@@ -1,0 +1,62 @@
+
+C->S    open
+S->C        "TARDIS proto=1.0"
+C->S        "BACKUP host name encoding"
+                host == hostname
+                name == backupset name
+                encoding = JSON or BIN
+                EX: 
+                    BACKUP linux.koldware.com Daily-Jan-1-2013 JSON
+            "SESSION uuid"
+                reopens/continues a session which previously existed
+S->C        "OK uuid"
+            "FAIL reasonCode string"
+
+C->S        DIR
+                { message : "DIR", name : "path", inode : number, files : []}
+                    file objects
+                         "name": name in directory,
+                         "nlinks": number of links
+                          "gid": Group ID
+                          "uid": UID
+                          "mode": mode
+                          "inode": inode number
+                          "dir": false,
+                          "size": 7 in bytes
+                          "mtime": 1381188762.094946,
+                        { {"name": "123123", "nlinks": 1, "gid": 1000, "mode": 33204, "mtime": 1381188762.094946, "uid": 1000, "inode": 58589484, "dir": false, "size": 7} 
+
+S->C        ACKDIR
+                {message : "ACKDIR", inode : "inode number", status : "OK|FAIL",
+                    done : [ inodes ]
+                    cksum : [ inodes ]
+                    content : [ inodes ]
+                    delta : [ inodes ]
+                    deleted : [ [name, inode], ...]
+                    }
+
+C->S        CKSUM
+                {message : "CKSUM", files : [ { inode : number, md5 : checksum }, ... ] }
+            CONTENT
+                { message : "CONTENT", inode : inode number, size : size, encoding : BASE64|BIN }
+                followed by content
+            SIGREQ
+                { message : "SIGREQ", inode : inode number }
+
+S->C
+            SIGNATURE
+                { message : "SIGNATURE",  inode : inode number, size : size, encoding : BASE64|BIN }
+                followed by signature
+
+S->C        ACKCKSUM
+                { message : "ACKCKSUM", 
+                    done : [ inodes ],
+                    delta : [ inodes ],
+                    content : [ inodes ],
+                }
+C->S
+            DELTA
+                { message : "DELTA", inode : inode number, size : size, encoding : BASE64|BIN }
+S->C        ACKDELTA
+
+C->S        COMPLETE name
