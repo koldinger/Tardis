@@ -1,15 +1,19 @@
-#! /urs/bin/python
+#! /usr/bin/env python
+# coding: latin1
 
 import os, sys
 import fnmatch
 from stat import *
 import json
+import argparse
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
 
 globalExcludes      = []
+verbosity           = 0
+version             = "0.1"
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0 }
 
@@ -26,13 +30,16 @@ def handleAckDir():
     return
 
 def sendMessage(message):
-    stats['messages'] += 1
     x = json.dumps(message)
+    if verbosity > 1:
+        print json.dumps(message, indent=4, sort_keys=True)
+    stats['messages'] += 1
     stats['bytes'] += len(x)
     return
 
 def processDir(top, excludes=[]):
-    print "Dir: %s Excludes: %s" %(top, excludes)
+    if verbosity:
+        print "Dir: %s Excludes: %s" %(top, excludes)
     s = os.stat(top)
     if not S_ISDIR(s.st_mode):
         return
@@ -71,8 +78,6 @@ def processDir(top, excludes=[]):
         try:
             s = os.stat(pathname)
             mode = s.st_mode
-            if S_ISDIR(mode):
-                subdirs.append(pathname)
             if S_ISLNK(mode):
                 stats['links'] += 1
                 file = {}
@@ -82,7 +87,7 @@ def processDir(top, excludes=[]):
             elif S_ISREG(mode) or S_ISDIR(mode):
                 stats['files'] += 1
                 file = {}
-                file['name']    = f
+                file['name']    = unicode(f.decode('utf8', 'ignore'))
                 file['dir']     = S_ISDIR(mode)
                 file['inode']   = s.st_ino
                 file['nlinks']  = s.st_nlink
@@ -92,34 +97,57 @@ def processDir(top, excludes=[]):
                 file['uid']     = s.st_uid
                 file['gid']     = s.st_gid
                 files.append(file)
+                if S_ISDIR(mode):
+                    subdirs.append(pathname)
             else:
                 # Unknown file type, print a message
                 print 'Skipping %s' % pathname
         except IOError as e:
             print "Error processing %s: %s" % (pathname, str(e))
+        except:
+            print "Error processing %s: %s" % (pathname, sys.exc_info()[0])
 
     return (dir, subdirs, excludes)
 
 
-def recurseTree(top, excludes=[]):
+def recurseTree(top, depth=0, excludes=[]):
+    newdepth = 0
+    if depth > 0:
+        newdepth = depth - 1
+
     try:
         (message, subdirs, subexcludes) = processDir(top, excludes)
 
         sendMessage(message)
         handleAckDir()
 
-        for pathname in subdirs:
-            recurseTree(pathname, subexcludes)
+        # Make sure we're not at maximum depth
+        if depth != 1:
+            for pathname in subdirs:
+                recurseTree(pathname, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
         print e
 
 
 if __name__ == '__main__':
-    sys.argv.pop(0)
+    parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
-    print sys.argv
-    for x in sys.argv:
-        recurseTree(x)
+    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--server', '-s', dest='server', default='localhost', help='Set the destination server')
+    parser.add_argument('--port', '-p', type=int, dest='port', default=9999, help='Set the destination server port')
+    parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
+    parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
+    parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")
 
-    print stats
+    args = parser.parse_args()
+    print args
+
+    verbosity=args.verbose
+
+    for x in args.directories:
+        recurseTree(x, depth=args.maxdepth)
+
+    if args.stats:
+        print stats
