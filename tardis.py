@@ -15,7 +15,7 @@ globalExcludes      = []
 verbosity           = 0
 version             = "0.1"
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
 def filelist(dir, excludes):
     files = os.listdir(dir)
@@ -40,7 +40,7 @@ def sendMessage(message):
 def processDir(top, excludes=[]):
     if verbosity:
         print "Dir: %s Excludes: %s" %(top, excludes)
-    s = os.stat(top)
+    s = os.lstat(top)
     if not S_ISDIR(s.st_mode):
         return
 
@@ -55,12 +55,13 @@ def processDir(top, excludes=[]):
             excludes = newExcludes
     except IOError as e:
         pass
-    localExcludes = list(excludes)
+    localExcludes = excludes
 
     # Add a list of local files to exclude.  These won't get passed to lower directories
     lexFile = os.path.join(top, excludeFile)
     try:
         with open(lexFile) as f:
+            localExcludes = list(excludes)
             localExcludes.extend( [x.rstrip('\n') for x in f.readlines()] )
     except:
         pass
@@ -76,18 +77,17 @@ def processDir(top, excludes=[]):
     for f in filelist(top, localExcludes):
         pathname = os.path.join(top, f)
         try:
-            s = os.stat(pathname)
+            s = os.lstat(pathname)
             mode = s.st_mode
+            file = {}
+            file['name']    = unicode(f.decode('utf8', 'ignore'))
             if S_ISLNK(mode):
                 stats['links'] += 1
-                file = {}
-                file['name'] = f
-                file['link'] = os.readlink(f)
+                file['link'] = os.readlink(pathname)
                 files.append(file)
             elif S_ISREG(mode) or S_ISDIR(mode):
                 stats['files'] += 1
-                file = {}
-                file['name']    = unicode(f.decode('utf8', 'ignore'))
+                stats['backed'] += s.st_size
                 file['dir']     = S_ISDIR(mode)
                 file['inode']   = s.st_ino
                 file['nlinks']  = s.st_nlink
@@ -101,7 +101,8 @@ def processDir(top, excludes=[]):
                     subdirs.append(pathname)
             else:
                 # Unknown file type, print a message
-                print 'Skipping %s' % pathname
+                if verbose:
+                    print 'Skipping %s' % pathname
         except IOError as e:
             print "Error processing %s: %s" % (pathname, str(e))
         except:
