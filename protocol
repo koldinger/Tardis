@@ -26,7 +26,7 @@ C->S        DIR
                           "mtime": 1381188762.094946,
                         { {"name": "123123", "nlinks": 1, "gid": 1000, "mode": 33204, "mtime": 1381188762.094946, "uid": 1000, "inode": 58589484, "dir": false, "size": 7} 
 
-S->C        ACKDIR
+S->C        ACD
                 {message : "ACKDIR", inode : "inode number", status : "OK|FAIL",
                     done : [ inodes ]
                     cksum : [ inodes ]
@@ -35,27 +35,27 @@ S->C        ACKDIR
                     deleted : [ [name, inode], ...]
                     }
 
-C->S        CKSUM
+C->S        CKS
                 {message : "CKSUM", files : [ { inode : number, md5 : checksum }, ... ] }
-            CONTENT
+            CON
                 { message : "CONTENT", inode : inode number, size : size, encoding : BASE64|BIN }
                 followed by content
-            SIGREQ
+            SGR
                 { message : "SIGREQ", inode : inode number }
 
 S->C
-            SIGNATURE
+            SIG
                 { message : "SIGNATURE",  inode : inode number, size : size, encoding : BASE64|BIN }
                 followed by signature
 
-S->C        ACKCKSUM
+S->C        ACS
                 { message : "ACKCKSUM", 
                     done : [ inodes ],
                     delta : [ inodes ],
                     content : [ inodes ],
                 }
 C->S
-            DELTA
+            DEL
                 { message : "DELTA", inode : inode number, size : size, encoding : BASE64|BIN }
 S->C        ACKDELTA
 

@@ -2,10 +2,14 @@
 # coding: latin1
 
 import os, sys
+import socket
 import fnmatch
+import socket
 from stat import *
 import json
 import argparse
+import time
+from Connection import JsonConnection
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
@@ -14,6 +18,8 @@ globalExcludeFile   = "/etc/tardis/excludes"
 globalExcludes      = []
 verbosity           = 0
 version             = "0.1"
+
+conn                = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
@@ -29,15 +35,8 @@ def filelist(dir, excludes):
 def handleAckDir():
     return
 
-def sendMessage(message):
-    x = json.dumps(message)
-    if verbosity > 1:
-        print json.dumps(message, indent=4, sort_keys=True)
-    stats['messages'] += 1
-    stats['bytes'] += len(x)
-    return
 
-def processDir(top, excludes=[]):
+def processDir(top, excludes=[], max=0):
     if verbosity:
         print "Dir: %s Excludes: %s" %(top, excludes)
     s = os.lstat(top)
@@ -117,9 +116,9 @@ def recurseTree(top, depth=0, excludes=[]):
         newdepth = depth - 1
 
     try:
-        (message, subdirs, subexcludes) = processDir(top, excludes)
+        (message, subdirs, subexcludes) = processDir(top, excludes, max=64)
 
-        sendMessage(message)
+        conn.send(message)
         handleAckDir()
 
         # Make sure we're not at maximum depth
@@ -132,23 +131,33 @@ def recurseTree(top, depth=0, excludes=[]):
 
 
 if __name__ == '__main__':
+
+    defaultBackupSet = time.strftime("Backup_%Y-%m-%d-%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--server', '-s', dest='server', default='localhost', help='Set the destination server')
     parser.add_argument('--port', '-p', type=int, dest='port', default=9999, help='Set the destination server port')
+    parser.add_argument('--name', '-n', dest='name', default=defaultBackupSet, help='Set the backup name')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")
 
     args = parser.parse_args()
-    print args
+    #print args
 
     verbosity=args.verbose
 
+    conn = JsonConnection(args.server, args.port, args.name)
+
+    if verbosity:
+        print "Session: %s" % conn.getSessionId()
+
     for x in args.directories:
         recurseTree(x, depth=args.maxdepth)
+
+    conn.close()
 
     if args.stats:
         print stats
