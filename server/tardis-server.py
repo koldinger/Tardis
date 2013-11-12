@@ -30,8 +30,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Process an individual file.  Check to see if it's different from what's there already """
         # Get the last backup information
         fileInfo = self.db.getFileInfoByName(file["name"], parent)
+
         # Insert the current file info
-        self.db.insertFile(file, parent)
+        self.db.insertFile(file)
         if fileInfo != None:
             if (fileInfo["inode"] == file["inode"]) and (fileinfo["size"] == file["size"]) and (fileinfo["mtime"] == file["mtime"]):
                 self.db.copyChecksum(parent, file)
@@ -97,7 +98,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def getDB(self, host):
         self.basedir = os.path.join(basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
-        self.dbname = os.path.join(basedir, "tardis.db")
+        self.dbname = os.path.join(self.basedir, "tardis.db")
         self.db = TardisDB.TardisDB(self.dbname)
 
     def startSession(self, name):
@@ -126,8 +127,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             name     = fields[2]
             encoding = fields[3]
 
-            self.db = self.getDB(host)
+            self.getDB(host)
             self.startSession(name)
+            self.db.newBackupSet(name, str(self.sessionid))
 
             self.request.sendall("OK {}".format(str(self.sessionid)))
 

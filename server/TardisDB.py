@@ -1,4 +1,5 @@
 import sqlite3
+import shutil
 from datetime import datetime
 
 
@@ -26,10 +27,22 @@ from datetime import datetime
 #    UID         INTEGER,
 #    GID         INTEGER);
 
+def makeDict(cursor, row):
+    d = {}
+    if row != None and cursor != None:
+        for idx, col in enumerate(cursor.description):
+            d[col[0]] = row[idx]
+    return d
+
 class TardisDB(object):
     def __init__(self, dbname):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.dbName = dbname
+        backup = dbname + ".bak"
+        try:
+            shutil.copyfile(dbname, backup)
+        except IOError:
+            pass
         self.conn = sqlite3.connect(self.dbName)
         # TODO: Load the tables?????
         # TODO: Set last complete backup set
@@ -55,23 +68,23 @@ class TardisDB(object):
         c = self.conn.cursor()
         c.execute("SELECT "
                   "Name as name, Inode as inode, Dir as dir, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
-                  "FROM Files WHERE Name =:name AND Dir =:parent AND BackupSet =:backup",
-                  {"name": name, "parent": parent, "backup": self.backupSet})
-        return c.fetchone()
+                  "FROM Files WHERE Name = :name AND Dir = :parent AND BackupSet = :backup",
+                  {"name": name, "parent": parent, "backup": self.prevBackupSet})
+        return makeDict(c, c.fetchone())
 
-    def getFileByInode(self, inode):
+    def getFileInfoByInode(self, inode):
         c = self.conn.cursor()
         c.execute("SELECT "
                   "Name as name, Inode as inode, Dir as dir, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
                   "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
-                  {"inode": inode, "backup": self.backupSet})
-        return c.fetchone()
+                  {"inode": inode, "backup": self.prevBackupSet})
+        return makeDict(c, c.fetchone())
 
 
     def copyChecksum(self, name, parent):
         c = self.conn.cursor()
-        c.execute("UPDATE Files SET Checksum = (SELECT CheckSum FROM Files WHERE Dir = :parent AND Name = :name AND BackupSet := :prev) "
-                  "WHERE Dir = :parent AND Name = :name AND BackupSet := :backup)",
+        c.execute("UPDATE Files SET Checksum = (SELECT CheckSum FROM Files WHERE Dir = :parent AND Name = :name AND BackupSet = :prev) "
+                  "WHERE Dir = :parent AND Name = :name AND BackupSet = :backup)",
                   {"name": name, "parent": parent, "prev": self.prevBackupSet, "backup": self.backupSet})
 
     def insertFile(self, fileInfo):
@@ -83,7 +96,7 @@ class TardisDB(object):
                   temp)
 
     def completeBackup(self):
-        self.conn.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", self.backupSet)
+        self.conn.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.backupSet})
         self.commit()
 
     def commit(self):
@@ -99,7 +112,9 @@ if __name__ == "__main__":
     import uuid
     x = TardisDB(sys.argv[1])
     x.newBackupSet(sys.argv[2], str(uuid.uuid1()))
-    print x.getFileInfoByName("File1", 1)
+    rec =  x.getFileInfoByName("File1", 1)
+    print rec
+    print x.getFileInfoByInode(2)
     file = {
         "name"  : "Dir",
         "inode" : 1,
@@ -128,4 +143,5 @@ if __name__ == "__main__":
         "cksum" : None
         }
     x.insertFile(file)
+    x.completeBackup()
     x.commit()
