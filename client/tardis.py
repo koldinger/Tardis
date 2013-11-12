@@ -2,6 +2,7 @@
 # coding: latin1
 
 import os, sys
+import os.path
 import socket
 import fnmatch
 import socket
@@ -16,6 +17,9 @@ localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
 
 globalExcludes      = []
+cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
+                       "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
+                       "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
 verbosity           = 0
 version             = "0.1"
 
@@ -33,6 +37,7 @@ def filelist(dir, excludes):
         yield f
 
 def handleAckDir():
+
     return
 
 
@@ -69,7 +74,7 @@ def processDir(top, excludes=[], max=0):
     files = []
     dir['message']  = 'DIR'
     dir['files']    = files
-    dir['name']     = top
+    dir['path']     = os.path.abspath(top)
     dir['inode']    = s.st_ino
 
     subdirs = []
@@ -80,6 +85,8 @@ def processDir(top, excludes=[], max=0):
             mode = s.st_mode
             file = {}
             file['name']    = unicode(f.decode('utf8', 'ignore'))
+            file['inode']   = s.st_ino
+            file['inode']   = s.st_ino
             if S_ISLNK(mode):
                 stats['links'] += 1
                 file['link'] = os.readlink(pathname)
@@ -88,10 +95,11 @@ def processDir(top, excludes=[], max=0):
                 stats['files'] += 1
                 stats['backed'] += s.st_size
                 file['dir']     = S_ISDIR(mode)
-                file['inode']   = s.st_ino
                 file['nlinks']  = s.st_nlink
                 file['size']    = s.st_size
                 file['mtime']   = s.st_mtime
+                file['ctime']   = s.st_ctime
+                file['atime']   = s.st_atime
                 file['mode']    = s.st_mode
                 file['uid']     = s.st_uid
                 file['gid']     = s.st_gid
@@ -119,7 +127,7 @@ def recurseTree(top, depth=0, excludes=[]):
         (message, subdirs, subexcludes) = processDir(top, excludes, max=64)
 
         conn.send(message)
-        handleAckDir()
+        response = conn.receive()
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -139,6 +147,7 @@ if __name__ == '__main__':
     parser.add_argument('--server', '-s', dest='server', default='localhost', help='Set the destination server')
     parser.add_argument('--port', '-p', type=int, dest='port', default=9999, help='Set the destination server port')
     parser.add_argument('--name', '-n', dest='name', default=defaultBackupSet, help='Set the backup name')
+    parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')

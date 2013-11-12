@@ -1,8 +1,13 @@
 import socket
 import json
 import uuid
+import sys
 
-class Connection:
+sys.path.append("../utils")
+
+import Messages
+
+class Connection(object):
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, name, encoding):
         self.stats = { 'messages' : 0, 'bytes': 0 }
@@ -13,7 +18,7 @@ class Connection:
 
         try:
             # Receive a string.  TARDIS proto=1.0
-            message = self.get(256)
+            message = self.get(10)
             if message != "TARDIS 1.0":
                 raise Exception
             message = "BACKUP {} {} {}".format(socket.gethostname(), name, encoding)
@@ -36,6 +41,15 @@ class Connection:
         self.stats['bytes'] += len(message)
         return
 
+    def recv(n):
+        msg = ''
+        while len(msg) < n:
+            chunk = self.sock.recv(n-len(msg))
+            if chunk == '':
+                raise RuntimeError("socket connection broken")
+            msg = msg + chunk
+        return msg
+
     def get(self, size):
         message = self.sock.recv(size).strip()
         self.stats['messages'] += 1
@@ -43,7 +57,6 @@ class Connection:
         return message
 
     def close(self):
-        self.put("BYE")
         self.sock.close()
 
     def getSessionId(self):
@@ -54,22 +67,35 @@ class JsonConnection(Connection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
     def __init__(self, host, port, name):
         Connection.__init__(self, host, port, name, 'JSON')
+        self.__sender = Messages.JsonMessages(self.sock)
 
     def send(self, message):
-        j = json.dumps(message)
-        self.put("{:<10}".format(len(j)))
-        self.put(j)
+        self.__sender.sendMessage(message)
 
-    def receive(self, size):
-        message = self.get(size)
-        return message
+    def receive(self):
+        return self.__sender.recvMessage()
+
+    def close(self):
+        self.__sender.sendMessage("BYE")
+        super(JsonConnection, self).close()
+
+
+class NullConnection(Connection):
+    def __init__(self, host, port, name):
+        pass
+
+    def send(self, message):
+        print json.dumps(message)
+
+    def receive(self):
+        return None
 
 if __name__ == "__main__":
     """ Test Code """
     conn = JsonConnection("localhost", 9999, "HiMom")
     print conn.getSessionId()
     conn.send({ 'x' : 1 })
-    print conn.receive(256)
+    print conn.receive()
     conn.send({ 'y' : 2 })
-    print conn.receive(256)
+    print conn.receive()
     conn.close()

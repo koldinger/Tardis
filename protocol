@@ -54,8 +54,7 @@ S->C        ACS
                     delta : [ inodes ],
                     content : [ inodes ],
                 }
-C->S
-            DEL
+C->S DEL
                 { message : "DELTA", inode : inode number, size : size, encoding : BASE64|BIN }
 S->C        ACKDELTA
 

@@ -1,4 +1,6 @@
+import os
 import os.path
+import socket
 
 class CacheDir:
     def __init__(self, root, parts, partsize):
@@ -18,9 +20,40 @@ class CacheDir:
     def path(self, file):
         return os.path.join(self.dir(file), file)
 
+    def exists(self, file):
+        return os.path.exists(self.path(file))
+
+    def mkdir(self, file):
+        dir = self.dir(file)
+        if not os.path.isdir(dir):
+            os.makedirs(dir)
+
+    def open(self, file, mode):
+        if mode.startswith("w"):
+            dir = self.dir(file)
+            if not os.path.isdir(dir):
+                os.makedirs(dir)
+        return open(self.path(file), mode)
+
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
-    c = CacheDir("var", 2, 4)
+    path = os.path.join("cache", socket.gethostname())
+    c = CacheDir(path, 4, 2)
     print c.comps(test)
     print c.dir(test)
     print c.path(test)
+    print c.exists(test)
+
+    try:
+        c.open(test, "r")
+    except IOError as ex:
+        print "Caught IOError"
+
+    with c.open(test, "w") as fd:
+        fd.write("I'm henry the 8'th I am\n")
+        fd.write("Henry the 8th, I am I am\n")
+
+    with c.open(test, "r") as fd:
+        for line in fd:
+            print line,
+    print c.exists(test)
