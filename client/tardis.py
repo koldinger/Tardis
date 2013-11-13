@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# coding: latin1
+# coding: utf8
 
 import os, sys
 import os.path
@@ -10,7 +10,10 @@ from stat import *
 import json
 import argparse
 import time
+import base64
+import traceback
 from Connection import JsonConnection
+from functools import partial
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
@@ -27,6 +30,8 @@ conn                = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
+inodeDB             = {}
+
 def filelist(dir, excludes):
     files = os.listdir(dir)
     for p in excludes:
@@ -36,7 +41,41 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-def handleAckDir():
+def sendContent(inode):
+    if inode in inodeDB:
+        (fileInfo, pathname) = inodeDB[inode]
+        if pathname:
+            mode = fileInfo["mode"]
+            if S_ISDIR(mode):
+                return
+            message = { "message" : "CON", "inode" : inode, "size" : fileInfo["size"], "encoding" : "base64", "pathname" : pathname }
+            conn.send(message)
+            if S_ISLNK(mode):
+                # It's a link.  Send the contents of readlink
+                chunk = os.readlink(pathname)
+                data = base64.encodestring(chunk)
+                chunkMessage = {"data": data }
+                conn.send(chunkMessage)
+            else:
+                with open(pathname, "rb") as file:
+                    for chunk in iter(partial(file.read, 1024), ''):
+                        data = base64.encodestring(chunk)
+                        chunkMessage = {"data": data }
+                        conn.send(chunkMessage)
+            response = conn.receive()
+    else:
+        print "Error: Unknown inode {}".format(inode)
+
+def handleAckDir(message):
+    content = message["content"]
+    done    = message["done"]
+
+    for i in done:
+        del inodeDB[i]
+
+    for i in content:
+        sendContent(i)
+        del inodeDB[i]
 
     return
 
@@ -83,17 +122,10 @@ def processDir(top, excludes=[], max=0):
         try:
             s = os.lstat(pathname)
             mode = s.st_mode
-            file = {}
-            file['name']    = unicode(f.decode('utf8', 'ignore'))
-            file['inode']   = s.st_ino
-            file['inode']   = s.st_ino
-            if S_ISLNK(mode):
-                stats['links'] += 1
-                file['link'] = os.readlink(pathname)
-                files.append(file)
-            elif S_ISREG(mode) or S_ISDIR(mode):
-                stats['files'] += 1
-                stats['backed'] += s.st_size
+            if S_ISREG(mode) or S_ISDIR(mode) or S_ISLINK(mode):
+                file = {}
+                file['name']    = unicode(f.decode('utf8', 'ignore'))
+                file['inode']   = s.st_ino
                 file['dir']     = S_ISDIR(mode)
                 file['nlinks']  = s.st_nlink
                 file['size']    = s.st_size
@@ -104,16 +136,23 @@ def processDir(top, excludes=[], max=0):
                 file['uid']     = s.st_uid
                 file['gid']     = s.st_gid
                 files.append(file)
+
+                inodeDB[s.st_ino] = (file, pathname)
+                if S_ISLNK(mode):
+                    stats['links'] += 1
+                elif S_ISREG(mode) or S_ISDIR(mode):
+                    stats['files'] += 1
+                    stats['backed'] += s.st_size
                 if S_ISDIR(mode):
                     subdirs.append(pathname)
             else:
-                # Unknown file type, print a message
-                if verbose:
-                    print 'Skipping %s' % pathname
+                if verbosity:
+                    print "Skipping non standard file: {}".format(pathname)
         except IOError as e:
             print "Error processing %s: %s" % (pathname, str(e))
         except:
             print "Error processing %s: %s" % (pathname, sys.exc_info()[0])
+            traceback.print_exc()
 
     return (dir, subdirs, excludes)
 
@@ -128,6 +167,9 @@ def recurseTree(top, depth=0, excludes=[]):
 
         conn.send(message)
         response = conn.receive()
+        print "Received: ", str(response)
+        handleAckDir(response)
+
 
         # Make sure we're not at maximum depth
         if depth != 1:

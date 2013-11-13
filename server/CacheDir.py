@@ -1,6 +1,7 @@
 import os
 import os.path
 import socket
+import logging
 
 class CacheDir:
     def __init__(self, root, parts, partsize):
@@ -35,6 +36,8 @@ class CacheDir:
                 os.makedirs(dir)
         return open(self.path(file), mode)
 
+logger = logging.getLogger("CacheDir")
+
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
     path = os.path.join("cache", socket.gethostname())
@@ -57,3 +60,5 @@ if __name__ == "__main__":
         for line in fd:
             print line,
     print c.exists(test)
+
+

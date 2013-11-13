@@ -1,5 +1,6 @@
 import sqlite3
 import shutil
+import logging
 from datetime import datetime
 
 
@@ -28,11 +29,13 @@ from datetime import datetime
 #    GID         INTEGER);
 
 def makeDict(cursor, row):
-    d = {}
-    if row != None and cursor != None:
+    if row != None and cursor != None and len(row) != 0:
+        d = {}
         for idx, col in enumerate(cursor.description):
             d[col[0]] = row[idx]
-    return d
+        return d
+    else:
+        return None
 
 class TardisDB(object):
     def __init__(self, dbname):
@@ -51,7 +54,7 @@ class TardisDB(object):
         row = c.fetchone()
         self.prevBackupName = row[0]
         self.prevBackupSet = row[1]
-        print "Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet)
+        logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
     def newBackupSet(self, name, session):
         """ Create a new backupset.  Set the current backup set to be that set. """
@@ -61,38 +64,49 @@ class TardisDB(object):
         self.backupSet = c.lastrowid
         self.backupName = name
         self.conn.commit()
+        logger.info("Created new backup set: {}: {} {}".format(self.backupSet, name, session))
         return self.backupSet
 
     def getFileInfoByName(self, name, parent):
         """ Lookup a file in a directory in the previous backup set"""
+        logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
         c = self.conn.cursor()
         c.execute("SELECT "
-                  "Name as name, Inode as inode, Dir as dir, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
-                  "FROM Files WHERE Name = :name AND Dir = :parent AND BackupSet = :backup",
+                  "Name as name, Inode as inode, Dir as dir, Parent as parent, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
+                  "FROM Files WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
                   {"name": name, "parent": parent, "backup": self.prevBackupSet})
         return makeDict(c, c.fetchone())
 
     def getFileInfoByInode(self, inode):
+        logger.debug("Looking up file by inode {} {}".format(inode, self.prevBackupSet))
         c = self.conn.cursor()
         c.execute("SELECT "
-                  "Name as name, Inode as inode, Dir as dir, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
+                  "Name as name, Inode as inode, Dir as dir, Parent as parent, Size as size, MTime as mtime, CTime as ctime, Mode as mode, UID as uid, GID as gid "
                   "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": self.prevBackupSet})
         return makeDict(c, c.fetchone())
 
 
-    def copyChecksum(self, name, parent):
+    def copyChecksum(self, old_inode, new_inode):
         c = self.conn.cursor()
-        c.execute("UPDATE Files SET Checksum = (SELECT CheckSum FROM Files WHERE Dir = :parent AND Name = :name AND BackupSet = :prev) "
-                  "WHERE Dir = :parent AND Name = :name AND BackupSet = :backup)",
-                  {"name": name, "parent": parent, "prev": self.prevBackupSet, "backup": self.backupSet})
+        c.execute("UPDATE Files SET Checksum = (SELECT CheckSum FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
+                  "WHERE INode = :newInode AND BackupSet = :backup",
+                  {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.backupSet})
 
-    def insertFile(self, fileInfo):
+    def setChecksum(self, inode, checksum):
+        c = self.conn.cursor()
+        c.execute("UPDATE Files SET Checksum = :checksum WHERE Inode = :inode AND BackupSet = :backup",
+                  {"inode": inode, "checksum": checksum, "backup": self.backupSet})
+
+
+    def insertFile(self, fileInfo, parent):
+        logger.debug("Inserting file: {}".format(str(fileInfo)))
         c = self.conn.cursor()
         temp = fileInfo
         temp["backup"] = self.backupSet
-        c.execute("INSERT INTO Files (Name, BackupSet, Inode, CheckSum, Dir, Size, MTime, CTime, ATime, Mode, UID, GID) "
-                  "VALUES            (:name, :backup, :inode, :cksum, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid)",
+        temp["parent"] = parent
+        c.execute("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID) "
+                  "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid)",
                   temp)
 
     def completeBackup(self):
@@ -103,9 +117,10 @@ class TardisDB(object):
         self.conn.commit()
 
     def __del__(self):
-        print "Closing DB"
+        logger.info("Closing DB: {}".format(self.dbName))
         self.conn.commit()
         self.conn.close()
+
 
 if __name__ == "__main__":
     import sys
@@ -145,3 +160,5 @@ if __name__ == "__main__":
     x.insertFile(file)
     x.completeBackup()
     x.commit()
+
+logger = logging.getLogger("DB")
