@@ -31,6 +31,7 @@ config = None
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
+    sessionid = None
 
     def checkFile(self, parent, file):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -46,7 +47,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # Get the last backup information
             old = self.db.getFileInfoByName(file["name"], parent)
             if old != None:
-                logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}".format(file["name"], file["inode"], file["size"], file["mtime"], old["inode"], old["size"], old["mtime"]))
+                self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
+                                  .format(file["name"], file["inode"], file["size"], file["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == file["inode"]) and (old["size"] == file["size"]) and (old["mtime"] == file["mtime"]):
                     self.db.copyChecksum(old["inode"], file["inode"])
                     retVal = DONE
@@ -56,9 +58,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 else:
                     retVal = DELTA
             else:
-                # TODO: Lookup based on inode.
-                logger.debug("No old file.")
-                retVal = CONTENT
+                old = self.db.getFileInfoBySimilar(file)
+                if old:
+                    retVal = CHKSUM
+                else:
+                    # TODO: Lookup based on inode.
+                    self.logger.debug("No old file.")
+                    retVal = CONTENT
             
         return retVal
 
@@ -99,6 +105,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return response
 
+    def processChecksum(self, message):
+        pass
+
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
         self.logger.debug("Processing content message: {}".format(str(message)))
@@ -137,12 +146,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if temp:
             checksum = digest.hexdigest()
             if self.cache.exists(checksum):
-                self.logger.info("Checksum file {} already exists".format(checksum))
+                self.logger.debug("Checksum file {} already exists".format(checksum))
                 os.remove(temp.name)
             else:
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming {} to {}".format(temp.name, self.cache.path(checksum)))
                 os.rename(temp.name, self.cache.path(checksum))
+                self.db.insertChecksumFile(checksum)
         self.db.setChecksum(message["inode"], checksum)
 
         return "OK"
@@ -176,7 +186,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         sessions[sid] = self
 
     def endSession(self):
-        if str(self.sessionid):
+        if self.sessionid:
             try:
                 del sessions[str(self.sessionid)]
             except KeyError:
@@ -210,7 +220,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             while not done:
                 message = self.messenger.recvMessage()
-                self.logger.debug("Received: " + str(message))
+                self.logger.debug("Received: " + str(message).encode("utf-8"))
                 if message == "BYE":
                     done = True
                 else:
@@ -230,7 +240,6 @@ if __name__ == "__main__":
 
     parser.add_argument('--config', dest='config', default=defaultConfig, help="Location of the configuration file")
     parser.add_argument('--single', dest='single', action='store_true', help='Run a single transaction and quit')
-    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-l', dest='logcfg', default=None, help='Logging configuration file');
 
@@ -239,25 +248,29 @@ if __name__ == "__main__":
     configDefaults = {
         'Port' : '9999',
         'BaseDir' : './cache',
-        'Verbose' : str(args.verbose),
-        'LogCfg'  : str(args.logcfg)
+        'LogCfg'  : args.logcfg
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
 
-    logger = logging.getLogger('')
-    format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-    handler = logging.StreamHandler()
-    handler.setFormatter(format)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    if config.get('Tardis', 'LogCfg'):
+        print "Loading logging config"
+        logging.config.fileConfig(config.get('Tardis', 'LogCfg'))
+        logger = logging.getLogger('')
+    else:
+        logger = logging.getLogger('')
+        format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
+        handler = logging.StreamHandler()
+        handler.setFormatter(format)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
 
 
-    basedir = config.get('DEFAULT', 'BaseDir')
+    basedir = config.get('Tardis', 'BaseDir')
     logger.debug("BaseDir: " + basedir)
 
-    server = SocketServer.TCPServer(("localhost", config.getint('DEFAULT', 'Port')), TardisServerHandler)
+    server = SocketServer.TCPServer(("localhost", config.getint('Tardis', 'Port')), TardisServerHandler)
 
     logger.info("Starting server");
 

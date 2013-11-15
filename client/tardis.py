@@ -69,28 +69,55 @@ def sendContent(inode):
 def handleAckDir(message):
     content = message["content"]
     done    = message["done"]
+    delta   = message["delta"]
+    cksum   = message["cksum"]
 
     for i in done:
+        if verbosity > 1:
+            (x, name) = inodeDB[i]
+            print "File: [I]: %s" % (name)
         del inodeDB[i]
 
     for i in content:
+        if verbosity > 1:
+            (x, name) = inodeDB[i]
+            print "File: [N]: %s" % (name)
         sendContent(i)
+        del inodeDB[i]
+
+    for i in delta:
+        if verbosity > 1:
+            (x, name) = inodeDB[i]
+            print "File: [D]: %s" % (name)
+        # sendDelta(i)
+        del inodeDB[i]
+
+    for i in cksum:
+        if verbosity > 1:
+            (x, name) = inodeDB[i]
+            print "File: [C]: %s" % (name)
+        # sendChecksum(i)
         del inodeDB[i]
 
     return
 
 
-def processDir(top, excludes=[], max=0):
+def makeDirHeader(dir):
+    pass
+
+def processDir(dir, top, excludes=[], max=0):
     if verbosity:
-        print "Dir: %s Excludes: %s" %(top, excludes)
-    s = os.lstat(top)
+        print "Dir: %s" % dir
+    if verbosity > 2:
+        print "   Excludes: %" % str(excludes)
+    s = os.lstat(dir)
     if not S_ISDIR(s.st_mode):
         return
 
     stats['dirs'] += 1;
 
     # Process an exclude file which will be passed on down to the receivers
-    exFile = os.path.join(top, excludeFile)
+    exFile = os.path.join(dir, excludeFile)
     try:
         with open(exFile) as f:
             newExcludes = [x.rstrip('\n') for x in f.readlines()]
@@ -101,7 +128,7 @@ def processDir(top, excludes=[], max=0):
     localExcludes = excludes
 
     # Add a list of local files to exclude.  These won't get passed to lower directories
-    lexFile = os.path.join(top, excludeFile)
+    lexFile = os.path.join(dir, excludeFile)
     try:
         with open(lexFile) as f:
             localExcludes = list(excludes)
@@ -109,20 +136,20 @@ def processDir(top, excludes=[], max=0):
     except:
         pass
 
-    dir = {}
+    message = {}
     files = []
-    dir['message']  = 'DIR'
-    dir['files']    = files
-    dir['path']     = os.path.abspath(top)
-    dir['inode']    = s.st_ino
+    message['message']  = 'DIR'
+    message['files']    = files
+    message['path']     = os.path.relpath(dir, top)
+    message['inode']    = s.st_ino
 
     subdirs = []
-    for f in filelist(top, localExcludes):
-        pathname = os.path.join(top, f)
+    for f in filelist(dir, localExcludes):
+        pathname = os.path.join(dir, f)
         try:
             s = os.lstat(pathname)
             mode = s.st_mode
-            if S_ISREG(mode) or S_ISDIR(mode) or S_ISLINK(mode):
+            if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
                 file = {}
                 file['name']    = unicode(f.decode('utf8', 'ignore'))
                 file['inode']   = s.st_ino
@@ -137,7 +164,6 @@ def processDir(top, excludes=[], max=0):
                 file['gid']     = s.st_gid
                 files.append(file)
 
-                inodeDB[s.st_ino] = (file, pathname)
                 if S_ISLNK(mode):
                     stats['links'] += 1
                 elif S_ISREG(mode) or S_ISDIR(mode):
@@ -145,6 +171,7 @@ def processDir(top, excludes=[], max=0):
                     stats['backed'] += s.st_size
                 if S_ISDIR(mode):
                     subdirs.append(pathname)
+                inodeDB[s.st_ino] = (file, pathname)
             else:
                 if verbosity:
                     print "Skipping non standard file: {}".format(pathname)
@@ -154,27 +181,31 @@ def processDir(top, excludes=[], max=0):
             print "Error processing %s: %s" % (pathname, sys.exc_info()[0])
             traceback.print_exc()
 
-    return (dir, subdirs, excludes)
+    return (message, subdirs, excludes)
 
 
-def recurseTree(top, depth=0, excludes=[]):
+def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
     if depth > 0:
         newdepth = depth - 1
 
     try:
-        (message, subdirs, subexcludes) = processDir(top, excludes, max=64)
+        (message, subdirs, subexcludes) = processDir(dir, top, excludes, max=64)
 
+        if verbosity > 3:
+            print "Send: %s" % str(message)
         conn.send(message)
         response = conn.receive()
-        print "Received: ", str(response)
+        if verbosity > 3:
+            print "Receive: %s" % str(response)
+        # print "Received: ", str(response)
         handleAckDir(response)
 
 
         # Make sure we're not at maximum depth
         if depth != 1:
-            for pathname in subdirs:
-                recurseTree(pathname, newdepth, subexcludes)
+            for subdir in subdirs:
+                recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
         print e
@@ -206,7 +237,7 @@ if __name__ == '__main__':
         print "Session: %s" % conn.getSessionId()
 
     for x in args.directories:
-        recurseTree(x, depth=args.maxdepth)
+        recurseTree(x, x, depth=args.maxdepth)
 
     conn.close()
 
