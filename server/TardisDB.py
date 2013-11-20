@@ -92,6 +92,15 @@ class TardisDB(object):
                   {"inode": inode, "backup": self.prevBackupSet})
         return makeDict(c, c.fetchone())
 
+    def getNewFileInfoByInode(self, inode):
+        self.logger.debug("Looking up file by inode {} {}".format(inode, self.backupSet))
+        c = self.conn.cursor()
+        c.execute("SELECT "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
+                  {"inode": inode, "backup": self.backupSet})
+        return makeDict(c, c.fetchone())
+
     def getFileInfoBySimilar(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         self.logger.debug("Looking up file for similar info")
@@ -115,6 +124,12 @@ class TardisDB(object):
         c.execute("UPDATE Files SET Checksum = :checksum WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "checksum": checksum, "backup": self.backupSet})
 
+    def getChecksum(self, name, parent):
+        c = self.conn.cursor()
+        c.execute("SELECT CheckSum AS checksum "
+                  "FROM Files WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
+                  {"name": name, "parent": parent, "backup": self.prevBackupSet})
+        return c.fetchone()[0]
 
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))

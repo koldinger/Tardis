@@ -12,6 +12,7 @@ import SocketServer
 import tempfile
 import hashlib
 import base64
+import subprocess
 
 import CacheDir
 import TardisDB
@@ -52,7 +53,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if (old["inode"] == file["inode"]) and (old["size"] == file["size"]) and (old["mtime"] == file["mtime"]):
                     self.db.copyChecksum(old["inode"], file["inode"])
                     retVal = DONE
-                elif file["size"] < 4096:
+                elif file["size"] < 32:
                     # Just ask for content if the size is under 4K.  Easier.
                     retVal = CONTENT
                 else:
@@ -93,17 +94,90 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.db.commit()
 
-        response = {}
-        response["message"] = "ACKDIR"
-        response["inode"] = data["inode"]
-        response["status"] = "OK"
-
-        response["done"] = done
-        response["cksum"] = cksum
-        response["content"] = content
-        response["delta"] = delta
+        response = {
+            "message": "ACKDIR",
+            "status":  "OK",
+            "inode": data["inode"],
+            "done":  done,
+            "cksum": cksum,
+            "content": content,
+            "delta": delta
+        }
 
         return response
+
+    def processSignature(self, message):
+        """ Generate and send a signature for a file """
+        self.logger.debug("Processing signature request message: {}".format(str(message)))
+        inode = message["inode"]
+
+        info = self.db.getNewFileInfoByInode(inode)
+        chksum = self.db.getChecksum(info["name"], info["parent"])      ### Assumption: Current parent is same as old
+        if chksum:
+            sigfile = chksum + ".sig"
+            if self.cache.exists(sigfile):
+                file = self.cache.open(sigfile, "rb")
+                sig = file.read()       # TODO: Does this always read the entire file?
+                file.close()
+            else:
+                pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
+                (sig, err) = pipe.communicate()
+                # Cache the signature for later use.  Just in case.
+                # TODO: Better logic on this?
+                outfile = self.cache.open(sigfile, "wb")
+                outfile.write(sig)
+                outfile.close()
+
+            response = {
+                "message": "SIG",
+                "inode": inode,
+                "status": "OK",
+                "encoding": "base64",
+                "checksum": chksum,
+                "size": len(sig),
+                "signature": base64.encodestring(sig) }
+
+            return response
+        else:
+            # TODO: Screw this up
+            pass
+
+    def processDelta(self, message):
+        """ Receive a delta message. """
+        self.logger.debug("Processing delta message: {}".format(str(message)))
+        output = None
+        temp = None
+        digest = None
+        checksum = message["checksum"]
+        basis    = message["basis"]
+        inode = message["inode"]
+        if self.cache.exists(checksum):
+            self.logger.debug("Checksum file {} already exists".format(checksum))
+            # Abort read
+        else:
+            output = self.cache.open(checksum, "wb")
+
+        bytesReceived = 0
+        size = message["size"]
+        encoding = message["encoding"]
+        if (encoding == "binary"):
+            decoder = lambda x: x
+        elif (encoding == "base64"):
+            decoder = base64.decodestring
+
+        while (bytesReceived < size):
+            chunk = self.messenger.recvMessage()
+            bytes = decoder(chunk["data"])
+            if output:
+                output.write(bytes)
+            bytesReceived += len(bytes)
+        if output:
+            output.close()
+            # TODO: This has gotta be wrong.
+            self.db.insertChecksumFile(checksum, basis=basis)
+
+        self.db.setChecksum(inode, checksum)
+        return "OK"
 
     def processChecksum(self, message):
         pass
@@ -130,13 +204,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         bytesReceived = 0
         size = message["size"]
         encoding = message["encoding"]
+        if (encoding == "binary"):
+            decoder = lambda x: x
+        elif (encoding == "base64"):
+            decoder = base64.decodestring
 
         while (bytesReceived < size):
             chunk = self.messenger.recvMessage()
-            if encoding == "base64":
-                bytes = base64.decodestring(chunk["data"])
-            else:
-                bytes = chunk["data"]
+            bytes = decoder(chunk["data"])
             if digest:
                 digest.update(bytes)
             output.write(bytes)
@@ -164,10 +239,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if messageType == "DIR":
             return self.processDir(message)
-        elif messageType == "CKS":
-            return "Not Yet Implemented"
+        elif messageType == "SGR":
+            return self.processSignature(message)
         elif messageType == "DEL":
-            return "Not Yet Implemented"
+            return self.processDelta(message)
         elif messageType == "CON":
             return self.processContent(message)
         else:
@@ -175,9 +250,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getDB(self, host):
         self.basedir = os.path.join(basedir, host)
+        self.tempdir = os.path.join(self.basedir, "tmp_" + str(os.getpid()))
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, "tardis.db")
         self.db = TardisDB.TardisDB(self.dbname)
+
 
     def startSession(self, name):
         self.sessionid = uuid.uuid1()
@@ -185,12 +262,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         sid = str(self.sessionid)
         sessions[sid] = self
 
+        os.makedirs(self.tempdir)
+
     def endSession(self):
         if self.sessionid:
             try:
                 del sessions[str(self.sessionid)]
             except KeyError:
                 pass
+
+        try:
+            os.rmdir(self.tempdir)
+        except OSError as error:
+            self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
 
     def handle(self):
         try:
@@ -264,14 +348,17 @@ if __name__ == "__main__":
         handler = logging.StreamHandler()
         handler.setFormatter(format)
         logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
 
 
     basedir = config.get('Tardis', 'BaseDir')
     logger.debug("BaseDir: " + basedir)
 
-    server = SocketServer.TCPServer(("localhost", config.getint('Tardis', 'Port')), TardisServerHandler)
-
-    logger.info("Starting server");
-
-    server.serve_forever()
+    try:
+        server = SocketServer.TCPServer(("localhost", config.getint('Tardis', 'Port')), TardisServerHandler)
+        logger.info("Starting server");
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    except:
+        logger.critical("Unable to run server: {}".format(sys.exc_info()[1].strerror))
