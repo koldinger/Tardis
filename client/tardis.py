@@ -260,12 +260,12 @@ def processDir(dir, top, excludes=[], max=0):
                     stats['files'] += 1
                     stats['backed'] += s.st_size
                 if S_ISDIR(mode):
-                    subdirs.append(pathname)
+                    subdirs.append(os.path.join(dir, f))
                 files.append(file)
         except IOError as e:
-            print "Error processing %s: %s" % (pathname, str(e))
+            print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
         except:
-            print "Error processing %s: %s" % (pathname, sys.exc_info()[0])
+            print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
             traceback.print_exc()
 
     return (message, subdirs, excludes)

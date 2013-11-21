@@ -92,7 +92,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             elif res == 3:
                 delta.append(inode)
 
-        self.db.commit()
+        # self.db.commit()
 
         response = {
             "message": "ACKDIR",
@@ -196,7 +196,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "w")
         else:
-            temp = tempfile.NamedTemporaryFile(dir=self.basedir, delete=False)
+            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
             self.logger.debug("Sending output to temporary file {}".format(temp.name))
             output = temp.file
             digest = hashlib.md5()
@@ -250,7 +250,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getDB(self, host):
         self.basedir = os.path.join(basedir, host)
-        self.tempdir = os.path.join(self.basedir, "tmp_" + str(os.getpid()))
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, "tardis.db")
         self.db = TardisDB.TardisDB(self.dbname)
@@ -262,6 +261,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         sid = str(self.sessionid)
         sessions[sid] = self
 
+        self.tempdir = os.path.join(self.basedir, "tmp_" + sid)
         os.makedirs(self.tempdir)
 
     def endSession(self):
@@ -348,7 +348,7 @@ if __name__ == "__main__":
         handler = logging.StreamHandler()
         handler.setFormatter(format)
         logger.addHandler(handler)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
 
 
     basedir = config.get('Tardis', 'BaseDir')
