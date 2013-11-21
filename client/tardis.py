@@ -209,15 +209,11 @@ def mkFileInfo(dir, name):
             print "Skipping non standard file: {}".format(pathname)
     return file
     
-def processDir(dir, top, excludes=[], max=0):
+def processDir(dir, excludes=[], max=0):
     if verbosity:
         print "Dir: {}".format(str(dir))
     if verbosity > 2:
         print "   Excludes: {}".format(str(excludes))
-    s = os.lstat(dir)
-    if not S_ISDIR(s.st_mode):
-        return
-
     stats['dirs'] += 1;
 
     # Process an exclude file which will be passed on down to the receivers
@@ -241,12 +237,6 @@ def processDir(dir, top, excludes=[], max=0):
         pass
 
     files = []
-    message = {
-        'message': 'DIR',
-        'files':  files,
-        'path':  os.path.relpath(dir, top),
-        'inode':  s.st_ino
-        }
 
     subdirs = []
     for f in filelist(dir, localExcludes):
@@ -258,7 +248,7 @@ def processDir(dir, top, excludes=[], max=0):
                     stats['links'] += 1
                 elif S_ISREG(mode) or S_ISDIR(mode):
                     stats['files'] += 1
-                    stats['backed'] += s.st_size
+                    stats['backed'] += file["size"]
                 if S_ISDIR(mode):
                     subdirs.append(os.path.join(dir, f))
                 files.append(file)
@@ -268,7 +258,7 @@ def processDir(dir, top, excludes=[], max=0):
             print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
             traceback.print_exc()
 
-    return (message, subdirs, excludes)
+    return (files, subdirs, excludes)
 
 
 def recurseTree(dir, top, depth=0, excludes=[]):
@@ -277,15 +267,28 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         newdepth = depth - 1
 
     try:
-        (message, subdirs, subexcludes) = processDir(dir, top, excludes, max=64)
+        s = os.lstat(dir)
+        if not S_ISDIR(s.st_mode):
+            return
 
-        if verbosity > 3:
-            print "Send: %s" % str(message)
-        conn.send(message)
-        response = conn.receive()
-        if verbosity > 3:
-            print "Receive: %s" % str(response)
-        handleAckDir(response)
+        (files, subdirs, subexcludes) = processDir(dir, excludes, max=64)
+
+        message = {
+            'message': 'DIR',
+            'path':  os.path.relpath(dir, top),
+            'inode':  s.st_ino
+        }
+
+        for x in range(0, len(files), args.dirslice):
+            chunk = files[x : x + args.dirslice - 1]
+            message["files"] = chunk
+            if verbosity > 3:
+                print "Send: %s" % str(message)
+            conn.send(message)
+            response = conn.receive()
+            if verbosity > 3:
+                print "Receive: %s" % str(response)
+            handleAckDir(response)
 
 
         # Make sure we're not at maximum depth
@@ -309,6 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
+    parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
     parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")
