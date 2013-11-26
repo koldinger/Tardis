@@ -2,6 +2,7 @@ import sqlite3
 import shutil
 import logging
 from datetime import datetime
+import os.path
 
 
 #CREATE TABLE IF NOT EXISTS Backups (
@@ -36,6 +37,12 @@ def makeDict(cursor, row):
         return d
     else:
         return None
+
+def splitpath(path, maxdepth=20):
+    ( head, tail ) = os.path.split(path)
+    return splitpath(head, maxdepth - 1) + [ tail ] \
+        if maxdepth and head and head != path \
+        else [ head or tail ]
 
 class TardisDB(object):
     logger = logging.getLogger("DB")
@@ -83,17 +90,33 @@ class TardisDB(object):
         self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
         c = self.conn.cursor()
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
-                  "FROM Files WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, CheckSums.CheckSum as checksum "
+                  "FROM Files LEFT OUTER JOIN CheckSums ON Files.Checksum = CheckSums.Id "
+                  "WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
                   {"name": name, "parent": parent, "backup": self.prevBackupSet})
         return makeDict(c, c.fetchone())
+
+    def getFileInfoByPath(self, path):
+        """ Lookup a file by a full path. """
+        ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
+        self.logger.debug("Looking up file by path {} {}".format(path, self.prevBackupSet))
+        parent = 0              # Root directory value
+        info = None
+        for name in splitpath(path):
+            info = self.getFileInfoByName(name, parent)
+            if info:
+                parent = info["inode"]
+            else:
+                break
+        return info
 
     def getFileInfoByInode(self, inode):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.prevBackupSet))
         c = self.conn.cursor()
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
-                  "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, CheckSums.CheckSum as checksum "
+                  "FROM Files LEFT OUTER JOIN CheckSums ON Files.Checksum = CheckSums.Id "
+                  "WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": self.prevBackupSet})
         return makeDict(c, c.fetchone())
 
@@ -101,7 +124,7 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.backupSet))
         c = self.conn.cursor()
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": self.backupSet})
         return makeDict(c, c.fetchone())
