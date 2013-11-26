@@ -42,21 +42,26 @@ class TardisDB(object):
     conn = None
     dbName = None
 
-    def __init__(self, dbname):
+    def __init__(self, dbname, backup=True, prevSet=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
-        backup = dbname + ".bak"
-        try:
-            self.logger.debug("Backing up {}".format(dbname))
-            shutil.copyfile(dbname, backup)
-        except IOError:
-            pass
+        if backup:
+            backup = dbname + ".bak"
+            try:
+                self.logger.debug("Backing up {}".format(dbname))
+                shutil.copyfile(dbname, backup)
+            except IOError:
+                pass
+
         self.conn = sqlite3.connect(self.dbName)
-        # TODO: Load the tables?????
-        # TODO: Set last complete backup set
+
         c = self.conn.cursor()
-        c.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+        if (prevSet):
+            c.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
+        else:
+            c.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+
         row = c.fetchone()
         self.prevBackupName = row[0]
         self.prevBackupSet = row[1]
@@ -151,6 +156,13 @@ class TardisDB(object):
                   "VALUES                (:checksum, :size, :basis)",
                   {"checksum": checksum, "size": size, "basis": basis })
 
+    def getChecksumInfo(self, checksum):
+        self.logger.debug("Getting checksum info on: {}".format(checksum))
+        c = self.conn.cursor()
+        c.execute("SELECT Checksum, Basis FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})
+        row = c.fetchone()
+        return (row[0], row[1])
+
     def completeBackup(self):
         self.conn.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.backupSet})
         self.commit()
@@ -163,7 +175,6 @@ class TardisDB(object):
         if self.conn:
             self.conn.commit()
             self.conn.close()
-
 
 if __name__ == "__main__":
     import sys

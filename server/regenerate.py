@@ -2,41 +2,75 @@
 
 import os
 import os.path
+import sys
 import argparse
+import socket
+import TardisDB
+import CacheDir
+import logging
+import subprocess
+
+version = "0.1"
 
 database = "./tardisDB"
 
-def readHeader(f):
-    line = f.readline().rstrip()
-    if line == "--- TARDIS 1.0":
-        print line
-        line = f.readline().rstrip()
-        while line != "---":
-            print line
-            line = f.readline().rstrip()
-        pos = f.tell()
-        print pos
-        print "------"
+def recoverChecksum(cksum, db, cacheDir):
+    (name, basis) = db.getChecksumInfo(cksum)
+    if basis:
+        input = recoverChecksum(basis, db, cacheDir)
+        pipe = subprocess.Popen(["rdiff", "patch", "-", cacheDir.path(name)], stdin=input, stdout=subprocess.PIPE)
+        return pipe.stdout
     else:
-        f.seek(0)
+        return cacheDir.open(name, "rb")
 
-def recoverFile(file):
-    f = open(file)
-    if f:
-        header = readHeader(f)
-        x = f.read(8192)
-        print x
+def recoverFile(file, db, cacheDir):
+    print "Recover file: " + file
+    return
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("Recover a file from the tardis DB")
+    parser = argparse.ArgumentParser("Regenerate a Tardis file")
 
-    parser.add_argument("--database", help="Path to database directory", default=database)
-    parser.add_argument("file")
+    parser.add_argument("--output", "-o", dest="output", help="Output file", default=None)
+    parser.add_argument("--database", help="Path to database directory", dest="database", default=database)
+    parser.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
+    parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
+    parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
+    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
+    parser.add_argument('files', nargs='*', default=None, help="List of files to regenerate")
 
     args = parser.parse_args()
     print args
 
-    file = os.path.join(args.database, args.file)
-    print file
 
-    recoverFile(file)
+    logger = logging.getLogger("")
+    format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
+    handler = logging.StreamHandler()
+    handler.setFormatter(format)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+
+    baseDir = os.path.join(args.database, args.host)
+    dbName = os.path.join(baseDir, "tardis.db")
+    db = TardisDB.TardisDB(dbName, backup=False, prevSet=args.backup)
+
+    cacheDir = CacheDir.CacheDir(baseDir)
+
+    if args.output:
+        output = file(args.output, "wb")
+    else:
+        output = sys.stdout
+
+    for i in args.files:
+        f = None
+        if args.cksum:
+            f = recoverChecksum(i, db, cacheDir)
+        else:
+            f = recoverFile(i, db, cacheDir)
+
+        x = f.read(16 * 1024)
+        while x:
+            output.write(x)
+            x = f.read(16 * 1024)
+
+        f.close()

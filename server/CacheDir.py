@@ -4,37 +4,35 @@ import socket
 import logging
 
 class CacheDir:
-    def __init__(self, root, parts, partsize):
+    def __init__(self, root, parts=2, partsize=2):
+        logger.debug("Creating CacheDir: path={}, parts={}, partsize={})".format(root, parts, partsize))
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
 
-    def comps(self, file):
-        return [file[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
+    def comps(self, name):
+        return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
 
-    def dir(self, file):
-        path = self.root
-        for dir in self.comps(file):
-            path = os.path.join(path, dir)
-        return path
+    def dir(self, name):
+        return reduce(os.path.join, self.comps(name), self.root)
 
-    def path(self, file):
-        return os.path.join(self.dir(file), file)
+    def path(self, name):
+        return os.path.join(self.dir(name), name)
 
-    def exists(self, file):
-        return os.path.exists(self.path(file))
+    def exists(self, name):
+        return os.path.exists(self.path(name))
 
-    def mkdir(self, file):
-        dir = self.dir(file)
+    def mkdir(self, name):
+        dir = self.dir(name)
         if not os.path.isdir(dir):
             os.makedirs(dir)
 
-    def open(self, file, mode):
+    def open(self, name, mode):
         if mode.startswith("w"):
-            dir = self.dir(file)
+            dir = self.dir(name)
             if not os.path.isdir(dir):
                 os.makedirs(dir)
-        return open(self.path(file), mode)
+        return open(self.path(name), mode)
 
 logger = logging.getLogger("CacheDir")
 

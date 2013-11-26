@@ -29,10 +29,19 @@ DELTA   = 3
 
 config = None
 
+def getDecoder(encoding):
+    decoder = None
+    if (encoding == "binary"):
+        decoder = lambda x: x
+    elif (encoding == "base64"):
+        decoder = base64.decodestring
+    return decoder
+
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
     sessionid = None
+
 
     def checkFile(self, parent, file):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -76,21 +85,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         cksum = []
         content = []
         delta = []
+        queues = [done, content, cksum, delta]
 
         parentInode = data['inode']
+
 
         for file in data['files']:
             self.logger.debug("Processing file: {} {}".format(file["name"], str(file["inode"])))
             inode = file['inode']
             res = self.checkFile(parentInode, file)
-            if res == 0:
-                done.append(inode)
-            elif res == 1:
-                content.append(inode)
-            elif res == 2:
-                cksum.append(inode)
-            elif res == 3:
-                delta.append(inode)
+            # Shortcut for this:
+            #if res == 0: done.append(inode)
+            #elif res == 1: content.append(inode)
+            #elif res == 2: cksum.append(inode)
+            #elif res == 3: delta.append(inode)
+            queues[res].append(inode)
 
         # self.db.commit()
 
@@ -106,7 +115,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return response
 
-    def processSignature(self, message):
+    def processSigRequest(self, message):
         """ Generate and send a signature for a file """
         self.logger.debug("Processing signature request message: {}".format(str(message)))
         inode = message["inode"]
@@ -159,11 +168,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         bytesReceived = 0
         size = message["size"]
-        encoding = message["encoding"]
-        if (encoding == "binary"):
-            decoder = lambda x: x
-        elif (encoding == "base64"):
-            decoder = base64.decodestring
+        decoder = getDecoder(message["encoding"])
 
         while (bytesReceived < size):
             chunk = self.messenger.recvMessage()
@@ -176,17 +181,34 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # TODO: This has gotta be wrong.
             self.db.insertChecksumFile(checksum, basis=basis)
 
+        self.db.setChecksum(inode, checksum)
+        return "OK"
+
+    def processSignature(self, message):
+        """ Receive a delta message. """
+        self.logger.debug("Processing signature message: {}".format(str(message)))
+        output = None
+        temp = None
+        checksum = message["checksum"]
+        basis    = message["basis"]
+        inode    = message["inode"]
+
+        decoder = getDecoder(message["encoding"])
+
         # If a signature is specified, receive it as well.
-        if message["signature"]:
-            sigfile = checksum + ".sig"
+        sigfile = checksum + ".sig"
+        if self.cache.exists(sigfile):
+            self.logger.debug("Signature file {} already exists".format(sigfile))
+            # Abort read
+        else:
             output = self.cache.open(sigfile, "wb")
-            bytesReceived = 0
-            size = message["sigsize"]
-            while (bytesReceived < size):
-                bytes = decoder(chunk["data"])
-                output.write(bytes)
-                bytesReceived += len(bytes)
-            output.close()
+        bytesReceived = 0
+        size = message["size"]
+        while (bytesReceived < size):
+            bytes = decoder(chunk["data"])
+            output.write(bytes)
+            bytesReceived += len(bytes)
+        output.close()
 
         self.db.setChecksum(inode, checksum)
         return "OK"
@@ -215,11 +237,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         bytesReceived = 0
         size = message["size"]
-        encoding = message["encoding"]
-        if (encoding == "binary"):
-            decoder = lambda x: x
-        elif (encoding == "base64"):
-            decoder = base64.decodestring
+        decoder = getDecoder(message["encoding"])
 
         while (bytesReceived < size):
             chunk = self.messenger.recvMessage()
@@ -251,6 +269,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if messageType == "DIR":
             return self.processDir(message)
         elif messageType == "SGR":
+            return self.processSigRequest(message)
+        elif messageType == "SIG":
             return self.processSignature(message)
         elif messageType == "DEL":
             return self.processDelta(message)
