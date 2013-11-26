@@ -150,7 +150,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         digest = None
         checksum = message["checksum"]
         basis    = message["basis"]
-        inode = message["inode"]
+        inode    = message["inode"]
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file {} already exists".format(checksum))
             # Abort read
@@ -175,6 +175,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             output.close()
             # TODO: This has gotta be wrong.
             self.db.insertChecksumFile(checksum, basis=basis)
+
+        # If a signature is specified, receive it as well.
+        if message["signature"]:
+            sigfile = checksum + ".sig"
+            output = self.cache.open(sigfile, "wb")
+            bytesReceived = 0
+            size = message["sigsize"]
+            while (bytesReceived < size):
+                bytes = decoder(chunk["data"])
+                output.write(bytes)
+                bytesReceived += len(bytes)
+            output.close()
 
         self.db.setChecksum(inode, checksum)
         return "OK"
@@ -231,7 +243,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.db.setChecksum(message["inode"], checksum)
 
         return "OK"
-
 
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
@@ -349,7 +360,6 @@ if __name__ == "__main__":
         handler.setFormatter(format)
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
-
 
     basedir = config.get('Tardis', 'BaseDir')
     logger.debug("BaseDir: " + basedir)

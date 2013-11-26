@@ -108,8 +108,10 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS cksum "
-                  "FROM Files WHERE Inode = :inode AND Mtime = :mtime AND SIZE = :size AND CheckSum IS NOT NULL AND BackupSet = :backup",
+                  "Files.Name AS name, Files.Inode AS inode, Files.Dir AS dir, Files.Parent AS parent, Files.Size AS size, "
+                  "Files.MTime AS mtime, Files.CTime AS ctime, Files.Mode AS mode, Files.UID AS uid, Files.GID AS gid, CheckSums.Checksum AS cksum "
+                  "FROM Files JOIN CheckSums ON (Files.CheckSum = CheckSums.ID) "
+                  "WHERE Files.Inode = :inode AND Files.Mtime = :mtime AND Files.Size = :size AND Files.BackupSet = :backup",
                   temp)
         return makeDict(c, c.fetchone())
 
@@ -121,13 +123,14 @@ class TardisDB(object):
 
     def setChecksum(self, inode, checksum):
         c = self.conn.cursor()
-        c.execute("UPDATE Files SET Checksum = :checksum WHERE Inode = :inode AND BackupSet = :backup",
+        c.execute("UPDATE Files SET Checksum = (SELECT Id FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "checksum": checksum, "backup": self.backupSet})
 
     def getChecksum(self, name, parent):
         c = self.conn.cursor()
-        c.execute("SELECT CheckSum AS checksum "
-                  "FROM Files WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
+        c.execute("SELECT CheckSums.CheckSum AS checksum "
+                  "FROM Files JOIN CheckSums ON (Files.CheckSum = CheckSums.ID) "
+                  "WHERE Files.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
                   {"name": name, "parent": parent, "backup": self.prevBackupSet})
         return c.fetchone()[0]
 
@@ -141,12 +144,12 @@ class TardisDB(object):
                   "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                   temp)
 
-    def insertChecksumFile(self, checksum, basis=None):
+    def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))
         c = self.conn.cursor()
         c.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
                   "VALUES                (:checksum, :size, :basis)",
-                  {"checksum": checksum, "size": 0, "basis": basis })
+                  {"checksum": checksum, "size": size, "basis": basis })
 
     def completeBackup(self):
         self.conn.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.backupSet})

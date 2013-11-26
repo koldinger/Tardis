@@ -59,6 +59,7 @@ def sendData(file):
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
         num += 1
+    conn.send("DONE")
 
 def processDelta(inode):
     if inode in inodeDB:
@@ -86,6 +87,9 @@ def processDelta(inode):
 
             temp.close()
 
+        pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
+        (sigdelta, err) = pipe.communicate()
+
         m = hashlib.md5()
         with open(pathname, "rb") as file:
             for chunk in iter(partial(file.read, args.chunksize), ''):
@@ -98,6 +102,8 @@ def processDelta(inode):
             "size": len(delta),
             "checksum": checksum,
             "basis": oldchksum,
+            "signature" : True,
+            "sigsize": len(sigdelta),
             "encoding": encoding
             }
         if verbosity > 3:
@@ -105,6 +111,11 @@ def processDelta(inode):
         conn.send(message)
 
         x = cStringIO.StringIO(delta)
+        sendData(x)
+        x.close()
+
+        # TODO: Should this be a separate message????
+        x = cStringIO.StringIO(sigdelta)
         sendData(x)
         x.close()
 
