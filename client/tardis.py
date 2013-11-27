@@ -5,7 +5,6 @@ import os, sys
 import os.path
 import socket
 import fnmatch
-import socket
 from stat import *
 import json
 import argparse
@@ -58,8 +57,8 @@ def sendData(file):
         data = encoder(chunk)
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
+        stats["bytes"] += len(data)
         num += 1
-    conn.send("DONE")
 
 def processDelta(inode):
     if inode in inodeDB:
@@ -102,8 +101,6 @@ def processDelta(inode):
             "size": len(delta),
             "checksum": checksum,
             "basis": oldchksum,
-            "signature" : True,
-            "sigsize": len(sigdelta),
             "encoding": encoding
             }
         if verbosity > 3:
@@ -114,14 +111,31 @@ def processDelta(inode):
         sendData(x)
         x.close()
 
-        # TODO: Should this be a separate message????
-        x = cStringIO.StringIO(sigdelta)
-        sendData(x)
-        x.close()
-
         response = conn.receive()
         if verbosity > 3:
             print "Receive %s" % str(response)
+
+        """
+        message = {
+            "message": "SIG",
+            "inode": inode,
+            "size": len(sigdelta),
+            "checksum": checksum,
+            "basis": oldchksum,
+            "encoding": encoding
+            }
+        if verbosity > 3:
+            print "Send: %s" % str(message)
+        conn.send(message)
+        
+        x = cStringIO.StringIO(sigdelta)
+        sendData(x)
+        x.close()
+        
+        response = conn.receive()
+        if verbosity > 3:
+            print "Receive %s" % str(response)
+        """
 
 def sendContent(inode):
     if inode in inodeDB:
@@ -162,16 +176,18 @@ def handleAckDir(message):
     delta   = message["delta"]
     cksum   = message["cksum"]
 
+    if verbosity > 1: print "Processing AKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
     for i in done:
-        if verbosity > 1:
-            (x, name) = inodeDB[i]
-            print "File: [I]: %s" % (name)
         del inodeDB[i]
 
     for i in content:
         if verbosity > 1:
             (x, name) = inodeDB[i]
-            print "File: [N]: %s" % (name)
+            if "size" in x:
+                size = x["size"]
+            else:
+                size = 0;
+            print "File: [N]: %s %d" % (name, size)
         sendContent(i)
         del inodeDB[i]
 
@@ -188,6 +204,9 @@ def handleAckDir(message):
             print "File: [C]: %s" % (name)
         # sendChecksum(i)
         del inodeDB[i]
+
+    if verbosity > 1:
+        print "----- AckDir complete"
 
     return
 
@@ -291,11 +310,17 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         }
 
         for x in range(0, len(files), args.dirslice):
+            if verbosity > 1:
+                print "---- Generating chunk ----"
             chunk = files[x : x + args.dirslice - 1]
             message["files"] = chunk
-            if verbosity > 3:
-                print "Send: %s" % str(message)
+            if verbosity > 1:
+                print "---- Sending chunk ----"
+                if verbosity > 3:
+                    print "Send: %s" % str(message)
             conn.send(message)
+            if verbosity > 1:
+                print "---- Waiting for ACKDir----"
             response = conn.receive()
             if verbosity > 3:
                 print "Receive: %s" % str(response)

@@ -13,6 +13,8 @@ import tempfile
 import hashlib
 import base64
 import subprocess
+import cProfile
+import StringIO
 
 import CacheDir
 import TardisDB
@@ -28,6 +30,7 @@ CKSUM   = 2
 DELTA   = 3
 
 config = None
+profiler = None
 
 def getDecoder(encoding):
     decoder = None
@@ -43,32 +46,30 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     sessionid = None
 
 
-    def checkFile(self, parent, file):
+    def checkFile(self, parent, f):
         """ Process an individual file.  Check to see if it's different from what's there already """
 
-        # Insert the current file info
-        self.db.insertFile(file, parent)
         #logger.debug("NFile: {}".format(str(file)))
         #logger.debug("OFile: {}".format(str(old)))
 
-        if file["dir"] == 1:
+        if f["dir"] == 1:
             retVal = DONE
         else:
             # Get the last backup information
-            old = self.db.getFileInfoByName(file["name"], parent)
+            old = self.db.getFileInfoByName(f["name"], parent)
             if old != None:
                 self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
-                                  .format(file["name"], file["inode"], file["size"], file["mtime"], old["inode"], old["size"], old["mtime"]))
-                if (old["inode"] == file["inode"]) and (old["size"] == file["size"]) and (old["mtime"] == file["mtime"]):
-                    self.db.copyChecksum(old["inode"], file["inode"])
+                                  .format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
+                if (old["inode"] == f["inode"]) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
+                    self.db.copyChecksum(old["inode"], f["inode"])
                     retVal = DONE
-                elif file["size"] < 32:
+                elif f["size"] < 32:
                     # Just ask for content if the size is under 4K.  Easier.
                     retVal = CONTENT
                 else:
                     retVal = DELTA
             else:
-                old = self.db.getFileInfoBySimilar(file)
+                old = self.db.getFileInfoBySimilar(f)
                 if old:
                     retVal = CHKSUM
                 else:
@@ -88,12 +89,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         queues = [done, content, cksum, delta]
 
         parentInode = data['inode']
+        files = data['files']
 
+        # Insert the current file info
+        self.db.insertFiles(files, parentInode)
 
-        for file in data['files']:
-            self.logger.debug("Processing file: {} {}".format(file["name"], str(file["inode"])))
-            inode = file['inode']
-            res = self.checkFile(parentInode, file)
+        for f in files:
+            self.logger.debug("Processing file: {} {}".format(f["name"], str(f["inode"])))
+            inode = f['inode']
+            res = self.checkFile(parentInode, f)
             # Shortcut for this:
             #if res == 0: done.append(inode)
             #elif res == 1: content.append(inode)
@@ -121,7 +125,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         inode = message["inode"]
 
         info = self.db.getNewFileInfoByInode(inode)
-        chksum = self.db.getChecksum(info["name"], info["parent"])      ### Assumption: Current parent is same as old
+        chksum = self.db.getChecksumByName(info["name"], info["parent"])      ### Assumption: Current parent is same as old
+
         if chksum:
             sigfile = chksum + ".sig"
             if self.cache.exists(sigfile):
@@ -308,6 +313,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
 
     def handle(self):
+        if profiler:
+            profiler.enable()
+
         try:
             self.request.sendall("TARDIS 1.0")
             message = self.request.recv(256).strip()
@@ -347,9 +355,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         finally:
             self.request.close()
             self.endSession()
+            if profiler:
+                profiler.disable()
+                s = StringIO.StringIO()
+                sortby = 'cumulative'
+                ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+                ps.print_stats()
+                print s.getvalue()
 
 if __name__ == "__main__":
     defaultConfig = './tardis-server.cfg'
+
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
@@ -357,13 +374,16 @@ if __name__ == "__main__":
     parser.add_argument('--single', dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--version', action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-l', dest='logcfg', default=None, help='Logging configuration file');
+    parser.add_argument('--verbose', '-v', action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--profile', dest='profile', default=None, help='Generate a profile')
 
     args = parser.parse_args()
 
     configDefaults = {
         'Port' : '9999',
         'BaseDir' : './cache',
-        'LogCfg'  : args.logcfg
+        'LogCfg'  : args.logcfg,
+        'Profile' : args.profile
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
@@ -379,10 +399,14 @@ if __name__ == "__main__":
         handler = logging.StreamHandler()
         handler.setFormatter(format)
         logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        loglevel = levels[args.verbose] if args.verbose < len(levels) else logging.DEBUG
+        logger.setLevel(loglevel)
 
     basedir = config.get('Tardis', 'BaseDir')
     logger.debug("BaseDir: " + basedir)
+
+    if config.get('Tardis', 'Profile'):
+        profiler = cProfile.Profile()
 
     try:
         server = SocketServer.TCPServer(("localhost", config.getint('Tardis', 'Port')), TardisServerHandler)

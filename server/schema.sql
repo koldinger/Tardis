@@ -8,19 +8,20 @@ CREATE TABLE IF NOT EXISTS Backups (
 
 CREATE TABLE IF NOT EXISTS CheckSums (
     Checksum    CHARACTER UNIQUE NOT NULL,
-    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
     Size        INTEGER,
-    Basis       CHARACTER
+    Basis       CHARACTER,
+    FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
-CREATE INDEX IF NOT EXISTS CheckSums.CheckSumIndex ON CheckSums(Checksum);
+CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
 CREATE TABLE IF NOT EXISTS Files (
     Name        CHARACTER NOT NULL,
     BackupSet   INTEGER   NOT NULL,
     Inode       INTEGER   NOT NULL,
     Parent      INTEGER   NOT NULL,
-    CheckSum    CHARACTER,
+    ChecksumId  INTEGER,
     Dir         INTEGER,
     Size        INTEGER,
     MTime       INTEGER,
@@ -30,7 +31,10 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
-    FOREIGN KEY(BackupSet) REFERENCES Backups(BackupSet)
+    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD),
+    FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet)
 );
+
+CREATE INDEX IF NOT EXISTS FilesID ON Files(Parent ASC, Name ASC, BackupSet ASC);
 
 INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", NULL, 1);

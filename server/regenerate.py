@@ -30,6 +30,7 @@ def recoverFile(filename, db, cacheDir):
     if info:
         return recoverChecksum(info["checksum"], db, cacheDir)
     else:
+        logger.error("Could not open file {}".format(filename))
         return None
 
 logger = logging.getLogger("")
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file")
 
     parser.add_argument("--output", "-o", dest="output", help="Output file", default=None)
-    parser.add_argument("--database", help="Path to database directory", dest="database", default=database)
+    parser.add_argument("--database", "-d", help="Path to database directory", dest="database", default=database)
     parser.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
     parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
@@ -48,11 +49,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    #format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-    #handler = logging.StreamHandler()
-    #handler.setFormatter(format)
+    FORMAT = "%(levelname)s : %(name)s : %(message)s"
+    #formatter = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
+    #handler = logging.StreamHandler(stream=sys.stderr)
+    #handler.setFormatter(formatter)
     #logger.addHandler(handler)
-    #logger.setLevel(logging.WARNING)
+    logger.setLevel(logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT)
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
