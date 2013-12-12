@@ -64,6 +64,7 @@ def splitpath(path, maxdepth=20):
 class TardisDB(object):
     logger = logging.getLogger("DB")
     conn = None
+    cursor = None
     dbName = None
 
     def __init__(self, dbname, backup=True, prevSet=None):
@@ -80,23 +81,25 @@ class TardisDB(object):
 
         self.conn = sqlite3.connect(self.dbName)
 
-        c = self.conn.cursor()
+        self.cursor = self.conn.cursor()
         if (prevSet):
-            c.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
+            self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
-            c.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+            self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
-        row = c.fetchone()
+        row = self.cursor.fetchone()
         self.prevBackupName = row[0]
         self.prevBackupSet = row[1]
         self.logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
-    def bset(current):
+        self.conn.execute("PRAGMA synchronous=false")
+
+    def bset(self, current):
         return self.currBackupSet if current else self.prevBackupSet
 
     def newBackupSet(self, name, session):
         """ Create a new backupset.  Set the current backup set to be that set. """
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("INSERT INTO Backups (Name, Completed, Timestamp, Session) VALUES (:name, 0, :now, :session)",
                   {"name": name, "now": datetime.now(), "session": session})
         self.currBackupSet = c.lastrowid
@@ -108,7 +111,7 @@ class TardisDB(object):
     def getFileInfoByName(self, name, parent):
         """ Lookup a file in a directory in the previous backup set"""
         self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, CheckSums.CheckSum as checksum "
                   "FROM Files LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
@@ -132,7 +135,7 @@ class TardisDB(object):
 
     def getFileInfoByInode(self, inode):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.prevBackupSet))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, CheckSums.CheckSum as checksum "
                   "FROM Files NATURAL LEFT OUTER JOIN CheckSums "
@@ -142,7 +145,7 @@ class TardisDB(object):
 
     def getNewFileInfoByInode(self, inode):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.currBackupSet))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
@@ -152,7 +155,7 @@ class TardisDB(object):
     def getFileInfoBySimilar(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         self.logger.debug("Looking up file for similar info")
-        c = self.conn.cursor()
+        c = self.cursor
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet
         c.execute("SELECT "
@@ -164,19 +167,19 @@ class TardisDB(object):
         return makeDict(c, c.fetchone())
 
     def copyChecksum(self, old_inode, new_inode):
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("UPDATE Files SET ChecksumId = (SELECT CheckSumID FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
                   "WHERE INode = :newInode AND BackupSet = :backup",
                   {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.currBackupSet})
 
     def setChecksum(self, inode, checksum):
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
 
     def getChecksumByName(self, name, parent):
         self.logger.debug("Looking up checksum for file {} {} {}".format(name, parent, self.prevBackupSet))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("SELECT CheckSums.CheckSum AS checksum "
                   "FROM Files JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
                   "WHERE Files.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
@@ -185,7 +188,7 @@ class TardisDB(object):
 
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
-        c = self.conn.cursor()
+        c = self.cursor
         temp = fileInfo.copy()
         temp["backup"] = self.currBackupSet
         temp["parent"] = parent
@@ -205,7 +208,7 @@ class TardisDB(object):
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
                   "VALUES                (:checksum, :size, :basis)",
                   {"checksum": checksum, "size": size, "basis": basis })
@@ -213,31 +216,34 @@ class TardisDB(object):
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: {}".format(checksum))
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute("SELECT Checksum, Basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
         row = c.fetchone()
         return (row[0], row[1])
 
-    def readDir(self, dirNode):
-        self.logger.debug("Reading directory values for {} {}".format(dirNode, self.prevBackupSet))
-        c = self.conn.cursor()
+    def readDirectory(self, dirNode, current=False):
+        backupset = self.bset(current)
+        self.logger.debug("Reading directory values for {} {}".format(dirNode, backupset))
+        c = self.cursor
         c.execute("SELECT "
                   "Files.Name AS name, Files.Inode AS inode, Files.Dir AS dir, Files.Parent AS parent, Files.Size AS size, "
                   "Files.MTime AS mtime, Files.CTime AS ctime, Files.Mode AS mode, Files.UID AS uid, Files.GID AS gid, CheckSums.Checksum AS cksum "
                   "FROM Files JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
                   "WHERE Files.Parent = :dirnode AND Files.BackupSet = :backup",
-                  {"dirnode": dirNode, "backup": self.prevBackupSet})
+                  {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():
             yield makeDict(c, row)
 
     def getPathForFileByName(self, name, parent, current=False):
         backupSet = self.bset(current)
-        self.logger.debug("Extracting path for file {} {} {}".format(name, parent, backupSet()))
+        self.logger.debug("Extracting path for file {} {} {}".format(name, parent, backupSet))
         return None
 
+    def beginTransaction(self):
+        self.cursor.execute("BEGIN")
 
     def completeBackup(self):
-        self.conn.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})
+        self.cursor.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})
         self.commit()
 
     def commit(self):

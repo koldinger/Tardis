@@ -309,10 +309,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             'inode':  s.st_ino
         }
 
+        chunkNum = 0
         for x in range(0, len(files), args.dirslice):
             if verbosity > 1:
-                print "---- Generating chunk ----"
-            chunk = files[x : x + args.dirslice - 1]
+                print "---- Generating chunk {} ----".format(chunkNum)
+            chunkNum += 1
+            chunk = files[x : x + args.dirslice]
             message["files"] = chunk
             if verbosity > 1:
                 print "---- Sending chunk ----"
@@ -329,7 +331,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         # Make sure we're not at maximum depth
         if depth != 1:
-            for subdir in subdirs:
+            for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
@@ -337,7 +339,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
 
 if __name__ == '__main__':
-
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d-%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 

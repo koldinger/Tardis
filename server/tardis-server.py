@@ -13,8 +13,11 @@ import tempfile
 import hashlib
 import base64
 import subprocess
+
+# For profiling
 import cProfile
 import StringIO
+import pstats
 
 import CacheDir
 import TardisDB
@@ -45,8 +48,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     logger = logging.getLogger('Tardis')
     sessionid = None
 
-
-    def checkFile(self, parent, f):
+    def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
 
         #logger.debug("NFile: {}".format(str(file)))
@@ -56,28 +58,40 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             retVal = DONE
         else:
             # Get the last backup information
-            old = self.db.getFileInfoByName(f["name"], parent)
-            if old != None:
-                self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
-                                  .format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
-                if (old["inode"] == f["inode"]) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
-                    self.db.copyChecksum(old["inode"], f["inode"])
+            #old = self.db.getFileInfoByName(f["name"], parent)
+            name = f["name"]
+            inode = f["inode"]
+            if name in dirhash:
+                old = dirhash[name]
+                self.logger.debug("Matching against old version for file {} ({})".format(name, inode))
+                #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
+                                  #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
+                if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
+                    if "checksum" in old:
+                        self.db.setChecksum(inode, old["checksum"])
+                    else:
+                        self.db.copyChecksum(old["inode"], inode)
                     retVal = DONE
-                elif f["size"] < 32:
+                elif f["size"] < 4096:
                     # Just ask for content if the size is under 4K.  Easier.
                     retVal = CONTENT
                 else:
                     retVal = DELTA
             else:
+                #Check to see if it already exists
+                self.logger.debug("Looking for similar file: {} ({})".format(name, inode));
                 old = self.db.getFileInfoBySimilar(f)
                 if old:
-                    retVal = CHKSUM
+                    retVal = CKSUM
                 else:
                     # TODO: Lookup based on inode.
-                    self.logger.debug("No old file.")
+                    #self.logger.debug("No old file.")
                     retVal = CONTENT
             
         return retVal
+
+    lastDirNode = None
+    lastDirHash = {}
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
@@ -91,13 +105,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         parentInode = data['inode']
         files = data['files']
 
+        dirhash = {}
+
+        # Get the old directory info
+        if self.lastDirNode == parentInode:
+            dirhash = self.lastDirHash
+        else:
+            directory = self.db.readDirectory(parentInode)
+            for i in directory:
+                dirhash[i["name"]] = i
+            self.lastDirHash = dirhash
+            self.lastDirNode = parentInode
+
         # Insert the current file info
         self.db.insertFiles(files, parentInode)
 
         for f in files:
             self.logger.debug("Processing file: {} {}".format(f["name"], str(f["inode"])))
             inode = f['inode']
-            res = self.checkFile(parentInode, f)
+            res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
             #elif res == 1: content.append(inode)

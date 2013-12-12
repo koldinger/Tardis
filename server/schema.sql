@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
+CREATE TABLE IF NOT EXISTS Names (
+    Name        CHARACTER UNIQUE NOT NULL,
+    NameId      INTEGER PRIMARY KEY AUTOINCREMENT
+);
+
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
 CREATE TABLE IF NOT EXISTS Files (
@@ -36,5 +41,6 @@ CREATE TABLE IF NOT EXISTS Files (
 );
 
 CREATE INDEX IF NOT EXISTS FilesID ON Files(Parent ASC, Name ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS InodeID ON Files(Inode ASC, BackupSet ASC);
 
 INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", NULL, 1);
