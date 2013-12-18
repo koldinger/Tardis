@@ -19,8 +19,6 @@ CREATE TABLE IF NOT EXISTS Names (
     NameId      INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
-CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
-
 CREATE TABLE IF NOT EXISTS Files (
     Name        CHARACTER NOT NULL,
     BackupSet   INTEGER   NOT NULL,
@@ -40,8 +38,9 @@ CREATE TABLE IF NOT EXISTS Files (
     FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet)
 );
 
-CREATE INDEX IF NOT EXISTS FilesID ON Files(Parent ASC, Name ASC, BackupSet ASC);
-CREATE INDEX IF NOT EXISTS InodeID ON Files(Inode ASC, BackupSet ASC);
-CREATE INDEX IF NOT EXISTS NameID  ON Files(Name ASC, BackupSet ASC, Parent ASC);
+CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
+
+CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
 INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", strftime('%s', 'now') , 1);

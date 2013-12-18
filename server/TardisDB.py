@@ -193,7 +193,11 @@ class TardisDB(object):
                               "FROM Files JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
                               "WHERE Files.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
                               {"name": name, "parent": parent, "backup": backupset})
-        return c.fetchone()[0]
+        row = c.fetchone()
+        if row:
+            return row[0]
+        else:
+            return None
 
     def getChecksumByPath(self, name, current=False):
         backupset = self.bset(current)

@@ -306,23 +306,48 @@ class TardisFS(fuse.Fuse):
     def listxattr ( self, path, size ):
         print line
         print '*** listxattr', path, " :: ", size
-        return 'checksum\0'
+        if (getDepth(path) > 1):
+            parts = getParts(path)
+            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            if bset:
+                checksum = self.tardis.getChecksumByPath(parts[1], bset)
+                print "Got checksum: ", parts, bset, checksum
+                if checksum:
+                    return ['user.checksum']
+        return None
 
-    def getxattr (self, path, attr, foobar ):
+    def getxattr (self, path, attr, size):
         print line
-        print '*** getxattr', path, " :: ", attr, foobar
-        return -errno.ENOSYS
+        print '*** getxattr', path, " :: ", attr, size
+
+        parts = getParts(path)
+        (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+
+        if size == 0:
+            retFunc = len
+        else:
+            retFunc = lambda x: str(x)
+
+        if attr == 'user.checksum':
+            if bset:
+                checksum = self.tardis.getChecksumByPath(parts[1], bset)
+                if checksum:
+                    print checksum, retFunc(checksum)
+                    return retFunc(checksum)
+        return None
+
 
 if __name__ == "__main__":
     profiler = None
 
-    profiler = cProfile.Profile()
+    #profiler = cProfile.Profile()
     if profiler:
         profiler.enable()
 
     fs = TardisFS()
     fs.flags = 0
     fs.multithreaded = 0
+    fs.use_ino = 1
     fs.main()
 
     if profiler:

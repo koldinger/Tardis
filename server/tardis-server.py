@@ -121,7 +121,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.db.insertFiles(files, parentInode)
 
         for f in files:
-            self.logger.debug("Processing file: {} {}".format(f["name"], str(f["inode"])))
+            self.logger.debug("Processing file: {} {}".format(str(f["name"]), str(f["inode"])))
             inode = f['inode']
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
