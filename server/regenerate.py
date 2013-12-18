@@ -20,23 +20,23 @@ class Regenerator:
         self.cacheDir = cache
         self.db = db
 
-    def recoverChecksum(self, cksum):
-        logger.debug("Recovering checksum: {}".format(cksum))
+    def recoverChecksum(self, cksum, bset=False):
+        self.logger.debug("Recovering checksum: {}".format(cksum))
         (name, basis) = self.db.getChecksumInfo(cksum)
         if basis:
-            input = self.recoverChecksum(basis)
-            pipe = subprocess.Popen(["rdiff", "patch", "-", cacheDir.path(name)], stdin=input, stdout=subprocess.PIPE)
+            input = self.recoverChecksum(basis, bset)
+            pipe = subprocess.Popen(["rdiff", "patch", "-", self.cacheDir.path(name)], stdin=input, stdout=subprocess.PIPE)
             return pipe.stdout
         else:
-            return cacheDir.open(name, "rb")
+            return self.cacheDir.open(name, "rb")
 
-    def recoverFile(self, filename):
-        logger.debug("Recovering file: {}".format(filename))
-        info = self.db.getFileInfoByPath(filename)
-        if info:
-            return self.recoverChecksum(info["checksum"])
+    def recoverFile(self, filename, bset=False):
+        self.logger.debug("Recovering file: {}".format(filename))
+        cksum = self.db.getChecksumByPath(filename, bset)
+        if cksum:
+            return self.recoverChecksum(cksum)
         else:
-            logger.error("Could not open file {}".format(filename))
+            self.logger.error("Could not open file {}".format(filename))
             return None
 
 
@@ -66,10 +66,10 @@ if __name__ == "__main__":
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
-    db = TardisDB.TardisDB(dbName, backup=False, prevSet=args.backup)
-    cacheDir = CacheDir.CacheDir(baseDir)
+    tardis = TardisDB.TardisDB(dbName, backup=False, prevSet=args.backup)
+    cache = CacheDir.CacheDir(baseDir)
 
-    r = Regenerator(cacheDir, db)
+    r = Regenerator(cache, tardis)
 
     if args.output:
         output = file(args.output, "wb")

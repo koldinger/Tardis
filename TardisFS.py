@@ -12,11 +12,13 @@ import errno   # for error number codes (ENOENT, etc)
                # - note: these must be returned as negatives
 import sys
 import argparse
+import os.path
 
 sys.path.append("server")
 import TardisDB
 import CacheDir
 import regenerate
+import tempfile
 
 # For profiling
 import cProfile
@@ -58,14 +60,21 @@ class TardisFS(fuse.Fuse):
 
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
-        self.db="."
+        self.path="."
 
-        self.parser.add_option(mountopt="db", help="Hi mom")
+        self.parser.add_option(mountopt="path", help="Hi mom")
         self.parse(values=self, errex=1)
-        print "DB: " , self.db
-        print 'Init complete.'
 
-        self.tardis = TardisDB.TardisDB(self.db)
+        print "Dir: ", self.path
+
+        self.cache = CacheDir.CacheDir(self.path)
+        dbPath = os.path.join(self.path, "tardis.db")
+        self.tardis = TardisDB.TardisDB(dbPath)
+
+        self.regenerator = regenerate.Regenerator(self.cache, self.tardis)
+        self.files = {}
+
+        print 'Init complete.'
 
     def fsinit(self):
         print "FSINIT()"
@@ -178,27 +187,27 @@ class TardisFS(fuse.Fuse):
 
     def chmod ( self, path, mode ):
         print '*** chmod', path, oct(mode)
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def chown ( self, path, uid, gid ):
         print '*** chown', path, uid, gid
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def fsync ( self, path, isFsyncFile ):
         print '*** fsync', path, isFsyncFile
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def link ( self, targetPath, linkPath ):
         print '*** link', targetPath, linkPath
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def mkdir ( self, path, mode ):
         print '*** mkdir', path, oct(mode)
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def mknod ( self, path, mode, dev ):
         print '*** mknod', path, oct(mode), dev
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def open ( self, path, flags ):
         print line
@@ -208,37 +217,67 @@ class TardisFS(fuse.Fuse):
         if (depth < 2):
             return -errno.ENOENT
 
+        # TODO: Lock this
+        if path in self.files:
+            self.files[path]["opens"] += 1
+            return 0
+
         parts = getParts(path)
         (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
         if bset:
-            f = self.tardis.getFileInfoByPath(parts[1], bset)
+            f = self.regenerator.recoverFile(parts[1], bset)
             if f:
-                print f
-                return 0
+                try:
+                    f.seek(0)
+                except IOError:
+                    print "Copying file to tempfile"
+                    temp = tempfile.TemporaryFile()
+                    chunk = f.read(65536)
+                    if chunk:
+                        temp.write(chunk)
+                        chunk = f.read(65536)
+                    f.close()
+                    f = temp
+                    temp.seek(0)
 
+                self.files["path"] = {"file": f, "opens": 1}
+                return 0
+        # Otherwise.....
         return -errno.ENOENT
 
 
     def read ( self, path, length, offset ):
         print line
         print '*** read', path, length, offset
-        return -errno.ENOSYS
+        f = self.files["path"]["file"]
+        if f:
+            f.seek(offset)
+            return f.read(length)
+        return -errno.EINVAL
 
     def readlink ( self, path ):
         print '*** readlink', path
         return -errno.ENOSYS
 
     def release ( self, path, flags ):
+        print line
         print '*** release', path, flags
-        return -errno.ENOSYS
+
+        if self.files["path"]:
+            self.files["path"]["opens"] -= 1;
+            if self.files["path"]["opens"] == 0:
+                self.files["path"]["file"].close()
+                del self.files["path"]
+            return 0
+        return -errno.EINVAL
 
     def rename ( self, oldPath, newPath ):
         print '*** rename', oldPath, newPath
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def rmdir ( self, path ):
         print '*** rmdir', path
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def statfs ( self ):
         print '*** statfs'
@@ -246,23 +285,23 @@ class TardisFS(fuse.Fuse):
 
     def symlink ( self, targetPath, linkPath ):
         print '*** symlink', targetPath, linkPath
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def truncate ( self, path, size ):
         print '*** truncate', path, size
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def unlink ( self, path ):
         print '*** unlink', path
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def utime ( self, path, times ):
         print '*** utime', path, times
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def write ( self, path, buf, offset ):
         print '*** write', path, buf, offset
-        return -errno.ENOSYS
+        return -errno.EROFS
 
     def listxattr ( self, path, size ):
         print line

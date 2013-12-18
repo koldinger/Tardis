@@ -195,6 +195,14 @@ class TardisDB(object):
                               {"name": name, "parent": parent, "backup": backupset})
         return c.fetchone()[0]
 
+    def getChecksumByPath(self, name, current=False):
+        backupset = self.bset(current)
+        self.logger.debug("Looking up checksum for path {} {}".format(name, backupset))
+        f = self.getFileInfoByPath(name, current)
+        if f:
+            return self.getChecksumByName(f["name"], f["parent"], current)
+        return None
+
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
         c = self.cursor
