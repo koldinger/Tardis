@@ -42,5 +42,6 @@ CREATE TABLE IF NOT EXISTS Files (
 
 CREATE INDEX IF NOT EXISTS FilesID ON Files(Parent ASC, Name ASC, BackupSet ASC);
 CREATE INDEX IF NOT EXISTS InodeID ON Files(Inode ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS NameID  ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
-INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", NULL, 1);
+INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", strftime('%s', 'now') , 1);
