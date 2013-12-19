@@ -178,32 +178,38 @@ def handleAckDir(message):
 
     if verbosity > 1: print "Processing AKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
     for i in done:
-        del inodeDB[i]
+        if i in inodeDB:
+            del inodeDB[i]
 
     for i in content:
         if verbosity > 1:
-            (x, name) = inodeDB[i]
-            if "size" in x:
-                size = x["size"]
-            else:
-                size = 0;
-            print "File: [N]: %s %d" % (name, size)
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                if "size" in x:
+                    size = x["size"]
+                else:
+                    size = 0;
+                print "File: [N]: %s %d" % (name, size)
         sendContent(i)
-        del inodeDB[i]
+        if i in inodeDB:
+            del inodeDB[i]
 
     for i in delta:
         if verbosity > 1:
             (x, name) = inodeDB[i]
             print "File: [D]: %s" % (name)
         processDelta(i)
-        del inodeDB[i]
+        if i in inodeDB:
+            del inodeDB[i]
 
     for i in cksum:
         if verbosity > 1:
-            (x, name) = inodeDB[i]
-            print "File: [C]: %s" % (name)
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                print "File: [C]: %s" % (name)
         # sendChecksum(i)
-        del inodeDB[i]
+        if i in inodeDB:
+            del inodeDB[i]
 
     if verbosity > 1:
         print "----- AckDir complete"
@@ -255,6 +261,7 @@ def processDir(dir, excludes=[], max=0):
             excludes = newExcludes
     except IOError as e:
         pass
+
     localExcludes = excludes
 
     # Add a list of local files to exclude.  These won't get passed to lower directories

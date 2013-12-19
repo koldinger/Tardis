@@ -85,13 +85,18 @@ class TardisDB(object):
 
         self.cursor = self.conn.cursor()
         if (prevSet):
-            self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
+            f = self.getBackupSetInfo(prevSet)
+            if f:
+                self.prevBackupName = f[0]
+                self.prevBackupSet  = f[1]
+            #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
-            self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+            (self.prevBackupName, self.prevBackupSet) = self.lastBackupSet()
+            #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
-        row = self.cursor.fetchone()
-        self.prevBackupName = row[0]
-        self.prevBackupSet = row[1]
+        #row = self.cursor.fetchone()
+        #self.prevBackupName = row[0]
+        #self.prevBackupSet = row[1]
         self.logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
         self.conn.execute("PRAGMA synchronous=false")
@@ -101,6 +106,14 @@ class TardisDB(object):
             return self.currBackupSet if current else self.prevBackupSet
         else:
             return current
+
+    def lastBackupSet(self):
+        c = self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+        row = c.fetchone()
+        if row:
+            return row[0], row[1]
+        else:
+            return None, None
 
     def newBackupSet(self, name, session):
         """ Create a new backupset.  Set the current backup set to be that set. """

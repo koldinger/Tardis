@@ -13,12 +13,13 @@ import errno   # for error number codes (ENOENT, etc)
 import sys
 import argparse
 import os.path
+import logging
+import tempfile
 
 sys.path.append("server")
 import TardisDB
 import CacheDir
 import regenerate
-import tempfile
 
 # For profiling
 import cProfile
@@ -61,11 +62,12 @@ class TardisFS(fuse.Fuse):
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
         self.path="."
+        self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="path", help="Hi mom")
         self.parse(values=self, errex=1)
 
-        print "Dir: ", self.path
+        self.log.info("Dir: %s", self.path)
 
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, "tardis.db")
@@ -74,10 +76,10 @@ class TardisFS(fuse.Fuse):
         self.regenerator = regenerate.Regenerator(self.cache, self.tardis)
         self.files = {}
 
-        print 'Init complete.'
+        self.log.debug('Init complete.')
 
     def fsinit(self):
-        print "FSINIT()"
+        self.log.debug("fsinit")
 
     def getattr(self, path):
         """
@@ -95,8 +97,7 @@ class TardisFS(fuse.Fuse):
         """
 
         depth = getDepth(path) # depth of path, zero-based from root
-        print line
-        print '*** getattr', path, depth
+        self.log.info('getattr {} {}'.format(path, depth))
 
         if depth == 0:
             # Fake the root
@@ -115,14 +116,15 @@ class TardisFS(fuse.Fuse):
         elif depth == 1:
             # Root directory contents
             lead = getParts(path)
-            f = self.tardis.getBackupSetInfo(lead[0])
-            if f:
-                st = fuse.Stat()
+            st = fuse.Stat()
+            if (lead[0] == 'Current'):
+                target = self.tardis.lastBackupSet()
+                f = self.tardis.getBackupSetInfo(target[0])
                 timestamp = float(f[1])
-                st.st_mode = stat.S_IFDIR | 0755
-                st.st_ino = 0
+                st.st_mode = stat.S_IFLNK | 0755
+                st.st_ino = 1
                 st.st_dev = 0
-                st.st_nlink = 4
+                st.st_nlink = 1
                 st.st_uid = 0
                 st.st_gid = 0
                 st.st_size = 4096
@@ -130,6 +132,22 @@ class TardisFS(fuse.Fuse):
                 st.st_mtime = timestamp
                 st.st_ctime = timestamp
                 return st
+            else:
+                f = self.tardis.getBackupSetInfo(lead[0])
+                if f:
+                    st = fuse.Stat()
+                    timestamp = float(f[1])
+                    st.st_mode = stat.S_IFDIR | 0755
+                    st.st_ino = 1
+                    st.st_dev = 0
+                    st.st_nlink = 2
+                    st.st_uid = 0
+                    st.st_gid = 0
+                    st.st_size = 4096
+                    st.st_atime = timestamp
+                    st.st_mtime = timestamp
+                    st.st_ctime = timestamp
+            return st
         else:
             parts = getParts(path)
             (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
@@ -154,17 +172,18 @@ class TardisFS(fuse.Fuse):
         """
         return: [[('file1', 0), ('file2', 0), ... ]]
         """
-        print line
-        print '*** getdir', path
+        self.log.info('*** getdir {}'.format(path))
         return -errno.ENOSYS
 
     def readdir(self, path, offset):
-        print line
-        print '*** readdir', path, offset
+        self.log.info('readdir {} {}'.format(path, offset))
+        inodes = {}
         dirents = ['.', '..']
+        parent = 0
 
         depth = getDepth(path)
         if depth == 0:
+            dirents.append("Current")
             entries = self.tardis.listBackupSets()
         else:
             parts = getParts(path)
@@ -181,37 +200,35 @@ class TardisFS(fuse.Fuse):
             yield fuse.Direntry(e)
 
     def mythread ( self ):
-        print line
-        print '*** mythread'
+        self.log.info('mythread')
         return -errno.ENOSYS
 
     def chmod ( self, path, mode ):
-        print '*** chmod', path, oct(mode)
+        self.log.info('chmod {} {}'.format(path, oct(mode)))
         return -errno.EROFS
 
     def chown ( self, path, uid, gid ):
-        print '*** chown', path, uid, gid
+        self.log.info( 'chown {} {} {}'.format(path, uid, gid))
         return -errno.EROFS
 
     def fsync ( self, path, isFsyncFile ):
-        print '*** fsync', path, isFsyncFile
+        self.log.info( 'fsync {} {}'.format(path, isFsyncFile))
         return -errno.EROFS
 
     def link ( self, targetPath, linkPath ):
-        print '*** link', targetPath, linkPath
+        self.log.info( 'link {} {}'.format(targetPath, linkPath))
         return -errno.EROFS
 
     def mkdir ( self, path, mode ):
-        print '*** mkdir', path, oct(mode)
+        self.log.info( 'mkdir {} {}'.format(path, oct(mode)))
         return -errno.EROFS
 
     def mknod ( self, path, mode, dev ):
-        print '*** mknod', path, oct(mode), dev
+        self.log.info( 'mknod {} {} {}'.format(path, oct(mode), dev))
         return -errno.EROFS
 
     def open ( self, path, flags ):
-        print line
-        print '*** open', path, flags
+        self.log.info('open'.format(path, flags))
         depth = getDepth(path) # depth of path, zero-based from root
 
         if (depth < 2):
@@ -230,7 +247,7 @@ class TardisFS(fuse.Fuse):
                 try:
                     f.seek(0)
                 except IOError:
-                    print "Copying file to tempfile"
+                    self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)
                     if chunk:
@@ -247,8 +264,7 @@ class TardisFS(fuse.Fuse):
 
 
     def read ( self, path, length, offset ):
-        print line
-        print '*** read', path, length, offset
+        self.log.info('read {} {} {}'.format(path, length, offset))
         f = self.files["path"]["file"]
         if f:
             f.seek(offset)
@@ -256,8 +272,20 @@ class TardisFS(fuse.Fuse):
         return -errno.EINVAL
 
     def readlink ( self, path ):
-        print '*** readlink', path
-        return -errno.ENOSYS
+        self.log.info('readlink {}'.format(path))
+        if path == '/Current':
+            target = self.tardis.lastBackupSet()
+            self.log.debug("Path: {} Target: {} {}".format(path, target[0], target[1]))
+            return str(target[0])
+        elif getDepth(path) > 1:
+            parts = getParts(path)
+            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            if bset:
+                f = self.regenerator.recoverFile(parts[1], bset)
+                link = f.readline()
+                f.close()
+                return link
+        return -errno.ENOENT
 
     def release ( self, path, flags ):
         print line
@@ -317,28 +345,33 @@ class TardisFS(fuse.Fuse):
         return None
 
     def getxattr (self, path, attr, size):
-        print line
-        print '*** getxattr', path, " :: ", attr, size
+        self.log.info('getxattr {} {} {}'.format(path, attr, size))
 
-        parts = getParts(path)
-        (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+        if (getDepth(path) > 1):
+            parts = getParts(path)
+            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
 
-        if size == 0:
-            retFunc = len
-        else:
-            retFunc = lambda x: str(x)
+            if size == 0:
+                retFunc = len
+            else:
+                retFunc = lambda x: str(x)
 
-        if attr == 'user.checksum':
-            if bset:
-                checksum = self.tardis.getChecksumByPath(parts[1], bset)
-                if checksum:
-                    print checksum, retFunc(checksum)
-                    return retFunc(checksum)
-        return None
-
+            if attr == 'user.checksum':
+                if bset:
+                    checksum = self.tardis.getChecksumByPath(parts[1], bset)
+                    if checksum:
+                        #print checksum, retFunc(checksum)
+                        return retFunc(checksum)
+        return 0
 
 if __name__ == "__main__":
     profiler = None
+
+    logger = logging.getLogger('')
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
 
     #profiler = cProfile.Profile()
     if profiler:
@@ -347,7 +380,6 @@ if __name__ == "__main__":
     fs = TardisFS()
     fs.flags = 0
     fs.multithreaded = 0
-    fs.use_ino = 1
     fs.main()
 
     if profiler:
