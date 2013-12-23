@@ -15,19 +15,16 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
-from Connection import JsonConnection
+from Connection import JsonConnection, BsonConnection
 from functools import partial
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
 
-#encoding            = "binary"
-#encoder             = lambda x : return x
-#encoder             = lambda x : return x
-encoding            = "base64"
-encoder             = base64.encodestring
-decoder             = base64.decodestring
+encoding            = None
+encoder             = None
+decoder             = None
 
 globalExcludes      = []
 cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
@@ -42,6 +39,16 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'ba
 
 inodeDB             = {}
 
+def setEncoder(format):
+    if format == 'base64':
+        encoding = "base64"
+        encoder  = base64.b64encode
+        decoder  = base64.b64decode
+    elif format == 'bin':
+        encoding = "bin"
+        encoder = lambda x: x
+        decoder = lambda x: x
+
 def filelist(dir, excludes):
     files = os.listdir(dir)
     for p in excludes:
@@ -53,12 +60,15 @@ def filelist(dir, excludes):
 
 def sendData(file):
     num = 0
+    m = hashlib.md5()
     for chunk in iter(partial(file.read, args.chunksize), ''):
-        data = encoder(chunk)
+        m.update(chunk)
+        data = conn.encode(chunk)
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
         stats["bytes"] += len(data)
         num += 1
+    return m.hexdigest()
 
 def processDelta(inode):
     if inode in inodeDB:
@@ -75,7 +85,7 @@ def processDelta(inode):
             print "Receive: %s" % str(sigmessage)
 
         oldchksum = sigmessage["checksum"]
-        sig = decoder(sigmessage["signature"])
+        sig = conn.decode(sigmessage["signature"])
 
         with tempfile.NamedTemporaryFile() as temp:
             temp.write(sig)
@@ -139,6 +149,7 @@ def processDelta(inode):
 
 def sendContent(inode):
     if inode in inodeDB:
+        checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
             mode = fileInfo["mode"]
@@ -158,12 +169,12 @@ def sendContent(inode):
             if S_ISLNK(mode):
                 # It's a link.  Send the contents of readlink
                 chunk = os.readlink(pathname)
-                data = encoder(chunk)
+                data = conn.encode(chunk)
                 chunkMessage = {"data": data }
                 conn.send(chunkMessage)
             else:
                 with open(pathname, "rb") as file:
-                    sendData(file)
+                    checksum = sendData(file)
             response = conn.receive()
             if verbosity > 3:
                 print "Receive %s" % str(response)
@@ -357,6 +368,7 @@ if __name__ == '__main__':
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
     parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
+    parser.add_argument('--protocol', '-P', dest='protocol', default="json", choices=["json", "bson"], help='Protocol for data transfer')
     parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")
@@ -366,7 +378,12 @@ if __name__ == '__main__':
 
     verbosity=args.verbose
 
-    conn = JsonConnection(args.server, args.port, args.name)
+    if args.protocol == 'json':
+        conn = JsonConnection(args.server, args.port, args.name)
+        setEncoder("base64")
+    elif args.protocol == 'bson':
+        conn = BsonConnection(args.server, args.port, args.name)
+        setEncoder("bin")
 
     if verbosity:
         print "Session: %s" % conn.getSessionId()

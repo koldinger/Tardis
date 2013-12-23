@@ -1,10 +1,10 @@
 #! /usr/bin/python
+# -*- coding: utf-8 -*-
 
 import os
 import sys
 import argparse
 import uuid
-import json
 import logging
 import logging.config
 import ConfigParser
@@ -37,16 +37,19 @@ profiler = None
 
 def getDecoder(encoding):
     decoder = None
-    if (encoding == "binary"):
+    if (encoding == "bin"):
         decoder = lambda x: x
+        encoder = lambda x: x
     elif (encoding == "base64"):
-        decoder = base64.decodestring
+        decoder = base64.b64encode
+        decoder = base64.b64decode
     return decoder
 
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
     sessionid = None
+    tempdir = None
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -63,7 +66,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
-                self.logger.debug("Matching against old version for file {} ({})".format(name, inode))
+                self.logger.debug(u'Matching against old version for file {} ({})'.format(name, inode))
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
@@ -78,16 +81,26 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 else:
                     retVal = DELTA
             else:
-                #Check to see if it already exists
-                self.logger.debug("Looking for similar file: {} ({})".format(name, inode));
-                old = self.db.getFileInfoBySimilar(f)
-                if old:
-                    retVal = CKSUM
+                if f["nlinks"] > 1:
+                    # We're a file, and we have hard links.  Check to see if I've already been handled
+                    self.logger.debug('Looking for file with same inode {} in backupset'.format(inode))
+                    checksum = self.db.getChecksumByInode(inode, True)
+                    if checksum:
+                        self.db.setChecksum(inode, checksum)
+                        retVal = DONE
+                    else:
+                        retVal = CONTENT
                 else:
-                    # TODO: Lookup based on inode.
-                    #self.logger.debug("No old file.")
-                    retVal = CONTENT
-            
+                    #Check to see if it already exists
+                    self.logger.debug(u'Looking for similar file: {} ({})'.format(name, inode));
+                    old = self.db.getFileInfoBySimilar(f)
+                    if old:
+                        retVal = CKSUM
+                    else:
+                        # TODO: Lookup based on inode.
+                        #self.logger.debug("No old file.")
+                        retVal = CONTENT
+
         return retVal
 
     lastDirNode = None
@@ -95,7 +108,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
-        self.logger.debug("Processing directory entry: {} : {}".format(data["path"], str(data["inode"])))
+        self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
         done = []
         cksum = []
         content = []
@@ -121,8 +134,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.db.insertFiles(files, parentInode)
 
         for f in files:
-            self.logger.debug("Processing file: {} {}".format(str(f["name"]), str(f["inode"])))
             inode = f['inode']
+            self.logger.debug(u'Processing file: {} {}'.format(f["name"], str(inode)))
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
@@ -168,6 +181,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 outfile.write(sig)
                 outfile.close()
 
+            # TODO: Set the encoder based on the protocol
             response = {
                 "message": "SIG",
                 "inode": inode,
@@ -175,7 +189,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "encoding": "base64",
                 "checksum": chksum,
                 "size": len(sig),
-                "signature": base64.encodestring(sig) }
+                "signature": self.messenger.encode(sig) }
+
 
             return response
         else:
@@ -203,7 +218,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         while (bytesReceived < size):
             chunk = self.messenger.recvMessage()
-            bytes = decoder(chunk["data"])
+            bytes = self.messenger.decode(chunk["data"])
             if output:
                 output.write(bytes)
             bytesReceived += len(bytes)
@@ -236,7 +251,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         bytesReceived = 0
         size = message["size"]
         while (bytesReceived < size):
-            bytes = decoder(chunk["data"])
+            bytes = self.messenger.decode(chunk["data"])
             output.write(bytes)
             bytesReceived += len(bytes)
         output.close()
@@ -272,7 +287,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         while (bytesReceived < size):
             chunk = self.messenger.recvMessage()
-            bytes = decoder(chunk["data"])
+            bytes = self.messenger.decode(chunk["data"])
             if digest:
                 digest.update(bytes)
             output.write(bytes)
@@ -334,7 +349,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 pass
 
         try:
-            os.rmdir(self.tempdir)
+            if (self.tempdir):
+                os.rmdir(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
 
@@ -362,6 +378,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             if encoding == "JSON":
                 self.messenger = Messages.JsonMessages(self.request)
+            elif encoding == "BSON":
+                self.messenger = Messages.BsonMessages(self.request)
             else:
                 raise Exception("Unknown encoding", encoding)
 
@@ -378,6 +396,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.messenger.sendMessage(response)
 
             self.db.completeBackup()
+        except:
+            e = sys.exc_info()[0]
+            self.logger.error("Caught exception: {}".format(e))
         finally:
             self.request.close()
             self.endSession()

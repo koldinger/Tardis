@@ -194,7 +194,7 @@ class TardisFS(fuse.Fuse):
                 parent = self.tardis.getFileInfoByPath(parts[1], bset)
                 entries = self.tardis.readDirectory(parent["inode"], bset)
 
-        dirents.extend([str(y["name"]) for y in entries])
+        dirents.extend([str(y["name"].encode("utf-8", "replace")) for y in entries])
 
         for e in dirents:
             yield fuse.Direntry(e)

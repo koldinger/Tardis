@@ -195,9 +195,21 @@ class TardisDB(object):
                   {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.currBackupSet})
 
     def setChecksum(self, inode, checksum):
-        c = self.cursor
-        c.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
+        self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+
+    def getChecksumByInode(self, inode, current=True):
+        backupset = self.bset(current)
+        c = self.cursor.execute("SELECT "
+                                "DISTINCT(Checksum) AS checksum "
+                                "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
+                                "WHERE Files.INode = :inode AND Files.BackupSet = :backupset",
+                                { "backupset" : backupset, "inode" : inode })
+        row = c.fetchone()
+        if row:
+            return row["checksum"]
+        else:
+            return None
 
     def getChecksumByName(self, name, parent, current=False):
         backupset = self.bset(current)
@@ -222,10 +234,7 @@ class TardisDB(object):
 
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
-        c = self.cursor
-        temp = fileInfo.copy()
-        temp["backup"] = self.currBackupSet
-        temp["parent"] = parent
+        temp = addFields({ "backup": self.currBackupSet, "parent": parent }, fileInfo)
         c.execute("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
                   "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                   temp)
@@ -237,8 +246,8 @@ class TardisDB(object):
         f = functools.partial(addFields, fields)
         
         self.conn.executemany("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
-                  "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
-                  map(f, files))
+                              "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                              map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))

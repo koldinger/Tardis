@@ -43,4 +43,4 @@ CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, BackupSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
-INSERT INTO Backups (Name, Timestamp, Completed) VALUES ("Initial", strftime('%s', 'now') , 1);
+INSERT INTO Backups (Name, Timestamp, Completed) VALUES (".Initial", strftime('%s', 'now') , 1);
