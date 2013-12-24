@@ -8,6 +8,7 @@ sys.path.append("../utils")
 import Messages
 
 class Connection(object):
+    lastTimestamp = None
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, name, encoding):
         self.stats = { 'messages' : 0, 'bytes': 0 }
@@ -26,11 +27,13 @@ class Connection(object):
 
             message = self.sock.recv(256).strip()
             fields = message.split()
-            if len(fields) != 2:
+            if len(fields) != 3:
+                print message
                 raise Exception
             if fields[0] != 'OK':
                 raise Exception
             self.sessionid = uuid.UUID(fields[1])
+            self.lastTimetstamp = fields[2]
         except:
             self.sock.close()
             raise
@@ -61,6 +64,9 @@ class Connection(object):
 
     def getSessionId(self):
         return str(self.sessionid)
+
+    def getLastTimestap(self):
+        return self.lastTimestamp
 
 class ProtocolConnection(Connection):
     sender = None

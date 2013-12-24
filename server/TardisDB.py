@@ -91,7 +91,7 @@ class TardisDB(object):
                 self.prevBackupSet  = f[1]
             #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
-            (self.prevBackupName, self.prevBackupSet) = self.lastBackupSet()
+            (self.prevBackupName, self.prevBackupSet, self.prevBackupDate) = self.lastBackupSet()
             #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
         #row = self.cursor.fetchone()
@@ -108,12 +108,13 @@ class TardisDB(object):
             return current
 
     def lastBackupSet(self):
-        c = self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+        c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp "
+                                "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         if row:
-            return row[0], row[1]
+            return row[0], row[1], row[2]
         else:
-            return None, None
+            return None, None, None
 
     def newBackupSet(self, name, session):
         """ Create a new backupset.  Set the current backup set to be that set. """

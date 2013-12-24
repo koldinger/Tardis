@@ -1,9 +1,10 @@
 CREATE TABLE IF NOT EXISTS Backups (
-    Name        CHARACTER UNIQUE,
-    Timestamp   CHARACTER,
-    Session     CHARACTER UNIQUE,
-    Completed   INTEGER,
-    BackupSet   INTEGER PRIMARY KEY AUTOINCREMENT
+    Name            CHARACTER UNIQUE,
+    Timestamp       CHARACTER,
+    EndTimestamp    CHARACTER,
+    Session         CHARACTER UNIQUE,
+    Completed       INTEGER,
+    BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (

@@ -228,7 +228,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.insertChecksumFile(checksum, basis=basis)
 
         self.db.setChecksum(inode, checksum)
-        return "OK"
+        return {"message" : "OK"}
 
     def processSignature(self, message):
         """ Receive a delta message. """
@@ -257,7 +257,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         output.close()
 
         self.db.setChecksum(inode, checksum)
-        return "OK"
+        return {"message" : "OK"}
 
     def processChecksum(self, message):
         pass
@@ -306,7 +306,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.insertChecksumFile(checksum)
         self.db.setChecksum(message["inode"], checksum)
 
-        return "OK"
+        return {"message" : "OK" }
 
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
@@ -374,7 +374,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.startSession(name)
             self.db.newBackupSet(name, str(self.sessionid))
 
-            self.request.sendall("OK {}".format(str(self.sessionid)))
+            self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
 
             if encoding == "JSON":
                 self.messenger = Messages.JsonMessages(self.request)
@@ -398,7 +398,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.completeBackup()
         except:
             e = sys.exc_info()[0]
-            self.logger.error("Caught exception: {}".format(e))
+            self.logger.exception("Caught exception: {}".format(e))
         finally:
             self.request.close()
             self.endSession()

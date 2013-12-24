@@ -308,6 +308,21 @@ def processDir(dir, excludes=[], max=0):
 
     return (files, subdirs, excludes)
 
+def checkClonable(dir, stat, files, subdirs):
+    return False
+    if len(subdirs) != 0:
+        return False
+    if stat.st_ctime > conn.lastTimestamp:
+        return False
+    if stat.st_mtime > conn.lastTimestamp:
+        return False
+    for f in files:
+        fs = os.lstat(f)
+        if fs.st_mtime > conn.lastTimestamp:
+            return False
+        if fs.st_ctime > conn.lastTimestamp:
+            return False
+    return True
 
 def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
@@ -321,30 +336,43 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         (files, subdirs, subexcludes) = processDir(dir, excludes, max=64)
 
-        message = {
-            'message': 'DIR',
-            'path':  os.path.relpath(dir, top),
-            'inode':  s.st_ino
-        }
-
-        chunkNum = 0
-        for x in range(0, len(files), args.dirslice):
-            if verbosity > 1:
-                print "---- Generating chunk {} ----".format(chunkNum)
-            chunkNum += 1
-            chunk = files[x : x + args.dirslice]
-            message["files"] = chunk
-            if verbosity > 1:
-                print "---- Sending chunk ----"
-                if verbosity > 3:
-                    print "Send: %s" % str(message)
+        if checkClonable(dir, s, files, subdirs):
+            message = {
+                'message': 'CLONE',
+                'path':  os.path.relpath(dir, top),
+                'inode':  s.st_ino
+            }
+            if verbosity > 3:
+                print "Send: %s" % str(message)
             conn.send(message)
-            if verbosity > 1:
-                print "---- Waiting for ACKDir----"
             response = conn.receive()
             if verbosity > 3:
                 print "Receive: %s" % str(response)
-            handleAckDir(response)
+        else:
+            message = {
+                'message': 'DIR',
+                'path':  os.path.relpath(dir, top),
+                'inode':  s.st_ino
+            }
+
+            chunkNum = 0
+            for x in range(0, len(files), args.dirslice):
+                if verbosity > 1:
+                    print "---- Generating chunk {} ----".format(chunkNum)
+                chunkNum += 1
+                chunk = files[x : x + args.dirslice]
+                message["files"] = chunk
+                if verbosity > 1:
+                    print "---- Sending chunk ----"
+                    if verbosity > 3:
+                        print "Send: %s" % str(message)
+                conn.send(message)
+                if verbosity > 1:
+                    print "---- Waiting for ACKDir----"
+                response = conn.receive()
+                if verbosity > 3:
+                    print "Receive: %s" % str(response)
+                handleAckDir(response)
 
 
         # Make sure we're not at maximum depth
