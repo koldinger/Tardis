@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS Names (
 );
 
 CREATE TABLE IF NOT EXISTS Files (
-    Name        CHARACTER NOT NULL,
+    NameId      INTEGER   NOT NULL,
     BackupSet   INTEGER   NOT NULL,
     Inode       INTEGER   NOT NULL,
     Parent      INTEGER   NOT NULL,
@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
+    PRIMARY KEY(NameId, BackupSet, Parent),
+    FOREIGN KEY(NameId)      REFERENCES Names(NameId),
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD),
     FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet)
 );
@@ -42,6 +44,14 @@ CREATE TABLE IF NOT EXISTS Files (
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, BackupSet ASC);
-CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
+CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
+
+-- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
 INSERT INTO Backups (Name, Timestamp, Completed) VALUES (".Initial", strftime('%s', 'now') , 1);
+
+CREATE VIEW IF NOT EXISTS VFiles AS
+    SELECT Name, Inode, Parent, Dir, Files.Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, BackupSet
+    FROM Files
+    JOIN Names ON Files.NameId = Names.NameId
+    JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;

@@ -59,6 +59,7 @@ def filelist(dir, excludes):
         yield f
 
 def sendData(file):
+    """ Send a block of data """
     num = 0
     m = hashlib.md5()
     for chunk in iter(partial(file.read, args.chunksize), ''):
@@ -71,17 +72,18 @@ def sendData(file):
     return m.hexdigest()
 
 def processDelta(inode):
+    """ Generate a delta and send it """
     if inode in inodeDB:
         (fileInfo, pathname) = inodeDB[inode]
         message = {
             "message" : "SGR",
             "inode" : inode
             }
-        if verbosity > 3:
+        if verbosity > 4:
             print "Send: %s" % str(message)
         conn.send(message)
         sigmessage = conn.receive()
-        if verbosity > 3:
+        if verbosity > 4:
             print "Receive: %s" % str(sigmessage)
 
         oldchksum = sigmessage["checksum"]
@@ -113,7 +115,7 @@ def processDelta(inode):
             "basis": oldchksum,
             "encoding": encoding
             }
-        if verbosity > 3:
+        if verbosity > 4:
             print "Send: %s" % str(message)
         conn.send(message)
 
@@ -122,7 +124,7 @@ def processDelta(inode):
         x.close()
 
         response = conn.receive()
-        if verbosity > 3:
+        if verbosity > 4:
             print "Receive %s" % str(response)
 
         """
@@ -134,7 +136,7 @@ def processDelta(inode):
             "basis": oldchksum,
             "encoding": encoding
             }
-        if verbosity > 3:
+        if verbosity > 4:
             print "Send: %s" % str(message)
         conn.send(message)
         
@@ -143,7 +145,7 @@ def processDelta(inode):
         x.close()
         
         response = conn.receive()
-        if verbosity > 3:
+        if verbosity > 4:
             print "Receive %s" % str(response)
         """
 
@@ -162,7 +164,7 @@ def sendContent(inode):
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
-            if verbosity > 3:
+            if verbosity > 4:
                 print "Send: %s" % str(message)
             conn.send(message)
 
@@ -176,7 +178,7 @@ def sendContent(inode):
                 with open(pathname, "rb") as file:
                     checksum = sendData(file)
             response = conn.receive()
-            if verbosity > 3:
+            if verbosity > 4:
                 print "Receive %s" % str(response)
     else:
         print "Error: Unknown inode {}".format(inode)
@@ -222,7 +224,7 @@ def handleAckDir(message):
         if i in inodeDB:
             del inodeDB[i]
 
-    if verbosity > 1:
+    if verbosity > 2:
         print "----- AckDir complete"
 
     return
@@ -259,7 +261,7 @@ def mkFileInfo(dir, name):
 def processDir(dir, excludes=[], max=0):
     if verbosity:
         print "Dir: {}".format(str(dir))
-    if verbosity > 2:
+    if verbosity > 2 and len(excludes) > 0:
         print "   Excludes: {}".format(str(excludes))
     stats['dirs'] += 1;
 
@@ -342,11 +344,11 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 'path':  os.path.relpath(dir, top),
                 'inode':  s.st_ino
             }
-            if verbosity > 3:
+            if verbosity > 4:
                 print "Send: %s" % str(message)
             conn.send(message)
             response = conn.receive()
-            if verbosity > 3:
+            if verbosity > 4:
                 print "Receive: %s" % str(response)
         else:
             message = {
@@ -357,20 +359,20 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             chunkNum = 0
             for x in range(0, len(files), args.dirslice):
-                if verbosity > 1:
+                if verbosity > 2:
                     print "---- Generating chunk {} ----".format(chunkNum)
                 chunkNum += 1
                 chunk = files[x : x + args.dirslice]
                 message["files"] = chunk
-                if verbosity > 1:
+                if verbosity > 2:
                     print "---- Sending chunk ----"
-                    if verbosity > 3:
+                    if verbosity > 4:
                         print "Send: %s" % str(message)
                 conn.send(message)
-                if verbosity > 1:
+                if verbosity > 2:
                     print "---- Waiting for ACKDir----"
                 response = conn.receive()
-                if verbosity > 3:
+                if verbosity > 4:
                     print "Receive: %s" % str(response)
                 handleAckDir(response)
 
@@ -435,11 +437,11 @@ if __name__ == '__main__':
             files.append(file)
 
     # and send it.
-    if verbosity > 3:
+    if verbosity > 4:
         print "Send: %s" % str(message)
     conn.send(message)
     response = conn.receive()
-    if verbosity > 3:
+    if verbosity > 4:
         print "Receive: %s" % str(response)
     handleAckDir(response)
 

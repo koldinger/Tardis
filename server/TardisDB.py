@@ -135,6 +135,7 @@ class TardisDB(object):
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
+                  "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
                   {"name": name, "parent": parent, "backup": backupset})
         return makeDict(c, c.fetchone())
@@ -161,6 +162,7 @@ class TardisDB(object):
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
+                  "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": backupset})
         return makeDict(c, c.fetchone())
@@ -170,7 +172,9 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
-                  "FROM Files WHERE Inode = :inode AND BackupSet = :backup",
+                  "FROM Files "
+                  "JOIN Names ON Files.NameId = Names.NameId "
+                  "WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": self.currBackupSet})
         return makeDict(c, c.fetchone())
 
@@ -185,6 +189,7 @@ class TardisDB(object):
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
                   "FROM Files "
+                  "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet = :backup",
                   temp)
         return makeDict(c, c.fetchone())
@@ -216,8 +221,10 @@ class TardisDB(object):
         backupset = self.bset(current)
         self.logger.debug("Looking up checksum for file {} {} {}".format(name, parent, backupset))
         c = self.conn.execute("SELECT CheckSums.CheckSum AS checksum "
-                              "FROM Files JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
-                              "WHERE Files.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
+                              "FROM Files "
+                              "JOIN Names ON Files.NameID = Names.NameId "
+                              "JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
+                              "WHERE Names.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
                               {"name": name, "parent": parent, "backup": backupset})
         row = c.fetchone()
         if row:
@@ -236,18 +243,32 @@ class TardisDB(object):
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
         temp = addFields({ "backup": self.currBackupSet, "parent": parent }, fileInfo)
-        c.execute("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
+        self.conn.execute("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
                   "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                   temp)
+
+    def setNameID(self, files):
+        for f in files:
+            c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", f)
+            row = c.fetchone()
+            if row:
+                f["nameid"] = row[0]
+            else:
+                self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
+                f["nameid"] = self.cursor.lastrowid
+
 
     def insertFiles(self, files, parent):
         self.logger.debug("Inserting files: {}".format(len(files)))
         self.conn.execute("BEGIN")
         fields = {"backup": self.currBackupSet, "parent": parent}.items()
         f = functools.partial(addFields, fields)
+        self.setNameID(files)
         
-        self.conn.executemany("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
-                              "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+        self.conn.executemany("INSERT INTO Files "
+                              "(NameId, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
+                              "VALUES "
+                              "(:nameid, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                               map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
@@ -273,6 +294,7 @@ class TardisDB(object):
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
                   "FROM Files "
+                  "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Parent = :dirnode AND BackupSet = :backup",
                   {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():

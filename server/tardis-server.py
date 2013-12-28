@@ -21,6 +21,7 @@ import pstats
 
 import CacheDir
 import TardisDB
+import regenerate
 
 sys.path.append("../utils")
 import Messages
@@ -53,10 +54,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
-
-        #logger.debug("NFile: {}".format(str(file)))
-        #logger.debug("OFile: {}".format(str(old)))
-
         if f["dir"] == 1:
             retVal = DONE
         else:
@@ -173,7 +170,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 sig = file.read()       # TODO: Does this always read the entire file?
                 file.close()
             else:
-                pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
+                rpipe = self.regenerator.recoverChecksum(chksum)
+                pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
+                #pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
                 (sig, err) = pipe.communicate()
                 # Cache the signature for later use.  Just in case.
                 # TODO: Better logic on this?
@@ -330,7 +329,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, "tardis.db")
         self.db = TardisDB.TardisDB(self.dbname)
-
+        self.regenerator = regenerate.Regenerator(self.cache, self.db)
 
     def startSession(self, name):
         self.sessionid = uuid.uuid1()
