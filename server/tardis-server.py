@@ -105,7 +105,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
-        self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
+        #self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
         done = []
         cksum = []
         content = []
@@ -209,7 +209,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Checksum file {} already exists".format(checksum))
             # Abort read
         else:
-            output = self.cache.open(checksum, "wb")
+            if savefull:
+                # Save the full output, rather than just a delta.  Save the delta to a file
+                output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
+            else:
+                output = self.cache.open(checksum, "wb")
 
         bytesReceived = 0
         size = message["size"]
@@ -222,9 +226,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output.write(bytes)
             bytesReceived += len(bytes)
         if output:
+            output.flush()
+            if savefull:
+                # Process the delta file into the new file.
+                subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
+                self.db.insertChecksumFile(checksum)
+            else:
+                self.db.insertChecksumFile(checksum, basis=basis)
             output.close()
             # TODO: This has gotta be wrong.
-            self.db.insertChecksumFile(checksum, basis=basis)
 
         self.db.setChecksum(inode, checksum)
         return {"message" : "OK"}
@@ -387,7 +397,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             while not done:
                 message = self.messenger.recvMessage()
                 self.logger.debug("Received: " + str(message).encode("utf-8"))
-                if message == "BYE":
+                if message["message"] == "BYE":
                     done = True
                 else:
                     response = self.processMessage(message)
@@ -428,6 +438,7 @@ if __name__ == "__main__":
     configDefaults = {
         'Port' : '9999',
         'BaseDir' : './cache',
+        'SaveFull': True,
         'LogCfg'  : args.logcfg,
         'Profile' : args.profile
     }
@@ -449,6 +460,7 @@ if __name__ == "__main__":
         logger.setLevel(loglevel)
 
     basedir = config.get('Tardis', 'BaseDir')
+    savefull = config.get('Tardis', 'SaveFull')
     logger.debug("BaseDir: " + basedir)
 
     if config.get('Tardis', 'Profile'):

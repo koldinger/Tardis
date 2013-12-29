@@ -80,7 +80,7 @@ class ProtocolConnection(Connection):
         return self.sender.recvMessage()
 
     def close(self):
-        self.sender.sendMessage("BYE")
+        self.sender.sendMessage({"message" : "BYE" })
         super(ProtocolConnection, self).close()
 
     def encode(self, string):
