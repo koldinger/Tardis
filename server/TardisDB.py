@@ -82,6 +82,7 @@ class TardisDB(object):
                 pass
 
         self.conn = sqlite3.connect(self.dbName)
+        #self.conn.text_factory = str
 
         self.cursor = self.conn.cursor()
         if (prevSet):
@@ -190,7 +191,7 @@ class TardisDB(object):
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
-                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet = :backup",
+                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup",
                   temp)
         return makeDict(c, c.fetchone())
 
