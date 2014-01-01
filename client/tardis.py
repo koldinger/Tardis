@@ -34,6 +34,7 @@ verbosity           = 0
 version             = "0.1"
 
 conn                = None
+args                = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
@@ -70,6 +71,50 @@ def sendData(file):
         stats["bytes"] += len(data)
         num += 1
     return m.hexdigest()
+
+def processChecksums(inodes):
+    """ Generate a delta and send it """
+    files = []
+    for inode in inodes:
+        if inode in inodeDB:
+            (fileInfo, pathname) = inodeDB[inode]
+            m = hashlib.md5()
+            with open(pathname, "rb") as file:
+                for chunk in iter(partial(file.read, args.chunksize), ''):
+                    m.update(chunk)
+            checksum = m.hexdigest()
+            files.append({ "inode": inode, "checksum": checksum })
+    message = {
+        "message": "CKS",
+        "files": files
+        }
+    if verbosity > 4:
+        print "Send: %s" % str(message)
+    conn.send(message)
+    response = conn.receive()
+    if verbosity > 4:
+        print "Receive: %s" % str(sigmessage)
+    if not response["message"] == "ACKSUM":
+        raise Exception
+    for i in response["done"]:
+        if verbosity > 1:
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                print "File: [C]: %s" % name
+        if i in inodeDB:
+            del inodeDB[i]
+    for i in response["content"]:
+        if verbosity > 1:
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                if "size" in x:
+                    size = x["size"]
+                else:
+                    size = 0;
+                print "File: [N]: %s %d" % (name, size)
+        sendContent(i)
+        if i in inodeDB:
+            del inodeDB[i]
 
 def processDelta(inode):
     """ Generate a delta and send it """
@@ -215,14 +260,8 @@ def handleAckDir(message):
         if i in inodeDB:
             del inodeDB[i]
 
-    for i in cksum:
-        if verbosity > 1:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                print "File: [C]: %s" % (name)
-        # sendChecksum(i)
-        if i in inodeDB:
-            del inodeDB[i]
+    if len(cksum) > 0:
+        processChecksums(cksum)
 
     if verbosity > 2:
         print "----- AckDir complete"
@@ -249,7 +288,8 @@ def mkFileInfo(dir, name):
             'atime':  s.st_atime,
             'mode':   s.st_mode,
             'uid':    s.st_uid,
-            'gid':    s.st_gid
+            'gid':    s.st_gid,
+            'dev':    s.st_dev
             }
 
         inodeDB[s.st_ino] = (file, pathname)
@@ -264,6 +304,9 @@ def processDir(dir, excludes=[], max=0):
     if verbosity > 2 and len(excludes) > 0:
         print "   Excludes: {}".format(str(excludes))
     stats['dirs'] += 1;
+
+    dirstat = os.lstat(dir)
+    device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
     exFile = os.path.join(dir, excludeFile)
@@ -296,11 +339,14 @@ def processDir(dir, excludes=[], max=0):
                 mode = file["mode"]
                 if S_ISLNK(mode):
                     stats['links'] += 1
-                elif S_ISREG(mode) or S_ISDIR(mode):
+                elif S_ISREG(mode):
                     stats['files'] += 1
                     stats['backed'] += file["size"]
+
                 if S_ISDIR(mode):
-                    subdirs.append(os.path.join(dir, f))
+                    if args.crossdev or device == file['dev']:
+                        subdirs.append(os.path.join(dir, f))
+
                 files.append(file)
         except IOError as e:
             print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
@@ -396,6 +442,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', '-n', dest='name', default=defaultBackupSet, help='Set the backup name')
     parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
+    parser.add_argument('--crossdevice', '-c', action='store_true', dest='crossdev', help='Cross devices')
     parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
     parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
     parser.add_argument('--protocol', '-P', dest='protocol', default="json", choices=["json", "bson"], help='Protocol for data transfer')

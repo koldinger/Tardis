@@ -269,7 +269,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return {"message" : "OK"}
 
     def processChecksum(self, message):
-        pass
+        """ Process a list of checksums """
+        self.logger.debug("Processing checksum message: {}".format(str(message)))
+        done = []
+        content = []
+        for f in message["files"]:
+            inode = f["inode"]
+            cksum = f["checksum"]
+            if self.cache.exists(cksum):
+                self.db.setChecksum(inode, cksum)
+                done.append(inode)
+            else:
+                content.append(inode)
+        message = {
+            "message": "ACKSUM",
+            "status" : "OK",
+            "done"   : done,
+            "content": content
+            }
+        return message
 
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
@@ -331,6 +349,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processDelta(message)
         elif messageType == "CON":
             return self.processContent(message)
+        elif messageType == "CKS":
+            return self.processChecksum(message)
         else:
             raise Exception("Unknown message type", messageType)
 
@@ -420,7 +440,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 print s.getvalue()
 
 if __name__ == "__main__":
-    defaultConfig = './tardis-server.cfg'
+    defaultConfig = './tardisd.cfg'
 
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
@@ -444,6 +464,7 @@ if __name__ == "__main__":
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
+    print "reading ", args.config
     config.read(args.config)
 
     if config.get('Tardis', 'LogCfg'):
