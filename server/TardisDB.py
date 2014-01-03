@@ -134,7 +134,8 @@ class TardisDB(object):
         self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
@@ -161,7 +162,8 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode {} {}".format(inode, backupset))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Inode = :inode AND BackupSet = :backup",
@@ -172,7 +174,8 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.currBackupSet))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "WHERE Inode = :inode AND BackupSet = :backup",
@@ -191,7 +194,7 @@ class TardisDB(object):
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
-                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup",
+                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup AND ChecksumId IS NOT NULL",
                   temp)
         return makeDict(c, c.fetchone())
 
@@ -244,9 +247,33 @@ class TardisDB(object):
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
         temp = addFields({ "backup": self.currBackupSet, "parent": parent }, fileInfo)
-        self.conn.execute("INSERT INTO Files (Name, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
-                  "VALUES            (:name, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+        self.setNameId([temp])
+        self.conn.execute("INSERT INTO Files "
+                          "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                          "VALUES  "
+                          "(:nameid, :backup, :inode, :parent, :dir, :link, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                   temp)
+
+    def cloneDir(self, parent, new=True, old=False):
+        newBSet = self.bset(new)
+        oldBSet = self.bset(old)
+        self.logger.debug("Cloning directory inode {} from {} to {}".format(parent, oldBSet, newBSet))
+        self.cursor.execute("INSERT INTO Files "
+                            "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                            "SELECT NameId, :new, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                            "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+                            {"new": newBSet, "old": oldBSet, "parent": parent})
+
+    def cloneDirs(self, parents, new=True, old=False):
+        newBSet = self.bset(new)
+        oldBSet = self.bset(old)
+        self.logger.debug("Cloning directory inodes {} from {} to {}".format(parents, oldBSet, newBSet))
+
+        self.cursor.executemany("INSERT INTO Files "
+                                "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                                "SELECT NameId, :new, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                                "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+                                map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
 
     def setNameID(self, files):
         for f in files:
@@ -258,7 +285,6 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-
     def insertFiles(self, files, parent):
         self.logger.debug("Inserting files: {}".format(len(files)))
         self.conn.execute("BEGIN")
@@ -267,9 +293,9 @@ class TardisDB(object):
         self.setNameID(files)
         
         self.conn.executemany("INSERT INTO Files "
-                              "(NameId, BackupSet, Inode, Parent, Dir, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
+                              "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
                               "VALUES "
-                              "(:nameid, :backup, :inode, :parent, :dir, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                              "(:nameid, :backup, :inode, :parent, :dir, :link, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                               map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
@@ -336,6 +362,9 @@ class TardisDB(object):
     def __del__(self):
         self.logger.info("Closing DB: {}".format(self.dbName))
         if self.conn:
+            if self.currBackupSet:
+                self.conn.execute("UPDATE Backups SET EndTimestamp = :now WHERE BackupSet = :backup",
+                                    { "now": time.time(), "backup": self.currBackupSet })
             self.conn.commit()
             self.conn.close()
 

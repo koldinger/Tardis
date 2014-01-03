@@ -106,10 +106,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
         #self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
-        done = []
-        cksum = []
-        content = []
-        delta = []
+        done = set()
+        cksum = set()
+        content = set()
+        delta = set()
         queues = [done, content, cksum, delta]
 
         parentInode = data['inode']
@@ -139,7 +139,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #elif res == 1: content.append(inode)
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
-            queues[res].append(inode)
+            queues[res].add(inode)
 
         # self.db.commit()
 
@@ -147,10 +147,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "message": "ACKDIR",
             "status":  "OK",
             "inode": data["inode"],
-            "done":  done,
-            "cksum": cksum,
-            "content": content,
-            "delta": delta
+            "done":  list(done),
+            "cksum": list(cksum),
+            "content": list(content),
+            "delta": list(delta)
         }
 
         return response
@@ -335,6 +335,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return {"message" : "OK" }
 
+    def processClone(self, message):
+        """ Clone an entire directory """
+        self.db.cloneDirs([x['inode'] for x in message['clones']])
+        return {"message" : "OK" }
+
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -351,6 +356,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processContent(message)
         elif messageType == "CKS":
             return self.processChecksum(message)
+        elif messageType == "CLONE":
+            return self.processClone(message)
         else:
             raise Exception("Unknown message type", messageType)
 
@@ -438,6 +445,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
                 ps.print_stats()
                 print s.getvalue()
+            self.logger.info("Connection complete")
 
 if __name__ == "__main__":
     defaultConfig = './tardisd.cfg'

@@ -36,6 +36,8 @@ version             = "0.1"
 conn                = None
 args                = None
 
+cloneDirs           = []
+
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
 inodeDB             = {}
@@ -79,9 +81,14 @@ def processChecksums(inodes):
         if inode in inodeDB:
             (fileInfo, pathname) = inodeDB[inode]
             m = hashlib.md5()
-            with open(pathname, "rb") as file:
-                for chunk in iter(partial(file.read, args.chunksize), ''):
-                    m.update(chunk)
+            s = os.lstat(pathname)
+            mode = s.st_mode
+            if S_ISLNK(mode):
+                chunk = os.readlink(pathname)
+            else:
+                with open(pathname, "rb") as file:
+                    for chunk in iter(partial(file.read, args.chunksize), ''):
+                        m.update(chunk)
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
     message = {
@@ -234,7 +241,7 @@ def handleAckDir(message):
     delta   = message["delta"]
     cksum   = message["cksum"]
 
-    if verbosity > 1: print "Processing AKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
+    if verbosity > 1: print "Processing ACKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
     for i in done:
         if i in inodeDB:
             del inodeDB[i]
@@ -281,6 +288,7 @@ def mkFileInfo(dir, name):
             'name':   unicode(name.decode('utf8', 'ignore')),
             'inode':  s.st_ino,
             'dir':    S_ISDIR(mode),
+            'link':   S_ISLNK(mode),
             'nlinks': s.st_nlink,
             'size':   s.st_size,
             'mtime':  s.st_mtime,
@@ -295,7 +303,7 @@ def mkFileInfo(dir, name):
         inodeDB[s.st_ino] = (file, pathname)
     else:
         if verbosity:
-            print "Skipping non standard file: {}".format(pathname)
+            print "Skipping special file: {}".format(pathname)
     return file
     
 def processDir(dir, excludes=[], max=0):
@@ -316,6 +324,7 @@ def processDir(dir, excludes=[], max=0):
             newExcludes.extend(excludes)
             excludes = newExcludes
     except IOError as e:
+        #traceback.print_exc()
         pass
 
     localExcludes = excludes
@@ -327,6 +336,7 @@ def processDir(dir, excludes=[], max=0):
             localExcludes = list(excludes)
             localExcludes.extend( [x.rstrip('\n') for x in f.readlines()] )
     except:
+        #traceback.print_exc()
         pass
 
     files = []
@@ -357,20 +367,39 @@ def processDir(dir, excludes=[], max=0):
     return (files, subdirs, excludes)
 
 def checkClonable(dir, stat, files, subdirs):
-    return False
-    if len(subdirs) != 0:
-        return False
     if stat.st_ctime > conn.lastTimestamp:
         return False
     if stat.st_mtime > conn.lastTimestamp:
         return False
-    for f in files:
-        fs = os.lstat(f)
-        if fs.st_mtime > conn.lastTimestamp:
+    # Now, collect the timestamps of all the files, and determine the maximum
+    # If any are greater than the last timestamp, punt
+    extend = partial(os.path.join, path)
+    if subdirs and len(subdirs):
+        times = map(os.lstat, map(extend, subdirs))
+        time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
+        if time > conn.lastTimestamp:
             return False
-        if fs.st_ctime > conn.lastTimestamp:
+    if files and len(files):
+        times = map(os.lstat, map(extend, subs))
+        time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
+        if time > conn.lastTimestamp:
             return False
+
     return True
+
+def sendClones():
+    global cloneDirs
+    message = {
+        'message': 'CLONE',
+        'clones': cloneDirs
+    }
+    if verbosity > 4:
+        print "Send: %s" % str(message)
+    conn.send(message)
+    response = conn.receive()
+    if verbosity > 4:
+        print "Receive: %s" % str(response)
+    cloneDirs = []
 
 def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
@@ -384,19 +413,25 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         (files, subdirs, subexcludes) = processDir(dir, excludes, max=64)
 
-        if checkClonable(dir, s, files, subdirs):
-            message = {
-                'message': 'CLONE',
-                'path':  os.path.relpath(dir, top),
-                'inode':  s.st_ino
-            }
-            if verbosity > 4:
-                print "Send: %s" % str(message)
-            conn.send(message)
-            response = conn.receive()
-            if verbosity > 4:
-                print "Receive: %s" % str(response)
+        # Check the max time on all the files.  If everything is before last timestamp, just clone
+        cloneable = False
+        #print "Checking cloneablity: {} {} {} {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
+        if args.clones and s.st_ctime < conn.lastTimestamp and s.st_mtime < conn.lastTimestamp and len(files) > 0:
+            maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
+            #print "Max file timestamp: {}".format(maxTime)
+            if maxTime < conn.lastTimestamp:
+                cloneable = True
+
+        if cloneable:
+            if verbosity > 2:
+                print "---- Cloning dir {} ----".format(dir)
+            cloneDirs.append({ 'path':  os.path.relpath(dir, top), 'inode':  s.st_ino })
+            if len(cloneDirs) > args.clones:
+                sendClones()
         else:
+            if len(cloneDirs):
+                sendClones()
+
             message = {
                 'message': 'DIR',
                 'path':  os.path.relpath(dir, top),
@@ -429,7 +464,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
-        print e
+        print "!!!!!", e
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
@@ -443,9 +479,10 @@ if __name__ == '__main__':
     parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c', action='store_true', dest='crossdev', help='Cross devices')
+    parser.add_argument('--clones', '-L', type=int, dest='clones', default=0, help='Maximum number of clones per chunk.  0 to disable cloning')
     parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
     parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
-    parser.add_argument('--protocol', '-P', dest='protocol', default="json", choices=["json", "bson"], help='Protocol for data transfer')
+    parser.add_argument('--protocol', '-P', dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer')
     parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")

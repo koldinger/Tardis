@@ -33,7 +33,7 @@ class Connection(object):
             if fields[0] != 'OK':
                 raise Exception
             self.sessionid = uuid.UUID(fields[1])
-            self.lastTimetstamp = fields[2]
+            self.lastTimestamp = fields[2]
         except:
             self.sock.close()
             raise
