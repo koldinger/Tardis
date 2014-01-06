@@ -207,17 +207,18 @@ class TardisDB(object):
     def setChecksum(self, inode, checksum):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+        return self.cursor.rowcount
 
     def getChecksumByInode(self, inode, current=True):
         backupset = self.bset(current)
         c = self.cursor.execute("SELECT "
-                                "DISTINCT(Checksum) AS checksum "
+                                "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
                                 "WHERE Files.INode = :inode AND Files.BackupSet = :backupset",
                                 { "backupset" : backupset, "inode" : inode })
         row = c.fetchone()
         if row:
-            return row["checksum"]
+            return row[0]
         else:
             return None
 
@@ -263,6 +264,8 @@ class TardisDB(object):
                             "SELECT NameId, :new, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
                             "FROM Files WHERE BackupSet = :old AND Parent = :parent",
                             {"new": newBSet, "old": oldBSet, "parent": parent})
+        return self.cursor.rowcount
+
 
     def cloneDirs(self, parents, new=True, old=False):
         newBSet = self.bset(new)
@@ -270,10 +273,11 @@ class TardisDB(object):
         self.logger.debug("Cloning directory inodes {} from {} to {}".format(parents, oldBSet, newBSet))
 
         self.cursor.executemany("INSERT INTO Files "
-                                "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                                "SELECT NameId, :new, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                                "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                                "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
                                 "FROM Files WHERE BackupSet = :old AND Parent = :parent",
                                 map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
+        return self.cursor.rowcount
 
     def setNameID(self, files):
         for f in files:

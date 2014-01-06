@@ -67,11 +67,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
-                    if "checksum" in old:
-                        self.db.setChecksum(inode, old["checksum"])
-                    else:
+                    if ("checksum") in old and not (old["checksum"] is None):
                         self.db.copyChecksum(old["inode"], inode)
-                    retVal = DONE
+                        retVal = DONE
+                    else:
+                        #self.db.setChecksum(inode, old["checksum"])
+                        retVal = CONTENT
                 elif f["size"] < 4096:
                     # Just ask for content if the size is under 4K.  Easier.
                     retVal = CONTENT
@@ -92,7 +93,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug(u'Looking for similar file: {} ({})'.format(name, inode));
                     old = self.db.getFileInfoBySimilar(f)
                     if old:
-                        retVal = CKSUM
+                        if old["name"] == f["name"] and old["parent"] == parent:
+                            # If the name and parent ID are the same, assume it's the same
+                            retVal = DONE
+                        else:
+                            # otherwise 
+                            retVal = CKSUM
                     else:
                         # TODO: Lookup based on inode.
                         #self.logger.debug("No old file.")
@@ -427,9 +433,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if message["message"] == "BYE":
                     done = True
                 else:
-                    response = self.processMessage(message)
-                    self.logger.debug("Sending : " + str(response))
-                    self.messenger.sendMessage(response)
+                    try:
+                        response = self.processMessage(message)
+                        self.logger.debug("Sending : " + str(response))
+                        self.messenger.sendMessage(response)
+                    except:
+                        self.logger.error("Erroneous message: {}".format(message))
+                        self.logger.error("Erroneous response: {}".format(response))
+                        raise
 
             self.db.completeBackup()
         except:
@@ -472,7 +483,6 @@ if __name__ == "__main__":
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
-    print "reading ", args.config
     config.read(args.config)
 
     if config.get('Tardis', 'LogCfg'):

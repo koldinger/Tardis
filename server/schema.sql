@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS Files (
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS ParentIndex ON Files(Parent ASC, BackupSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 -- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);

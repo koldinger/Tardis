@@ -9,6 +9,7 @@ from stat import *
 import json
 import argparse
 import time
+import datetime
 import base64
 import traceback
 import subprocess
@@ -37,6 +38,7 @@ conn                = None
 args                = None
 
 cloneDirs           = []
+cloneContents       = {}
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
@@ -306,14 +308,9 @@ def mkFileInfo(dir, name):
             print "Skipping special file: {}".format(pathname)
     return file
     
-def processDir(dir, excludes=[], max=0):
-    if verbosity:
-        print "Dir: {}".format(str(dir))
-    if verbosity > 2 and len(excludes) > 0:
-        print "   Excludes: {}".format(str(excludes))
+def processDir(dir, dirstat, excludes=[], allowClones=True):
     stats['dirs'] += 1;
 
-    dirstat = os.lstat(dir)
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
@@ -399,64 +396,71 @@ def sendClones():
     response = conn.receive()
     if verbosity > 4:
         print "Receive: %s" % str(response)
-    cloneDirs = []
+    del cloneDirs[:]
+
+def sendDirChunks(path, inode, files):
+    message = {
+        'message': 'DIR',
+        'path':  path,
+        'inode':  inode
+    }
+
+    chunkNum = 0
+    for x in range(0, len(files), args.dirslice):
+        if verbosity > 2:
+            print "---- Generating chunk {} ----".format(chunkNum)
+        chunkNum += 1
+        chunk = files[x : x + args.dirslice]
+        message["files"] = chunk
+        if verbosity > 2:
+            print "---- Sending chunk ----"
+            if verbosity > 4:
+                print "Send: %s" % str(message)
+        conn.send(message)
+        if verbosity > 2:
+            print "---- Waiting for ACKDir----"
+        response = conn.receive()
+        if verbosity > 4:
+            print "Receive: %s" % str(response)
+        handleAckDir(response)
 
 def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
     if depth > 0:
         newdepth = depth - 1
 
-    try:
-        s = os.lstat(dir)
-        if not S_ISDIR(s.st_mode):
-            return
+    s = os.lstat(dir)
+    if not S_ISDIR(s.st_mode):
+        return
 
-        (files, subdirs, subexcludes) = processDir(dir, excludes, max=64)
+    try:
+        if verbosity:
+            print "Dir: {}".format(str(dir))
+            if verbosity > 2 and len(excludes) > 0:
+                print "   Excludes: {}".format(str(excludes))
+
+        (files, subdirs, subexcludes) = processDir(dir, s, excludes)
 
         # Check the max time on all the files.  If everything is before last timestamp, just clone
         cloneable = False
-        #print "Checking cloneablity: {} {} {} {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
-        if args.clones and s.st_ctime < conn.lastTimestamp and s.st_mtime < conn.lastTimestamp and len(files) > 0:
+        #print "Checking cloneablity: {} Last {} ctime {} mtime {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
+        if (args.clones > 0) and (s.st_ctime < conn.lastTimestamp) and (s.st_mtime < conn.lastTimestamp) and (len(files) > 0):
             maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
-            #print "Max file timestamp: {}".format(maxTime)
+            #print "Max file timestamp: {} Last Timestamp {}".format(maxTime, conn.lastTimestamp)
             if maxTime < conn.lastTimestamp:
                 cloneable = True
 
         if cloneable:
             if verbosity > 2:
                 print "---- Cloning dir {} ----".format(dir)
-            cloneDirs.append({ 'path':  os.path.relpath(dir, top), 'inode':  s.st_ino })
+            cloneDirs.append({ 'path':  os.path.relpath(dir, top), 'inode':  s.st_ino, 'numfiles':  len(files)})
+            cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
             if len(cloneDirs) > args.clones:
                 sendClones()
         else:
             if len(cloneDirs):
                 sendClones()
-
-            message = {
-                'message': 'DIR',
-                'path':  os.path.relpath(dir, top),
-                'inode':  s.st_ino
-            }
-
-            chunkNum = 0
-            for x in range(0, len(files), args.dirslice):
-                if verbosity > 2:
-                    print "---- Generating chunk {} ----".format(chunkNum)
-                chunkNum += 1
-                chunk = files[x : x + args.dirslice]
-                message["files"] = chunk
-                if verbosity > 2:
-                    print "---- Sending chunk ----"
-                    if verbosity > 4:
-                        print "Send: %s" % str(message)
-                conn.send(message)
-                if verbosity > 2:
-                    print "---- Waiting for ACKDir----"
-                response = conn.receive()
-                if verbosity > 4:
-                    print "Receive: %s" % str(response)
-                handleAckDir(response)
-
+            sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -464,7 +468,10 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
-        print "!!!!!", e
+        traceback.print_exc()
+    except:
+        # TODO: Clean this up
+        raise
         traceback.print_exc()
 
 
@@ -489,6 +496,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     #print args
+
+    starttime = datetime.datetime.now()
 
     verbosity=args.verbose
 
@@ -517,7 +526,7 @@ if __name__ == '__main__':
             y = os.path.abspath(x)
         (dir, name) = os.path.split(y)
         file = mkFileInfo(dir, name)
-        if file:
+        if file and file["dir"] == 1:
             files.append(file)
 
     # and send it.
@@ -532,7 +541,15 @@ if __name__ == '__main__':
     for x in args.directories:
         recurseTree(x, x, depth=args.maxdepth)
 
-    conn.close()
+    if len(cloneDirs):
+        sendClones()
 
     if args.stats:
-        print stats
+        connstats = conn.stats
+    conn.close()
+
+    endtime = datetime.datetime.now()
+
+    if args.stats:
+        print "Runtime: {}".format((endtime - starttime))
+        print dict(stats.items() + connstats.items())
