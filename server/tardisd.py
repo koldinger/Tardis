@@ -195,12 +195,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "checksum": chksum,
                 "size": len(sig),
                 "signature": self.messenger.encode(sig) }
-
-
             return response
         else:
-            # TODO: Screw this up
-            pass
+            response = {
+                "message": "SIG",
+                "inode": inode,
+                "status": "FAIL"
+            }
+            return response
 
     def processDelta(self, message):
         """ Receive a delta message. """
@@ -343,8 +345,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processClone(self, message):
         """ Clone an entire directory """
-        self.db.cloneDirs([x['inode'] for x in message['clones']])
-        return {"message" : "OK" }
+        done = []
+        content = []
+        for d in message['clones']:
+            rows = self.db.cloneDir(d['inode'])
+            if rows != d['numfiles']:
+                content.append(d['inode'])
+            else:
+                done.append(d['inode'])
+        return {"message" : "ACKCLN", "done" : done, 'content' : content }
 
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
@@ -362,7 +371,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processContent(message)
         elif messageType == "CKS":
             return self.processChecksum(message)
-        elif messageType == "CLONE":
+        elif messageType == "CLN":
             return self.processClone(message)
         else:
             raise Exception("Unknown message type", messageType)
@@ -433,14 +442,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if message["message"] == "BYE":
                     done = True
                 else:
-                    try:
-                        response = self.processMessage(message)
-                        self.logger.debug("Sending : " + str(response))
-                        self.messenger.sendMessage(response)
-                    except:
-                        self.logger.error("Erroneous message: {}".format(message))
-                        self.logger.error("Erroneous response: {}".format(response))
-                        raise
+                    response = self.processMessage(message)
+                    self.logger.debug("Sending : " + str(response))
+                    self.messenger.sendMessage(response)
 
             self.db.completeBackup()
         except:

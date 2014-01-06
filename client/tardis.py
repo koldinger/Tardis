@@ -140,68 +140,49 @@ def processDelta(inode):
         if verbosity > 4:
             print "Receive: %s" % str(sigmessage)
 
-        oldchksum = sigmessage["checksum"]
-        sig = conn.decode(sigmessage["signature"])
+        if sigmessage['status'] == 'OK':
+            oldchksum = sigmessage['checksum']
+            sig = conn.decode(sigmessage['signature'])
 
-        with tempfile.NamedTemporaryFile() as temp:
-            temp.write(sig)
-            temp.flush()
+            with tempfile.NamedTemporaryFile() as temp:
+                temp.write(sig)
+                temp.flush()
 
-            pipe = subprocess.Popen(["rdiff", "delta", temp.name, pathname], stdout=subprocess.PIPE)
-            (delta, err) = pipe.communicate()
+                pipe = subprocess.Popen(["rdiff", "delta", temp.name, pathname], stdout=subprocess.PIPE)
+                (delta, err) = pipe.communicate()
 
-            temp.close()
+                temp.close()
 
-        pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
-        (sigdelta, err) = pipe.communicate()
+            pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
+            (sigdelta, err) = pipe.communicate()
 
-        m = hashlib.md5()
-        with open(pathname, "rb") as file:
-            for chunk in iter(partial(file.read, args.chunksize), ''):
-                m.update(chunk)
-        checksum = m.hexdigest()
+            m = hashlib.md5()
+            with open(pathname, "rb") as file:
+                for chunk in iter(partial(file.read, args.chunksize), ''):
+                    m.update(chunk)
+            checksum = m.hexdigest()
 
-        message = {
-            "message": "DEL",
-            "inode": inode,
-            "size": len(delta),
-            "checksum": checksum,
-            "basis": oldchksum,
-            "encoding": encoding
-            }
-        if verbosity > 4:
-            print "Send: %s" % str(message)
-        conn.send(message)
+            message = {
+                "message": "DEL",
+                "inode": inode,
+                "size": len(delta),
+                "checksum": checksum,
+                "basis": oldchksum,
+                "encoding": encoding
+                }
+            if verbosity > 4:
+                print "Send: %s" % str(message)
+            conn.send(message)
 
-        x = cStringIO.StringIO(delta)
-        sendData(x)
-        x.close()
+            x = cStringIO.StringIO(delta)
+            sendData(x)
+            x.close()
 
-        response = conn.receive()
-        if verbosity > 4:
-            print "Receive %s" % str(response)
-
-        """
-        message = {
-            "message": "SIG",
-            "inode": inode,
-            "size": len(sigdelta),
-            "checksum": checksum,
-            "basis": oldchksum,
-            "encoding": encoding
-            }
-        if verbosity > 4:
-            print "Send: %s" % str(message)
-        conn.send(message)
-        
-        x = cStringIO.StringIO(sigdelta)
-        sendData(x)
-        x.close()
-        
-        response = conn.receive()
-        if verbosity > 4:
-            print "Receive %s" % str(response)
-        """
+            response = conn.receive()
+            if verbosity > 4:
+                print "Receive %s" % str(response)
+        else:
+            sendContent(inode)
 
 def sendContent(inode):
     if inode in inodeDB:
@@ -384,10 +365,21 @@ def checkClonable(dir, stat, files, subdirs):
 
     return True
 
+def handleAckClone(message):
+    if message["message"] != "ACKCLN":
+        raise Exception
+    for inode in message["content"]:
+        if inode in cloneContents:
+            (path, files) = cloneContents[inode]
+            sendDirChunks(path, inode, files)
+            del cloneContents[inode]
+    for inode in message["done"]:
+        if inode in cloneContents:
+            del cloneContents[inode]
+        
 def sendClones():
-    global cloneDirs
     message = {
-        'message': 'CLONE',
+        'message': 'CLN',
         'clones': cloneDirs
     }
     if verbosity > 4:
@@ -396,6 +388,7 @@ def sendClones():
     response = conn.receive()
     if verbosity > 4:
         print "Receive: %s" % str(response)
+    handleAckClone(response)
     del cloneDirs[:]
 
 def sendDirChunks(path, inode, files):
@@ -453,7 +446,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         if cloneable:
             if verbosity > 2:
                 print "---- Cloning dir {} ----".format(dir)
-            cloneDirs.append({ 'path':  os.path.relpath(dir, top), 'inode':  s.st_ino, 'numfiles':  len(files)})
+            cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files)})
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
             if len(cloneDirs) > args.clones:
                 sendClones()
@@ -486,7 +479,7 @@ if __name__ == '__main__':
     parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
     parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c', action='store_true', dest='crossdev', help='Cross devices')
-    parser.add_argument('--clones', '-L', type=int, dest='clones', default=0, help='Maximum number of clones per chunk.  0 to disable cloning')
+    parser.add_argument('--clones', '-L', type=int, dest='clones', default=100, help='Maximum number of clones per chunk.  0 to disable cloning')
     parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
     parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
     parser.add_argument('--protocol', '-P', dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer')

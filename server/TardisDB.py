@@ -243,7 +243,8 @@ class TardisDB(object):
         f = self.getFileInfoByPath(name, current)
         if f:
             return self.getChecksumByName(f["name"], f["parent"], current)
-        return None
+        else:
+            return None
 
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: {}".format(str(fileInfo)))
@@ -260,8 +261,8 @@ class TardisDB(object):
         oldBSet = self.bset(old)
         self.logger.debug("Cloning directory inode {} from {} to {}".format(parent, oldBSet, newBSet))
         self.cursor.execute("INSERT INTO Files "
-                            "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                            "SELECT NameId, :new, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                            "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                            "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
                             "FROM Files WHERE BackupSet = :old AND Parent = :parent",
                             {"new": newBSet, "old": oldBSet, "parent": parent})
         return self.cursor.rowcount
@@ -322,10 +323,11 @@ class TardisDB(object):
         self.logger.debug("Reading directory values for {} {}".format(dirNode, backupset))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum as checksum "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
+                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
                   "WHERE Parent = :dirnode AND BackupSet = :backup",
                   {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():
