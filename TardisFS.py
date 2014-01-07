@@ -96,8 +96,12 @@ class TardisFS(fuse.Fuse):
                     or the time of creation on Windows).
         """
 
+        print "*********", path, type(path)
+        #path = unicode(path, errors='replace')
+        path = unicode(path.decode('utf-8'))
+        print "+++++++++", path, type(path)
         depth = getDepth(path) # depth of path, zero-based from root
-        self.log.info('getattr {} {}'.format(path, depth))
+        #self.log.info('getattr {} {}'.format(path, depth))
 
         if depth == 0:
             # Fake the root
@@ -193,7 +197,11 @@ class TardisFS(fuse.Fuse):
                 parent = self.tardis.getFileInfoByPath(parts[1], bset)
                 entries = self.tardis.readDirectory(parent["inode"], bset)
 
-        dirents.extend([str(y["name"].encode("utf-8", "replace")) for y in entries])
+        dirents.extend([y["name"] for y in entries])
+        #for y in entries:
+            #print "*******", y, y["name"], type(y["name"])
+            #dirents.append(str(y["name"].encode("utf-8", "replace")))
+            #dirents.append(y["name"])
 
         for e in dirents:
             yield fuse.Direntry(e)

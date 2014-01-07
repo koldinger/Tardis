@@ -82,7 +82,7 @@ class TardisDB(object):
                 pass
 
         self.conn = sqlite3.connect(self.dbName)
-        #self.conn.text_factory = str
+        self.conn.text_factory = str
 
         self.cursor = self.conn.cursor()
         if (prevSet):
@@ -131,7 +131,7 @@ class TardisDB(object):
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self.bset(current)
-        self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
+        #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
@@ -146,7 +146,7 @@ class TardisDB(object):
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self.bset(current)
-        self.logger.debug("Looking up file by path {} {}".format(path, backupset))
+        #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = 0              # Root directory value
         info = None
         for name in splitpath(path):

@@ -343,15 +343,27 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return {"message" : "OK" }
 
+    def checksumDir(self, dirNode):
+        """ Generate a checksum of the file names in a directory"""
+        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode)])
+        length = len(filenames)
+        m = hashlib.md5()
+        for f in filenames:
+            m.update(f.encode('utf8'))
+        return (length, m.hexdigest())
+
     def processClone(self, message):
         """ Clone an entire directory """
         done = []
         content = []
         for d in message['clones']:
-            rows = self.db.cloneDir(d['inode'])
-            if rows != d['numfiles']:
+            inode = d['inode']
+            (numfiles, checksum) = self.checksumDir(inode)
+            if numfiles != d['numfiles'] or checksum != d['cksum']:
+                self.logger.debug("No match on clone.  Inode: {} Rows: {} {} Checksums: {} {}".format(inode, numfiles, d['numfiles'], checksum, d['cksum']))
                 content.append(d['inode'])
             else:
+                rows = self.db.cloneDir(d['inode'])
                 done.append(d['inode'])
         return {"message" : "ACKCLN", "done" : done, 'content' : content }
 
