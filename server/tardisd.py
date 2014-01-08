@@ -528,7 +528,7 @@ if __name__ == "__main__":
         profiler = cProfile.Profile()
 
     try:
-        server = SocketServer.TCPServer(("localhost", config.getint('Tardis', 'Port')), TardisServerHandler)
+        server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         logger.info("Starting server");
         server.serve_forever()
     except KeyboardInterrupt:
