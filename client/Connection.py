@@ -11,7 +11,7 @@ import Messages
 class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority=0):
+    def __init__(self, host, port, name, encoding, priority):
         self.stats = { 'messages' : 0, 'bytes': 0 }
 
         # Create and open the socket
@@ -71,8 +71,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol):
-        Connection.__init__(self, host, port, name, protocol)
+    def __init__(self, host, port, name, protocol, priority):
+        Connection.__init__(self, host, port, name, protocol, priority)
 
     def send(self, message):
         self.sender.sendMessage(message)
@@ -92,14 +92,14 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON')
+    def __init__(self, host, port, name, priority=0):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON')
+    def __init__(self, host, port, name, priority=0):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock)
 

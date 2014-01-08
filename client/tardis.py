@@ -295,27 +295,13 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
-    exFile = os.path.join(dir, excludeFile)
-    try:
-        with open(exFile) as f:
-            newExcludes = [x.rstrip('\n') for x in f.readlines()]
-            newExcludes.extend(excludes)
-            excludes = newExcludes
-    except IOError as e:
-        #traceback.print_exc()
-        pass
-
-    localExcludes = excludes
+    newExcludes = loadExcludeFile(os.path.join(dir, excludeFile))
+    newExcludes.extend(excludes)
+    excludes = newExcludes
 
     # Add a list of local files to exclude.  These won't get passed to lower directories
-    lexFile = os.path.join(dir, excludeFile)
-    try:
-        with open(lexFile) as f:
-            localExcludes = list(excludes)
-            localExcludes.extend( [x.rstrip('\n') for x in f.readlines()] )
-    except:
-        #traceback.print_exc()
-        pass
+    localExcludes = list(excludes)
+    localExcludes.extend(loadExcludeFile(os.path.join(dir, localExcludeFile)))
 
     files = []
 
@@ -475,37 +461,125 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         traceback.print_exc()
 
 
-if __name__ == '__main__':
+def setBackupName(args):
+    """ Calculate the name of the backup set """
+    name = args.name
+    priority = 1
+    # If auto is set, pick based on the day of the month, week, or just a daily
+    if args.auto:
+        if starttime.day == 1:
+            args.monthly = True
+        elif starttime.weekday() == 0:
+            args.weekly = True
+        else:
+            args.daily = True
+
+    if args.hourly:
+        name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
+        priority = 1
+    elif args.daily:
+        name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
+        priority = 2
+    elif args.weekly:
+        name = 'Weekly-{}'.format(starttime.strftime("%Y-%U"))
+        priority = 3
+    elif args.monthly:
+        name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
+        priority = 4
+
+    # If priority was set, set it here
+    if args.priority:
+        priority = args.priority
+
+    return (name, priority)
+
+def loadExcludeFile(name):
+    """ Load a list of patterns to exclude from a file. """
+    try:
+        with open(name) as f:
+            excludes = [x.rstrip('\n') for x in f.readlines()]
+        return excludes
+    except IOError as e:
+        #traceback.print_exc()
+        return []
+
+# Load all the excludes we might want
+def loadExcludes(args):
+    if not args.ignoreglobalexcludes:
+        globalExcludes.extend(loadExcludeFile(globalExcludeFile))
+    if args.cvs:
+        globalExcludes.extend(cvsExcludes)
+    if args.excludes:
+        globalExcludes.extend(args.excludes)
+    if args.excludefiles:
+        for f in args.excludefiles:
+            globalExcludes.extend(loadExcludeFile(f))
+    excludeFile         = args.excludefilename
+    localExcludeFile    = args.excludelocalfilename
+
+def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d-%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
-    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--server', '-s', dest='server', default='localhost', help='Set the destination server')
-    parser.add_argument('--port', '-p', type=int, dest='port', default=9999, help='Set the destination server port')
-    parser.add_argument('--name', '-n', dest='name', default=defaultBackupSet, help='Set the backup name')
-    parser.add_argument('--cvs-ignore', action='store_true', dest='cvs', help='Ignore files like CVS')
-    parser.add_argument('--maxdepth', '-d', type=int, dest='maxdepth', default=0, help='Maximum depth to search')
-    parser.add_argument('--crossdevice', '-c', action='store_true', dest='crossdev', help='Cross devices')
-    parser.add_argument('--clones', '-L', type=int, dest='clones', default=100, help='Maximum number of clones per chunk.  0 to disable cloning')
-    parser.add_argument('--chunksize', type=int, dest='chunksize', default=16536, help='Chunk size for sending data')
-    parser.add_argument('--dirslice', type=int, dest='dirslice', default=100, help='Maximum number of directory entries per message')
-    parser.add_argument('--protocol', '-P', dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer')
-    parser.add_argument('--stats', action='store_true', dest='stats', help='Print stats about the transfer')
-    parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
-    parser.add_argument('directories', nargs='*', default='.', help="List of files to sync")
+    parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server')
+    parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port')
 
-    args = parser.parse_args()
+    # Create a group of mutually exclusive options for naming the backup set
+    namegroup = parser.add_mutually_exclusive_group()
+    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,  help='Set the backup name')
+    namegroup.add_argument('--hourly', '-H',    dest='hourly', action='store_true',     help='Run an hourly backup')
+    namegroup.add_argument('--daily',  '-D',    dest='daily', action='store_true',      help='Run a daily backup')
+    namegroup.add_argument('--weekly', '-W',    dest='weekly', action='store_true',     help='Run a weekly backup')
+    namegroup.add_argument('--monthly','-M',    dest='monthly', action='store_true',    help='Run a monthly backup')
+    namegroup.add_argument('--auto',   '-A',    dest='auto', action='store_true',       help='Automatically name the backup, from daily, weekly, or monthly')
+
+    parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
+    parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
+    parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
+
+    excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
+    excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
+    excgrp.add_argument('--exclude', '-x',      dest='excludes', action='append',           help='Patterns to exclude globally (may be repeated)')
+    excgrp.add_argument('--exclude-file', '-X', dest='excludefiles', action='append',       help='Load patterns from exclude file (may be repeated)')
+    excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,                            help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--local-exclude-file-name',  dest='localexcludefilename', default=localExcludeFile,            help='Load local exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
+
+    comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
+    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,       help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
+    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=16536,  help='Chunk size for sending data.  Default: %(default)s')
+    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,    help='Maximum number of directory entries per message.  Default: %(default)s')
+    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer.  Default: %(default)s')
+
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + version,    help='Show the version')
+    parser.add_argument('--stats',              action='store_true', dest='stats',          help='Print stats about the transfer')
+    parser.add_argument('--verbose', '-v',      dest='verbose', action='count',         help='Increase the verbosity')
+
+    parser.add_argument('directories',          nargs='*', default='.', help="List of files to sync")
+
+    return parser.parse_args()
+
+if __name__ == '__main__':
+
+    args = processCommandLine()
     #print args
 
     starttime = datetime.datetime.now()
 
     verbosity=args.verbose
 
+    # Figure out the name and the priority of this backupset
+    (name, priority) = setBackupName(args)
+
+    # Load the excludes
+    loadExcludes(args)
+
+    # Open the connection
     if args.protocol == 'json':
-        conn = JsonConnection(args.server, args.port, args.name)
+        conn = JsonConnection(args.server, args.port, name, priority)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = BsonConnection(args.server, args.port, args.name)
+        conn = BsonConnection(args.server, args.port, name, priority)
         setEncoder("bin")
 
     if verbosity:
@@ -538,9 +612,11 @@ if __name__ == '__main__':
         print "Receive: %s" % str(response)
     handleAckDir(response)
 
+    # Now, do the actual work here.
     for x in args.directories:
-        recurseTree(x, x, depth=args.maxdepth)
+        recurseTree(x, x, depth=args.maxdepth, excludes=globalExcludes)
 
+    # If any clone requests still lying around, send them
     if len(cloneDirs):
         sendClones()
 
