@@ -109,10 +109,10 @@ class TardisDB(object):
 
     def lastBackupSet(self, completed=True):
         if completed:
-            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp, ClientTime as clienttime "
+            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, StartTime as Timestamp, ClientTime as clienttime "
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp, ClientTime as clienttime "
+            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, StartTime as Timestamp, ClientTime as clienttime "
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         if row:
@@ -123,7 +123,7 @@ class TardisDB(object):
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
-        c.execute("INSERT INTO Backups (Name, Completed, Timestamp, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
+        c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
                   {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
         self.currBackupSet = c.lastrowid
         self.currBackupName = name
@@ -350,7 +350,7 @@ class TardisDB(object):
 
     def getBackupSetInfo(self, name):
         c = self.conn.execute("SELECT "
-                              "BackupSet, Timestamp, ClientTime FROM Backups WHERE name = :name",
+                              "BackupSet, StartTime, ClientTime FROM Backups WHERE name = :name",
                               {"name": name})
         row = c.fetchone()
         if row:
@@ -372,7 +372,7 @@ class TardisDB(object):
         self.logger.info("Closing DB: {}".format(self.dbName))
         if self.conn:
             if self.currBackupSet:
-                self.conn.execute("UPDATE Backups SET EndTimestamp = :now WHERE BackupSet = :backup",
+                self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
                                     { "now": time.time(), "backup": self.currBackupSet })
             self.conn.commit()
             self.conn.close()
