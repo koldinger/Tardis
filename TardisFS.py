@@ -105,6 +105,8 @@ class TardisFS(fuse.Fuse):
 
         if depth == 0:
             # Fake the root
+            target = self.tardis.lastBackupSet(completed=False)
+            timestamp = float(target[2])
             st = fuse.Stat()
             st.st_mode = stat.S_IFDIR | 0755
             st.st_ino = 0
@@ -113,9 +115,9 @@ class TardisFS(fuse.Fuse):
             st.st_uid = 0
             st.st_gid = 0
             st.st_size = 4096
-            st.st_atime = int(time())
-            st.st_mtime = st.st_atime
-            st.st_ctime = st.st_atime
+            st.st_atime = timestamp
+            st.st_mtime = timestamp
+            st.st_ctime = timestamp
             return st
         elif depth == 1:
             # Root directory contents

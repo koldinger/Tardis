@@ -1,5 +1,5 @@
-#! /usr/bin/env python
-# coding: utf8
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
 
 import os, sys
 import os.path
@@ -63,18 +63,24 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-def sendData(file):
+def sendData(file, checksum=False):
     """ Send a block of data """
     num = 0
-    m = hashlib.md5()
+    if checksum:
+        m = hashlib.md5()
     for chunk in iter(partial(file.read, args.chunksize), ''):
-        m.update(chunk)
+        if checksum:
+            m.update(chunk)
         data = conn.encode(chunk)
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
         stats["bytes"] += len(data)
         num += 1
-    return m.hexdigest()
+    conn.send({"chunk": "done"})
+    if checksum:
+        return m.hexdigest()
+    else:
+        return None
 
 def processChecksums(inodes):
     """ Generate a delta and send it """
@@ -178,9 +184,9 @@ def processDelta(inode):
             sendData(x)
             x.close()
 
-            response = conn.receive()
-            if verbosity > 4:
-                print "Receive %s" % str(response)
+            #response = conn.receive()
+            #if verbosity > 4:
+                #print "Receive %s" % str(response)
         else:
             sendContent(inode)
 
@@ -205,16 +211,16 @@ def sendContent(inode):
 
             if S_ISLNK(mode):
                 # It's a link.  Send the contents of readlink
-                chunk = os.readlink(pathname)
-                data = conn.encode(chunk)
-                chunkMessage = {"data": data }
-                conn.send(chunkMessage)
+                #chunk = os.readlink(pathname)
+                x = cStringIO.StringIO(os.readlink(pathname))
+                sendData(x)
+                x.close()
             else:
                 with open(pathname, "rb") as file:
-                    checksum = sendData(file)
-            response = conn.receive()
-            if verbosity > 4:
-                print "Receive %s" % str(response)
+                    checksum = sendData(file, checksum=True)
+            #response = conn.receive()
+            #if verbosity > 4:
+                #print "Receive %s" % str(response)
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -239,17 +245,14 @@ def handleAckDir(message):
                     size = 0;
                 print "File: [N]: %s %d" % (name, size)
         sendContent(i)
-        if i in inodeDB:
-            del inodeDB[i]
 
     for i in delta:
         if verbosity > 1:
             (x, name) = inodeDB[i]
             print "File: [D]: %s" % (name)
         processDelta(i)
-        if i in inodeDB:
-            del inodeDB[i]
 
+    # Collect the ACK messages
     if len(cksum) > 0:
         processChecksums(cksum)
 
@@ -257,9 +260,6 @@ def handleAckDir(message):
         print "----- AckDir complete"
 
     return
-
-def makeDirHeader(dir):
-    pass
 
 def mkFileInfo(dir, name):
     file = None
@@ -451,7 +451,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
             for f in filenames:
-                m.update(f.encode("utf8"))
+                m.update(f.encode('utf8', 'ignore'))
 
             cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)

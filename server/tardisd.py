@@ -227,8 +227,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         size = message["size"]
         decoder = getDecoder(message["encoding"])
 
-        while (bytesReceived < size):
+        while True:
             chunk = self.messenger.recvMessage()
+            if chunk['chunk'] == 'done':
+                break
             bytes = self.messenger.decode(chunk["data"])
             if output:
                 output.write(bytes)
@@ -245,7 +247,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # TODO: This has gotta be wrong.
 
         self.db.setChecksum(inode, checksum)
-        return {"message" : "OK"}
+        #return {"message" : "OK", "inode": inode}
+        return None
 
     def processSignature(self, message):
         """ Receive a delta message. """
@@ -320,8 +323,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         size = message["size"]
         decoder = getDecoder(message["encoding"])
 
-        while (bytesReceived < size):
+        while True:
             chunk = self.messenger.recvMessage()
+            if chunk['chunk'] == 'done':
+                break
+
             bytes = self.messenger.decode(chunk["data"])
             if digest:
                 digest.update(bytes)
@@ -341,7 +347,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.insertChecksumFile(checksum)
         self.db.setChecksum(message["inode"], checksum)
 
-        return {"message" : "OK" }
+        #return {"message" : "OK", "inode": message["inode"]}
+        return None
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""
@@ -349,7 +356,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         length = len(filenames)
         m = hashlib.md5()
         for f in filenames:
-            m.update(f.encode('utf8'))
+            m.update(f)
         return (length, m.hexdigest())
 
     def processClone(self, message):
@@ -426,16 +433,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             message = self.request.recv(256).strip()
             self.logger.info(message)
             fields = message.split()
-            if (len(fields) != 4 or fields[0] != 'BACKUP'):
+            if (len(fields) != 6 or fields[0] != 'BACKUP'):
                 self.request.sendall("FAIL")
                 raise Exception("Unrecognized command", message)
-            host     = fields[1]
-            name     = fields[2]
-            encoding = fields[3]
+            (command, host, name, encoding, priority, clienttime) = fields
 
             self.getDB(host)
             self.startSession(name)
-            self.db.newBackupSet(name, str(self.sessionid))
+            self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
 
             self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
 
@@ -455,8 +460,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     done = True
                 else:
                     response = self.processMessage(message)
-                    self.logger.debug("Sending : " + str(response))
-                    self.messenger.sendMessage(response)
+                    if response:
+                        self.logger.debug("Sending : " + str(response))
+                        self.messenger.sendMessage(response)
 
             self.db.completeBackup()
         except:

@@ -2,6 +2,7 @@ import socket
 import json
 import uuid
 import sys
+import time
 
 sys.path.append("../utils")
 
@@ -10,7 +11,7 @@ import Messages
 class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding):
+    def __init__(self, host, port, name, encoding, priority=0):
         self.stats = { 'messages' : 0, 'bytes': 0 }
 
         # Create and open the socket
@@ -22,7 +23,7 @@ class Connection(object):
             message = self.get(10)
             if message != "TARDIS 1.0":
                 raise Exception
-            message = "BACKUP {} {} {}".format(socket.gethostname(), name, encoding)
+            message = "BACKUP {} {} {} {} {}".format(socket.gethostname(), name, encoding, priority, time.time())
             self.put(message)
 
             message = self.sock.recv(256).strip()

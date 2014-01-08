@@ -88,11 +88,10 @@ class TardisDB(object):
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
-                self.prevBackupName = f[0]
-                self.prevBackupSet  = f[1]
+                (self.prevBackupName, self.prevBackupSet, self.lastClientTime) = f
             #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
-            (self.prevBackupName, self.prevBackupSet, self.prevBackupDate) = self.lastBackupSet()
+            (self.prevBackupName, self.prevBackupSet, self.prevBackupDate, self.lastClientTime) = self.lastBackupSet()
             #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
         #row = self.cursor.fetchone()
@@ -108,20 +107,24 @@ class TardisDB(object):
         else:
             return current
 
-    def lastBackupSet(self):
-        c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp "
-                                "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+    def lastBackupSet(self, completed=True):
+        if completed:
+            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp, ClientTime as clienttime "
+                                    "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+        else:
+            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, Timestamp as timestamp, ClientTime as clienttime "
+                                    "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         if row:
-            return row[0], row[1], row[2]
+            return row[0], row[1], row[2], row[3]
         else:
             return None, None, None
 
-    def newBackupSet(self, name, session):
+    def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
-        c.execute("INSERT INTO Backups (Name, Completed, Timestamp, Session) VALUES (:name, 0, :now, :session)",
-                  {"name": name, "now": time.time(), "session": session})
+        c.execute("INSERT INTO Backups (Name, Completed, Timestamp, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
+                  {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
         self.currBackupSet = c.lastrowid
         self.currBackupName = name
         self.conn.commit()
@@ -347,7 +350,7 @@ class TardisDB(object):
 
     def getBackupSetInfo(self, name):
         c = self.conn.execute("SELECT "
-                              "BackupSet, Timestamp FROM Backups WHERE name = :name",
+                              "BackupSet, Timestamp, ClientTime FROM Backups WHERE name = :name",
                               {"name": name})
         row = c.fetchone()
         if row:

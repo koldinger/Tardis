@@ -1,9 +1,11 @@
 CREATE TABLE IF NOT EXISTS Backups (
     Name            CHARACTER UNIQUE,
-    Timestamp       CHARACTER,
-    EndTimestamp    CHARACTER,
+    StartTime       CHARACTER,
+    EndTime         CHARACTER,
+    ClientTime      CHARACTER,
     Session         CHARACTER UNIQUE,
     Completed       INTEGER,
+    Priority        INTEGER DEFAULT 1,
     BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
