@@ -515,7 +515,7 @@ def loadExcludes(args):
         for f in args.excludefiles:
             globalExcludes.extend(loadExcludeFile(f))
     excludeFile         = args.excludefilename
-    localExcludeFile    = args.excludelocalfilename
+    localExcludeFile    = args.localexcludefilename
 
 def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d-%H:%M:%S")
