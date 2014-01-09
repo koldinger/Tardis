@@ -101,7 +101,7 @@ class TardisFS(fuse.Fuse):
         path = unicode(path.decode('utf-8'))
         #print "+++++++++", path, type(path)
         depth = getDepth(path) # depth of path, zero-based from root
-        self.log.info('getattr {} {}'.format(path, depth))
+        #self.log.info('getattr {} {}'.format(path, depth))
 
         if depth == 0:
             # Fake the root
