@@ -639,7 +639,7 @@ if __name__ == '__main__':
         setEncoder("bin")
 
     if verbosity:
-        print "Session: %s" % conn.getSessionId()
+        print "Name: {} Server: {} Session: {}".format(name, args.server, conn.getSessionId())
 
     # send a fake root directory
     files = []
