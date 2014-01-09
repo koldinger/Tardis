@@ -71,7 +71,7 @@ class TardisFS(fuse.Fuse):
 
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, "tardis.db")
-        self.tardis = TardisDB.TardisDB(dbPath)
+        self.tardis = TardisDB.TardisDB(dbPath, backup=False)
 
         self.regenerator = regenerate.Regenerator(self.cache, self.tardis)
         self.files = {}
@@ -96,12 +96,12 @@ class TardisFS(fuse.Fuse):
                     or the time of creation on Windows).
         """
 
-        print "*********", path, type(path)
+        #print "*********", path, type(path)
         #path = unicode(path, errors='replace')
         path = unicode(path.decode('utf-8'))
-        print "+++++++++", path, type(path)
+        #print "+++++++++", path, type(path)
         depth = getDepth(path) # depth of path, zero-based from root
-        #self.log.info('getattr {} {}'.format(path, depth))
+        self.log.info('getattr {} {}'.format(path, depth))
 
         if depth == 0:
             # Fake the root
@@ -155,7 +155,7 @@ class TardisFS(fuse.Fuse):
             return st
         else:
             parts = getParts(path)
-            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
             f = self.tardis.getFileInfoByPath(parts[1], bset)
             if f:
                 st = fuse.Stat()
@@ -192,7 +192,7 @@ class TardisFS(fuse.Fuse):
             entries = self.tardis.listBackupSets()
         else:
             parts = getParts(path)
-            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
             if depth == 1:
                 entries = self.tardis.readDirectory(0, bset)
             else:
@@ -249,7 +249,7 @@ class TardisFS(fuse.Fuse):
             return 0
 
         parts = getParts(path)
-        (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+        (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
         if bset:
             f = self.regenerator.recoverFile(parts[1], bset)
             if f:
@@ -288,7 +288,7 @@ class TardisFS(fuse.Fuse):
             return str(target[0])
         elif getDepth(path) > 1:
             parts = getParts(path)
-            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
             if bset:
                 f = self.regenerator.recoverFile(parts[1], bset)
                 link = f.readline()
@@ -345,7 +345,7 @@ class TardisFS(fuse.Fuse):
         print '*** listxattr', path, " :: ", size
         if (getDepth(path) > 1):
             parts = getParts(path)
-            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
             if bset:
                 checksum = self.tardis.getChecksumByPath(parts[1], bset)
                 print "Got checksum: ", parts, bset, checksum
@@ -358,7 +358,7 @@ class TardisFS(fuse.Fuse):
 
         if (getDepth(path) > 1):
             parts = getParts(path)
-            (bset, timestamp) = self.tardis.getBackupSetInfo(parts[0])
+            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
 
             if size == 0:
                 retFunc = len

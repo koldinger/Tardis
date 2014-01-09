@@ -69,10 +69,11 @@ class TardisDB(object):
     dbName = None
     currBackupSet = None
 
-    def __init__(self, dbname, backup=True, prevSet=None):
+    def __init__(self, dbname, backup=True, prevSet=None, initialize=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
+
         if backup:
             backup = dbname + ".bak"
             try:
@@ -84,11 +85,27 @@ class TardisDB(object):
         self.conn = sqlite3.connect(self.dbName)
         self.conn.text_factory = str
 
+        if (initialize):
+            self.logger.info("Processing script: {}".format(initialize))
+            try:
+                with open(initialize, "r") as f:
+                    script = f.read()
+                    self.conn.executescript(script)
+            except IOError as e:
+                self.logger.error("Could not read initialization script {}".format(initialize))
+                self.logger.exception(e)
+                raise
+            except sqlite3.Error as e:
+                self.logger.error("Could not execute initialization script {}".format(initialize))
+                self.logger.exception(e)
+                raise
+
         self.cursor = self.conn.cursor()
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
-                (self.prevBackupName, self.prevBackupSet, self.lastClientTime) = f
+                (self.prevBackupSet, self.prevBackupDate, self.lastClientTime) = f
+                self.prevBackupName = prevSet
             #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
             (self.prevBackupName, self.prevBackupSet, self.prevBackupDate, self.lastClientTime) = self.lastBackupSet()
@@ -100,6 +117,7 @@ class TardisDB(object):
         self.logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
         self.conn.execute("PRAGMA synchronous=false")
+        self.conn.execute("PRAGMA foreignkeys=true")
 
     def bset(self, current):
         if type(current) is bool:
@@ -324,15 +342,14 @@ class TardisDB(object):
     def readDirectory(self, dirNode, current=False):
         backupset = self.bset(current)
         self.logger.debug("Reading directory values for {} {}".format(dirNode, backupset))
-        c = self.cursor
-        c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum as checksum "
-                  "FROM Files "
-                  "JOIN Names ON Files.NameId = Names.NameId "
-                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Parent = :dirnode AND BackupSet = :backup",
-                  {"dirnode": dirNode, "backup": backupset})
+        c = self.conn.execute("SELECT "
+                               "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                               "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum as checksum "
+                               "FROM Files "
+                               "JOIN Names ON Files.NameId = Names.NameId "
+                               "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                               "WHERE Parent = :dirnode AND BackupSet = :backup",
+                               {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():
             yield makeDict(c, row)
 
@@ -354,7 +371,7 @@ class TardisDB(object):
                               {"name": name})
         row = c.fetchone()
         if row:
-            return row[0], row[1]
+            return row[0], row[1], row[2]
         else:
             return None
 
@@ -364,6 +381,35 @@ class TardisDB(object):
     def completeBackup(self):
         self.cursor.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})
         self.commit()
+
+    def purgeFiles(self, priority, timestamp, current=False):
+        """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
+        backupset = self.bset(current)
+        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        # Delete files which are in backupsets below a specified priority, and are before the timestamp, and are 
+        # before the previous version of Current
+        self.cursor.execute("DELETE FROM Files WHERE Files.BackupSet IN "
+                            "(SELECT BackupSet FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset)",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        filesDeleted = self.cursor.rowcount
+        # Same for the row counts
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        setsDeleted = self.cursor.rowcount
+
+        return (filesDeleted, setsDeleted)
+
+    def listOrphanChecksums(self):
+        c = self.conn.execute("SELECT Checksum FROM Checksums "
+                              "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
+                              "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL)")
+        for row in c.fetchall():
+            yield row[0]
+
+    def deleteChecksum(self, checksum):
+        self.logger.debug("Deleting checksum: {}".format(checksum))
+        c = self.cursor.execute("DELETE FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})
+        return self.cursor.rowcount
 
     def commit(self):
         self.conn.commit()

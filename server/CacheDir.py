@@ -9,6 +9,10 @@ class CacheDir:
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
+        try:
+            os.makedirs(self.root)
+        except OSError, error:
+            pass
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
@@ -33,6 +37,13 @@ class CacheDir:
             if not os.path.isdir(dir):
                 os.makedirs(dir)
         return open(self.path(name), mode)
+
+    def remove(self, name):
+        try:
+            os.remove(self.path(name))
+            return True
+        except OSError:
+            return False
 
 logger = logging.getLogger("CacheDir")
 

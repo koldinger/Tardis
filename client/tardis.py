@@ -27,6 +27,9 @@ encoding            = None
 encoder             = None
 decoder             = None
 
+purgePriority       = None
+purgeTime           = None
+
 globalExcludes      = []
 cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
@@ -76,9 +79,13 @@ def sendData(file, checksum=False):
         conn.send(chunkMessage)
         stats["bytes"] += len(data)
         num += 1
-    conn.send({"chunk": "done"})
+    message = {"chunk": "done"}
     if checksum:
-        return m.hexdigest()
+        ck = m.hexdigest()
+        message["checksum"] = m.hexdigest()
+    conn.send(message)
+    if checksum:
+        return ck
     else:
         return None
 
@@ -213,7 +220,7 @@ def sendContent(inode):
                 # It's a link.  Send the contents of readlink
                 #chunk = os.readlink(pathname)
                 x = cStringIO.StringIO(os.readlink(pathname))
-                sendData(x)
+                checksum = sendData(x, checksum=True)
                 x.close()
             else:
                 with open(pathname, "rb") as file:
@@ -353,7 +360,7 @@ def checkClonable(dir, stat, files, subdirs):
 
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
-        raise Exception
+        raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
     for inode in message["content"]:
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
@@ -375,9 +382,24 @@ def sendClones():
     conn.send(message)
     response = conn.receive()
     if verbosity > 4:
-        print "Receive: %s" % str(response)
+        print "SC Receive: %s" % str(response)
     handleAckClone(response)
     del cloneDirs[:]
+
+def sendPurge(relative):
+    if purgePriority and purgeTime:
+        message = {
+            'message': 'PRG',
+            'priority': purgePriority,
+            'time'    : purgeTime,
+            'relative': relative
+        }
+        if verbosity > 4:
+            print "Send: %s" % str(message)
+        conn.send(message)
+        response = conn.receive()
+        if verbosity > 4:
+            print "Receive: %s" % str(response)
 
 def sendDirChunks(path, inode, files):
     message = {
@@ -460,11 +482,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         raise
         traceback.print_exc()
 
-
 def setBackupName(args):
     """ Calculate the name of the backup set """
+    global purgeTime, purgePriority
     name = args.name
     priority = 1
+    keepdays = None
     # If auto is set, pick based on the day of the month, week, or just a daily
     if args.auto:
         if starttime.day == 1:
@@ -476,20 +499,41 @@ def setBackupName(args):
 
     if args.hourly:
         name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
-        priority = 1
+        priority = 10
+        keepdays = 1
     elif args.daily:
         name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
-        priority = 2
+        priority = 20
+        keepdays = 30
     elif args.weekly:
         name = 'Weekly-{}'.format(starttime.strftime("%Y-%U"))
-        priority = 3
+        priority = 30
+        keepdays = 180
     elif args.monthly:
         name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
-        priority = 4
+        priority = 40
 
     # If priority was set, set it here
     if args.priority:
         priority = args.priority
+
+    if args.purge:
+        purgePriority = priority
+        if args.purgeprior:
+            purgePriority = args.purgeprior
+        if keepdays:
+            purgeTime = keepdays * 3600 * 24        # seconds in days
+        if args.purgedays:
+            purgeTime = args.purgedays * 3600 * 24
+        if args.purgehours:
+            purgeTime = args.purgedays * 3600
+        if args.purgetime:
+            try:
+                purgeTime = time.mktime(time.strptime(args.purgetime, "%Y/%m/%d:%H:%M"))
+            except ValueError:
+                print "Invalid format for --keep-time.  Needs to be YYYY/MM/DD:hh:mm, on a 24-hour clock"
+                raise
+        print "PurgeTime: ", purgeTime
 
     return (name, priority)
 
@@ -518,7 +562,7 @@ def loadExcludes(args):
     localExcludeFile    = args.localexcludefilename
 
 def processCommandLine():
-    defaultBackupSet = time.strftime("Backup_%Y-%m-%d-%H:%M:%S")
+    defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server')
@@ -551,9 +595,16 @@ def processCommandLine():
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,    help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer.  Default: %(default)s')
 
+    parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
+    parser.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,          help='Delete below this priority (Default: Backup priority)')
+    prggroup = parser.add_mutually_exclusive_group()
+    prggroup.add_argument('--keep-days',        dest='purgedays', type=int, default=None,           help='Number of days to keep')
+    prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
+    prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
+
     parser.add_argument('--version',            action='version', version='%(prog)s ' + version,    help='Show the version')
-    parser.add_argument('--stats',              action='store_true', dest='stats',          help='Print stats about the transfer')
-    parser.add_argument('--verbose', '-v',      dest='verbose', action='count',         help='Increase the verbosity')
+    parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
+    parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of files to sync")
 
@@ -573,6 +624,11 @@ if __name__ == '__main__':
 
     # Load the excludes
     loadExcludes(args)
+
+    # Error check the purge parameter.  Disable it if need be
+    if args.purge and not purgeTime:
+        print "Must specify purge days with this option set"
+        args.purge=False
 
     # Open the connection
     if args.protocol == 'json':
@@ -619,6 +675,12 @@ if __name__ == '__main__':
     # If any clone requests still lying around, send them
     if len(cloneDirs):
         sendClones()
+
+    if args.purge:
+        if args.purgetime:
+            sendPurge(False)
+        else:
+            sendPurge(True)
 
     if args.stats:
         connstats = conn.stats

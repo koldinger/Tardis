@@ -317,7 +317,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
             self.logger.debug("Sending output to temporary file {}".format(temp.name))
             output = temp.file
-            digest = hashlib.md5()
+            #digest = hashlib.md5()
 
         bytesReceived = 0
         size = message["size"]
@@ -326,17 +326,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         while True:
             chunk = self.messenger.recvMessage()
             if chunk['chunk'] == 'done':
+                checksum = chunk['checksum']
                 break
 
             bytes = self.messenger.decode(chunk["data"])
-            if digest:
-                digest.update(bytes)
             output.write(bytes)
             bytesReceived += len(bytes)
         output.close()
 
         if temp:
-            checksum = digest.hexdigest()
             if self.cache.exists(checksum):
                 self.logger.debug("Checksum file {} already exists".format(checksum))
                 os.remove(temp.name)
@@ -349,6 +347,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         #return {"message" : "OK", "inode": message["inode"]}
         return None
+
+    def processPurge(self, message):
+        self.logger.debug("Processing purge message: {}".format(str(message)))
+        if message['relative']:
+            prevTime = self.prevBackupDate - message['time']
+        else:
+            prevTime = message['time']
+
+        # Purge the files
+        (files, sets) = self.db.purgeFiles(message['priority'], prevTime)
+        self.logger.debug("Purged {} files in {} backup sets".format(files, sets))
+        # Now remove any leftover orphans
+        orphans = self.db.listOrphanChecksums()
+        for c in orphans:
+            self.cache.remove(c)
+            self.db.deleteChecksum(c)
+        return {"message" : "PURGEOK"}
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""
@@ -392,14 +407,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processChecksum(message)
         elif messageType == "CLN":
             return self.processClone(message)
+        elif messageType == "PRG":
+            return self.processPurge(message)
         else:
             raise Exception("Unknown message type", messageType)
 
     def getDB(self, host):
+        script = None
         self.basedir = os.path.join(basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, "tardis.db")
-        self.db = TardisDB.TardisDB(self.dbname)
+        if not os.path.exists(self.dbname):
+            script = "schema.sql"
+        self.db = TardisDB.TardisDB(self.dbname, initialize=script)
         self.regenerator = regenerate.Regenerator(self.cache, self.db)
 
     def startSession(self, name):
