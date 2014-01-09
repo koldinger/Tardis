@@ -16,10 +16,9 @@ import os.path
 import logging
 import tempfile
 
-sys.path.append("server")
 import TardisDB
 import CacheDir
-import regenerate
+import Regenerate
 
 # For profiling
 import cProfile
@@ -73,7 +72,7 @@ class TardisFS(fuse.Fuse):
         dbPath = os.path.join(self.path, "tardis.db")
         self.tardis = TardisDB.TardisDB(dbPath, backup=False)
 
-        self.regenerator = regenerate.Regenerator(self.cache, self.tardis)
+        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis)
         self.files = {}
 
         self.log.debug('Init complete.')

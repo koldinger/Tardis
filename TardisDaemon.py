@@ -19,12 +19,10 @@ import cProfile
 import StringIO
 import pstats
 
+import Messages
 import CacheDir
 import TardisDB
-import regenerate
-
-sys.path.append("../utils")
-import Messages
+import Regenerate
 
 sessions = {}
 
@@ -36,17 +34,11 @@ DELTA   = 3
 config = None
 profiler = None
 
-def getDecoder(encoding):
-    decoder = None
-    if (encoding == "bin"):
-        decoder = lambda x: x
-        encoder = lambda x: x
-    elif (encoding == "base64"):
-        decoder = base64.b64encode
-        decoder = base64.b64decode
-    return decoder
+databaseName = 'tardis.db'
+schemaName   = 'tardis.sql'
+configName   = '/etc/tardis/tardisd.cfg'
 
-class TardisServerHandler(SocketServer.BaseRequestHandler):
+class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
     sessionid = None
@@ -191,7 +183,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "message": "SIG",
                 "inode": inode,
                 "status": "OK",
-                "encoding": "base64",
+                "encoding": self.messenger.getEncoding(),
                 "checksum": chksum,
                 "size": len(sig),
                 "signature": self.messenger.encode(sig) }
@@ -225,7 +217,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         bytesReceived = 0
         size = message["size"]
-        decoder = getDecoder(message["encoding"])
 
         while True:
             chunk = self.messenger.recvMessage()
@@ -258,8 +249,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message["checksum"]
         basis    = message["basis"]
         inode    = message["inode"]
-
-        decoder = getDecoder(message["encoding"])
 
         # If a signature is specified, receive it as well.
         sigfile = checksum + ".sig"
@@ -321,7 +310,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         bytesReceived = 0
         size = message["size"]
-        decoder = getDecoder(message["encoding"])
 
         while True:
             chunk = self.messenger.recvMessage()
@@ -416,11 +404,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         script = None
         self.basedir = os.path.join(basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
-        self.dbname = os.path.join(self.basedir, "tardis.db")
+        self.dbname = os.path.join(self.basedir, databaseName)
         if not os.path.exists(self.dbname):
-            script = "schema.sql"
+            script = schemaName
         self.db = TardisDB.TardisDB(self.dbname, initialize=script)
-        self.regenerator = regenerate.Regenerator(self.cache, self.db)
+        self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
     def startSession(self, name):
         self.sessionid = uuid.uuid1()
@@ -500,14 +488,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 print s.getvalue()
             self.logger.info("Connection complete")
 
-if __name__ == "__main__":
-    defaultConfig = './tardisd.cfg'
-
+def main():
+    global basedir, savefull
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
-    parser.add_argument('--config', dest='config', default=defaultConfig, help="Location of the configuration file")
+    parser.add_argument('--config', dest='config', default=configName, help="Location of the configuration file")
     parser.add_argument('--single', dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--version', action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-l', dest='logcfg', default=None, help='Logging configuration file');
@@ -555,3 +542,6 @@ if __name__ == "__main__":
         pass
     except:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1].strerror))
+
+if __name__ == "__main__":
+    sys.exit(main())

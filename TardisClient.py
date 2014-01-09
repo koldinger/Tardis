@@ -23,6 +23,8 @@ excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
 
+starttime           = None
+
 encoding            = None
 encoder             = None
 decoder             = None
@@ -39,6 +41,7 @@ version             = "0.1"
 
 conn                = None
 args                = None
+conn                = None
 
 cloneDirs           = []
 cloneContents       = {}
@@ -484,7 +487,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
-    global purgeTime, purgePriority
+    global purgeTime, purgePriority, starttime
     name = args.name
     priority = 1
     keepdays = None
@@ -610,10 +613,10 @@ def processCommandLine():
 
     return parser.parse_args()
 
-if __name__ == '__main__':
 
+def main():
+    global starttime, args, config, conn, verbosity
     args = processCommandLine()
-    #print args
 
     starttime = datetime.datetime.now()
 
@@ -639,7 +642,7 @@ if __name__ == '__main__':
         setEncoder("bin")
 
     if verbosity:
-        print "Name: {} Server: {} Session: {}".format(name, args.server, conn.getSessionId())
+        print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
 
     # send a fake root directory
     files = []
@@ -691,3 +694,6 @@ if __name__ == '__main__':
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
         print dict(stats.items() + connstats.items())
+
+if __name__ == '__main__':
+    sys.exit(main())

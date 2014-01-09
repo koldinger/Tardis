@@ -30,7 +30,7 @@ class Connection(object):
             fields = message.split()
             if len(fields) != 3:
                 print message
-                raise Exception
+                raise Exception("Unexpected response: {}".format(message))
             if fields[0] != 'OK':
                 raise Exception
             self.sessionid = uuid.UUID(fields[1])

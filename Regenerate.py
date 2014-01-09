@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# -*- coding: utf-8 -*-
 
 import os
 import os.path
@@ -40,7 +41,7 @@ class Regenerator:
             return None
 
 
-if __name__ == "__main__":
+def main():
     logger = logging.getLogger("")
     logger.setLevel(logging.ERROR)
 
@@ -89,3 +90,6 @@ if __name__ == "__main__":
                 output.write(x)
                 x = f.read(16 * 1024)
             f.close()
+
+if __name__ == "__main__":
+    sys.exit(main())

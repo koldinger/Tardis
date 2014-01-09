@@ -1,0 +1,7 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+import TardisClient
+import sys
+
+sys.exit(TardisClient.main())

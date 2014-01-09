@@ -68,6 +68,9 @@ class JsonMessages(TextMessages):
     def decode(self, data):
         return base64.b64decode(data)
 
+    def getEncoding(self):
+        return "base64"
+
 class BsonMessages(BinMessages):
     def __init__(self, socket):
         BinMessages.__init__(self, socket)
@@ -83,3 +86,6 @@ class BsonMessages(BinMessages):
 
     def decode(self, data):
         return data
+
+    def getEncoding(self):
+        return "bin"
