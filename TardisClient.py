@@ -536,7 +536,6 @@ def setBackupName(args):
             except ValueError:
                 print "Invalid format for --keep-time.  Needs to be YYYY/MM/DD:hh:mm, on a 24-hour clock"
                 raise
-        print "PurgeTime: ", purgeTime
 
     return (name, priority)
 
@@ -641,7 +640,7 @@ def main():
         conn = BsonConnection(args.server, args.port, name, priority)
         setEncoder("bin")
 
-    if verbosity:
+    if verbosity or args.stats:
         print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
 
     # send a fake root directory
