@@ -6,47 +6,76 @@ import functools
 #from datetime import datetime, time
 import time
 
+# Expected SQL Schema
+"""
+CREATE TABLE IF NOT EXISTS Backups (
+    Name            CHARACTER UNIQUE,
+    StartTime       CHARACTER,
+    EndTime         CHARACTER,
+    ClientTime      CHARACTER,
+    Session         CHARACTER UNIQUE,
+    Completed       INTEGER,
+    Priority        INTEGER DEFAULT 1,
+    BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT
+);
 
-#CREATE TABLE IF NOT EXISTS Backups (
-#    Name        CHARACTER UNIQUE,
-#    Timestamp   CHARACTER,
-#    Session     CHARACTER UNIQUE,
-#    Completed   INTEGER,
-#    BackupSet   INTEGER PRIMARY KEY AUTOINCREMENT
-#);
-#
-#CREATE TABLE IF NOT EXISTS CheckSums (
-#    Checksum    CHARACTER UNIQUE NOT NULL,
-#    ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
-#    Size        INTEGER,
-#    Basis       CHARACTER,
-#    FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
-#);
-#
-#CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
-#
-#CREATE TABLE IF NOT EXISTS Files (
-#    Name        CHARACTER NOT NULL,
-#    BackupSet   INTEGER   NOT NULL,
-#    Inode       INTEGER   NOT NULL,
-#    Parent      INTEGER   NOT NULL,
-#    ChecksumId  INTEGER,
-#    Dir         INTEGER,
-#    Size        INTEGER,
-#    MTime       INTEGER,
-#    CTime       INTEGER,
-#    ATime       INTEGER,
-#    Mode        INTEGER,
-#    UID         INTEGER,
-#    GID         INTEGER,
-#    NLinks      INTEGER,
-#    FOREIGN KEY(Checksum)  REFERENCES CheckSums(ID),
-#    FOREIGN KEY(BackupSet) REFERENCES Backups(BackupSet)
-#);
-#
-#CREATE INDEX IF NOT EXISTS FilesID ON Files(Parent ASC, Name ASC, BackupSet ASC);
+CREATE TABLE IF NOT EXISTS CheckSums (
+    Checksum    CHARACTER UNIQUE NOT NULL,
+    ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
+    Size        INTEGER,
+    Basis       INTEGER,
+    FOREIGN KEY(Basis) REFERENCES CheckSums(ChecksumId)
+);
+
+CREATE TABLE IF NOT EXISTS Names (
+    Name        CHARACTER UNIQUE NOT NULL,
+    NameId      INTEGER PRIMARY KEY AUTOINCREMENT
+);
+
+CREATE TABLE IF NOT EXISTS Files (
+    NameId      INTEGER   NOT NULL,
+    BackupSet   INTEGER   NOT NULL,
+    Inode       INTEGER   NOT NULL,
+    Parent      INTEGER   NOT NULL,
+    ChecksumId  INTEGER,
+    Dir         INTEGER,
+    Link        INTEGER,
+    MTime       INTEGER,
+    CTime       INTEGER,
+    ATime       INTEGER,
+    Mode        INTEGER,
+    UID         INTEGER,
+    GID         INTEGER, 
+    NLinks      INTEGER,
+    PRIMARY KEY(NameId, BackupSet, Parent),
+    FOREIGN KEY(NameId)      REFERENCES Names(NameId),
+    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD),
+    FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet)
+);
+
+CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
+
+CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS ParentIndex ON Files(Parent ASC, BackupSet ASC);
+CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
+
+-- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
+
+INSERT OR IGNORE INTO Backups (Name, StartTime, Completed, Priority) VALUES (".Initial", strftime('%s', 'now') , 1, 0);
+
+CREATE VIEW IF NOT EXISTS VFiles AS
+    SELECT Name, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, BackupSet
+    FROM Files
+    JOIN Names ON Files.NameId = Names.NameId
+    LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
+"""
+
+# End of schema
+
+# Utility functions
 
 def makeDict(cursor, row):
+    """ Convert a row from the db into a dict """
     if row != None and cursor != None and len(row) != 0:
         d = {}
         for idx, col in enumerate(cursor.description):
@@ -56,17 +85,23 @@ def makeDict(cursor, row):
         return None
 
 def addFields(x, y):
+    """ Add fields to the end of a dict """
     return dict(y.items() + x)
 
 def splitpath(path, maxdepth=20):
+    """ Split a path into chunks, recursively """
     (head, tail) = os.path.split(path)
     return splitpath(head, maxdepth - 1) + [ tail ] if maxdepth and head and head != path else [ head or tail ]
 
+# Class TardisDB
+
 class TardisDB(object):
-    logger = logging.getLogger("DB")
-    conn = None
-    cursor = None
-    dbName = None
+    """ Main source for all interaction with the Tardis DB """
+    logger  = logging.getLogger("DB")
+    conn    = None
+    cursor  = None
+    dbName  = None
+    db      = None
     currBackupSet = None
 
     def __init__(self, dbname, backup=True, prevSet=None, initialize=None):
@@ -86,7 +121,7 @@ class TardisDB(object):
         self.conn.text_factory = str
 
         if (initialize):
-            self.logger.info("Processing script: {}".format(initialize))
+            self.logger.info("Creating database: {}".format(initialize))
             try:
                 with open(initialize, "r") as f:
                     script = f.read()
@@ -104,11 +139,17 @@ class TardisDB(object):
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
-                (self.prevBackupSet, self.prevBackupDate, self.lastClientTime) = f
+                self.prevBackupSet = f['backupset']
+                self.prevBackupDate = f['starttime']
+                self.lastClientTime = f['clienttime']
                 self.prevBackupName = prevSet
             #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
-            (self.prevBackupName, self.prevBackupSet, self.prevBackupDate, self.lastClientTime) = self.lastBackupSet()
+            b = self.lastBackupSet()
+            self.prevBackupName = b['name']
+            self.prevBackupSet  = b['backupset']
+            self.prevBackupDate = b['starttime']
+            self.lastClientTime = b['clienttime']
             #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
         #row = self.cursor.fetchone()
@@ -120,23 +161,25 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
 
     def bset(self, current):
+        """ Determine the backupset we're being asked about.  True == current, false = previous, otherwise a number is returned """
         if type(current) is bool:
             return self.currBackupSet if current else self.prevBackupSet
         else:
             return current
 
     def lastBackupSet(self, completed=True):
+        """ Select the last backup set. """
         if completed:
-            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, StartTime as Timestamp, ClientTime as clienttime "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority as priority "
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            c = self.cursor.execute("SELECT Name as name, BackupSet as backupset, StartTime as Timestamp, ClientTime as clienttime "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime , Priority as priority "
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         if row:
-            return row[0], row[1], row[2], row[3]
+            return makeDict(c, row)
         else:
-            return None, None, None
+            return None
 
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
@@ -155,10 +198,11 @@ class TardisDB(object):
         #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
+                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
                   "WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
                   {"name": name, "parent": parent, "backup": backupset})
         return makeDict(c, c.fetchone())
@@ -187,6 +231,7 @@ class TardisDB(object):
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
+                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
                   "WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": backupset})
         return makeDict(c, c.fetchone())
@@ -195,10 +240,11 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode {} {}".format(inode, self.currBackupSet))
         c = self.cursor
         c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
+                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
+                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
                   "WHERE Inode = :inode AND BackupSet = :backup",
                   {"inode": inode, "backup": self.currBackupSet})
         return makeDict(c, c.fetchone())
@@ -212,22 +258,23 @@ class TardisDB(object):
         temp["backup"] = backupset
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
-                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup AND ChecksumId IS NOT NULL",
+                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup AND Files.ChecksumId IS NOT NULL",
                   temp)
         return makeDict(c, c.fetchone())
 
     def copyChecksum(self, old_inode, new_inode):
-        c = self.cursor
-        c.execute("UPDATE Files SET ChecksumId = (SELECT CheckSumID FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
-                  "WHERE INode = :newInode AND BackupSet = :backup",
-                  {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.currBackupSet})
+        self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT CheckSumID FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
+                            "WHERE INode = :newInode AND BackupSet = :backup",
+                            {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.currBackupSet})
+        return self.cursor.rowcount
 
     def setChecksum(self, inode, checksum):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
-                  {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
         return self.cursor.rowcount
 
     def getChecksumByInode(self, inode, current=True):
@@ -282,8 +329,8 @@ class TardisDB(object):
         oldBSet = self.bset(old)
         self.logger.debug("Cloning directory inode {} from {} to {}".format(parent, oldBSet, newBSet))
         self.cursor.execute("INSERT INTO Files "
-                            "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                            "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                            "(NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, BackupSet) "
+                            "SELECT NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, :new "
                             "FROM Files WHERE BackupSet = :old AND Parent = :parent",
                             {"new": newBSet, "old": oldBSet, "parent": parent})
         return self.cursor.rowcount
@@ -295,8 +342,8 @@ class TardisDB(object):
         self.logger.debug("Cloning directory inodes {} from {} to {}".format(parents, oldBSet, newBSet))
 
         self.cursor.executemany("INSERT INTO Files "
-                                "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                                "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+                                "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                                "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
                                 "FROM Files WHERE BackupSet = :old AND Parent = :parent",
                                 map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
         return self.cursor.rowcount
@@ -319,17 +366,21 @@ class TardisDB(object):
         self.setNameID(files)
         
         self.conn.executemany("INSERT INTO Files "
-                              "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
+                              "(NameId, BackupSet, Inode, Parent, Dir, Link, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
                               "VALUES "
-                              "(:nameid, :backup, :inode, :parent, :dir, :link, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                              "(:nameid, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                               map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))
+        basisid = None
+        if basis:
+            (cksum, basisid) = self.getChecksumInfo(checksum)
+
         c = self.cursor
         c.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
                   "VALUES                (:checksum, :size, :basis)",
-                  {"checksum": checksum, "size": size, "basis": basis })
+                  {"checksum": checksum, "size": size, "basis": basisid})
         return c.lastrowid
 
     def getChecksumInfo(self, checksum):
@@ -343,12 +394,12 @@ class TardisDB(object):
         backupset = self.bset(current)
         self.logger.debug("Reading directory values for {} {}".format(dirNode, backupset))
         c = self.conn.execute("SELECT "
-                               "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Files.Size AS size, "
-                               "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum as checksum "
+                               "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Checksums.Size AS size, "
+                               "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
                                "FROM Files "
                                "JOIN Names ON Files.NameId = Names.NameId "
                                "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                               "WHERE Parent = :dirnode AND BackupSet = :backup",
+                               "WHERE Parent = :dirnode AND Files.BackupSet = :backup",
                                {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():
             yield makeDict(c, row)
@@ -367,11 +418,12 @@ class TardisDB(object):
 
     def getBackupSetInfo(self, name):
         c = self.conn.execute("SELECT "
-                              "BackupSet, StartTime, ClientTime FROM Backups WHERE name = :name",
+                              "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, Completed AS completed, Session AS session "
+                              "FROM Backups WHERE name = :name",
                               {"name": name})
         row = c.fetchone()
         if row:
-            return row[0], row[1], row[2]
+            return makeDict(c, row)
         else:
             return None
 

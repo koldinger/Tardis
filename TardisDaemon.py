@@ -13,6 +13,8 @@ import tempfile
 import hashlib
 import base64
 import subprocess
+import daemon
+import daemon.pidfile
 
 # For profiling
 import cProfile
@@ -38,11 +40,13 @@ databaseName = 'tardis.db'
 schemaName   = 'tardis.sql'
 configName   = '/etc/tardis/tardisd.cfg'
 
-class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHandler):
+class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
     sessionid = None
     tempdir = None
+    cache   = None
+    db      = None
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -60,13 +64,12 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
                     if ("checksum") in old and not (old["checksum"] is None):
-                        self.db.copyChecksum(old["inode"], inode)
+                        self.db.setChecksum(inode, old['checksum'])
                         retVal = DONE
                     else:
-                        #self.db.setChecksum(inode, old["checksum"])
                         retVal = CONTENT
-                elif f["size"] < 4096:
-                    # Just ask for content if the size is under 4K.  Easier.
+                elif f["size"] < 4096 or old["size"] is None:
+                    # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
                     retVal = CONTENT
                 else:
                     retVal = DELTA
@@ -87,7 +90,11 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
                     if old:
                         if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
-                            retVal = DONE
+                            if ("checksum") in old and not (old["checksum"] is None):
+                                self.db.setChecksum(inode, old['checksum'])
+                                retVal = DONE
+                            else:
+                                retVal = CONTENT
                         else:
                             # otherwise 
                             retVal = CKSUM
@@ -209,7 +216,7 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
             self.logger.debug("Checksum file {} already exists".format(checksum))
             # Abort read
         else:
-            if savefull:
+            if self.server.savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
                 output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
             else:
@@ -228,12 +235,12 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
             bytesReceived += len(bytes)
         if output:
             output.flush()
-            if savefull:
+            if self.server.savefull:
                 # Process the delta file into the new file.
                 subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
-                self.db.insertChecksumFile(checksum)
+                self.db.insertChecksumFile(checksum, size)
             else:
-                self.db.insertChecksumFile(checksum, basis=basis)
+                self.db.insertChecksumFile(checksum, size, basis=basis)
             output.close()
             # TODO: This has gotta be wrong.
 
@@ -242,7 +249,7 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
         return None
 
     def processSignature(self, message):
-        """ Receive a delta message. """
+        """ Receive a signature message. """
         self.logger.debug("Processing signature message: {}".format(str(message)))
         output = None
         temp = None
@@ -330,7 +337,7 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming {} to {}".format(temp.name, self.cache.path(checksum)))
                 os.rename(temp.name, self.cache.path(checksum))
-                self.db.insertChecksumFile(checksum)
+                self.db.insertChecksumFile(checksum, bytesReceived)
         self.db.setChecksum(message["inode"], checksum)
 
         #return {"message" : "OK", "inode": message["inode"]}
@@ -339,24 +346,24 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
     def processPurge(self, message):
         self.logger.debug("Processing purge message: {}".format(str(message)))
         if message['relative']:
-            prevTime = self.prevBackupDate - message['time']
+            prevTime = float(self.db.prevBackupDate) - float(message['time'])
         else:
-            prevTime = message['time']
+            prevTime = float(message['time'])
 
         # Purge the files
         (files, sets) = self.db.purgeFiles(message['priority'], prevTime)
         self.logger.debug("Purged {} files in {} backup sets".format(files, sets))
-        # Now remove any leftover orphans
-        orphans = self.db.listOrphanChecksums()
-        for c in orphans:
-            self.cache.remove(c)
-            self.db.deleteChecksum(c)
         return {"message" : "PURGEOK"}
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""
-        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode)])
+        # Create a list of files, extracted from the directory
+        # ONLY include those that are directories, or that have a checksum ID
+        # eliminates any files which don't have a valid backup.
+        # Sort them to be in the same order as the sender
+        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode) if (x['size'] is not None or x['dir'] == 1)]) 
         length = len(filenames)
+
         m = hashlib.md5()
         for f in filenames:
             m.update(f)
@@ -402,7 +409,7 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
 
     def getDB(self, host):
         script = None
-        self.basedir = os.path.join(basedir, host)
+        self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, databaseName)
         if not os.path.exists(self.dbname):
@@ -425,12 +432,19 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
                 del sessions[str(self.sessionid)]
             except KeyError:
                 pass
-
         try:
             if (self.tempdir):
                 os.rmdir(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
+
+    def removeOrphans(self):
+        # Now remove any leftover orphans
+        if self.db:
+            orphans = self.db.listOrphanChecksums()
+            for c in orphans:
+                self.cache.remove(c)
+                self.db.deleteChecksum(c)
 
     def handle(self):
         if profiler:
@@ -475,10 +489,12 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
             self.db.completeBackup()
         except:
             e = sys.exc_info()[0]
-            self.logger.exception("Caught exception: {}".format(e))
+            self.logger.error("Caught exception: {}".format(e))
+            self.logger.exception(e)
         finally:
             self.request.close()
             self.endSession()
+            self.removeOrphans()
             if profiler:
                 profiler.disable()
                 s = StringIO.StringIO()
@@ -488,18 +504,33 @@ class TardisServerHandler(SocketServer.ForkingMixIn, SocketServer.BaseRequestHan
                 print s.getvalue()
             self.logger.info("Connection complete")
 
+class TardisSocketServer(SocketServer.TCPServer):
+    config = None
+
+    def __init__(self, config):
+        self.config = config
+        SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
+        self.basedir = config.get('Tardis', 'BaseDir')
+        self.savefull = config.get('Tardis', 'SaveFull')
+
+def run_server(config):
+    #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
+    server = TardisSocketServer(config)
+    server.serve_forever()
+
 def main():
-    global basedir, savefull
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
-    parser.add_argument('--config', dest='config', default=configName, help="Location of the configuration file")
-    parser.add_argument('--single', dest='single', action='store_true', help='Run a single transaction and quit')
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1', help='Show the version')
-    parser.add_argument('--logcfg', '-l', dest='logcfg', default=None, help='Logging configuration file');
-    parser.add_argument('--verbose', '-v', action='count', default=0, dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--profile', dest='profile', default=None, help='Generate a profile')
+    parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
+    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
+    parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
+    parser.add_argument('--logcfg', '-l',   dest='logcfg', default=None, help='Logging configuration file');
+    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
+    parser.add_argument('--daemon', '-d',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    parser.add_argument('--logfile', '-L',  dest='logfile', default=None, help='Log to file')
 
     args = parser.parse_args()
 
@@ -508,40 +539,46 @@ def main():
         'BaseDir' : './cache',
         'SaveFull': True,
         'LogCfg'  : args.logcfg,
-        'Profile' : args.profile
+        'Profile' : args.profile,
+        'LogFile' : args.logfile
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
 
     if config.get('Tardis', 'LogCfg'):
-        print "Loading logging config"
         logging.config.fileConfig(config.get('Tardis', 'LogCfg'))
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
         format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-        handler = logging.StreamHandler()
+        if args.logfile:
+            handler = logging.FileHandler(args.logfile)
+        elif args.daemon:
+            handler = logging.SysLogHandler()
+        else:
+            handler = logging.StreamHandler()
         handler.setFormatter(format)
         logger.addHandler(handler)
         loglevel = levels[args.verbose] if args.verbose < len(levels) else logging.DEBUG
         logger.setLevel(loglevel)
 
-    basedir = config.get('Tardis', 'BaseDir')
-    savefull = config.get('Tardis', 'SaveFull')
-    logger.debug("BaseDir: " + basedir)
-
     if config.get('Tardis', 'Profile'):
         profiler = cProfile.Profile()
-
     try:
-        server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         logger.info("Starting server");
-        server.serve_forever()
+        if args.daemon:
+            pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
+            with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
+                run_server(config)
+        else:
+            run_server(config)
     except KeyboardInterrupt:
         pass
     except:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1].strerror))
+        #logger.exception(sys.exc_info()[1])
+    logger.info("Ending")
 
 if __name__ == "__main__":
     sys.exit(main())

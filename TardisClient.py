@@ -169,19 +169,22 @@ def processDelta(inode):
 
                 temp.close()
 
-            pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
-            (sigdelta, err) = pipe.communicate()
+            #pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
+            #(sigdelta, err) = pipe.communicate()
 
             m = hashlib.md5()
+            filesize = 0
             with open(pathname, "rb") as file:
                 for chunk in iter(partial(file.read, args.chunksize), ''):
                     m.update(chunk)
+                    filesize += len(chunk)
             checksum = m.hexdigest()
 
             message = {
                 "message": "DEL",
                 "inode": inode,
-                "size": len(delta),
+                "size": filesize,
+                "deltasize": len(delta),
                 "checksum": checksum,
                 "basis": oldchksum,
                 "encoding": encoding
@@ -368,7 +371,7 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity > 1:
-                print "ResyncDir: {}".format(str(dir))
+                print "ResyncDir: {}".format(path)
             sendDirChunks(path, inode, files)
             del cloneContents[inode]
     for inode in message["done"]:

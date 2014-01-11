@@ -105,9 +105,9 @@ class TardisFS(fuse.Fuse):
         if depth == 0:
             # Fake the root
             target = self.tardis.lastBackupSet(completed=False)
-            timestamp = float(target[2])
+            timestamp = float(target['starttime'])
             st = fuse.Stat()
-            st.st_mode = stat.S_IFDIR | 0755
+            st.st_mode = stat.S_IFDIR | 0555
             st.st_ino = 0
             st.st_dev = 0
             st.st_nlink = 32
@@ -124,7 +124,7 @@ class TardisFS(fuse.Fuse):
             st = fuse.Stat()
             if (lead[0] == 'Current'):
                 target = self.tardis.lastBackupSet()
-                timestamp = float(target[2])
+                timestamp = float(target['starttime'])
                 st.st_mode = stat.S_IFLNK | 0755
                 st.st_ino = 1
                 st.st_dev = 0
@@ -140,9 +140,9 @@ class TardisFS(fuse.Fuse):
                 f = self.tardis.getBackupSetInfo(lead[0])
                 if f:
                     st = fuse.Stat()
-                    timestamp = float(f[1])
-                    st.st_mode = stat.S_IFDIR | 0755
-                    st.st_ino = 1
+                    timestamp = float(f['starttime'])
+                    st.st_mode = stat.S_IFDIR | 0555
+                    st.st_ino = int(float(f['starttime']))
                     st.st_dev = 0
                     st.st_nlink = 2
                     st.st_uid = 0
@@ -154,8 +154,8 @@ class TardisFS(fuse.Fuse):
             return st
         else:
             parts = getParts(path)
-            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
-            f = self.tardis.getFileInfoByPath(parts[1], bset)
+            b = self.tardis.getBackupSetInfo(parts[0])
+            f = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
             if f:
                 st = fuse.Stat()
                 st.st_mode = f["mode"]
@@ -164,7 +164,12 @@ class TardisFS(fuse.Fuse):
                 st.st_nlink = f["nlinks"]
                 st.st_uid = f["uid"]
                 st.st_gid = f["gid"]
-                st.st_size = f["size"]
+                if f["size"] is not None:
+                    st.st_size = int(f["size"])
+                elif f["dir"]:
+                    st.st_size = 4096       # Arbitrary number
+                else:
+                    st.st_size = 0
                 st.st_atime = f["mtime"]
                 st.st_mtime = f["mtime"]
                 st.st_ctime = f["ctime"]
@@ -191,18 +196,14 @@ class TardisFS(fuse.Fuse):
             entries = self.tardis.listBackupSets()
         else:
             parts = getParts(path)
-            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
+            b = self.tardis.getBackupSetInfo(parts[0])
             if depth == 1:
-                entries = self.tardis.readDirectory(0, bset)
+                entries = self.tardis.readDirectory(0, b['backupset'])
             else:
-                parent = self.tardis.getFileInfoByPath(parts[1], bset)
-                entries = self.tardis.readDirectory(parent["inode"], bset)
+                parent = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
+                entries = self.tardis.readDirectory(parent["inode"], b['backupset'])
 
         dirents.extend([y["name"] for y in entries])
-        #for y in entries:
-            #print "*******", y, y["name"], type(y["name"])
-            #dirents.append(str(y["name"].encode("utf-8", "replace")))
-            #dirents.append(y["name"])
 
         for e in dirents:
             yield fuse.Direntry(e)
@@ -248,9 +249,9 @@ class TardisFS(fuse.Fuse):
             return 0
 
         parts = getParts(path)
-        (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
-        if bset:
-            f = self.regenerator.recoverFile(parts[1], bset)
+        b = self.tardis.getBackupSetInfo(parts[0])
+        if b:
+            f = self.regenerator.recoverFile(parts[1], b['backupset'])
             if f:
                 try:
                     f.seek(0)
@@ -283,22 +284,19 @@ class TardisFS(fuse.Fuse):
         self.log.info('readlink {}'.format(path))
         if path == '/Current':
             target = self.tardis.lastBackupSet()
-            self.log.debug("Path: {} Target: {} {}".format(path, target[0], target[1]))
-            return str(target[0])
+            self.log.debug("Path: {} Target: {} {}".format(path, target['name'], target['backupset']))
+            return str(target['name'])
         elif getDepth(path) > 1:
             parts = getParts(path)
-            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
-            if bset:
-                f = self.regenerator.recoverFile(parts[1], bset)
+            b = self.tardis.getBackupSetInfo(parts[0])
+            if b:
+                f = self.regenerator.recoverFile(parts[1], b['backupset'])
                 link = f.readline()
                 f.close()
                 return link
         return -errno.ENOENT
 
     def release ( self, path, flags ):
-        print line
-        print '*** release', path, flags
-
         if self.files["path"]:
             self.files["path"]["opens"] -= 1;
             if self.files["path"]["opens"] == 0:
@@ -308,67 +306,75 @@ class TardisFS(fuse.Fuse):
         return -errno.EINVAL
 
     def rename ( self, oldPath, newPath ):
-        print '*** rename', oldPath, newPath
         return -errno.EROFS
 
     def rmdir ( self, path ):
-        print '*** rmdir', path
         return -errno.EROFS
 
     def statfs ( self ):
-        print '*** statfs'
         return -errno.ENOSYS
 
     def symlink ( self, targetPath, linkPath ):
-        print '*** symlink', targetPath, linkPath
         return -errno.EROFS
 
     def truncate ( self, path, size ):
-        print '*** truncate', path, size
         return -errno.EROFS
 
     def unlink ( self, path ):
-        print '*** unlink', path
         return -errno.EROFS
 
     def utime ( self, path, times ):
-        print '*** utime', path, times
         return -errno.EROFS
 
     def write ( self, path, buf, offset ):
-        print '*** write', path, buf, offset
         return -errno.EROFS
 
+    attrMap = {
+        'user.priority' : 'priority',
+        'user.complete' : 'completed',
+        'user.backupset': 'backupset',
+        'user.session'  : 'session'
+    }
+
     def listxattr ( self, path, size ):
-        print line
-        print '*** listxattr', path, " :: ", size
+        if (getDepth(path) == 1):
+            parts = getParts(path)
+            b = self.tardis.getBackupSetInfo(parts[0])
+            if b:
+                return self.attrMap.keys()
+
         if (getDepth(path) > 1):
             parts = getParts(path)
-            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
-            if bset:
-                checksum = self.tardis.getChecksumByPath(parts[1], bset)
-                print "Got checksum: ", parts, bset, checksum
+            b = self.tardis.getBackupSetInfo(parts[0])
+            if b:
+                checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                 if checksum:
                     return ['user.checksum']
+
         return None
 
     def getxattr (self, path, attr, size):
         self.log.info('getxattr {} {} {}'.format(path, attr, size))
+        if size == 0:
+            retFunc = lambda x: len(str(x))
+        else:
+            retFunc = lambda x: str(x)
 
-        if (getDepth(path) > 1):
+        if getDepth(path) == 1:
+            if attr in self.attrMap:
+                parts = getParts(path)
+                b = self.tardis.getBackupSetInfo(parts[0])
+                if self.attrMap[attr] in b:
+                    return retFunc(b[self.attrMap[attr]])
+
+        if getDepth(path) > 1:
             parts = getParts(path)
-            (bset, timestamp, clienttime) = self.tardis.getBackupSetInfo(parts[0])
-
-            if size == 0:
-                retFunc = len
-            else:
-                retFunc = lambda x: str(x)
+            b = self.tardis.getBackupSetInfo(parts[0])
 
             if attr == 'user.checksum':
-                if bset:
-                    checksum = self.tardis.getChecksumByPath(parts[1], bset)
+                if b:
+                    checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                     if checksum:
-                        #print checksum, retFunc(checksum)
                         return retFunc(checksum)
         return 0
 
