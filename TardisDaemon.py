@@ -540,7 +540,8 @@ def main():
         'SaveFull': True,
         'LogCfg'  : args.logcfg,
         'Profile' : args.profile,
-        'LogFile' : args.logfile
+        'LogFile' : args.logfile,
+		'Daemon'  : str(args.daemon)
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
@@ -552,9 +553,9 @@ def main():
     else:
         logger = logging.getLogger('')
         format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-        if args.logfile:
-            handler = logging.FileHandler(args.logfile)
-        elif args.daemon:
+        if config.get('Tardis', 'LogFile'):
+            handler = logging.FileHandler(config.get('Tardis', 'LogFile'))
+        elif config.getboolean('Tardis', 'Daemon'):
             handler = logging.SysLogHandler()
         else:
             handler = logging.StreamHandler()
