@@ -26,3 +26,6 @@ Features currently planned to be implemented:
 3: SSL encrypted transport
 4: rdiff based file storage (necessary for 2)
 5: user authentication capability
+6: Python EGG setup.
+
+Tardis relies on the bson and xattrs packages.
