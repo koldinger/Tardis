@@ -585,6 +585,7 @@ def processCommandLine():
     parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
+    parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
@@ -637,10 +638,10 @@ def main():
 
     # Open the connection
     if args.protocol == 'json':
-        conn = JsonConnection(args.server, args.port, name, priority)
+        conn = JsonConnection(args.server, args.port, name, priority, args.hostname)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = BsonConnection(args.server, args.port, name, priority)
+        conn = BsonConnection(args.server, args.port, name, priority, args.hostname)
         setEncoder("bin")
 
     if verbosity or args.stats:

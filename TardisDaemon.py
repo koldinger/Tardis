@@ -212,6 +212,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message["checksum"]
         basis    = message["basis"]
         inode    = message["inode"]
+
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file {} already exists".format(checksum))
             # Abort read
@@ -243,9 +244,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.insertChecksumFile(checksum, size, basis=basis)
             output.close()
             # TODO: This has gotta be wrong.
-
         self.db.setChecksum(inode, checksum)
-        #return {"message" : "OK", "inode": inode}
+
         return None
 
     def processSignature(self, message):
@@ -352,7 +352,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Purge the files
         (files, sets) = self.db.purgeFiles(message['priority'], prevTime)
-        self.logger.debug("Purged {} files in {} backup sets".format(files, sets))
+        self.logger.info("Purged {} files in {} backup sets".format(files, sets))
         return {"message" : "PURGEOK"}
 
     def checksumDir(self, dirNode):
@@ -442,9 +442,24 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Now remove any leftover orphans
         if self.db:
             orphans = self.db.listOrphanChecksums()
+            self.logger.debug("Attempting to remove")
+            size = 0
+            count = 0
             for c in orphans:
-                self.cache.remove(c)
+                try:
+                    s = os.stat(self.cache.path(c))
+                    if s:
+                        count += 1
+                        size += s.st_size
+                    self.cache.remove(c)
+                except OSError:
+                    self.logger.warning("No checksum file for checksum {}".format(c))
+                except:
+                    e = sys.exc_info()[0]
+                    self.logger.exception(e)
                 self.db.deleteChecksum(c)
+            self.logger.info("Removed {} orphans, {} bytes".format(count, size))
+
 
     def handle(self):
         if profiler:
