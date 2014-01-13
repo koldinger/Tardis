@@ -337,11 +337,17 @@ class TardisFS(fuse.Fuse):
     }
 
     def listxattr ( self, path, size ):
+        self.log.info('listxattr {} {}'.format(path, size))
+        if size == 0:
+            retFunc = lambda x: len("".join(x)) + len(str(x))
+        else:
+            retFunc = lambda x: x
+
         if (getDepth(path) == 1):
             parts = getParts(path)
             b = self.tardis.getBackupSetInfo(parts[0])
             if b:
-                return self.attrMap.keys()
+                return retFunc(self.attrMap.keys())
 
         if (getDepth(path) > 1):
             parts = getParts(path)
@@ -349,7 +355,7 @@ class TardisFS(fuse.Fuse):
             if b:
                 checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                 if checksum:
-                    return ['user.checksum']
+                    return retFunc(['user.checksum'])
 
         return None
 
