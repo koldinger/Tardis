@@ -15,6 +15,7 @@ import base64
 import subprocess
 import daemon
 import daemon.pidfile
+import pprint
 
 # For profiling
 import cProfile
@@ -39,6 +40,10 @@ profiler = None
 databaseName = 'tardis.db'
 schemaName   = 'tardis.sql'
 configName   = '/etc/tardis/tardisd.cfg'
+
+pp = pprint.PrettyPrinter(indent=2, width=200)
+
+logging.TRACE = logging.DEBUG - 1
 
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
@@ -111,10 +116,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
         #self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
+
+        # Create some sets that we'll collect the inodes into
+        # Use sets to remove duplicates due to hard links in a directory
         done = set()
         cksum = set()
         content = set()
         delta = set()
+        # Keep the order
         queues = [done, content, cksum, delta]
 
         parentInode = data['inode']
@@ -185,7 +194,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 outfile.write(sig)
                 outfile.close()
 
-            # TODO: Set the encoder based on the protocol
+            # TODO: Break the signature out of here.
             response = {
                 "message": "SIG",
                 "inode": inode,
@@ -492,13 +501,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             while not done:
                 message = self.messenger.recvMessage()
-                self.logger.debug("Received: " + str(message).encode("utf-8"))
+                self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
                 if message["message"] == "BYE":
                     done = True
                 else:
                     response = self.processMessage(message)
                     if response:
-                        self.logger.debug("Sending : " + str(response))
+                        self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(response)))
                         self.messenger.sendMessage(response)
 
             self.db.completeBackup()
@@ -534,7 +543,7 @@ def run_server(config):
     server.serve_forever()
 
 def main():
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
 
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
@@ -567,6 +576,7 @@ def main():
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
+        logging.addLevelName(logging.TRACE, 'Message')
         format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
         if config.get('Tardis', 'LogFile'):
             handler = logging.FileHandler(config.get('Tardis', 'LogFile'))

@@ -16,7 +16,7 @@ class Connection(object):
 
 
         if hostname is None:
-            hostname = socket.gethostname(), 
+            hostname = socket.gethostname()
 
         # Create and open the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
