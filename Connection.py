@@ -3,9 +3,6 @@ import json
 import uuid
 import sys
 import time
-
-sys.path.append("../utils")
-
 import Messages
 
 class Connection(object):
