@@ -113,12 +113,9 @@ def processChecksums(inodes):
         "message": "CKS",
         "files": files
         }
-    if verbosity > 4:
-        print "Send: %s" % str(message)
-    conn.send(message)
-    response = conn.receive()
-    if verbosity > 4:
-        print "Receive: %s" % str(sigmessage)
+
+    response = sendAndReceive(message)
+
     if not response["message"] == "ACKSUM":
         raise Exception
     for i in response["done"]:
@@ -149,12 +146,8 @@ def processDelta(inode):
             "message" : "SGR",
             "inode" : inode
             }
-        if verbosity > 4:
-            print "Send: %s" % str(message)
-        conn.send(message)
-        sigmessage = conn.receive()
-        if verbosity > 4:
-            print "Receive: %s" % str(sigmessage)
+
+        sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
             oldchksum = sigmessage['checksum']
@@ -189,17 +182,12 @@ def processDelta(inode):
                 "basis": oldchksum,
                 "encoding": encoding
                 }
-            if verbosity > 4:
-                print "Send: %s" % str(message)
-            conn.send(message)
+
+            sendMessage(message)
 
             x = cStringIO.StringIO(delta)
             sendData(x)
             x.close()
-
-            #response = conn.receive()
-            #if verbosity > 4:
-                #print "Receive %s" % str(response)
         else:
             sendContent(inode)
 
@@ -218,9 +206,7 @@ def sendContent(inode):
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
-            if verbosity > 4:
-                print "Send: %s" % str(message)
-            conn.send(message)
+            sendMessage(message)
 
             if S_ISLNK(mode):
                 # It's a link.  Send the contents of readlink
@@ -231,9 +217,6 @@ def sendContent(inode):
             else:
                 with open(pathname, "rb") as file:
                     checksum = sendData(file, checksum=True)
-            #response = conn.receive()
-            #if verbosity > 4:
-                #print "Receive %s" % str(response)
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -243,7 +226,8 @@ def handleAckDir(message):
     delta   = message["delta"]
     cksum   = message["cksum"]
 
-    if verbosity > 1: print "Processing ACKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
+    if verbosity > 1:
+        print "Processing ACKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
     for i in done:
         if i in inodeDB:
             del inodeDB[i]
@@ -383,12 +367,7 @@ def sendClones():
         'message': 'CLN',
         'clones': cloneDirs
     }
-    if verbosity > 4:
-        print "Send: %s" % str(message)
-    conn.send(message)
-    response = conn.receive()
-    if verbosity > 4:
-        print "SC Receive: %s" % str(response)
+    response = sendAndReceive(message)
     handleAckClone(response)
     del cloneDirs[:]
 
@@ -400,12 +379,8 @@ def sendPurge(relative):
             'time'    : purgeTime,
             'relative': relative
         }
-        if verbosity > 4:
-            print "Send: %s" % str(message)
-        conn.send(message)
-        response = conn.receive()
-        if verbosity > 4:
-            print "Receive: %s" % str(response)
+
+        response = sendAndReceive(message)
 
 def sendDirChunks(path, inode, files):
     message = {
@@ -423,14 +398,7 @@ def sendDirChunks(path, inode, files):
         message["files"] = chunk
         if verbosity > 2:
             print "---- Sending chunk ----"
-            if verbosity > 4:
-                print "Send: %s" % str(message)
-        conn.send(message)
-        if verbosity > 2:
-            print "---- Waiting for ACKDir----"
-        response = conn.receive()
-        if verbosity > 4:
-            print "Receive: %s" % str(response)
+        response = sendAndReceive(message)
         handleAckDir(response)
 
 def recurseTree(dir, top, depth=0, excludes=[]):
@@ -566,7 +534,77 @@ def loadExcludes(args):
     excludeFile         = args.excludefilename
     localExcludeFile    = args.localexcludefilename
 
+def sendMessage(message):
+    if verbosity > 4:
+        print "Send: %s" % str(message)
+    conn.send(message)
+
+def receiveMessage():
+    response = conn.receive()
+    if verbosity > 4:
+        print "Receive: %s" % str(response)
+    return response
+
+def sendAndReceive(message):
+    sendMessage(message)
+    return receiveMessage()
+
+def sendDirEntry(parent, files):
+    # send a fake root directory
+    message = {
+        'message': 'DIR',
+        'files':  files,
+        'path':  None,
+        'inode': parent,
+        'files': files
+        }
+
+    #for x in map(os.path.realpath, args.directories):
+        #(dir, name) = os.path.split(x)
+        #file = mkFileInfo(dir, name)
+        #if file and file["dir"] == 1:
+            #files.append(file)
+    #
+    # and send it.
+    response = sendAndReceive(message)
+    handleAckDir(response)
+
+
+def splitDirs(x):
+    root, rest = os.path.split(x)
+    if root and rest:
+        ret = splitDirs(root)
+        ret.append(rest)
+    elif root:
+        if root is '/':
+            ret = [root]
+        else:
+            ret = splitDirs(root)
+    else:
+        ret = [rest]
+    return ret
+
+sentDirs = {}
+
+def makePrefix(root, path):
+    """ Create common path directories.  Will be empty, except for path elements to the repested directories. """
+    rPath = os.path.relpath(path, root)
+    pathDirs = splitDirs(rPath)
+    parent = 0
+    current = root
+    for d in pathDirs:
+        dirPath = os.path.join(current, d)
+        st = os.lstat(dirPath)
+        f = mkFileInfo(current, d)
+        if dirPath not in sentDirs:
+            sendDirEntry(parent, [f])
+            sentDirs[dirPath] = parent
+        parent = st.st_ino
+        current = dirPath
+     
+
 def processCommandLine():
+    """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
@@ -586,6 +624,8 @@ def processCommandLine():
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
     parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
+
+    parser.add_argument('--basepath',           dest='basepath', default='distinct', choices=['distinct', 'common', 'full'],    help="Select style of root path handling")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
@@ -647,35 +687,25 @@ def main():
     if verbosity or args.stats:
         print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
 
-    # send a fake root directory
-    files = []
-    message = {
-        'message': 'DIR',
-        'files':  files,
-        'path':  None,
-        'inode':  0
-        }
-    for x in args.directories:
-        if x == ".":
-            y = os.getcwd()
-        else:
-            y = os.path.abspath(x)
-        (dir, name) = os.path.split(y)
-        file = mkFileInfo(dir, name)
-        if file and file["dir"] == 1:
-            files.append(file)
 
-    # and send it.
-    if verbosity > 4:
-        print "Send: %s" % str(message)
-    conn.send(message)
-    response = conn.receive()
-    if verbosity > 4:
-        print "Receive: %s" % str(response)
-    handleAckDir(response)
+    if args.basepath == 'common':
+        rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
+    elif args.basepath == 'full':
+        rootdir = '/'
+    else:
+        rootdir = None
+
 
     # Now, do the actual work here.
-    for x in args.directories:
+    for x in map(os.path.realpath, args.directories):
+        if rootdir:
+            makePrefix(rootdir, x)
+        else:
+            (d, name) = os.path.split(x)
+            f = mkFileInfo(d, name)
+            sendDirEntry(0, [f])
+
+    for x in map(os.path.realpath, args.directories):
         recurseTree(x, x, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone requests still lying around, send them
