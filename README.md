@@ -27,5 +27,7 @@ Features currently planned to be implemented:
 4: rdiff based file storage (necessary for 2)
 5: user authentication capability
 6: Python EGG setup.
+7: Better daemon support.
+8: LSB init script (systemctl support)?
 
 Tardis relies on the bson and xattrs packages.
