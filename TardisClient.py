@@ -359,7 +359,7 @@ def handleAckClone(message):
     for inode in message["content"]:
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
-            if verbosity > 1:
+            if verbosity:
                 print "ResyncDir: {}".format(path)
             sendDirChunks(path, inode, files)
             del cloneContents[inode]
@@ -425,9 +425,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
     try:
         if verbosity:
-            print "Dir: {}".format(str(dir))
+            print "Dir: {}".format(str(dir)),
             if verbosity > 2 and len(excludes) > 0:
-                print "   Excludes: {}".format(str(excludes))
+                print "\n   Excludes: {}".format(str(excludes))
 
         (files, subdirs, subexcludes) = processDir(dir, s, excludes)
 
@@ -450,9 +450,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
+            if verbosity:
+                print " [Clone]"
             if len(cloneDirs) > args.clones:
                 sendClones()
         else:
+            if verbosity:
+                print
             if len(cloneDirs):
                 sendClones()
             sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
