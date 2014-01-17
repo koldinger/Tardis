@@ -1,0 +1,10 @@
+#! /bin/sh
+
+for i in $@; do
+	name=`basename $i`
+	echo $i
+	echo $name
+	~kolding/Tardis/tardis --hostname linux.koldware.com ---name "$name"  --priority 30 "$i"/* -v --stats
+	timestamp=`stat -c "%Y" "$i"`
+	echo "UPDATE Backups SET StartTime = $timestamp, EndTime = $timestamp, ClientTime = $timestamp WHERE Name='$name';" | sqlite3 /srv/test/Tardis/linux.koldware.com/tardis.db
+done
