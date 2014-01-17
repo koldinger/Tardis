@@ -242,12 +242,16 @@ def handleAckDir(message):
                     size = 0;
                 print "File: [N]: %s %d" % (name, size)
         sendContent(i)
+        if i in inodeDB:
+            del inodeDB[i]
 
     for i in delta:
         if verbosity > 1:
             (x, name) = inodeDB[i]
             print "File: [D]: %s" % (name)
         processDelta(i)
+        if i in inodeDB:
+            del inodeDB[i]
 
     # Collect the ACK messages
     if len(cksum) > 0:
@@ -351,6 +355,7 @@ def checkClonable(dir, stat, files, subdirs):
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
         raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
+    # Process the directories that have changed
     for inode in message["content"]:
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
@@ -358,9 +363,17 @@ def handleAckClone(message):
                 print "ResyncDir: {}".format(path)
             sendDirChunks(path, inode, files)
             del cloneContents[inode]
+
+    # Purge out what hasn't changed
     for inode in message["done"]:
         if inode in cloneContents:
+            (path, files) = cloneContents[inode]
+            for f in files:
+                if f['inode'] in inodeDB:
+                    del inodeDB[f['inode']]
             del cloneContents[inode]
+        if inode in inodeDB:
+            del inodeDB[inode]
         
 def sendClones():
     message = {
