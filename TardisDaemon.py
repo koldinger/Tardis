@@ -518,7 +518,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         finally:
             self.request.close()
             self.endSession()
-            self.removeOrphans()
             if profiler:
                 profiler.disable()
                 s = StringIO.StringIO()
@@ -527,6 +526,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ps.print_stats()
                 print s.getvalue()
             self.logger.info("Connection complete")
+
+        def finish(self):
+            self.logger.info("Removing orphans")
+            self.removeOrphans()
 
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     config = None
@@ -577,7 +580,8 @@ def main():
     else:
         logger = logging.getLogger('')
         logging.addLevelName(logging.TRACE, 'Message')
-        format = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
+        #format = logging.Formatter("%(asctime) %(levelname)s : %(name)s : %(message)s")
+        format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
         if config.get('Tardis', 'LogFile'):
             handler = logging.FileHandler(config.get('Tardis', 'LogFile'))
         elif config.getboolean('Tardis', 'Daemon'):
