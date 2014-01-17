@@ -528,7 +528,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 print s.getvalue()
             self.logger.info("Connection complete")
 
-class TardisSocketServer(SocketServer.TCPServer):
+class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     config = None
 
     def __init__(self, config):
