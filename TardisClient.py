@@ -627,6 +627,7 @@ def processCommandLine():
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port')
+    parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -695,10 +696,10 @@ def main():
 
     # Open the connection
     if args.protocol == 'json':
-        conn = JsonConnection(args.server, args.port, name, priority, args.hostname)
+        conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = BsonConnection(args.server, args.port, name, priority, args.hostname)
+        conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
         setEncoder("bin")
 
     if verbosity or args.stats:
