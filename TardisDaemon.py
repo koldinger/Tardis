@@ -9,6 +9,7 @@ import logging
 import logging.config
 import ConfigParser
 import SocketServer
+import ssl
 import tempfile
 import hashlib
 import base64
@@ -488,6 +489,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.startSession(name)
             self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
 
+
             self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
 
             if encoding == "JSON":
@@ -537,8 +539,15 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, config):
         self.config = config
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
-        self.basedir = config.get('Tardis', 'BaseDir')
-        self.savefull = config.get('Tardis', 'SaveFull')
+        self.basedir    = config.get('Tardis', 'BaseDir')
+        self.savefull   = config.getboolean('Tardis', 'SaveFull')
+        self.ssl        = config.getboolean('Tardis', 'SSL')
+        if self.ssl:
+            certfile   = config.get('Tardis', 'CertFile')
+            keyfile    = config.get('Tardis', 'KeyFile')
+            self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+
+
 
 def run_server(config):
     #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
@@ -559,16 +568,26 @@ def main():
     parser.add_argument('--daemon', '-d',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-L',  dest='logfile', default=None, help='Log to file')
 
+    sslgroup = parser.add_mutually_exclusive_group()
+    sslgroup.add_argument('--ssl', '-s',    dest='ssl', action='store_true', default=False, help='Use SSL connections')
+    sslgroup.add_argument('--nossl',        dest='ssl', action='store_false', help='Do not use SSL connections')
+
+    parser.add_argument('--certfile', '-c', dest='certfile', default=None, help='Path to certificate file for SSL connections')
+    parser.add_argument('--keyfile', '-k',  dest='keyfile',  default=None, help='Path to key file for SSL connections')
+
     args = parser.parse_args()
 
     configDefaults = {
-        'Port' : '9999',
-        'BaseDir' : './cache',
-        'SaveFull': True,
-        'LogCfg'  : args.logcfg,
-        'Profile' : args.profile,
-        'LogFile' : args.logfile,
-		'Daemon'  : str(args.daemon)
+        'Port'      : '9999',
+        'BaseDir'   : './cache',
+        'SaveFull'  : str(True),
+        'LogCfg'    : args.logcfg,
+        'Profile'   : args.profile,
+        'LogFile'   : args.logfile,
+        'Daemon'    : str(args.daemon),
+        'SSL'       : str(args.ssl),
+        'CertFile'  : args.certfile,
+        'KeyFile'   : args.keyfile
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
@@ -606,7 +625,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except:
-        logger.critical("Unable to run server: {}".format(sys.exc_info()[1].strerror))
+        logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
         #logger.exception(sys.exc_info()[1])
     logger.info("Ending")
 
