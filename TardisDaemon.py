@@ -444,6 +444,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 pass
         try:
             if (self.tempdir):
+                # Clean out the temp dir
+                for f in os.listdir(self.tempdir):
+                    os.remove(os.path.join(self.tempdir, f))
+                # And delete it
                 os.rmdir(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
@@ -451,11 +455,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def removeOrphans(self):
         # Now remove any leftover orphans
         if self.db:
+            # Get a list of orphan'd files
             orphans = self.db.listOrphanChecksums()
             self.logger.debug("Attempting to remove")
             size = 0
             count = 0
             for c in orphans:
+                # And remove them each....
                 try:
                     s = os.stat(self.cache.path(c))
                     if s:
@@ -588,7 +594,7 @@ def run_server(config):
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         server = TardisSocketServer(config)
 
-        if (config.getboolean('Tardis', 'Single'):
+        if (config.getboolean('Tardis', 'Single')):
             server.handle_request()
         else:
             server.serve_forever()
@@ -641,7 +647,6 @@ def main():
     if config.get('Tardis', 'Profile'):
         profiler = cProfile.Profile()
     try:
-        print "Ready"
         if config.getboolean('Tardis', 'Daemon'):
             pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
             with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
