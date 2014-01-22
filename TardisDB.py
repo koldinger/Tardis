@@ -427,8 +427,20 @@ class TardisDB(object):
         else:
             return None
 
+    def getBackupSetInfoForTime(self, time):
+        c = self.conn.execute("SELECT "
+                              "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, Completed AS completed, Session AS session "
+                              "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
+                              {"time": time})
+        row = c.fetchone()
+        if row:
+            return makeDict(c, row)
+        else:
+            return None
+
     def beginTransaction(self):
         self.cursor.execute("BEGIN")
+
 
     def completeBackup(self):
         self.cursor.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})

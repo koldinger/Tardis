@@ -1,0 +1,7 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+import Regenerate
+import sys
+
+sys.exit(Regenerate.main())
