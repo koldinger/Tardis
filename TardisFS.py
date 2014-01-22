@@ -338,7 +338,22 @@ class TardisFS(fuse.Fuse):
         return -errno.EROFS
 
     def statfs ( self ):
-        return -errno.ENOSYS
+        """ StatFS """
+        fs = os.statvfs(self.path)
+
+        st = fuse.Stat()
+        st.f_bsize   = fs.f_bsize
+        st.f_frsize  = fs.f_frsize
+        st.f_blocks  = fs.f_blocks
+        st.f_bfree   = fs.f_bfree
+        st.f_bavail  = fs.f_bavail
+        st.f_files   = fs.f_files
+        st.f_ffree   = fs.f_ffree
+        st.f_favail  = fs.f_favail
+        st.f_flag    = fs.f_flag
+        st.f_namemax = fs.f_namemax
+        print st
+        return st
 
     def symlink ( self, targetPath, linkPath ):
         return -errno.EROFS
