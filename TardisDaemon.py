@@ -583,7 +583,7 @@ def main():
         #format = logging.Formatter("%(asctime) %(levelname)s : %(name)s : %(message)s")
         format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
         if config.get('Tardis', 'LogFile'):
-            handler = logging.FileHandler(config.get('Tardis', 'LogFile'))
+            handler = logging.WatchedFileHandler(config.get('Tardis', 'LogFile'))
         elif config.getboolean('Tardis', 'Daemon'):
             handler = logging.SysLogHandler()
         else:
