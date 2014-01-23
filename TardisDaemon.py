@@ -9,6 +9,7 @@ import logging
 import logging.config
 import ConfigParser
 import SocketServer
+import ssl
 import tempfile
 import hashlib
 import base64
@@ -443,6 +444,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 pass
         try:
             if (self.tempdir):
+                # Clean out the temp dir
+                for f in os.listdir(self.tempdir):
+                    os.remove(os.path.join(self.tempdir, f))
+                # And delete it
                 os.rmdir(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
@@ -450,11 +455,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def removeOrphans(self):
         # Now remove any leftover orphans
         if self.db:
+            # Get a list of orphan'd files
             orphans = self.db.listOrphanChecksums()
             self.logger.debug("Attempting to remove")
             size = 0
             count = 0
             for c in orphans:
+                # And remove them each....
                 try:
                     s = os.stat(self.cache.path(c))
                     if s:
@@ -487,6 +494,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.getDB(host)
             self.startSession(name)
             self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
+
 
             self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
 
@@ -537,67 +545,109 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, config):
         self.config = config
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
-        self.basedir = config.get('Tardis', 'BaseDir')
-        self.savefull = config.get('Tardis', 'SaveFull')
 
-def run_server(config):
-    #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
-    server = TardisSocketServer(config)
-    server.serve_forever()
+        self.basedir    = config.get('Tardis', 'BaseDir')
+        self.savefull   = config.getboolean('Tardis', 'SaveFull')
+        self.ssl        = config.getboolean('Tardis', 'SSL')
+        if self.ssl:
+            certfile   = config.get('Tardis', 'CertFile')
+            keyfile    = config.get('Tardis', 'KeyFile')
+            self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
 
-def main():
+
+
+def setupLogging(config):
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
 
-    parser = argparse.ArgumentParser(description='Tardis Backup Server')
-
-    parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
-    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
-    parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
-    parser.add_argument('--logcfg', '-l',   dest='logcfg', default=None, help='Logging configuration file');
-    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
-    parser.add_argument('--daemon', '-d',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
-    parser.add_argument('--logfile', '-L',  dest='logfile', default=None, help='Log to file')
-
-    args = parser.parse_args()
-
-    configDefaults = {
-        'Port' : '9999',
-        'BaseDir' : './cache',
-        'SaveFull': True,
-        'LogCfg'  : args.logcfg,
-        'Profile' : args.profile,
-        'LogFile' : args.logfile,
-		'Daemon'  : str(args.daemon)
-    }
-
-    config = ConfigParser.ConfigParser(configDefaults)
-    config.read(args.config)
+    logging.addLevelName(logging.TRACE, 'Message')
 
     if config.get('Tardis', 'LogCfg'):
         logging.config.fileConfig(config.get('Tardis', 'LogCfg'))
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
-        logging.addLevelName(logging.TRACE, 'Message')
         #format = logging.Formatter("%(asctime) %(levelname)s : %(name)s : %(message)s")
         format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+
+        verbosity = config.getint('Tardis', 'Verbose')
+
         if config.get('Tardis', 'LogFile'):
             handler = logging.WatchedFileHandler(config.get('Tardis', 'LogFile'))
         elif config.getboolean('Tardis', 'Daemon'):
             handler = logging.SysLogHandler()
         else:
             handler = logging.StreamHandler()
+
         handler.setFormatter(format)
         logger.addHandler(handler)
-        loglevel = levels[args.verbose] if args.verbose < len(levels) else logging.DEBUG
+
+        loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
         logger.setLevel(loglevel)
+
+    return logger
+
+def run_server(config):
+    try:
+        logger = setupLogging(config)
+
+        logger.info("Starting server");
+        #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
+        server = TardisSocketServer(config)
+
+        if (config.getboolean('Tardis', 'Single')):
+            server.handle_request()
+        else:
+            server.serve_forever()
+        logger.info("Ending")
+    except:
+        logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
+        #logger.exception(sys.exc_info()[1])
+
+
+def main():
+
+    parser = argparse.ArgumentParser(description='Tardis Backup Server')
+
+    parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
+    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
+    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
+    parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
+    parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
+    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
+
+    sslgroup = parser.add_mutually_exclusive_group()
+    sslgroup.add_argument('--ssl', '-s',    dest='ssl', action='store_true', default=False, help='Use SSL connections')
+    sslgroup.add_argument('--nossl',        dest='ssl', action='store_false', help='Do not use SSL connections')
+
+    parser.add_argument('--certfile', '-c', dest='certfile', default=None, help='Path to certificate file for SSL connections')
+    parser.add_argument('--keyfile', '-k',  dest='keyfile',  default=None, help='Path to key file for SSL connections')
+
+    args = parser.parse_args()
+
+    configDefaults = {
+        'Port'      : '9999',
+        'BaseDir'   : './cache',
+        'SaveFull'  : str(True),
+        'LogCfg'    : args.logcfg,
+        'Profile'   : args.profile,
+        'LogFile'   : args.logfile,
+        'Single'    : str(args.single),
+        'Verbose'   : str(args.verbose),
+        'Daemon'    : str(args.daemon),
+        'SSL'       : str(args.ssl),
+        'CertFile'  : args.certfile,
+        'KeyFile'   : args.keyfile
+    }
+
+    config = ConfigParser.ConfigParser(configDefaults)
+    config.read(args.config)
 
     if config.get('Tardis', 'Profile'):
         profiler = cProfile.Profile()
     try:
-        logger.info("Starting server");
-        if args.daemon:
+        if config.getboolean('Tardis', 'Daemon'):
             pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
             with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
                 run_server(config)
@@ -606,9 +656,8 @@ def main():
     except KeyboardInterrupt:
         pass
     except:
-        logger.critical("Unable to run server: {}".format(sys.exc_info()[1].strerror))
+        print "Unable to run server: {}".format(sys.exc_info()[1])
         #logger.exception(sys.exc_info()[1])
-    logger.info("Ending")
 
 if __name__ == "__main__":
     sys.exit(main())

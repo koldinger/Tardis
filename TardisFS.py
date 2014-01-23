@@ -20,14 +20,6 @@ import TardisDB
 import CacheDir
 import Regenerate
 
-# For profiling
-import cProfile
-import StringIO
-import pstats
-
-
-line = "--------------------------------------------------------------------------------------------------------------"
-
 def dirFromList(list):
     """
     Return a properly formatted list of items suitable to a directory listing.
@@ -56,7 +48,6 @@ def getParts(path):
 class TardisFS(fuse.Fuse):
     """
     """
-    profiler = None
     backupsets = {}
     dirInfo = {}
 
@@ -419,28 +410,17 @@ class TardisFS(fuse.Fuse):
                         return retFunc(checksum)
         return 0
 
-if __name__ == "__main__":
-    profiler = None
-
+def main():
     logger = logging.getLogger('')
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
 
-    #profiler = cProfile.Profile()
-    if profiler:
-        profiler.enable()
-
     fs = TardisFS()
     fs.flags = 0
     fs.multithreaded = 0
     fs.main()
 
-    if profiler:
-        profiler.disable()
-        s = StringIO.StringIO()
-        sortby = 'cumulative'
-        ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
-        ps.print_stats()
-        print s.getvalue()
+if __name__ == "__main__":
+    main()

@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 -- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
-INSERT OR IGNORE INTO Backups (Name, StartTime, Completed, Priority) VALUES (".Initial", strftime('%s', 'now') , 1, 0);
+INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Name, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, BackupSet
