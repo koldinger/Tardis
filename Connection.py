@@ -10,7 +10,7 @@ class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, name, encoding, priority, use_ssl=False, hostname=None):
-        self.stats = { 'messages' : 0, 'bytes': 0 }
+        self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
 
         if hostname is None:
@@ -47,8 +47,8 @@ class Connection(object):
 
     def put(self, message):
         self.sock.sendall(message)
-        self.stats['messages'] += 1
-        self.stats['bytes'] += len(message)
+        self.stats['messagesSent'] += 1
+        self.stats['bytesSent'] += len(message)
         return
 
     def recv(n):
@@ -62,8 +62,8 @@ class Connection(object):
 
     def get(self, size):
         message = self.sock.recv(size).strip()
-        self.stats['messages'] += 1
-        self.stats['bytes'] += len(message)
+        self.stats['messagesRecvd'] += 1
+        self.stats['bytesRecvd'] += len(message)
         return message
 
     def close(self):
@@ -81,13 +81,18 @@ class ProtocolConnection(Connection):
         Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname)
 
     def send(self, message):
+        self.stats['messagesSent'] += 1
+        self.stats['bytesSent'] += len(message)
         self.sender.sendMessage(message)
 
     def receive(self):
-        return self.sender.recvMessage()
+        self.stats['messagesRecvd'] += 1
+        message = self.sender.recvMessage()
+        self.stats['bytesRecvd'] += len(message)
+        return message
 
     def close(self):
-        self.sender.sendMessage({"message" : "BYE" })
+        self.send({"message" : "BYE" })
         super(ProtocolConnection, self).close()
 
     def encode(self, string):
