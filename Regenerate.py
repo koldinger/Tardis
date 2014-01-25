@@ -1,8 +1,6 @@
-#! /usr/bin/python
-# -*- coding: utf-8 -*-
-
 import os
 import os.path
+import types
 import sys
 import argparse
 import socket
@@ -11,6 +9,9 @@ import CacheDir
 import logging
 import subprocess
 import time
+from rdiff_backup import librsync
+import tempfile
+import shutil
 import parsedatetime.parsedatetime as pdt
 
 version = "0.1"
@@ -18,20 +19,28 @@ version = "0.1"
 database = "./tardisDB"
 
 class Regenerator:
-    def __init__(self, cache, db):
+    def __init__(self, cache, db, tempdir="/tmp"):
         self.logger = logging.getLogger("Recoverer")
         self.cacheDir = cache
         self.db = db
+        self.tempdir = tempdir
 
-    def recoverChecksum(self, cksum, bset=False):
+    def recoverChecksum(self, cksum):
         self.logger.debug("Recovering checksum: {}".format(cksum))
-        (name, basis) = self.db.getChecksumInfo(cksum)
-        if basis:
-            input = self.recoverChecksum(basis, bset)
-            pipe = subprocess.Popen(["rdiff", "patch", "-", self.cacheDir.path(name)], stdin=input, stdout=subprocess.PIPE)
-            return pipe.stdout
+        cksInfo = self.db.getChecksumInfo(cksum)
+        if cksInfo['basis']:
+            basis = self.recoverChecksum(cksInfo['basis'])
+            # UGLY.  Put the basis into an actual file for librsync
+            if type(basis) is not types.FileType:
+                temp = tempfile.TemporaryFile()
+                shutil.copyfileobj(basis, temp)
+                basis = temp
+            #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
+            output = librsync.PatchedFile(basis, self.cacheDir.open(cksum, "rb"))
+            #output.seek(0)
+            return output
         else:
-            return self.cacheDir.open(name, "rb")
+            return self.cacheDir.open(cksum, "rb")
 
     def recoverFile(self, filename, bset=False):
         self.logger.debug("Recovering file: {}".format(filename))

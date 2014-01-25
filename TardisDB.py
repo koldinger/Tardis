@@ -373,22 +373,31 @@ class TardisDB(object):
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))
-        basisid = None
-        if basis:
-            (cksum, basisid) = self.getChecksumInfo(checksum)
 
-        c = self.cursor
-        c.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
-                  "VALUES                (:checksum, :size, :basis)",
-                  {"checksum": checksum, "size": size, "basis": basisid})
-        return c.lastrowid
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
+                             "VALUES                (:checksum, :size, :basis)",
+                             {"checksum": checksum, "size": size, "basis": basis})
+        return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: {}".format(checksum))
         c = self.cursor
-        c.execute("SELECT Checksum, Basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
+        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
         row = c.fetchone()
-        return (row[0], row[1])
+        if row:
+            return makeDict(c, row)
+        else:
+            return None
+
+    def getChainLength(self, checksum):
+        data = self.getChecksumInfo(checksum)
+        if data:
+            if data['basis'] is None:
+                return 0
+            else:
+                return self.getChainLength(data['basis']) + 1
+        else:
+            return -1
 
     def readDirectory(self, dirNode, current=False):
         backupset = self.bset(current)

@@ -1,6 +1,3 @@
-#! /usr/bin/python
-# -*- coding: utf-8 -*-
-
 import os, sys
 import os.path
 import socket
@@ -16,6 +13,7 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
+from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
 from functools import partial
 
@@ -72,6 +70,7 @@ def filelist(dir, excludes):
 def sendData(file, checksum=False):
     """ Send a block of data """
     num = 0
+    size = 0
     if checksum:
         m = hashlib.md5()
     for chunk in iter(partial(file.read, args.chunksize), ''):
@@ -80,9 +79,11 @@ def sendData(file, checksum=False):
         data = conn.encode(chunk)
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
-        stats["bytes"] += len(data)
+        x = len(data)
+        stats["bytes"] += x
+        size += x
         num += 1
-    message = {"chunk": "done"}
+    message = {"chunk": "done", "size": size}
     if checksum:
         ck = m.hexdigest()
         message["checksum"] = m.hexdigest()
@@ -145,26 +146,17 @@ def processDelta(inode):
         message = {
             "message" : "SGR",
             "inode" : inode
-            }
+        }
 
         sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
             oldchksum = sigmessage['checksum']
-            sig = conn.decode(sigmessage['signature'])
 
-            with tempfile.NamedTemporaryFile() as temp:
-                temp.write(sig)
-                temp.flush()
+            sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+            delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
 
-                pipe = subprocess.Popen(["rdiff", "delta", temp.name, pathname], stdout=subprocess.PIPE)
-                (delta, err) = pipe.communicate()
-
-                temp.close()
-
-            #pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
-            #(sigdelta, err) = pipe.communicate()
-
+            ### BUG: If the file is being changed, this value and the above may be different.
             m = hashlib.md5()
             filesize = 0
             with open(pathname, "rb") as file:
@@ -177,17 +169,14 @@ def processDelta(inode):
                 "message": "DEL",
                 "inode": inode,
                 "size": filesize,
-                "deltasize": len(delta),
                 "checksum": checksum,
                 "basis": oldchksum,
                 "encoding": encoding
-                }
+            }
 
             sendMessage(message)
-
-            x = cStringIO.StringIO(delta)
-            sendData(x)
-            x.close()
+            sendData(delta)
+            delta.close()
         else:
             sendContent(inode)
 
@@ -202,7 +191,7 @@ def sendContent(inode):
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                "size" : fileInfo["size"],
+                # "size" : fileInfo["size"],        # No longer used.  Sent at end from calculated value, in case the file size is changing.
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
@@ -215,8 +204,8 @@ def sendContent(inode):
                 checksum = sendData(x, checksum=True)
                 x.close()
             else:
-                with open(pathname, "rb") as file:
-                    checksum = sendData(file, checksum=True)
+                with open(pathname, "rb") as f:
+                    checksum = sendData(f, checksum=True)
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -643,7 +632,7 @@ def processCommandLine():
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
     parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
-    parser.add_argument('--basepath',           dest='basepath', default='distinct', choices=['distinct', 'common', 'full'],    help="Select style of root path handling")
+    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
