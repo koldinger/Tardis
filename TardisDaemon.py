@@ -1,7 +1,35 @@
-#! /usr/bin/python
-# -*- coding: utf-8 -*-
+# vim: set et sw=4 sts=4 fileencoding=utf-8:
+#
+# Tardis: A Backup System
+# Copyright 2013-2014, Eric Koldinger, All Rights Reserved.
+# kolding@washington.edu
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import types
 import sys
 import argparse
 import uuid
@@ -10,13 +38,15 @@ import logging.config
 import ConfigParser
 import SocketServer
 import ssl
-import tempfile
 import hashlib
 import base64
 import subprocess
 import daemon
 import daemon.pidfile
 import pprint
+import tempfile
+import shutil
+from rdiff_backup import librsync
 
 # For profiling
 import cProfile
@@ -131,12 +161,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         files = data['files']
 
         dirhash = {}
+        oldDir = None
 
         # Get the old directory info
+        # If we're still in the same directory, use cached info
         if self.lastDirNode == parentInode:
             dirhash = self.lastDirHash
         else:
-            directory = self.db.readDirectory(parentInode)
+            # Lookup the old directory based on the path
+            if data['path']:
+                oldDir = self.db.getFileInfoByPath(data['path'], current=False)
+            # If found, read that' guys directory
+            if oldDir:
+                dirInode = oldDir['inode']
+            else:
+                # Otherwise
+                dirInode = parentInode
+            directory = self.db.readDirectory(dirInode)
             for i in directory:
                 dirhash[i["name"]] = i
             self.lastDirHash = dirhash
@@ -186,15 +227,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 file.close()
             else:
                 rpipe = self.regenerator.recoverChecksum(chksum)
-                pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
+                #pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
                 #pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
-                (sig, err) = pipe.communicate()
+                #(sig, err) = pipe.communicate()
                 # Cache the signature for later use.  Just in case.
                 # TODO: Better logic on this?
+                s = librsync.SigFile(rpipe)
+                sig = s.read()
+
                 outfile = self.cache.open(sigfile, "wb")
                 outfile.write(sig)
                 outfile.close()
-
             # TODO: Break the signature out of here.
             response = {
                 "message": "SIG",
@@ -222,40 +265,53 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message["checksum"]
         basis    = message["basis"]
         inode    = message["inode"]
+        size     = message["size"]          # size of the original file, not the content
 
+        savefull = self.server.savefull
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file {} already exists".format(checksum))
             # Abort read
         else:
-            if self.server.savefull:
+            chainLength = self.db.getChainLength(basis)
+            if chainLength > self.server.maxChain:
+                self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
+                savefull = True
+            if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
-                output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
+                #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
+                output = tempfile.SpooledTemporaryFile(dir=self.tempdir)
             else:
                 output = self.cache.open(checksum, "wb")
 
         bytesReceived = 0
-        size = message["size"]
 
         while True:
             chunk = self.messenger.recvMessage()
-            if chunk['chunk'] == 'done':
-                break
+            if chunk['chunk'] == 'done': break
             bytes = self.messenger.decode(chunk["data"])
-            if output:
-                output.write(bytes)
+            if output: output.write(bytes)
             bytesReceived += len(bytes)
+
         if output:
-            output.flush()
-            if self.server.savefull:
+            if savefull:
+                output.seek(0)
                 # Process the delta file into the new file.
-                subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
+                #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
+                basisFile = self.regenerator.recoverChecksum(basis)
+                if type(basisFile) != types.FileType:
+                    temp = basisFile
+                    basisFile = tempfile.TemporaryFile(dir=self.tempdir)
+                    shutil.copyfileobj(temp, basisFile)
+                patched = librsync.PatchedFile(basisFile, output)
+                shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                 self.db.insertChecksumFile(checksum, size)
             else:
                 self.db.insertChecksumFile(checksum, size, basis=basis)
             output.close()
             # TODO: This has gotta be wrong.
-        self.db.setChecksum(inode, checksum)
 
+        self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
+        self.db.setChecksum(inode, checksum)
         return None
 
     def processSignature(self, message):
@@ -326,11 +382,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #digest = hashlib.md5()
 
         bytesReceived = 0
-        size = message["size"]
 
         while True:
             chunk = self.messenger.recvMessage()
             if chunk['chunk'] == 'done':
+                size = chunk["size"]
                 checksum = chunk['checksum']
                 break
 
@@ -348,6 +404,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.debug("Renaming {} to {}".format(temp.name, self.cache.path(checksum)))
                 os.rename(temp.name, self.cache.path(checksum))
                 self.db.insertChecksumFile(checksum, bytesReceived)
+
+        self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
         self.db.setChecksum(message["inode"], checksum)
 
         #return {"message" : "OK", "inode": message["inode"]}
@@ -445,10 +503,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             if (self.tempdir):
                 # Clean out the temp dir
-                for f in os.listdir(self.tempdir):
-                    os.remove(os.path.join(self.tempdir, f))
-                # And delete it
-                os.rmdir(self.tempdir)
+                shutil.rmtree(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
 
@@ -548,13 +603,14 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
 
         self.basedir    = config.get('Tardis', 'BaseDir')
         self.savefull   = config.getboolean('Tardis', 'SaveFull')
+        self.maxChain   = config.getint('Tardis', 'MaxDeltaChain')
+        self.deltaPercent  = config.getint('Tardis', 'MaxChangePercent')
+
         self.ssl        = config.getboolean('Tardis', 'SSL')
         if self.ssl:
             certfile   = config.get('Tardis', 'CertFile')
             keyfile    = config.get('Tardis', 'KeyFile')
             self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
-
-
 
 def setupLogging(config):
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]

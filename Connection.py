@@ -1,3 +1,33 @@
+# vim: set et sw=4 sts=4 fileencoding=utf-8:
+#
+# Tardis: A Backup System
+# Copyright 2013-2014, Eric Koldinger, All Rights Reserved.
+# kolding@washington.edu
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 import socket
 import json
 import uuid
@@ -10,7 +40,7 @@ class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, name, encoding, priority, use_ssl=False, hostname=None):
-        self.stats = { 'messages' : 0, 'bytes': 0 }
+        self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
 
         if hostname is None:
@@ -47,8 +77,8 @@ class Connection(object):
 
     def put(self, message):
         self.sock.sendall(message)
-        self.stats['messages'] += 1
-        self.stats['bytes'] += len(message)
+        self.stats['messagesSent'] += 1
+        self.stats['bytesSent'] += len(message)
         return
 
     def recv(n):
@@ -62,8 +92,8 @@ class Connection(object):
 
     def get(self, size):
         message = self.sock.recv(size).strip()
-        self.stats['messages'] += 1
-        self.stats['bytes'] += len(message)
+        self.stats['messagesRecvd'] += 1
+        self.stats['bytesRecvd'] += len(message)
         return message
 
     def close(self):
@@ -81,13 +111,18 @@ class ProtocolConnection(Connection):
         Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname)
 
     def send(self, message):
+        self.stats['messagesSent'] += 1
+        self.stats['bytesSent'] += len(message)
         self.sender.sendMessage(message)
 
     def receive(self):
-        return self.sender.recvMessage()
+        self.stats['messagesRecvd'] += 1
+        message = self.sender.recvMessage()
+        self.stats['bytesRecvd'] += len(message)
+        return message
 
     def close(self):
-        self.sender.sendMessage({"message" : "BYE" })
+        self.send({"message" : "BYE" })
         super(ProtocolConnection, self).close()
 
     def encode(self, string):

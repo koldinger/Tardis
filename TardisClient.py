@@ -1,5 +1,32 @@
-#! /usr/bin/python
-# -*- coding: utf-8 -*-
+# vim: set et sw=4 sts=4 fileencoding=utf-8:
+#
+# Tardis: A Backup System
+# Copyright 2013-2014, Eric Koldinger, All Rights Reserved.
+# kolding@washington.edu
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 import os, sys
 import os.path
@@ -16,6 +43,7 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
+from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
 from functools import partial
 
@@ -74,6 +102,7 @@ def filelist(dir, excludes):
 def sendData(file, checksum=False):
     """ Send a block of data """
     num = 0
+    size = 0
     if checksum:
         m = hashlib.md5()
     for chunk in iter(partial(file.read, args.chunksize), ''):
@@ -82,9 +111,11 @@ def sendData(file, checksum=False):
         data = conn.encode(chunk)
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
-        stats["bytes"] += len(data)
+        x = len(data)
+        stats["bytes"] += x
+        size += x
         num += 1
-    message = {"chunk": "done"}
+    message = {"chunk": "done", "size": size}
     if checksum:
         ck = m.hexdigest()
         message["checksum"] = m.hexdigest()
@@ -147,26 +178,17 @@ def processDelta(inode):
         message = {
             "message" : "SGR",
             "inode" : inode
-            }
+        }
 
         sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
             oldchksum = sigmessage['checksum']
-            sig = conn.decode(sigmessage['signature'])
 
-            with tempfile.NamedTemporaryFile() as temp:
-                temp.write(sig)
-                temp.flush()
+            sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+            delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
 
-                pipe = subprocess.Popen(["rdiff", "delta", temp.name, pathname], stdout=subprocess.PIPE)
-                (delta, err) = pipe.communicate()
-
-                temp.close()
-
-            #pipe = subprocess.Popen(["rdiff", "signature", pathname], stdout=subprocess.PIPE)
-            #(sigdelta, err) = pipe.communicate()
-
+            ### BUG: If the file is being changed, this value and the above may be different.
             m = hashlib.md5()
             filesize = 0
             with open(pathname, "rb") as file:
@@ -179,17 +201,14 @@ def processDelta(inode):
                 "message": "DEL",
                 "inode": inode,
                 "size": filesize,
-                "deltasize": len(delta),
                 "checksum": checksum,
                 "basis": oldchksum,
                 "encoding": encoding
-                }
+            }
 
             sendMessage(message)
-
-            x = cStringIO.StringIO(delta)
-            sendData(x)
-            x.close()
+            sendData(delta)
+            delta.close()
         else:
             sendContent(inode)
 
@@ -204,7 +223,7 @@ def sendContent(inode):
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                "size" : fileInfo["size"],
+                # "size" : fileInfo["size"],        # No longer used.  Sent at end from calculated value, in case the file size is changing.
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
@@ -217,8 +236,8 @@ def sendContent(inode):
                 checksum = sendData(x, checksum=True)
                 x.close()
             else:
-                with open(pathname, "rb") as file:
-                    checksum = sendData(file, checksum=True)
+                with open(pathname, "rb") as f:
+                    checksum = sendData(f, checksum=True)
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -658,7 +677,7 @@ def processCommandLine():
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
     parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
-    parser.add_argument('--basepath',           dest='basepath', default='distinct', choices=['distinct', 'common', 'full'],    help="Select style of root path handling")
+    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
@@ -744,7 +763,13 @@ def main():
             sendDirEntry(0, [f])
 
     for x in map(os.path.realpath, args.directories):
-        recurseTree(x, x, depth=args.maxdepth, excludes=globalExcludes)
+        if rootdir:
+            root = rootdir
+        else:
+            (d, name) = os.path.split(x)
+            root = d
+
+        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone requests still lying around, send them
     if len(cloneDirs):

@@ -1,9 +1,38 @@
+# vim: set et sw=4 sts=4 fileencoding=utf-8:
+#
+# Tardis: A Backup System
+# Copyright 2013-2014, Eric Koldinger, All Rights Reserved.
+# kolding@washington.edu
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 import sqlite3
 import shutil
 import logging
 import os.path
 import functools
-#from datetime import datetime, time
 import time
 
 # Expected SQL Schema
@@ -24,7 +53,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
     Size        INTEGER,
     Basis       INTEGER,
-    FOREIGN KEY(Basis) REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
 CREATE TABLE IF NOT EXISTS Names (
@@ -373,22 +402,31 @@ class TardisDB(object):
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: {}".format(checksum))
-        basisid = None
-        if basis:
-            (cksum, basisid) = self.getChecksumInfo(checksum)
 
-        c = self.cursor
-        c.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
-                  "VALUES                (:checksum, :size, :basis)",
-                  {"checksum": checksum, "size": size, "basis": basisid})
-        return c.lastrowid
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
+                             "VALUES                (:checksum, :size, :basis)",
+                             {"checksum": checksum, "size": size, "basis": basis})
+        return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: {}".format(checksum))
         c = self.cursor
-        c.execute("SELECT Checksum, Basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
+        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
         row = c.fetchone()
-        return (row[0], row[1])
+        if row:
+            return makeDict(c, row)
+        else:
+            return None
+
+    def getChainLength(self, checksum):
+        data = self.getChecksumInfo(checksum)
+        if data:
+            if data['basis'] is None:
+                return 0
+            else:
+                return self.getChainLength(data['basis']) + 1
+        else:
+            return -1
 
     def readDirectory(self, dirNode, current=False):
         backupset = self.bset(current)
@@ -427,8 +465,20 @@ class TardisDB(object):
         else:
             return None
 
+    def getBackupSetInfoForTime(self, time):
+        c = self.conn.execute("SELECT "
+                              "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, Completed AS completed, Session AS session "
+                              "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
+                              {"time": time})
+        row = c.fetchone()
+        if row:
+            return makeDict(c, row)
+        else:
+            return None
+
     def beginTransaction(self):
         self.cursor.execute("BEGIN")
+
 
     def completeBackup(self):
         self.cursor.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})

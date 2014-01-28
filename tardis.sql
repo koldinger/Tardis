@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
     Size        INTEGER,
     Basis       INTEGER,
-    FOREIGN KEY(Basis) REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
 CREATE TABLE IF NOT EXISTS Names (
