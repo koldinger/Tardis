@@ -161,12 +161,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         files = data['files']
 
         dirhash = {}
+        oldDir = None
 
         # Get the old directory info
+        # If we're still in the same directory, use cached info
         if self.lastDirNode == parentInode:
             dirhash = self.lastDirHash
         else:
-            directory = self.db.readDirectory(parentInode)
+            # Lookup the old directory based on the path
+            if data['path']:
+                oldDir = self.db.getFileInfoByPath(data['path'], current=False)
+            # If found, read that' guys directory
+            if oldDir:
+                dirInode = oldDir['inode']
+            else:
+                # Otherwise
+                dirInode = parentInode
+            directory = self.db.readDirectory(dirInode)
             for i in directory:
                 dirhash[i["name"]] = i
             self.lastDirHash = dirhash

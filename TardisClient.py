@@ -743,7 +743,13 @@ def main():
             sendDirEntry(0, [f])
 
     for x in map(os.path.realpath, args.directories):
-        recurseTree(x, x, depth=args.maxdepth, excludes=globalExcludes)
+        if rootdir:
+            root = rootdir
+        else:
+            (d, name) = os.path.split(x)
+            root = d
+
+        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone requests still lying around, send them
     if len(cloneDirs):
