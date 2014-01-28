@@ -453,6 +453,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 done.append(d['inode'])
         return {"message" : "ACKCLN", "done" : done, 'content' : content }
 
+    def processBatch(self, message):
+        batch = message['batch']
+        responses = []
+        for mess in batch:
+            responses.append(self.processMessage(mess))
+
+        response = { 
+            'message': 'ACKBTCH',
+            'responses': responses
+        }
+        return response
+
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -471,6 +483,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processChecksum(message)
         elif messageType == "CLN":
             return self.processClone(message)
+        elif messageType == "BATCH":
+            return self.processBatch(message)
         elif messageType == "PRG":
             return self.processPurge(message)
         else:
