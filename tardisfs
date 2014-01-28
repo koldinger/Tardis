@@ -1,0 +1,7 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+import TardisFS
+import sys
+
+sys.exit(TardisFS.main())
