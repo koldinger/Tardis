@@ -42,7 +42,7 @@ import time
 from rdiff_backup import librsync
 import tempfile
 import shutil
-import parsedatetime.parsedatetime as pdt
+import parsedatetime as pdt
 
 version = "0.1"
 
