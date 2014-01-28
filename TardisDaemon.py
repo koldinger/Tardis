@@ -201,13 +201,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # self.db.commit()
 
         response = {
-            "message": "ACKDIR",
-            "status":  "OK",
-            "inode": data["inode"],
-            "done":  list(done),
-            "cksum": list(cksum),
-            "content": list(content),
-            "delta": list(delta)
+            "message"   : "ACKDIR",
+            "status"    : "OK",
+            "path"      : data["path"],
+            "inode"     : data["inode"],
+            "done"      : list(done),
+            "cksum"     : list(cksum),
+            "content"   : list(content),
+            "delta"     : list(delta)
         }
 
         return response
@@ -274,7 +275,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # Abort read
         else:
             chainLength = self.db.getChainLength(basis)
-            if chainLength > self.server.maxChain:
+            if chainLength >= self.server.maxChain:
                 self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
                 savefull = True
             if savefull:

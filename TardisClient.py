@@ -242,14 +242,18 @@ def sendContent(inode):
     else:
         print "Error: Unknown inode {}".format(inode)
 
-def handleAckDir(message):
+def handleAckDir(message, batched=False):
     content = message["content"]
     done    = message["done"]
     delta   = message["delta"]
     cksum   = message["cksum"]
 
     if verbosity > 1:
-        print "Processing ACKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
+        if batched:
+            print "Processing ACKDIR [Batched]: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), message['path'])
+        else:
+            print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), message['path'])
+
     for i in done:
         if i in inodeDB:
             del inodeDB[i]
@@ -392,8 +396,18 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity:
-                print "ResyncDir: {}".format(path)
-            sendDirChunks(path, inode, files)
+                print "ResyncDir: {}".format(path),
+            if len(files) < args.batchdirs:
+                if verbosity:
+                    print "[Batched]"
+                batchDirs.append(makeDirMessage(path, inode, files))
+                if len(batchDirs) >= args.batchsize:
+                    flushBatchDirs()
+            else:
+                if verbosity:
+                    print
+                flushBatchDirs()
+                sendDirChunks(path, inode, files)
             del cloneContents[inode]
 
     # Purge out what hasn't changed
@@ -421,13 +435,15 @@ def flushClones():
         sendClones()
 
 def sendBatchDirs():
+    if verbosity > 1:
+        print "Pushing batch.  {} commands".format(len(batchDirs))
     message = {
         'message' : 'BATCH',
         'batch': batchDirs
     }
     response = sendAndReceive(message)
     for ack in response['responses']:
-        handleAckDir(ack)
+        handleAckDir(ack, True)
     del batchDirs[:]
 
 def flushBatchDirs():
@@ -466,10 +482,10 @@ def sendDirChunks(path, inode, files):
 
 def makeDirMessage(path, inode, files):
     message = {
-        'message': 'DIR',
-        'path':  path,
+        'files':  files,
         'inode':  inode,
-        'files':  files
+        'path':  path,
+        'message': 'DIR',
         }
     return message
 
@@ -503,7 +519,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            flushBatchDirs()
             if verbosity > 2:
                 print "---- Cloning dir {} ----".format(dir)
             filenames = sorted([x["name"] for x in files])
@@ -515,19 +530,22 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
             if verbosity:
                 print " [Clone]"
+            flushBatchDirs()
             if len(cloneDirs) >= args.clones:
                 flushClones()
         else:
-            flushClones()
             if len(files) < args.batchdirs:
                 if verbosity:
                     print " [Batched]"
+                flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
                 if verbosity:
                     print
+                flushClones()
+                flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
 
         # Make sure we're not at maximum depth
