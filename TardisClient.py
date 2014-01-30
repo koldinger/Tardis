@@ -75,6 +75,7 @@ conn                = None
 
 cloneDirs           = []
 cloneContents       = {}
+batchDirs           = []
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
@@ -98,6 +99,7 @@ def filelist(dir, excludes):
             files = list(set(files) - set(remove))
     for f in files:
         yield f
+
 
 def sendData(file, checksum=False):
     """ Send a block of data """
@@ -155,7 +157,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                print "File: [C]: %s" % name
+                print "File: [C]: {}".format(shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     for i in response["content"]:
@@ -166,7 +168,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: %s %d" % (name, size)
+                print "File: [N]: {} {}".format(shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -248,7 +250,8 @@ def handleAckDir(message):
     cksum   = message["cksum"]
 
     if verbosity > 1:
-        print "Processing ACKDIR: Up-to-date: %d New Content: %d Delta: %d ChkSum: %d" % (len(done), len(content), len(delta), len(cksum))
+        print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
+
     for i in done:
         if i in inodeDB:
             del inodeDB[i]
@@ -261,7 +264,7 @@ def handleAckDir(message):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: %s %d" % (name, size)
+                print "File: [N]: {} {}".format(shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -269,7 +272,7 @@ def handleAckDir(message):
     for i in delta:
         if verbosity > 1:
             (x, name) = inodeDB[i]
-            print "File: [D]: %s" % (name)
+            print "File: [D]: {}".format(shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -391,8 +394,18 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity:
-                print "ResyncDir: {}".format(path)
-            sendDirChunks(path, inode, files)
+                print "ResyncDir: {}".format(shortPath(path)),
+            if len(files) < args.batchdirs:
+                if verbosity:
+                    print "[Batched]"
+                batchDirs.append(makeDirMessage(path, inode, files))
+                if len(batchDirs) >= args.batchsize:
+                    flushBatchDirs()
+            else:
+                if verbosity:
+                    print
+                flushBatchDirs()
+                sendDirChunks(path, inode, files)
             del cloneContents[inode]
 
     # Purge out what hasn't changed
@@ -414,6 +427,31 @@ def sendClones():
     response = sendAndReceive(message)
     handleAckClone(response)
     del cloneDirs[:]
+
+def flushClones():
+    if len(cloneDirs):
+        sendClones()
+
+def sendBatchDirs():
+    message = {
+        'message' : 'BATCH',
+        'batch': batchDirs
+    }
+    if verbosity > 1:
+        print "Starting batch.  {} commands".format(len(batchDirs))
+
+    response = sendAndReceive(message)
+    for ack in response['responses']:
+        handleAckDir(ack)
+
+    if verbosity > 1:
+        print "Ending batch."
+
+    del batchDirs[:]
+
+def flushBatchDirs():
+    if len(batchDirs):
+        sendBatchDirs()
 
 def sendPurge(relative):
     if purgePriority and purgeTime:
@@ -445,6 +483,15 @@ def sendDirChunks(path, inode, files):
         response = sendAndReceive(message)
         handleAckDir(response)
 
+def makeDirMessage(path, inode, files):
+    message = {
+        'files':  files,
+        'inode':  inode,
+        'path':  path,
+        'message': 'DIR',
+        }
+    return message
+
 def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
     if depth > 0:
@@ -456,7 +503,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
     try:
         if verbosity:
-            print "Dir: {}".format(str(dir)),
+            print "Dir: {}".format(shortPath(dir)),
             if verbosity > 2 and len(excludes) > 0:
                 print "\n   Excludes: {}".format(str(excludes))
 
@@ -475,8 +522,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            if verbosity > 2:
-                print "---- Cloning dir {} ----".format(dir)
+            if verbosity:
+                print " [Clone]"
+
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
             for f in filenames:
@@ -484,16 +532,23 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
-            if verbosity:
-                print " [Clone]"
-            if len(cloneDirs) > args.clones:
-                sendClones()
+            flushBatchDirs()
+            if len(cloneDirs) >= args.clones:
+                flushClones()
         else:
-            if verbosity:
-                print
-            if len(cloneDirs):
-                sendClones()
-            sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
+            if len(files) < args.batchdirs:
+                if verbosity:
+                    print " [Batched]"
+                flushClones()
+                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
+                if len(batchDirs) >= args.batchsize:
+                    flushBatchDirs()
+            else:
+                if verbosity:
+                    print
+                flushClones()
+                flushBatchDirs()
+                sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -620,6 +675,18 @@ def sendDirEntry(parent, files):
     response = sendAndReceive(message)
     handleAckDir(response)
 
+def shortPath(path, width=80):
+    if path == None or len(path) <= width:
+        return path
+
+    width -= 8
+    while len(path) > width:
+        try:
+            head, path = str.split(path, os.sep, 1)
+        except:
+            break
+    return ".../" + path
+
 
 def splitDirs(x):
     root, rest = os.path.split(x)
@@ -659,8 +726,8 @@ def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
-    parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server')
-    parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port')
+    parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
+    parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
 
     # Create a group of mutually exclusive options for naming the backup set
@@ -677,7 +744,7 @@ def processCommandLine():
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
     parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
-    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling")
+    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
@@ -688,9 +755,11 @@ def processCommandLine():
     excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
-    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,       help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
-    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=16536,  help='Chunk size for sending data.  Default: %(default)s')
-    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,    help='Maximum number of directory entries per message.  Default: %(default)s')
+    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,           help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
+    comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,         help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
+    comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
+    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
+    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer.  Default: %(default)s')
 
     parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
@@ -771,9 +840,9 @@ def main():
 
         recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
-    # If any clone requests still lying around, send them
-    if len(cloneDirs):
-        sendClones()
+    # If any clone or batch requests still lying around, send them
+    flushBatchDirs()
+    flushClones()
 
     if args.purge:
         if args.purgetime:
