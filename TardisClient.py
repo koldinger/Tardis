@@ -67,6 +67,8 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
 verbosity           = 0
 version             = "0.1"
 
+ignorectime         = False
+
 conn                = None
 args                = None
 conn                = None
@@ -351,21 +353,28 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
     return (files, subdirs, excludes)
 
 def checkClonable(dir, stat, files, subdirs):
-    if stat.st_ctime > conn.lastTimestamp:
+    if (ignorectime is False) and (stat.st_ctime > conn.lastTimestamp):
         return False
     if stat.st_mtime > conn.lastTimestamp:
         return False
+
     # Now, collect the timestamps of all the files, and determine the maximum
     # If any are greater than the last timestamp, punt
     extend = partial(os.path.join, path)
     if subdirs and len(subdirs):
         times = map(os.lstat, map(extend, subdirs))
-        time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
+        if ignorectime:
+            time = max([x.st_mtime for x in times])
+        else:
+            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
         if time > conn.lastTimestamp:
             return False
     if files and len(files):
         times = map(os.lstat, map(extend, subs))
-        time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
+        if ignorectime:
+            time = max([x.st_mtime for x in times])
+        else:
+            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
         if time > conn.lastTimestamp:
             return False
 
@@ -374,6 +383,9 @@ def checkClonable(dir, stat, files, subdirs):
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
         raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
+    if verbosity > 1:
+        print "Processing ACKCLN: Up-to-date: %d New Content: %d" % (len(message['done']), len(message['content']))
+
     # Process the directories that have changed
     for inode in message["content"]:
         if inode in cloneContents:
@@ -454,7 +466,10 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         cloneable = False
         #print "Checking cloneablity: {} Last {} ctime {} mtime {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
         if (args.clones > 0) and (s.st_ctime < conn.lastTimestamp) and (s.st_mtime < conn.lastTimestamp) and (len(files) > 0):
-            maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
+            if ignorectime:
+                maxTime = max(x["mtime"] for x in files)
+            else:
+                maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
             #print "Max file timestamp: {} Last Timestamp {}".format(maxTime, conn.lastTimestamp)
             if maxTime < conn.lastTimestamp:
                 cloneable = True
@@ -689,18 +704,23 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
+    dangergroup = parser.add_argument_group("DANGEROUS", "Dangerous options, use only if you're very knowledgable of Tardis functionality")
+    dangergroup.add_argument('--ignore-ctime',      dest='ignorectime', action='store_true', default=False,     help='Ignore CTime when determining clonability')
+
     parser.add_argument('directories',          nargs='*', default='.', help="List of files to sync")
+
 
     return parser.parse_args()
 
 
 def main():
-    global starttime, args, config, conn, verbosity
+    global starttime, args, config, conn, verbosity, ignorectime
     args = processCommandLine()
 
     starttime = datetime.datetime.now()
 
     verbosity=args.verbose
+    ignorectime = args.ignorectime
 
     # Figure out the name and the priority of this backupset
     (name, priority) = setBackupName(args)
@@ -743,7 +763,13 @@ def main():
             sendDirEntry(0, [f])
 
     for x in map(os.path.realpath, args.directories):
-        recurseTree(x, x, depth=args.maxdepth, excludes=globalExcludes)
+        if rootdir:
+            root = rootdir
+        else:
+            (d, name) = os.path.split(x)
+            root = d
+
+        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone requests still lying around, send them
     if len(cloneDirs):

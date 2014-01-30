@@ -46,6 +46,7 @@ import daemon.pidfile
 import pprint
 import tempfile
 import shutil
+import traceback
 from rdiff_backup import librsync
 
 # For profiling
@@ -161,12 +162,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         files = data['files']
 
         dirhash = {}
+        oldDir = None
 
         # Get the old directory info
+        # If we're still in the same directory, use cached info
         if self.lastDirNode == parentInode:
             dirhash = self.lastDirHash
         else:
-            directory = self.db.readDirectory(parentInode)
+            # Lookup the old directory based on the path
+            if data['path']:
+                oldDir = self.db.getFileInfoByPath(data['path'], current=False)
+            # If found, read that' guys directory
+            if oldDir:
+                dirInode = oldDir['inode']
+            else:
+                # Otherwise
+                dirInode = parentInode
+            directory = self.db.readDirectory(dirInode)
             for i in directory:
                 dirhash[i["name"]] = i
             self.lastDirHash = dirhash
@@ -617,11 +629,11 @@ def setupLogging(config):
         verbosity = config.getint('Tardis', 'Verbose')
 
         if config.get('Tardis', 'LogFile'):
-            handler = logging.FileHandler(config.get('Tardis', 'LogFile'))
+            handler = logging.handlers.WatchedFileHandler(config.get('Tardis', 'LogFile'))
         elif config.getboolean('Tardis', 'Daemon'):
-            handler = logging.SysLogHandler()
+            handler = logging.handlers.SysLogHandler()
         else:
-            handler = logging.StreamHandler()
+            handler = logging.handlers.StreamHandler()
 
         handler.setFormatter(format)
         logger.addHandler(handler)
@@ -632,10 +644,10 @@ def setupLogging(config):
     return logger
 
 def run_server(config):
-    try:
-        logger = setupLogging(config)
+    logger = setupLogging(config)
+    logger.info("Starting server");
 
-        logger.info("Starting server");
+    try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         server = TardisSocketServer(config)
 
@@ -646,7 +658,7 @@ def run_server(config):
         logger.info("Ending")
     except:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        #logger.exception(sys.exc_info()[1])
+        logger.exception(sys.exc_info()[1])
 
 
 def main():
@@ -702,7 +714,7 @@ def main():
         pass
     except:
         print "Unable to run server: {}".format(sys.exc_info()[1])
-        #logger.exception(sys.exc_info()[1])
+        traceback.print_exc()
 
 if __name__ == "__main__":
     sys.exit(main())

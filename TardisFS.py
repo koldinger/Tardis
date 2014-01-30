@@ -1,3 +1,4 @@
+#! /usr/bin/python
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
