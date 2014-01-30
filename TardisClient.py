@@ -243,17 +243,14 @@ def sendContent(inode):
     else:
         print "Error: Unknown inode {}".format(inode)
 
-def handleAckDir(message, batched=False):
+def handleAckDir(message):
     content = message["content"]
     done    = message["done"]
     delta   = message["delta"]
     cksum   = message["cksum"]
 
     if verbosity > 1:
-        if batched:
-            print "Processing ACKDIR [Batched]: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
-        else:
-            print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
+        print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
 
     for i in done:
         if i in inodeDB:
@@ -436,15 +433,20 @@ def flushClones():
         sendClones()
 
 def sendBatchDirs():
-    if verbosity > 1:
-        print "Pushing batch.  {} commands".format(len(batchDirs))
     message = {
         'message' : 'BATCH',
         'batch': batchDirs
     }
+    if verbosity > 1:
+        print "Starting batch.  {} commands".format(len(batchDirs))
+
     response = sendAndReceive(message)
     for ack in response['responses']:
-        handleAckDir(ack, True)
+        handleAckDir(ack)
+
+    if verbosity > 1:
+        print "Ending batch."
+
     del batchDirs[:]
 
 def flushBatchDirs():
