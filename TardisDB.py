@@ -132,6 +132,7 @@ class TardisDB(object):
     dbName  = None
     db      = None
     currBackupSet = None
+    dirinodes = {}
 
     def __init__(self, dbname, backup=True, prevSet=None, initialize=None):
         """ Initialize the connection to a per-machine Tardis Database"""
@@ -236,20 +237,49 @@ class TardisDB(object):
                   {"name": name, "parent": parent, "backup": backupset})
         return makeDict(c, c.fetchone())
 
-    def getFileInfoByPath(self, path, current=False):
         """ Lookup a file by a full path. """
+    """def getFileInfoByPath(self, path, current=False):
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self.bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = 0              # Root directory value
         info = None
-        for name in splitpath(path):
-            info = self.getFileInfoByName(name, parent, backupset)
-            if info:
-                parent = info["inode"]
-            else:
-                break
-        return info
+
+        (dirname, name) = os.path.split(path)
+        try:
+            # Check the cache
+            parent = self.dirinodes[(backupset, dirname)]
+            return self.getFileInfoByName(name, parent, backupset)
+        except KeyError:
+            # Walk the path
+            for name in splitpath(path):
+                info = self.getFileInfoByName(name, parent, backupset)
+                if info:
+                    parent = info["inode"]
+                else:
+                    break
+            #if info:
+                #self.dirinodes[(backupset, dirname)] = parent
+            return info
+            """
+
+    def __getFileInfoByPath(self, path, backupset):
+        try:
+            (dirname, filename) = os.path.split(path)
+            try:
+                parent = self.dirinodes[(backupset, dirname)]
+                return self.getFileInfoByName(name, parent, backupset)
+            except KeyError:
+                parentInfo = self.__getFileInfoByPath(dirname, backupset)
+                parent = parentInfo['inode']
+                self.dirinodes[(backupset, dirname)] = parent
+                return self.getFileInfoByName(name, parent, backupset)
+        except:
+            return self.getFileInfoByName(path, 0, backupset)
+
+    def getFileInfoByPath(self, path, current=False):
+        backupset = self.bset(current)
+        return self.__getFileInfoByPath(path, backupset)
 
     def getFileInfoByInode(self, inode, current=False):
         backupset = self.bset(current)

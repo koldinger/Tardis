@@ -67,8 +67,6 @@ CKSUM   = 2
 DELTA   = 3
 
 config = None
-profiler = None
-
 databaseName = 'tardis.db'
 schemaName   = 'tardis.sql'
 configName   = '/etc/tardis/tardisd.cfg'
@@ -549,8 +547,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
 
     def handle(self):
-        if profiler:
-            profiler.enable()
+        printMessages = self.logger.isEnabledFor(logging.TRACE)
+
+        if self.server.profiler:
+            self.logger.info("Starting Profiler")
+            self.server.profiler.enable()
 
         try:
             self.request.sendall("TARDIS 1.0")
@@ -580,13 +581,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             while not done:
                 message = self.messenger.recvMessage()
-                self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
+                if printMessages:
+                    self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
                 if message["message"] == "BYE":
                     done = True
                 else:
                     response = self.processMessage(message)
                     if response:
-                        self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(response)))
+                        if printMessages:
+                            self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(response)))
                         self.messenger.sendMessage(response)
 
             self.db.completeBackup()
@@ -597,11 +600,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         finally:
             self.request.close()
             self.endSession()
-            if profiler:
-                profiler.disable()
+            if self.server.profiler:
+                self.logger.info("Stopping Profiler")
+                self.server.profiler.disable()
                 s = StringIO.StringIO()
                 sortby = 'cumulative'
-                ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+                ps = pstats.Stats(self.server.profiler, stream=s).sort_stats(sortby)
                 ps.print_stats()
                 print s.getvalue()
             self.logger.info("Connection complete")
@@ -610,6 +614,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.info("Removing orphans")
             self.removeOrphans()
 
+#class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     config = None
 
@@ -627,6 +632,11 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
             certfile   = config.get('Tardis', 'CertFile')
             keyfile    = config.get('Tardis', 'KeyFile')
             self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+
+        if config.get('Tardis', 'Profile'):
+            self.profiler = cProfile.Profile()
+        else:
+            self.profiler = None
 
 def setupLogging(config):
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
@@ -718,6 +728,7 @@ def main():
 
     if config.get('Tardis', 'Profile'):
         profiler = cProfile.Profile()
+
     try:
         if config.getboolean('Tardis', 'Daemon'):
             pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
