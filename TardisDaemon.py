@@ -125,7 +125,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug(u'Looking for similar file: {} ({})'.format(name, inode));
                     old = self.db.getFileInfoBySimilar(f)
                     if old:
-                        if old["name"] == f["name"] and old["parent"] == parent:
+                        if old["name"] == f["name"].encode('utf-8') and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
                             if ("checksum") in old and not (old["checksum"] is None):
                                 self.db.setChecksum(inode, old['checksum'])
@@ -648,7 +648,7 @@ def setupLogging(config):
         elif config.getboolean('Tardis', 'Daemon'):
             handler = logging.handlers.SysLogHandler()
         else:
-            handler = logging.handlers.StreamHandler()
+            handler = logging.StreamHandler()
 
         handler.setFormatter(format)
         logger.addHandler(handler)

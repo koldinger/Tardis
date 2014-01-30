@@ -100,6 +100,7 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
+
 def sendData(file, checksum=False):
     """ Send a block of data """
     num = 0
@@ -156,7 +157,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                print "File: [C]: %s" % name
+                print "File: [C]: {}".format(shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     for i in response["content"]:
@@ -167,7 +168,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: %s %d" % (name, size)
+                print "File: [N]: {} {}".format(shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -250,9 +251,9 @@ def handleAckDir(message, batched=False):
 
     if verbosity > 1:
         if batched:
-            print "Processing ACKDIR [Batched]: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), message['path'])
+            print "Processing ACKDIR [Batched]: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
         else:
-            print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), message['path'])
+            print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
 
     for i in done:
         if i in inodeDB:
@@ -266,7 +267,7 @@ def handleAckDir(message, batched=False):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: %s %d" % (name, size)
+                print "File: [N]: {} {}".format(shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -274,7 +275,7 @@ def handleAckDir(message, batched=False):
     for i in delta:
         if verbosity > 1:
             (x, name) = inodeDB[i]
-            print "File: [D]: %s" % (name)
+            print "File: [D]: {}".format(shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -396,7 +397,7 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity:
-                print "ResyncDir: {}".format(path),
+                print "ResyncDir: {}".format(shortPath(path)),
             if len(files) < args.batchdirs:
                 if verbosity:
                     print "[Batched]"
@@ -500,7 +501,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
     try:
         if verbosity:
-            print "Dir: {}".format(str(dir)),
+            print "Dir: {}".format(shortPath(dir)),
             if verbosity > 2 and len(excludes) > 0:
                 print "\n   Excludes: {}".format(str(excludes))
 
@@ -519,8 +520,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            if verbosity > 2:
-                print "---- Cloning dir {} ----".format(dir)
+            if verbosity:
+                print " [Clone]"
+
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
             for f in filenames:
@@ -528,8 +530,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
             cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
-            if verbosity:
-                print " [Clone]"
             flushBatchDirs()
             if len(cloneDirs) >= args.clones:
                 flushClones()
@@ -673,6 +673,18 @@ def sendDirEntry(parent, files):
     response = sendAndReceive(message)
     handleAckDir(response)
 
+def shortPath(path, width=80):
+    if path == None or len(path) <= width:
+        return path
+
+    width -= 8
+    while len(path) > width:
+        try:
+            head, path = str.split(path, os.sep, 1)
+        except:
+            break
+    return ".../" + path
+
 
 def splitDirs(x):
     root, rest = os.path.split(x)
@@ -712,8 +724,8 @@ def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     parser = argparse.ArgumentParser(description='Tardis Backup Client')
 
-    parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server')
-    parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port')
+    parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
+    parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
 
     # Create a group of mutually exclusive options for naming the backup set
@@ -730,7 +742,7 @@ def processCommandLine():
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
     parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
-    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling")
+    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')

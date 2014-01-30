@@ -117,10 +117,10 @@ def addFields(x, y):
     """ Add fields to the end of a dict """
     return dict(y.items() + x)
 
-def splitpath(path, maxdepth=20):
+def splitpath(path):
     """ Split a path into chunks, recursively """
     (head, tail) = os.path.split(path)
-    return splitpath(head, maxdepth - 1) + [ tail ] if maxdepth and head and head != path else [ head or tail ]
+    return splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
 
 # Class TardisDB
 
