@@ -188,7 +188,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            self.logger.debug(u'Processing file: %d %s', f["name"], inode)
+            self.logger.debug('Processing file: %s %d', f["name"], inode)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)

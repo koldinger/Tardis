@@ -233,7 +233,8 @@ class TardisDB(object):
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Name = :name AND Parent = :parent AND BackupSet = :backup",
+                  "WHERE Name = :name AND Parent = :parent AND"
+                  ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": parent, "backup": backupset})
         return makeDict(c, c.fetchone())
 
@@ -285,7 +286,8 @@ class TardisDB(object):
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND BackupSet = :backup",
+                  "WHERE Inode = :inode AND "
+                  ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "backup": backupset})
         return makeDict(c, c.fetchone())
 
@@ -298,7 +300,8 @@ class TardisDB(object):
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND BackupSet = :backup",
+                  "WHERE Inode = :inode AND "
+                  ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "backup": self.currBackupSet})
         return makeDict(c, c.fetchone())
 
@@ -315,7 +318,9 @@ class TardisDB(object):
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND BackupSet >= :backup AND Files.ChecksumId IS NOT NULL",
+                  "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND "
+                  ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
+                  "Files.ChecksumId IS NOT NULL",
                   temp)
         return makeDict(c, c.fetchone())
 
@@ -326,7 +331,9 @@ class TardisDB(object):
         return self.cursor.rowcount
 
     def setChecksum(self, inode, checksum):
-        self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) WHERE Inode = :inode AND BackupSet = :backup",
+        self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
+                            "WHERE Inode = :inode AND "
+                            ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
         return self.cursor.rowcount
 
@@ -335,7 +342,8 @@ class TardisDB(object):
         c = self.cursor.execute("SELECT "
                                 "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
-                                "WHERE Files.INode = :inode AND Files.BackupSet = :backupset",
+                                "WHERE Files.INode = :inode AND "
+                                ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 { "backupset" : backupset, "inode" : inode })
         row = c.fetchone()
         if row:
@@ -350,7 +358,8 @@ class TardisDB(object):
                               "FROM Files "
                               "JOIN Names ON Files.NameID = Names.NameId "
                               "JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
-                              "WHERE Names.Name = :name AND Files.Parent = :parent AND Files.BackupSet = :backup",
+                              "WHERE Names.Name = :name AND Files.Parent = :parent AND "
+                              ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                               {"name": name, "parent": parent, "backup": backupset})
         row = c.fetchone()
         if row:
@@ -372,33 +381,55 @@ class TardisDB(object):
         temp = addFields({ "backup": self.currBackupSet, "parent": parent }, fileInfo)
         self.setNameId([temp])
         self.conn.execute("INSERT INTO Files "
-                          "(NameId, BackupSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                          "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
                           "VALUES  "
-                          "(:nameid, :backup, :inode, :parent, :dir, :link, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                          "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :size, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                   temp)
+
+    def insertFiles(self, files, parent):
+        self.logger.debug("Inserting files: %d", len(files))
+        fields = {"backup": self.currBackupSet, "parent": parent}.items()
+        f = functools.partial(addFields, fields)
+        self.setNameID(files)
+        
+        self.conn.executemany("INSERT INTO Files "
+                              "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
+                              "VALUES "
+                              "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                              map(f, files))
 
     def cloneDir(self, parent, new=True, old=False):
         newBSet = self.bset(new)
         oldBSet = self.bset(old)
         self.logger.debug("Cloning directory inode %d from %d to %d", parent, oldBSet, newBSet)
-        self.cursor.execute("INSERT INTO Files "
-                            "(NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, BackupSet) "
-                            "SELECT NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, :new "
-                            "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+        self.cursor.execute("UPDATE FILES "
+                            "SET LastSet = :new "
+                            "WHERE AND Parent = :parent AND "
+                            ":old BETWEEN FirstSet AND LastSet",
                             {"new": newBSet, "old": oldBSet, "parent": parent})
+        #self.cursor.execute("INSERT INTO Files "
+        #                    "(NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, BackupSet) "
+        #                    "SELECT NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, :new "
+        #                    "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+        #                    {"new": newBSet, "old": oldBSet, "parent": parent})
         return self.cursor.rowcount
-
 
     def cloneDirs(self, parents, new=True, old=False):
         newBSet = self.bset(new)
         oldBSet = self.bset(old)
         self.logger.debug("Cloning directory inodes %s from %d to %d", parents, oldBSet, newBSet)
 
-        self.cursor.executemany("INSERT INTO Files "
-                                "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                                "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
-                                "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+        self.cursor.executemany("UPDATE Files "
+                                "SET LastSet = :new "
+                                "WHERE "
+                                "Parent = :parent AND "
+                                ":old BETWEEN FirstSet AND LastSet",
                                 map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
+        #self.cursor.executemany("INSERT INTO Files "
+        #                        "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+        #                        "SELECT NameId, :new, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks "
+        #                        "FROM Files WHERE BackupSet = :old AND Parent = :parent",
+        #                        map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
         return self.cursor.rowcount
 
     def setNameID(self, files):
@@ -411,18 +442,6 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertFiles(self, files, parent):
-        self.logger.debug("Inserting files: %d", len(files))
-        self.conn.execute("BEGIN")
-        fields = {"backup": self.currBackupSet, "parent": parent}.items()
-        f = functools.partial(addFields, fields)
-        self.setNameID(files)
-        
-        self.conn.executemany("INSERT INTO Files "
-                              "(NameId, BackupSet, Inode, Parent, Dir, Link, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
-                              "VALUES "
-                              "(:nameid, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
-                              map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
         self.logger.debug("Inserting checksum file: %s", checksum)
@@ -461,7 +480,8 @@ class TardisDB(object):
                                "FROM Files "
                                "JOIN Names ON Files.NameId = Names.NameId "
                                "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                               "WHERE Parent = :dirnode AND Files.BackupSet = :backup",
+                               "WHERE Parent = :dirnode AND "
+                               ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                {"dirnode": dirNode, "backup": backupset})
         for row in c.fetchall():
             yield makeDict(c, row)
@@ -512,16 +532,18 @@ class TardisDB(object):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self.bset(current)
         self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
-        # Delete files which are in backupsets below a specified priority, and are before the timestamp, and are 
-        # before the previous version of Current
-        self.cursor.execute("DELETE FROM Files WHERE Files.BackupSet IN "
-                            "(SELECT BackupSet FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset)",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
-        filesDeleted = self.cursor.rowcount
-        # Same for the row counts
+        # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
+        # Then delete the files which are 
+        # TODO: Move this to the removeOrphans phase
+        self.cursor.execute("DELETE FROM Files WHERE "
+                            "0 = (SELECT COUNT(*) FROM Backups WHERE Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet)")
+        #self.cursor.execute("DELETE FROM Files WHERE Files.BackupSet IN "
+        #                    "(SELECT BackupSet FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset)",
+        #                    {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        filesDeleted = self.cursor.rowcount
 
         return (filesDeleted, setsDeleted)
 
