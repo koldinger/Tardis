@@ -238,7 +238,7 @@ class TardisDB(object):
         return makeDict(c, c.fetchone())
 
         """ Lookup a file by a full path. """
-    """def getFileInfoByPath(self, path, current=False):
+    def getFileInfoByPath(self, path, current=False):
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self.bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
@@ -246,23 +246,16 @@ class TardisDB(object):
         info = None
 
         (dirname, name) = os.path.split(path)
-        try:
-            # Check the cache
-            parent = self.dirinodes[(backupset, dirname)]
-            return self.getFileInfoByName(name, parent, backupset)
-        except KeyError:
-            # Walk the path
-            for name in splitpath(path):
-                info = self.getFileInfoByName(name, parent, backupset)
-                if info:
-                    parent = info["inode"]
-                else:
-                    break
-            #if info:
-                #self.dirinodes[(backupset, dirname)] = parent
-            return info
-            """
+        # Walk the path
+        for name in splitpath(path):
+            info = self.getFileInfoByName(name, parent, backupset)
+            if info:
+                parent = info["inode"]
+            else:
+                break
+        return info
 
+    """
     def __getFileInfoByPath(self, path, backupset):
         try:
             (dirname, filename) = os.path.split(path)
@@ -280,10 +273,11 @@ class TardisDB(object):
     def getFileInfoByPath(self, path, current=False):
         backupset = self.bset(current)
         return self.__getFileInfoByPath(path, backupset)
+    """
 
     def getFileInfoByInode(self, inode, current=False):
         backupset = self.bset(current)
-        self.logger.debug("Looking up file by inode {} {}".format(inode, backupset))
+        self.logger.debug("Looking up file by inode %d %d", inode, backupset)
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
@@ -296,7 +290,7 @@ class TardisDB(object):
         return makeDict(c, c.fetchone())
 
     def getNewFileInfoByInode(self, inode):
-        self.logger.debug("Looking up file by inode {} {}".format(inode, self.currBackupSet))
+        self.logger.debug("Looking up file by inode %d %d", inode, self.currBackupSet)
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
@@ -311,7 +305,7 @@ class TardisDB(object):
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         backupset = self.bset(current)
-        self.logger.debug("Looking up file for similar info")
+        self.logger.debug("Looking up file for similar info: %s", fileInfo)
         c = self.cursor
         temp = fileInfo.copy()
         temp["backup"] = backupset
@@ -351,7 +345,7 @@ class TardisDB(object):
 
     def getChecksumByName(self, name, parent, current=False):
         backupset = self.bset(current)
-        self.logger.debug("Looking up checksum for file {} {} {}".format(name, parent, backupset))
+        self.logger.debug("Looking up checksum for file %s %d %d", name, parent, backupset)
         c = self.conn.execute("SELECT CheckSums.CheckSum AS checksum "
                               "FROM Files "
                               "JOIN Names ON Files.NameID = Names.NameId "
@@ -366,7 +360,7 @@ class TardisDB(object):
 
     def getChecksumByPath(self, name, current=False):
         backupset = self.bset(current)
-        self.logger.debug("Looking up checksum for path {} {}".format(name, backupset))
+        self.logger.debug("Looking up checksum for path %s %d", name, backupset)
         f = self.getFileInfoByPath(name, current)
         if f:
             return self.getChecksumByName(f["name"], f["parent"], current)
@@ -374,7 +368,7 @@ class TardisDB(object):
             return None
 
     def insertFile(self, fileInfo, parent):
-        self.logger.debug("Inserting file: {}".format(str(fileInfo)))
+        self.logger.debug("Inserting file: %s", fileInfo)
         temp = addFields({ "backup": self.currBackupSet, "parent": parent }, fileInfo)
         self.setNameId([temp])
         self.conn.execute("INSERT INTO Files "
@@ -386,7 +380,7 @@ class TardisDB(object):
     def cloneDir(self, parent, new=True, old=False):
         newBSet = self.bset(new)
         oldBSet = self.bset(old)
-        self.logger.debug("Cloning directory inode {} from {} to {}".format(parent, oldBSet, newBSet))
+        self.logger.debug("Cloning directory inode %d from %d to %d", parent, oldBSet, newBSet)
         self.cursor.execute("INSERT INTO Files "
                             "(NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, BackupSet) "
                             "SELECT NameId, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks, :new "
@@ -398,7 +392,7 @@ class TardisDB(object):
     def cloneDirs(self, parents, new=True, old=False):
         newBSet = self.bset(new)
         oldBSet = self.bset(old)
-        self.logger.debug("Cloning directory inodes {} from {} to {}".format(parents, oldBSet, newBSet))
+        self.logger.debug("Cloning directory inodes %s from %d to %d", parents, oldBSet, newBSet)
 
         self.cursor.executemany("INSERT INTO Files "
                                 "(NameId, BackupSet, Inode, Parent, ChecksumID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
@@ -418,7 +412,7 @@ class TardisDB(object):
                 f["nameid"] = self.cursor.lastrowid
 
     def insertFiles(self, files, parent):
-        self.logger.debug("Inserting files: {}".format(len(files)))
+        self.logger.debug("Inserting files: %d", len(files))
         self.conn.execute("BEGIN")
         fields = {"backup": self.currBackupSet, "parent": parent}.items()
         f = functools.partial(addFields, fields)
@@ -431,7 +425,7 @@ class TardisDB(object):
                               map(f, files))
 
     def insertChecksumFile(self, checksum, size=0, basis=None):
-        self.logger.debug("Inserting checksum file: {}".format(checksum))
+        self.logger.debug("Inserting checksum file: %s", checksum)
 
         self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
                              "VALUES                (:checksum, :size, :basis)",
@@ -439,7 +433,7 @@ class TardisDB(object):
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
-        self.logger.debug("Getting checksum info on: {}".format(checksum))
+        self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.cursor
         c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
         row = c.fetchone()
@@ -460,7 +454,7 @@ class TardisDB(object):
 
     def readDirectory(self, dirNode, current=False):
         backupset = self.bset(current)
-        self.logger.debug("Reading directory values for {} {}".format(dirNode, backupset))
+        self.logger.debug("Reading directory values for %d %d", dirNode, backupset)
         c = self.conn.execute("SELECT "
                                "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Checksums.Size AS size, "
                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
@@ -474,7 +468,7 @@ class TardisDB(object):
 
     def getPathForFileByName(self, name, parent, current=False):
         backupSet = self.bset(current)
-        self.logger.debug("Extracting path for file {} {} {}".format(name, parent, backupSet))
+        self.logger.debug("Extracting path for file %s %d %d", name, parent, backupSet)
         return None
 
     def listBackupSets(self):
@@ -538,8 +532,11 @@ class TardisDB(object):
         for row in c.fetchall():
             yield row[0]
 
+    def compact(self):
+        c = self.conn.execute("VACUUM")
+
     def deleteChecksum(self, checksum):
-        self.logger.debug("Deleting checksum: {}".format(checksum))
+        self.logger.debug("Deleting checksum: %s", checksum)
         c = self.cursor.execute("DELETE FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})
         return self.cursor.rowcount
 
