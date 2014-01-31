@@ -404,7 +404,7 @@ class TardisDB(object):
         self.logger.debug("Cloning directory inode %d from %d to %d", parent, oldBSet, newBSet)
         self.cursor.execute("UPDATE FILES "
                             "SET LastSet = :new "
-                            "WHERE AND Parent = :parent AND "
+                            "WHERE Parent = :parent AND "
                             ":old BETWEEN FirstSet AND LastSet",
                             {"new": newBSet, "old": oldBSet, "parent": parent})
         #self.cursor.execute("INSERT INTO Files "
