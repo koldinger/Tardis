@@ -438,14 +438,14 @@ def sendBatchDirs():
         'batch': batchDirs
     }
     if verbosity > 1:
-        print "Starting batch.  {} commands".format(len(batchDirs))
+        print "BATCH Starting. {} commands".format(len(batchDirs))
 
     response = sendAndReceive(message)
     for ack in response['responses']:
         handleAckDir(ack)
 
     if verbosity > 1:
-        print "Ending batch."
+        print "BATCH Ending."
 
     del batchDirs[:]
 

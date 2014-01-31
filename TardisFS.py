@@ -81,13 +81,18 @@ class TardisFS(fuse.Fuse):
 
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
-        self.path="."
+        self.path=None
+        self.repoint = False
         self.log = logging.getLogger("TardisFS")
 
-        self.parser.add_option(mountopt="path", help="Hi mom")
-        self.parse(values=self, errex=1)
+        self.parser.add_option(mountopt="path", help="Path to the directory containing the database for this filesystem")
+        self.parser.add_option(mountopt="repoint", help="Make absolute links relative to backupset")
+        res = self.parse(values=self, errex=1)
 
+        self.mountpoint = res.mountpoint
         self.log.info("Dir: %s", self.path)
+        self.log.info("Repoint Links: %s", self.repoint)
+        self.log.info("MountPoint: %s", self.mountpoint)
 
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, "tardis.db")
@@ -117,6 +122,7 @@ class TardisFS(fuse.Fuse):
             bsInfo = self.getBackupSetInfo(parts[0])
             if len(parts) == 2:
                 fInfo = self.tardis.getFileInfoByPath(parts[1], bsInfo['backupset'])
+                print "*******: fInfo", parts[1], "**", fInfo
                 if bsInfo and fInfo and fInfo['dir']:
                     self.dirInfo[path] = (bsInfo, fInfo)
             else:
@@ -347,6 +353,9 @@ class TardisFS(fuse.Fuse):
                 f = self.regenerator.recoverFile(parts[1], b['backupset'])
                 link = f.readline()
                 f.close()
+                if self.repoint:
+                    if os.path.isabs(link):
+                        link = os.path.join(self.mountpoint, parts[0], os.path.relpath(link, "/"))
                 return link
         return -errno.ENOENT
 

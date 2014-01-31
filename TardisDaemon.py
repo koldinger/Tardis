@@ -82,6 +82,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     tempdir = None
     cache   = None
     db      = None
+    purged  = False
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -94,7 +95,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
-                self.logger.debug(u'Matching against old version for file {} ({})'.format(name, inode))
+                self.logger.debug(u'Matching against old version for file %s (%d)', name, inode)
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
@@ -111,7 +112,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled
-                    self.logger.debug('Looking for file with same inode {} in backupset'.format(inode))
+                    self.logger.debug('Looking for file with same inode %d in backupset', inode)
                     checksum = self.db.getChecksumByInode(inode, True)
                     if checksum:
                         self.db.setChecksum(inode, checksum)
@@ -120,7 +121,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         retVal = CONTENT
                 else:
                     #Check to see if it already exists
-                    self.logger.debug(u'Looking for similar file: {} ({})'.format(name, inode));
+                    self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
                     if old:
                         if old["name"] == f["name"].encode('utf-8') and old["parent"] == parent:
@@ -187,7 +188,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            self.logger.debug(u'Processing file: {} {}'.format(f["name"], str(inode)))
+            self.logger.debug(u'Processing file: %d %s', f["name"], inode)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
@@ -213,9 +214,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
-        self.logger.debug("Processing signature request message: {}".format(str(message)))
+        #self.logger.debug("Processing signature request message: %s"format(str(message)))
         inode = message["inode"]
 
+        ### TODO: Remove this function.  Clean up.
         info = self.db.getNewFileInfoByInode(inode)
         chksum = self.db.getChecksumByName(info["name"], info["parent"])      ### Assumption: Current parent is same as old
 
@@ -258,7 +260,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processDelta(self, message):
         """ Receive a delta message. """
-        self.logger.debug("Processing delta message: {}".format(str(message)))
+        self.logger.debug("Processing delta message: %s", message)
         output = None
         temp = None
         digest = None
@@ -269,7 +271,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         savefull = self.server.savefull
         if self.cache.exists(checksum):
-            self.logger.debug("Checksum file {} already exists".format(checksum))
+            self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
             chainLength = self.db.getChainLength(basis)
@@ -316,7 +318,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processSignature(self, message):
         """ Receive a signature message. """
-        self.logger.debug("Processing signature message: {}".format(str(message)))
+        self.logger.debug("Processing signature message: %s", message)
         output = None
         temp = None
         checksum = message["checksum"]
@@ -326,7 +328,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # If a signature is specified, receive it as well.
         sigfile = checksum + ".sig"
         if self.cache.exists(sigfile):
-            self.logger.debug("Signature file {} already exists".format(sigfile))
+            self.logger.debug("Signature file %s already exists", sigfile)
             # Abort read
         else:
             output = self.cache.open(sigfile, "wb")
@@ -343,7 +345,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processChecksum(self, message):
         """ Process a list of checksums """
-        self.logger.debug("Processing checksum message: {}".format(str(message)))
+        self.logger.debug("Processing checksum message: %s", message)
         done = []
         content = []
         for f in message["files"]:
@@ -364,20 +366,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
-        self.logger.debug("Processing content message: {}".format(str(message)))
+        self.logger.debug("Processing content message: %s", message)
         temp = None
         digest = None
         checksum = None
         if "checksum" in message:
             checksum = message["checksum"]
             if self.cache.exists(checksum):
-                self.logger.debug("Checksum file {} already exists".format(checksum))
+                self.logger.debug("Checksum file %s already exists", checksum)
                 # Abort read
             else:
                 output = self.cache.open(checksum, "w")
         else:
             temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
-            self.logger.debug("Sending output to temporary file {}".format(temp.name))
+            self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
             #digest = hashlib.md5()
 
@@ -397,11 +399,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if temp:
             if self.cache.exists(checksum):
-                self.logger.debug("Checksum file {} already exists".format(checksum))
+                self.logger.debug("Checksum file %s already exists", checksum)
                 os.remove(temp.name)
             else:
                 self.cache.mkdir(checksum)
-                self.logger.debug("Renaming {} to {}".format(temp.name, self.cache.path(checksum)))
+                self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                 os.rename(temp.name, self.cache.path(checksum))
                 self.db.insertChecksumFile(checksum, bytesReceived)
 
@@ -420,7 +422,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Purge the files
         (files, sets) = self.db.purgeFiles(message['priority'], prevTime)
-        self.logger.info("Purged {} files in {} backup sets".format(files, sets))
+        self.logger.info("Purged %d files in %d backup sets", files, sets)
+        if files:
+            self.purged = True
         return {"message" : "PURGEOK"}
 
     def checksumDir(self, dirNode):
@@ -445,7 +449,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             inode = d['inode']
             (numfiles, checksum) = self.checksumDir(inode)
             if numfiles != d['numfiles'] or checksum != d['cksum']:
-                self.logger.debug("No match on clone.  Inode: {} Rows: {} {} Checksums: {} {}".format(inode, numfiles, d['numfiles'], checksum, d['cksum']))
+                self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, numfiles, d['numfiles'], checksum, d['cksum'])
                 content.append(d['inode'])
             else:
                 rows = self.db.cloneDir(d['inode'])
@@ -519,14 +523,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # Clean out the temp dir
                 shutil.rmtree(self.tempdir)
         except OSError as error:
-            self.logger.warning("Unable to delete temporary directory: {}: {}".format(self.tempdir, error.strerror))
+            self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
     def removeOrphans(self):
         # Now remove any leftover orphans
         if self.db:
             # Get a list of orphan'd files
             orphans = self.db.listOrphanChecksums()
-            self.logger.debug("Attempting to remove")
+            self.logger.debug("Attempting to remove orphans")
             size = 0
             count = 0
             for c in orphans:
@@ -538,12 +542,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         size += s.st_size
                     self.cache.remove(c)
                 except OSError:
-                    self.logger.warning("No checksum file for checksum {}".format(c))
+                    self.logger.warning("No checksum file for checksum %s", c)
                 except:
                     e = sys.exc_info()[0]
                     self.logger.exception(e)
                 self.db.deleteChecksum(c)
-            self.logger.info("Removed {} orphans, {} bytes".format(count, size))
+            self.logger.info("Removed %d orphans, %d bytes", count, size)
+            if count:
+                self.purged = True
 
 
     def handle(self):
@@ -595,7 +601,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.completeBackup()
         except:
             e = sys.exc_info()[0]
-            self.logger.error("Caught exception: {}".format(e))
+            self.logger.error("Caught exception: %s", e)
             self.logger.exception(e)
         finally:
             self.request.close()
@@ -613,6 +619,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         def finish(self):
             self.logger.info("Removing orphans")
             self.removeOrphans()
+            if self.purged:
+                self.db.compact()
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
