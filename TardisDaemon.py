@@ -91,11 +91,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
-            name = f["name"]
+            name = f["name"].encode('utf-8')
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
-                self.logger.debug(u'Matching against old version for file %s (%d)', name, inode)
+                self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
@@ -124,7 +124,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
                     if old:
-                        if old["name"] == f["name"].encode('utf-8') and old["parent"] == parent:
+                        if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
                             if ("checksum") in old and not (old["checksum"] is None):
                                 self.db.setChecksum(inode, old['checksum'])
@@ -188,7 +188,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            self.logger.debug(u'Processing file: %d %s', f["name"], inode)
+            self.logger.debug(u'Processing file: %s %d', f["name"], inode)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
