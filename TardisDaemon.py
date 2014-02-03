@@ -91,11 +91,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
-            name = f["name"]
+            name = f["name"].encode('utf-8')
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
-                self.logger.debug(u'Matching against old version for file %s (%d)', name, inode)
+                self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
@@ -124,7 +124,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
                     if old:
-                        if old["name"] == f["name"].encode('utf-8') and old["parent"] == parent:
+                        if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
                             if ("checksum") in old and not (old["checksum"] is None):
                                 self.db.setChecksum(inode, old['checksum'])
@@ -188,7 +188,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            self.logger.debug(u'Processing file: %d %s', f["name"], inode)
+            self.logger.debug(u'Processing file: %s %d', f["name"], inode)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
@@ -210,7 +210,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "delta"     : list(delta)
         }
 
-        return response
+        return (response, True)
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
@@ -249,14 +249,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "checksum": chksum,
                 "size": len(sig),
                 "signature": self.messenger.encode(sig) }
-            return response
+            return (response, False)
         else:
             response = {
                 "message": "SIG",
                 "inode": inode,
                 "status": "FAIL"
             }
-            return response
+            return (response, False)
 
     def processDelta(self, message):
         """ Receive a delta message. """
@@ -314,7 +314,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
         self.db.setChecksum(inode, checksum)
-        return None
+        flush = True if size > 1000000 else False;
+        return (None, flush)
 
     def processSignature(self, message):
         """ Receive a signature message. """
@@ -341,7 +342,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         output.close()
 
         self.db.setChecksum(inode, checksum)
-        return {"message" : "OK"}
+        return ({"message" : "OK"}, False)
 
     def processChecksum(self, message):
         """ Process a list of checksums """
@@ -362,7 +363,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "done"   : done,
             "content": content
             }
-        return message
+        return (message, False)
 
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
@@ -411,7 +412,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.db.setChecksum(message["inode"], checksum)
 
         #return {"message" : "OK", "inode": message["inode"]}
-        return None
+        flush = False
+        if bytesReceived > 1000000:
+            flush = True;
+        return (None, flush)
 
     def processPurge(self, message):
         self.logger.debug("Processing purge message: {}".format(str(message)))
@@ -425,7 +429,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.info("Purged %d files in %d backup sets", files, sets)
         if files:
             self.purged = True
-        return {"message" : "PURGEOK"}
+        return ({"message" : "PURGEOK"}, True)
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""
@@ -454,19 +458,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 rows = self.db.cloneDir(d['inode'])
                 done.append(d['inode'])
-        return {"message" : "ACKCLN", "done" : done, 'content' : content }
+        return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
     def processBatch(self, message):
         batch = message['batch']
         responses = []
         for mess in batch:
-            responses.append(self.processMessage(mess))
+            (response, flush) = self.processMessage(mess)
+            responses.append(response)
 
         response = { 
             'message': 'ACKBTCH',
             'responses': responses
         }
-        return response
+        return (response, True)
 
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
@@ -586,17 +591,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             done = False;
 
             while not done:
+                flush = False
                 message = self.messenger.recvMessage()
                 if printMessages:
                     self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
                 if message["message"] == "BYE":
                     done = True
                 else:
-                    response = self.processMessage(message)
+                    (response, flush) = self.processMessage(message)
                     if response:
                         if printMessages:
                             self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(response)))
                         self.messenger.sendMessage(response)
+                if flush:
+                    self.db.commit()
 
             self.db.completeBackup()
         except:
@@ -634,6 +642,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.savefull   = config.getboolean('Tardis', 'SaveFull')
         self.maxChain   = config.getint('Tardis', 'MaxDeltaChain')
         self.deltaPercent  = config.getint('Tardis', 'MaxChangePercent')
+        self.dbname     = config.get('Tardis', 'DBName')
 
         self.ssl        = config.getboolean('Tardis', 'SSL')
         if self.ssl:
@@ -700,6 +709,7 @@ def main():
 
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
     parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
+    parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
     parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
@@ -720,6 +730,7 @@ def main():
         'Port'      : '9999',
         'BaseDir'   : './cache',
         'SaveFull'  : str(True),
+        'DBName'    : args.dbname,
         'LogCfg'    : args.logcfg,
         'Profile'   : args.profile,
         'LogFile'   : args.logfile,

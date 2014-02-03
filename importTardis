@@ -4,7 +4,7 @@ for i in $@; do
 	name=`basename $i`
 	echo $i
 	echo $name
-	~kolding/Tardis/tardis --hostname linux.koldware.com --name "$name" -L 256 --chunksize 262144 --protocol bson --priority 30 -v -v --stats --ignore-ctime "$i"/* 
+	~kolding/Tardis/tardis --hostname linux.koldware.com --name "$name" --basepath none -B 64 --batchsize 256 -L 256 --chunksize 262144 --protocol bson --priority 30 -v -v --stats --ignore-ctime "$i"/* 
 	timestamp=`stat -c "%Y" "$i"`
 	sleep 15
 	echo "UPDATE Backups SET StartTime = $timestamp, EndTime = $timestamp, ClientTime = $timestamp WHERE Name='$name';" | sqlite3 /srv/test/Tardis/linux.koldware.com/tardis.db
