@@ -413,7 +413,6 @@ class TardisDB(object):
 
     def insertFiles(self, files, parent):
         self.logger.debug("Inserting files: %d", len(files))
-        self.conn.execute("BEGIN")
         fields = {"backup": self.currBackupSet, "parent": parent}.items()
         f = functools.partial(addFields, fields)
         self.setNameID(files)

@@ -249,7 +249,7 @@ def handleAckDir(message):
     delta   = message["delta"]
     cksum   = message["cksum"]
 
-    if verbosity > 1:
+    if verbosity > 2:
         print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
 
     for i in done:
@@ -281,7 +281,7 @@ def handleAckDir(message):
     if len(cksum) > 0:
         processChecksums(cksum)
 
-    if verbosity > 2:
+    if verbosity > 3:
         print "----- AckDir complete"
 
     return
@@ -386,7 +386,7 @@ def checkClonable(dir, stat, files, subdirs):
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
         raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
-    if verbosity > 1:
+    if verbosity > 2:
         print "Processing ACKCLN: Up-to-date: %d New Content: %d" % (len(message['done']), len(message['content']))
 
     # Process the directories that have changed
@@ -437,14 +437,14 @@ def sendBatchDirs():
         'message' : 'BATCH',
         'batch': batchDirs
     }
-    if verbosity > 1:
+    if verbosity > 2:
         print "BATCH Starting. {} commands".format(len(batchDirs))
 
     response = sendAndReceive(message)
     for ack in response['responses']:
         handleAckDir(ack)
 
-    if verbosity > 1:
+    if verbosity > 2:
         print "BATCH Ending."
 
     del batchDirs[:]
@@ -473,12 +473,12 @@ def sendDirChunks(path, inode, files):
 
     chunkNum = 0
     for x in range(0, len(files), args.dirslice):
-        if verbosity > 2:
+        if verbosity > 3:
             print "---- Generating chunk {} ----".format(chunkNum)
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
         message["files"] = chunk
-        if verbosity > 2:
+        if verbosity > 3:
             print "---- Sending chunk ----"
         response = sendAndReceive(message)
         handleAckDir(response)
@@ -841,8 +841,8 @@ def main():
         recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone or batch requests still lying around, send them
-    flushBatchDirs()
     flushClones()
+    flushBatchDirs()
 
     if args.purge:
         if args.purgetime:
