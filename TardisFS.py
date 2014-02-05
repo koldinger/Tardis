@@ -332,7 +332,7 @@ class TardisFS(fuse.Fuse):
             if f:
                 try:
                     f.seek(0)
-                except IOError:
+                except AttributeError, IOError:
                     self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)

@@ -86,30 +86,54 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
+        name = f["name"]
+        inode = f["inode"]
+        if name in dirhash:
+            old = dirhash[name]
+        else:
+            old = None
+
         if f["dir"] == 1:
+            if old:
+                if (old["inode"] == inode) and (old["mtime"] == f["mtime"]):
+                    self.db.extendFile(parent, f['name'])
+                else:
+                    self.db.insertFile(f, parent)
+            else:
+                self.db.insertFile(f, parent)
             retVal = DONE
         else:
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
+<<<<<<< HEAD
             name = f["name"].encode('utf-8')
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
                 self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
+=======
+            if old:
+                self.logger.debug(u'Matching against old version for file %s (%d)', name, inode)
+>>>>>>> ranges_branch
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
                     if ("checksum") in old and not (old["checksum"] is None):
-                        self.db.setChecksum(inode, old['checksum'])
+                        #self.db.setChecksum(inode, old['checksum'])
+                        self.db.extendFile(parent, f['name'])
                         retVal = DONE
                     else:
+                        self.db.insertFile(f, parent)
                         retVal = CONTENT
                 elif f["size"] < 4096 or old["size"] is None:
                     # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
+                    self.db.insertFile(f, parent)
                     retVal = CONTENT
                 else:
+                    self.db.insertFile(f, parent)
                     retVal = DELTA
             else:
+                self.db.insertFile(f, parent)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled
                     self.logger.debug('Looking for file with same inode %d in backupset', inode)
@@ -123,6 +147,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #Check to see if it already exists
                     self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
+                    if old is None:
+                        old = self.db.getFileFromPartialBackup(f)
+
                     if old:
                         if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
@@ -183,9 +210,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.lastDirHash = dirhash
             self.lastDirNode = parentInode
 
-        # Insert the current file info
-        self.db.insertFiles(files, parentInode)
-
         for f in files:
             inode = f['inode']
             self.logger.debug(u'Processing file: %s %d', f["name"], inode)
@@ -196,8 +220,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
             queues[res].add(inode)
-
-        # self.db.commit()
 
         response = {
             "message"   : "ACKDIR",

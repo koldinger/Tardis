@@ -2,3 +2,7 @@
 cache
 *.log
 *.out
+.tardis-excludes
+test.cfg
+test
+mnt
