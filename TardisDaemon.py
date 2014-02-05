@@ -105,16 +105,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
-<<<<<<< HEAD
             name = f["name"].encode('utf-8')
             inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
                 self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
-=======
-            if old:
-                self.logger.debug(u'Matching against old version for file %s (%d)', name, inode)
->>>>>>> ranges_branch
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
@@ -792,7 +787,7 @@ def main():
         'LogCfg'        : args.logcfg,
         'Profile'       : args.profile,
         'LogFile'       : args.logfile,
-        'AllowCopies'   : args.copies,
+        'AllowCopies'   : str(args.copies),
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         'Daemon'        : str(args.daemon),
