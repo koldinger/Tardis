@@ -400,13 +400,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if temp:
             if self.cache.exists(checksum):
-                self.logger.debug("Checksum file %s already exists", checksum)
+                self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
                 os.remove(temp.name)
             else:
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                 os.rename(temp.name, self.cache.path(checksum))
                 self.db.insertChecksumFile(checksum, bytesReceived)
+        else:
+            self.db.insertChecksumFile(checksum, size, basis=basis)
 
         self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
         self.db.setChecksum(message["inode"], checksum)
