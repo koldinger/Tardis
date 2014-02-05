@@ -42,6 +42,7 @@ import traceback
 import subprocess
 import hashlib
 import tempfile
+import shutil
 import cStringIO
 from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
@@ -72,6 +73,8 @@ ignorectime         = False
 conn                = None
 args                = None
 conn                = None
+targetDir           = None
+targetStat          = None
 
 cloneDirs           = []
 cloneContents       = {}
@@ -214,8 +217,48 @@ def processDelta(inode):
         else:
             sendContent(inode)
 
+def copyContent(inode):
+    (fileInfo, pathname) = inodeDB[inode]
+    dest = tempfile.NamedTemporaryFile(delete=False, dir=targetDir)
+    mode = fileInfo['mode']
+    if S_ISDIR(mode):
+        return
+    m = hashlib.md5()
+    if S_ISLNK(mode):
+        data = os.readlink(pathname)
+        m.update(data)
+        dest.write(data)
+        size = len(data)
+    else:
+        src = open(pathname, 'rb')
+        shutil.copyfileobj(src, dest)
+        src.close()
+        # Now, read the destination and generate the checksum
+        # Use the destination file to make sure we have the same data
+        dest.seek(0)
+        size = 0
+        for chunk in iter(partial(dest.read, args.chunksize), ''):
+            m.update(chunk)
+            size += len(chunk)
+        dest.close()
+
+    checksum = m.hexdigest()
+    os.chown(dest.name, targetStat.st_uid, targetStat.st_gid)
+
+    message = {
+        "message"   : "CPY",
+        "checksum"  : checksum,
+        "inode"     : inode,
+        'file'      : dest.name,
+        'size'      : size
+        }
+    sendMessage(message)
+
 def sendContent(inode):
     if inode in inodeDB:
+        if targetDir:
+            return copyContent(inode)
+
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
@@ -675,6 +718,18 @@ def sendDirEntry(parent, files):
     response = sendAndReceive(message)
     handleAckDir(response)
 
+def requestTargetDir():
+    global targetDir, targetStat
+    message = { "message" : "TMPDIR" }
+    response = sendAndReceive(message)
+    if response['status'] == 'OK':
+        t = response['target']
+        if os.path.exists(t):
+            targetStat = os.stat(t)
+            targetDir = t
+        else:
+            print "Unable to access target directory {}.  Ignorning copy directive".format(t)
+
 def shortPath(path, width=80):
     if path == None or len(path) <= width:
         return path
@@ -761,6 +816,7 @@ def processCommandLine():
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer.  Default: %(default)s')
+    parser.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
 
     parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
     parser.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,          help='Delete below this priority (Default: Backup priority)')
@@ -773,14 +829,13 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
+
     dangergroup = parser.add_argument_group("DANGEROUS", "Dangerous options, use only if you're very knowledgable of Tardis functionality")
     dangergroup.add_argument('--ignore-ctime',      dest='ignorectime', action='store_true', default=False,     help='Ignore CTime when determining clonability')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of files to sync")
 
-
     return parser.parse_args()
-
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime
@@ -813,7 +868,6 @@ def main():
     if verbosity or args.stats:
         print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
 
-
     if args.basepath == 'common':
         rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
     elif args.basepath == 'full':
@@ -821,6 +875,8 @@ def main():
     else:
         rootdir = None
 
+    if args.copy:
+        requestTargetDir()
 
     # Now, do the actual work here.
     for x in map(os.path.realpath, args.directories):

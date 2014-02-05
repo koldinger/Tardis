@@ -441,6 +441,27 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             flush = True;
         return (None, flush)
 
+    def processCopy(self, message):
+        inode = message['inode']
+        copyfile = message['file']
+        checksum = message['checksum']
+        size     = message['size']
+
+        if self.cache.exists(checksum):
+            self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+            os.remove(copyfile)
+        else:
+            self.cache.mkdir(checksum)
+            self.logger.debug("Renaming %s to %s", copyfile, self.cache.path(checksum))
+            os.rename(copyfile, self.cache.path(checksum))
+            self.db.insertChecksumFile(checksum, size)
+        self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
+        self.db.setChecksum(inode, checksum)
+        flush = False
+        if size > 1000000:
+            flush = True;
+        return (None, flush)
+
     def processPurge(self, message):
         self.logger.debug("Processing purge message: {}".format(str(message)))
         if message['relative']:
@@ -497,6 +518,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, True)
 
+    def processTmpDir(self, message):
+        if self.server.allowCopies:
+            response = {'message': 'ACKTDIR', "status": "OK", "target": self.tempdir }
+        else:
+            response = {'message': 'ACKTDIR', "status": "FAIL" }
+        return (response, False)
+
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -515,8 +543,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processChecksum(message)
         elif messageType == "CLN":
             return self.processClone(message)
+        elif messageType == "CPY":
+            return self.processCopy(message)
         elif messageType == "BATCH":
             return self.processBatch(message)
+        elif messageType == "TMPDIR":
+            return self.processTmpDir(message)
         elif messageType == "PRG":
             return self.processPurge(message)
         else:
@@ -662,11 +694,12 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.config = config
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
 
-        self.basedir    = config.get('Tardis', 'BaseDir')
-        self.savefull   = config.getboolean('Tardis', 'SaveFull')
-        self.maxChain   = config.getint('Tardis', 'MaxDeltaChain')
-        self.deltaPercent  = config.getint('Tardis', 'MaxChangePercent')
-        self.dbname     = config.get('Tardis', 'DBName')
+        self.basedir        = config.get('Tardis', 'BaseDir')
+        self.savefull       = config.getboolean('Tardis', 'SaveFull')
+        self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
+        self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
+        self.dbname         = config.get('Tardis', 'DBName')
+        self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
 
         self.ssl        = config.getboolean('Tardis', 'SSL')
         if self.ssl:
@@ -739,6 +772,7 @@ def main():
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
     parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
 
     sslgroup = parser.add_mutually_exclusive_group()
@@ -751,19 +785,20 @@ def main():
     args = parser.parse_args()
 
     configDefaults = {
-        'Port'      : '9999',
-        'BaseDir'   : './cache',
-        'SaveFull'  : str(True),
-        'DBName'    : args.dbname,
-        'LogCfg'    : args.logcfg,
-        'Profile'   : args.profile,
-        'LogFile'   : args.logfile,
-        'Single'    : str(args.single),
-        'Verbose'   : str(args.verbose),
-        'Daemon'    : str(args.daemon),
-        'SSL'       : str(args.ssl),
-        'CertFile'  : args.certfile,
-        'KeyFile'   : args.keyfile
+        'Port'          : '9999',
+        'BaseDir'       : './cache',
+        'SaveFull'      : str(True),
+        'DBName'        : args.dbname,
+        'LogCfg'        : args.logcfg,
+        'Profile'       : args.profile,
+        'LogFile'       : args.logfile,
+        'AllowCopies'   : args.copies,
+        'Single'        : str(args.single),
+        'Verbose'       : str(args.verbose),
+        'Daemon'        : str(args.daemon),
+        'SSL'           : str(args.ssl),
+        'CertFile'      : args.certfile,
+        'KeyFile'       : args.keyfile
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
