@@ -314,8 +314,9 @@ def handleAckDir(message):
 
     for i in delta:
         if verbosity > 1:
-            (x, name) = inodeDB[i]
-            print "File: [D]: {}".format(shortPath(name))
+			if i in inodeDB:
+				(x, name) = inodeDB[i]
+				print "File: [D]: {}".format(shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
