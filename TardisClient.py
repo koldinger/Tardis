@@ -42,7 +42,6 @@ import traceback
 import subprocess
 import hashlib
 import tempfile
-import shutil
 import cStringIO
 from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
@@ -231,16 +230,15 @@ def copyContent(inode):
         size = len(data)
     else:
         src = open(pathname, 'rb')
-        shutil.copyfileobj(src, dest)
-        src.close()
         # Now, read the destination and generate the checksum
         # Use the destination file to make sure we have the same data
-        dest.seek(0)
         size = 0
-        for chunk in iter(partial(dest.read, args.chunksize), ''):
+        for chunk in iter(partial(src.read, args.chunksize), ''):
+            dest.write(chunk)
             m.update(chunk)
             size += len(chunk)
-        dest.close()
+        src.close()
+
 
     checksum = m.hexdigest()
     os.chown(dest.name, targetStat.st_uid, targetStat.st_gid)
@@ -253,6 +251,7 @@ def copyContent(inode):
         'size'      : size
         }
     sendMessage(message)
+    dest.close()
 
 def sendContent(inode):
     if inode in inodeDB:
