@@ -4,3 +4,7 @@ cache
 *.out
 *.bak
 *.db
+.tardis-excludes
+test.cfg
+test
+mnt

@@ -87,10 +87,13 @@ class JsonMessages(TextMessages):
         TextMessages.__init__(self, socket)
     
     def sendMessage(self, message):
+        self.lastMessageSent = message
         super(JsonMessages, self).sendMessage(json.dumps(message))
 
     def recvMessage(self):
-        return json.loads(super(JsonMessages, self).recvMessage())
+        message = json.loads(super(JsonMessages, self).recvMessage())
+        self.lastMessageReceived = message
+        return message
 
     def encode(self, data):
         return base64.b64encode(data)
@@ -106,10 +109,13 @@ class BsonMessages(BinMessages):
         BinMessages.__init__(self, socket)
     
     def sendMessage(self, message):
+        self.lastMessageSent = message
         super(BsonMessages, self).sendMessage(bson.dumps(message))
 
     def recvMessage(self):
-        return bson.loads(super(BsonMessages, self).recvMessage())
+        message = bson.loads(super(BsonMessages, self).recvMessage())
+        self.lastMessageReceived = message
+        return message
 
     def encode(self, data):
         return data

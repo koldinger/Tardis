@@ -313,8 +313,9 @@ def handleAckDir(message):
 
     for i in delta:
         if verbosity > 1:
-            (x, name) = inodeDB[i]
-            print "File: [D]: {}".format(shortPath(name))
+			if i in inodeDB:
+				(x, name) = inodeDB[i]
+				print "File: [D]: {}".format(shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -554,12 +555,16 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         # Check the max time on all the files.  If everything is before last timestamp, just clone
         cloneable = False
         #print "Checking cloneablity: {} Last {} ctime {} mtime {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
-        if (args.clones > 0) and (s.st_ctime < conn.lastTimestamp) and (s.st_mtime < conn.lastTimestamp) and (len(files) > 0):
-            if ignorectime:
-                maxTime = max(x["mtime"] for x in files)
+        if (args.clones > 0) and (s.st_ctime < conn.lastTimestamp) and (s.st_mtime < conn.lastTimestamp):
+            if len(files) > 0:
+                if ignorectime:
+                    maxTime = max(x["mtime"] for x in files)
+                else:
+                    maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
+                #print "Max file timestamp: {} Last Timestamp {}".format(maxTime, conn.lastTimestamp)
             else:
-                maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
-            #print "Max file timestamp: {} Last Timestamp {}".format(maxTime, conn.lastTimestamp)
+                maxTime = max(s.st_ctime, s.st_mtime)
+
             if maxTime < conn.lastTimestamp:
                 cloneable = True
 
