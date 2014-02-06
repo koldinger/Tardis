@@ -78,6 +78,7 @@ class TardisFS(fuse.Fuse):
     """
     backupsets = {}
     dirInfo = {}
+    cacheTime = None
 
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
@@ -103,18 +104,32 @@ class TardisFS(fuse.Fuse):
 
         self.log.debug('Init complete.')
 
-    def getBackupSetInfo(self, b):
+    def checkFlush(self, requestTime = None):
+        if requestTime == None:
+            requestTime = time()
+        if self.cacheTime < requestTime - 30.0:
+            print "Flushing caches"
+            self.dirInfo = {} 
+            self.backupsets = {}
+            self.cacheTime = None
+        return requestTime
+ 
+    def getBackupSetInfo(self, b, requestTime = None):
+        requestTime = self.checkFlush(requestTime)
         if b in self.backupsets:
             return self.backupsets[b]
         else:
             i = self.tardis.getBackupSetInfo(b)
             if i:
                 self.backupsets[b] = i
+                if self.cacheTime == None:
+                    self.cacheTime = requestTime
             return i
 
-    def getCachedDirInfo(self, path):
+    def getCachedDirInfo(self, path, requestTime=None):
         """ Return the inode and backupset of a directory """
         print "***** getCachedDirInfo: ", path
+        requestTime = self.checkFlush(requestTime)
         if path in self.dirInfo:
             return self.dirInfo[path]
         else:
@@ -125,6 +140,8 @@ class TardisFS(fuse.Fuse):
                 print "*******: fInfo", parts[1], "**", fInfo
                 if bsInfo and fInfo and fInfo['dir']:
                     self.dirInfo[path] = (bsInfo, fInfo)
+                    if self.cacheTime == None:
+                        self.cacheTime = requestTime
             else:
                 fInfo = {'inode': 0}
             return (bsInfo, fInfo)
@@ -315,7 +332,7 @@ class TardisFS(fuse.Fuse):
             if f:
                 try:
                     f.seek(0)
-                except IOError:
+                except AttributeError, IOError:
                     self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)

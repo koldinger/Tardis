@@ -86,7 +86,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
+        name = f["name"]
+        inode = f["inode"]
+        if name in dirhash:
+            old = dirhash[name]
+        else:
+            old = None
+
         if f["dir"] == 1:
+            if old:
+                if (old["inode"] == inode) and (old["mtime"] == f["mtime"]):
+                    self.db.extendFile(parent, f['name'])
+                else:
+                    self.db.insertFile(f, parent)
+            else:
+                self.db.insertFile(f, parent)
             retVal = DONE
         else:
             # Get the last backup information
@@ -100,16 +114,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
                 if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
                     if ("checksum") in old and not (old["checksum"] is None):
-                        self.db.setChecksum(inode, old['checksum'])
+                        #self.db.setChecksum(inode, old['checksum'])
+                        self.db.extendFile(parent, f['name'])
                         retVal = DONE
                     else:
+                        self.db.insertFile(f, parent)
                         retVal = CONTENT
                 elif f["size"] < 4096 or old["size"] is None:
                     # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
+                    self.db.insertFile(f, parent)
                     retVal = CONTENT
                 else:
+                    self.db.insertFile(f, parent)
                     retVal = DELTA
             else:
+                self.db.insertFile(f, parent)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled
                     self.logger.debug('Looking for file with same inode %d in backupset', inode)
@@ -123,6 +142,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #Check to see if it already exists
                     self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
+                    if old is None:
+                        old = self.db.getFileFromPartialBackup(f)
+
                     if old:
                         if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
@@ -183,9 +205,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.lastDirHash = dirhash
             self.lastDirNode = parentInode
 
-        # Insert the current file info
-        self.db.insertFiles(files, parentInode)
-
         for f in files:
             inode = f['inode']
             self.logger.debug(u'Processing file: %s %d', f["name"], inode)
@@ -196,8 +215,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
             queues[res].add(inode)
-
-        # self.db.commit()
 
         response = {
             "message"   : "ACKDIR",
@@ -400,13 +417,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if temp:
             if self.cache.exists(checksum):
-                self.logger.debug("Checksum file %s already exists", checksum)
+                self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
                 os.remove(temp.name)
             else:
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                 os.rename(temp.name, self.cache.path(checksum))
                 self.db.insertChecksumFile(checksum, bytesReceived)
+        else:
+            self.db.insertChecksumFile(checksum, size, basis=basis)
 
         self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
         self.db.setChecksum(message["inode"], checksum)
@@ -414,6 +433,27 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         #return {"message" : "OK", "inode": message["inode"]}
         flush = False
         if bytesReceived > 1000000:
+            flush = True;
+        return (None, flush)
+
+    def processCopy(self, message):
+        inode = message['inode']
+        copyfile = message['file']
+        checksum = message['checksum']
+        size     = message['size']
+
+        if self.cache.exists(checksum):
+            self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+            os.remove(copyfile)
+        else:
+            self.cache.mkdir(checksum)
+            self.logger.debug("Renaming %s to %s", copyfile, self.cache.path(checksum))
+            os.rename(copyfile, self.cache.path(checksum))
+            self.db.insertChecksumFile(checksum, size)
+        self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
+        self.db.setChecksum(inode, checksum)
+        flush = False
+        if size > 1000000:
             flush = True;
         return (None, flush)
 
@@ -473,6 +513,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, True)
 
+    def processTmpDir(self, message):
+        if self.server.allowCopies:
+            response = {'message': 'ACKTDIR', "status": "OK", "target": self.tempdir }
+        else:
+            response = {'message': 'ACKTDIR', "status": "FAIL" }
+        return (response, False)
+
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -491,8 +538,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processChecksum(message)
         elif messageType == "CLN":
             return self.processClone(message)
+        elif messageType == "CPY":
+            return self.processCopy(message)
         elif messageType == "BATCH":
             return self.processBatch(message)
+        elif messageType == "TMPDIR":
+            return self.processTmpDir(message)
         elif messageType == "PRG":
             return self.processPurge(message)
         else:
@@ -638,11 +689,12 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.config = config
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
 
-        self.basedir    = config.get('Tardis', 'BaseDir')
-        self.savefull   = config.getboolean('Tardis', 'SaveFull')
-        self.maxChain   = config.getint('Tardis', 'MaxDeltaChain')
-        self.deltaPercent  = config.getint('Tardis', 'MaxChangePercent')
-        self.dbname     = config.get('Tardis', 'DBName')
+        self.basedir        = config.get('Tardis', 'BaseDir')
+        self.savefull       = config.getboolean('Tardis', 'SaveFull')
+        self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
+        self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
+        self.dbname         = config.get('Tardis', 'DBName')
+        self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
 
         self.ssl        = config.getboolean('Tardis', 'SSL')
         if self.ssl:
@@ -715,6 +767,7 @@ def main():
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
     parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
 
     sslgroup = parser.add_mutually_exclusive_group()
@@ -727,19 +780,20 @@ def main():
     args = parser.parse_args()
 
     configDefaults = {
-        'Port'      : '9999',
-        'BaseDir'   : './cache',
-        'SaveFull'  : str(True),
-        'DBName'    : args.dbname,
-        'LogCfg'    : args.logcfg,
-        'Profile'   : args.profile,
-        'LogFile'   : args.logfile,
-        'Single'    : str(args.single),
-        'Verbose'   : str(args.verbose),
-        'Daemon'    : str(args.daemon),
-        'SSL'       : str(args.ssl),
-        'CertFile'  : args.certfile,
-        'KeyFile'   : args.keyfile
+        'Port'          : '9999',
+        'BaseDir'       : './cache',
+        'SaveFull'      : str(True),
+        'DBName'        : args.dbname,
+        'LogCfg'        : args.logcfg,
+        'Profile'       : args.profile,
+        'LogFile'       : args.logfile,
+        'AllowCopies'   : str(args.copies),
+        'Single'        : str(args.single),
+        'Verbose'       : str(args.verbose),
+        'Daemon'        : str(args.daemon),
+        'SSL'           : str(args.ssl),
+        'CertFile'      : args.certfile,
+        'KeyFile'       : args.keyfile
     }
 
     config = ConfigParser.ConfigParser(configDefaults)
