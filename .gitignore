@@ -2,6 +2,8 @@
 cache
 *.log
 *.out
+*.bak
+*.db
 .tardis-excludes
 test.cfg
 test
