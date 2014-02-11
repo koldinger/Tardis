@@ -33,12 +33,15 @@ from Crypto.Protocol.KDF import PBKDF2
 import Crypto.Random
 import socket
 import hashlib
+import os.path
+import base64
 
 class TardisCrypto:
     contentKey  = None
     filenameKey = None
     random      = None
     blocksize   = 16
+    altchars    = '#@'
 
     def __init__(self, password, hostname=None):
         self.random = Crypto.Random.new()
@@ -46,8 +49,9 @@ class TardisCrypto:
             hostname = socket.gethostname()
         self.salt = hashlib.sha256(hostname).digest()
         self.contentKey = PBKDF2(password, self.salt)
-        password2 = password #munge(password)
+        password2 = hashlib.sha256(password).digest()
         self.filenameKey = PBKDF2(password2, self.salt)
+        self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
 
     def getContentCipher(self, iv):
         cipher = AES.new(self.contentKey, AES.MODE_CBC, IV=iv)
@@ -55,7 +59,7 @@ class TardisCrypto:
 
     def getFilenameCipher(self):
         cipher = AES.new(self.filenameKey, AES.MODE_ECB)
-        return cypher
+        return cipher
 
     def getIV(self, ivLength=16):
         iv = self.random.read(ivLength)
@@ -68,73 +72,68 @@ class TardisCrypto:
         else:
             return x + (self.blocksize - remainder) * '\0'
 
+    def encryptPath(self, path):
+        rooted = False
+        comps = path.split('/')
+        encoder = self.getFilenameCipher()
+        if comps[0] == '':
+            rooted = True
+            comps.pop(0)
+        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self.altchars) for x in comps]
+        encpath = reduce(os.path.join, enccomps)
+        if rooted:
+            encpath = os.path.join('/', encpath)
+        return encpath
+
+    def decryptPath(self, path):
+        rooted = False
+        comps = path.split('/')
+        encoder = self.getFilenameCipher()
+        if comps[0] == '':
+            rooted = True
+            comps.pop(0)
+        enccomps = [encoder.decrypt(base64.b64decode(x, self.altchars)).rstrip('\0') for x in comps]
+        encpath = reduce(os.path.join, enccomps)
+        if rooted:
+            encpath = os.path.join('/', encpath)
+        return encpath
+
+    def encryptFilename(self, name):
+        cipher = self.getFilenameCipher()
+        return base64.b64encode(cipher.encrypt(self.pad(name)), self.altchars)
+
+    def decryptFilename(self, name):
+        cipher = self.getFilenameCipher()
+        return cipher.decrypt(base64.b64decode(name, self.altchars)).rstrip('\0')
 
 if __name__ == "__main__":
-    tc = TardisCrypto("password")
-    print tc.filenameKey
-    print tc.contentKey
+    tc = TardisCrypto("I've got a password, do you?")
+    print base64.b64encode(tc.filenameKey)
+    print base64.b64encode(tc.contentKey)
 
     iv = tc.getIV()
     cc = tc.getContentCipher(iv)
 
     fc = tc.getFilenameCipher()
 
-"""
-#!/usr/bin/env python
-from Crypto.Cipher import AES, Blowfish
-import Crypto.Random
-from Crypto.Protocol.KDF import PBKDF2
-import base64
-import os
-import hashlib
-import socket
+    print "---- Paths"
+    a = tc.encryptPath('a/b/c/d/e')
+    b = tc.encryptPath('/srv/music/MP3/CD/Classical/Bartók,_Béla_&_Kodaly,_Zoltan/Bartok_-_The_Miraculous_Mandarin_Kodály_-_Háry_Janos_Dances_Of_Galánta/02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
+    c = tc.encryptPath(os.path.join('a' * 16, 'b' * 32, 'c' * 48, 'd' * 64, 'e' * 80, 'f' * 96, 'g' * 112))
+    print "1", a
+    print "2", b
+    print "3", c
 
-# the block size for the cipher object; must be 16, 24, or 32 for AES
-BLOCK_SIZE = 32
+    print tc.decryptPath(a)
+    print tc.decryptPath(b)
+    print tc.decryptPath(c)
 
-# the character used for padding--with a block cipher such as AES, the value
-# you encrypt must be a multiple of BLOCK_SIZE in length.  This character is
-# used to ensure that your value is always a multiple of BLOCK_SIZE
-PADDING = '\0'
+    print "---- Names ----"
+    a =  tc.encryptFilename("srv")
+    print a
+    print tc.decryptFilename(a)
 
-# one-liner to sufficiently pad the text to be encrypted
-pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
-
-# one-liners to encrypt/encode and decrypt/decode a string
-# encrypt with AES, encode with base64
-#EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
-#DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
-EncodeAES = lambda c, s: c.encrypt(pad(s))
-DecodeAES = lambda c, e: c.decrypt(e).rstrip(PADDING)
-
-#secrett =  generate a random secret key
-#secret = os.urandom(BLOCK_SIZE)
-password = 'Im henry the 8th I am'
-salt = hashlib.sha256(socket.gethostname()).digest()
-secret = PBKDF2(password, salt)
-
-r = Crypto.Random.new()
-iv = r.read(8)
-print "--------------------------------------"
-print "IV: ", str.lower(base64.b16encode(iv))
-print "Key:", str.lower(base64.b16encode(secret))
-print "--------------------------------------"
-
-# create a cipher object using the random secret
-#cipher = AES.new(secret, AES.MODE_CBC, IV=iv)
-#cipher2 = AES.new(secret, AES.MODE_CBC, IV=iv)
-cipher = AES.new(secret, AES.MODE_CBC, IV=iv)
-cipher2 = AES.new(secret, AES.MODE_CBC, IV=iv)
-#cipher = AES.new(secret, AES.MODE_ECB, IV=iv)
-
-# encode a string
-encoded = EncodeAES(cipher, 'password')
-print 'Encrypted string:', base64.b64encode(encoded)
-
-#encoded = EncodeAES(cipher, 'password')
-#print 'Encrypted string:', base64.b64encode(encoded)
-
-# decode the encoded string
-decoded = DecodeAES(cipher2, encoded)
-print 'Decrypted string:', decoded, base64.b64encode(decoded)
-"""
+    print "------------------------------------------"
+    b = tc.encryptFilename('02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
+    print b
+    print tc.decryptFilename(b)
