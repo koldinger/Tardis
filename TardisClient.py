@@ -47,6 +47,8 @@ from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
 from functools import partial
 
+import TardisCrypto
+
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
@@ -79,6 +81,8 @@ cloneDirs           = []
 cloneContents       = {}
 batchDirs           = []
 
+crypt               = None
+
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
 inodeDB             = {}
@@ -102,8 +106,7 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-
-def sendData(file, checksum=False):
+def sendData(file, encrypt, checksum=False):
     """ Send a block of data """
     num = 0
     size = 0
@@ -112,7 +115,7 @@ def sendData(file, checksum=False):
     for chunk in iter(partial(file.read, args.chunksize), ''):
         if checksum:
             m.update(chunk)
-        data = conn.encode(chunk)
+        data = conn.encode(encrypt(chunk))
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
         x = len(data)
@@ -175,6 +178,16 @@ def processChecksums(inodes):
         if i in inodeDB:
             del inodeDB[i]
 
+def makeEncryptor():
+    if crypt:
+        iv = crypt.getIV()
+        encryptor = crypt.getContentCipher(iv)
+        func = lambda x: encryptor.encrypt(crypt.pad(x))
+    else:
+        iv = None
+        func = lambda x: x
+    return (func, iv)
+
 def processDelta(inode):
     """ Generate a delta and send it """
     if inode in inodeDB:
@@ -201,6 +214,8 @@ def processDelta(inode):
                     filesize += len(chunk)
             checksum = m.hexdigest()
 
+            (encrypt, iv) = makeEncryptor()
+
             message = {
                 "message": "DEL",
                 "inode": inode,
@@ -209,9 +224,11 @@ def processDelta(inode):
                 "basis": oldchksum,
                 "encoding": encoding
             }
+            if iv:
+                message["iv"] = conn.encode(iv)
 
             sendMessage(message)
-            sendData(delta)
+            sendData(delta, encrypt)
             delta.close()
         else:
             sendContent(inode)
@@ -264,24 +281,26 @@ def sendContent(inode):
             mode = fileInfo["mode"]
             if S_ISDIR(mode):
                 return
+            (encrypt, iv) = makeEncryptor()
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                # "size" : fileInfo["size"],        # No longer used.  Sent at end from calculated value, in case the file size is changing.
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
+            if iv:
+                message["iv"] = conn.encode(iv)
             sendMessage(message)
 
             if S_ISLNK(mode):
                 # It's a link.  Send the contents of readlink
                 #chunk = os.readlink(pathname)
                 x = cStringIO.StringIO(os.readlink(pathname))
-                checksum = sendData(x, checksum=True)
+                checksum = sendData(x, encrypt, checksum=True)
                 x.close()
             else:
                 with open(pathname, "rb") as f:
-                    checksum = sendData(f, checksum=True)
+                    checksum = sendData(f, encrypt, checksum=True)
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -779,7 +798,6 @@ def makePrefix(root, path):
         parent = st.st_ino
         current = dirPath
      
-
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
@@ -788,6 +806,7 @@ def processCommandLine():
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
+    parser.add_argument('--password',           dest='password', default=None,          help='Encrypt files with this password')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -842,7 +861,7 @@ def processCommandLine():
     return parser.parse_args()
 
 def main():
-    global starttime, args, config, conn, verbosity, ignorectime
+    global starttime, args, config, conn, verbosity, ignorectime, crypt
     args = processCommandLine()
 
     starttime = datetime.datetime.now()
@@ -881,6 +900,9 @@ def main():
 
     if args.copy:
         requestTargetDir()
+
+    if args.password:
+        crypt = TardisCrypto.TardisCrypto(args.password)
 
     # Now, do the actual work here.
     for x in map(os.path.realpath, args.directories):

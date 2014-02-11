@@ -47,6 +47,7 @@ import tempfile
 import TardisDB
 import CacheDir
 import Regenerate
+import TardisCrypto
 
 def dirFromList(list):
     """
@@ -84,10 +85,13 @@ class TardisFS(fuse.Fuse):
         fuse.Fuse.__init__(self, *args, **kw)
         self.path=None
         self.repoint = False
+        self.password = None
+        self.crypt = None
         self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="path", help="Path to the directory containing the database for this filesystem")
         self.parser.add_option(mountopt="repoint", help="Make absolute links relative to backupset")
+        self.parser.add_option(mountopt="password", help="Password for this archive")
         res = self.parse(values=self, errex=1)
 
         self.mountpoint = res.mountpoint
@@ -95,11 +99,15 @@ class TardisFS(fuse.Fuse):
         self.log.info("Repoint Links: %s", self.repoint)
         self.log.info("MountPoint: %s", self.mountpoint)
 
+        if res.password:
+            self.password = res.password
+            self.crypt = TardisCrypto.TardisCrypto(self.password)
+
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, "tardis.db")
         self.tardis = TardisDB.TardisDB(dbPath, backup=False)
 
-        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis)
+        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
         self.files = {}
 
         self.log.debug('Init complete.')

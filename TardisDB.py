@@ -457,18 +457,20 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, size=0, basis=None):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltaSize = None):
         self.logger.debug("Inserting checksum file: %s", checksum)
 
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis) "
-                             "VALUES                (:checksum, :size, :basis)",
-                             {"checksum": checksum, "size": size, "basis": basis})
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector) "
+                             "VALUES                (:checksum, :size, :basis, :iv)",
+                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.cursor
-        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis FROM Checksums WHERE CheckSum = :checksum", {"checksum": checksum})
+        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size "
+                  "FROM Checksums WHERE CheckSum = :checksum",
+                  {"checksum": checksum})
         row = c.fetchone()
         if row:
             return makeDict(c, row)
