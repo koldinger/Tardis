@@ -118,7 +118,7 @@ def sendData(file, encrypt, checksum=False):
         data = conn.encode(encrypt(chunk))
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
-        x = len(data)
+        x = len(chunk)
         stats["bytes"] += x
         size += x
         num += 1
@@ -200,6 +200,7 @@ def processDelta(inode):
         sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
+            newsig = None
             oldchksum = sigmessage['checksum']
 
             sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
@@ -212,24 +213,34 @@ def processDelta(inode):
                 for chunk in iter(partial(file.read, args.chunksize), ''):
                     m.update(chunk)
                     filesize += len(chunk)
-            checksum = m.hexdigest()
+                if crypt:
+                    file.seek(0)
+                    newsig = librsync.SigFile(file)
+                checksum = m.hexdigest()
 
-            (encrypt, iv) = makeEncryptor()
+                (encrypt, iv) = makeEncryptor()
 
-            message = {
-                "message": "DEL",
-                "inode": inode,
-                "size": filesize,
-                "checksum": checksum,
-                "basis": oldchksum,
-                "encoding": encoding
-            }
-            if iv:
-                message["iv"] = conn.encode(iv)
+                message = {
+                    "message": "DEL",
+                    "inode": inode,
+                    "size": filesize,
+                    "checksum": checksum,
+                    "basis": oldchksum,
+                    "encoding": encoding
+                }
+                if iv:
+                    message["iv"] = conn.encode(iv)
 
-            sendMessage(message)
-            sendData(delta, encrypt)
-            delta.close()
+                sendMessage(message)
+                sendData(delta, encrypt)
+                delta.close()
+                if newsig:
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                sendMessage(message)
+                sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -270,6 +281,9 @@ def copyContent(inode):
     sendMessage(message)
     dest.close()
 
+def sendSignature(f):
+    pass
+
 def sendContent(inode):
     if inode in inodeDB:
         if targetDir:
@@ -297,10 +311,19 @@ def sendContent(inode):
                 #chunk = os.readlink(pathname)
                 x = cStringIO.StringIO(os.readlink(pathname))
                 checksum = sendData(x, encrypt, checksum=True)
-                x.close()
             else:
-                with open(pathname, "rb") as f:
-                    checksum = sendData(f, encrypt, checksum=True)
+                x = open(pathname, "rb")
+                checksum = sendData(x, encrypt, checksum=True)
+            if crypt:
+                x.seek(0)
+                sig = librsync.SigFile(x)
+                message = {
+                    "message" : "SIG",
+                    "checksum": checksum
+                }
+                sendMessage(message)
+                sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+            x.close()
     else:
         print "Error: Unknown inode {}".format(inode)
 

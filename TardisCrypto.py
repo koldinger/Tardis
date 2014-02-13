@@ -48,9 +48,9 @@ class TardisCrypto:
         if hostname == None:
             hostname = socket.gethostname()
         self.salt = hashlib.sha256(hostname).digest()
-        self.contentKey = PBKDF2(password, self.salt)
-        password2 = hashlib.sha256(password).digest()
-        self.filenameKey = PBKDF2(password2, self.salt)
+        keys = PBKDF2(password, self.salt, dkLen=64)            # 2x256 bit keys
+        self.contentKey = keys[0:32]                            # First 256 bit key
+        self.filenameKey = keys[32:]                            # And the other one
         self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
 
     def getContentCipher(self, iv):

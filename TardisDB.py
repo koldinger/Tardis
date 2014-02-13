@@ -457,18 +457,18 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltaSize = None):
-        self.logger.debug("Inserting checksum file: %s", checksum)
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None):
+        self.logger.debug("Inserting checksum file: %s -- %d bytes", checksum, size)
 
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector) "
-                             "VALUES                (:checksum, :size, :basis, :iv)",
-                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv})
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize) "
+                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize)",
+                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.cursor
-        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size "
+        c.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size, DeltaSize AS deltasize "
                   "FROM Checksums WHERE CheckSum = :checksum",
                   {"checksum": checksum})
         row = c.fetchone()

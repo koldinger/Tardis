@@ -94,9 +94,10 @@ class Regenerator:
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False):
         self.logger.debug("Recovering file: {}".format(filename))
+        name = filename
         if self.crypt and not nameEncrypted:
-            filename = self.crypt.encryptPath(filename)
-        cksum = self.db.getChecksumByPath(filename, bset)
+            name = self.crypt.encryptPath(filename)
+        cksum = self.db.getChecksumByPath(name, bset)
         if cksum:
             return self.recoverChecksum(cksum)
         else:
