@@ -832,7 +832,10 @@ def processCommandLine():
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
-    parser.add_argument('--password',           dest='password', default=None,          help='Encrypt files with this password')
+
+    pwgroup = parser.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -927,8 +930,14 @@ def main():
     if args.copy:
         requestTargetDir()
 
-    if args.password:
-        crypt = TardisCrypto.TardisCrypto(args.password)
+    password = args.password
+    args.password = None
+    if args.passwordfile:
+        with open(args.passwordfile, "r") as f:
+            password = f.readline()
+    if password:
+        crypt = TardisCrypto.TardisCrypto(password)
+    password = None
 
     # Now, do the actual work here.
     for x in map(os.path.realpath, args.directories):
