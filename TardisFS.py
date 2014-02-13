@@ -343,7 +343,7 @@ class TardisFS(fuse.Fuse):
                     f = temp
                     temp.seek(0)
 
-                self.files["path"] = {"file": f, "opens": 1}
+                self.files[path] = {"file": f, "opens": 1}
                 return 0
         # Otherwise.....
         return -errno.ENOENT
@@ -351,7 +351,7 @@ class TardisFS(fuse.Fuse):
 
     def read ( self, path, length, offset ):
         self.log.info('read {} {} {}'.format(path, length, offset))
-        f = self.files["path"]["file"]
+        f = self.files[path]["file"]
         if f:
             f.seek(offset)
             return f.read(length)
@@ -377,11 +377,11 @@ class TardisFS(fuse.Fuse):
         return -errno.ENOENT
 
     def release ( self, path, flags ):
-        if self.files["path"]:
-            self.files["path"]["opens"] -= 1;
-            if self.files["path"]["opens"] == 0:
-                self.files["path"]["file"].close()
-                del self.files["path"]
+        if self.files[path]:
+            self.files[path]["opens"] -= 1;
+            if self.files[path]["opens"] == 0:
+                self.files[path]["file"].close()
+                del self.files[path]
             return 0
         return -errno.EINVAL
 
