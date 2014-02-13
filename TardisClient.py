@@ -47,6 +47,8 @@ from rdiff_backup import librsync
 from Connection import JsonConnection, BsonConnection
 from functools import partial
 
+import TardisCrypto
+
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
@@ -79,6 +81,8 @@ cloneDirs           = []
 cloneContents       = {}
 batchDirs           = []
 
+crypt               = None
+
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
 
 inodeDB             = {}
@@ -102,8 +106,7 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-
-def sendData(file, checksum=False):
+def sendData(file, encrypt, checksum=False):
     """ Send a block of data """
     num = 0
     size = 0
@@ -112,10 +115,10 @@ def sendData(file, checksum=False):
     for chunk in iter(partial(file.read, args.chunksize), ''):
         if checksum:
             m.update(chunk)
-        data = conn.encode(chunk)
+        data = conn.encode(encrypt(chunk))
         chunkMessage = { "chunk" : num, "data": data }
         conn.send(chunkMessage)
-        x = len(data)
+        x = len(chunk)
         stats["bytes"] += x
         size += x
         num += 1
@@ -175,6 +178,16 @@ def processChecksums(inodes):
         if i in inodeDB:
             del inodeDB[i]
 
+def makeEncryptor():
+    if crypt:
+        iv = crypt.getIV()
+        encryptor = crypt.getContentCipher(iv)
+        func = lambda x: encryptor.encrypt(crypt.pad(x))
+    else:
+        iv = None
+        func = lambda x: x
+    return (func, iv)
+
 def processDelta(inode):
     """ Generate a delta and send it """
     if inode in inodeDB:
@@ -187,6 +200,7 @@ def processDelta(inode):
         sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
+            newsig = None
             oldchksum = sigmessage['checksum']
 
             sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
@@ -199,20 +213,34 @@ def processDelta(inode):
                 for chunk in iter(partial(file.read, args.chunksize), ''):
                     m.update(chunk)
                     filesize += len(chunk)
-            checksum = m.hexdigest()
+                if crypt:
+                    file.seek(0)
+                    newsig = librsync.SigFile(file)
+                checksum = m.hexdigest()
 
-            message = {
-                "message": "DEL",
-                "inode": inode,
-                "size": filesize,
-                "checksum": checksum,
-                "basis": oldchksum,
-                "encoding": encoding
-            }
+                (encrypt, iv) = makeEncryptor()
 
-            sendMessage(message)
-            sendData(delta)
-            delta.close()
+                message = {
+                    "message": "DEL",
+                    "inode": inode,
+                    "size": filesize,
+                    "checksum": checksum,
+                    "basis": oldchksum,
+                    "encoding": encoding
+                }
+                if iv:
+                    message["iv"] = conn.encode(iv)
+
+                sendMessage(message)
+                sendData(delta, encrypt)
+                delta.close()
+                if newsig:
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                sendMessage(message)
+                sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -253,6 +281,9 @@ def copyContent(inode):
     sendMessage(message)
     dest.close()
 
+def sendSignature(f):
+    pass
+
 def sendContent(inode):
     if inode in inodeDB:
         if targetDir:
@@ -264,24 +295,35 @@ def sendContent(inode):
             mode = fileInfo["mode"]
             if S_ISDIR(mode):
                 return
+            (encrypt, iv) = makeEncryptor()
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                # "size" : fileInfo["size"],        # No longer used.  Sent at end from calculated value, in case the file size is changing.
                 "encoding" : encoding,
                 "pathname" : pathname
                 }
+            if iv:
+                message["iv"] = conn.encode(iv)
             sendMessage(message)
 
             if S_ISLNK(mode):
                 # It's a link.  Send the contents of readlink
                 #chunk = os.readlink(pathname)
                 x = cStringIO.StringIO(os.readlink(pathname))
-                checksum = sendData(x, checksum=True)
-                x.close()
+                checksum = sendData(x, encrypt, checksum=True)
             else:
-                with open(pathname, "rb") as f:
-                    checksum = sendData(f, checksum=True)
+                x = open(pathname, "rb")
+                checksum = sendData(x, encrypt, checksum=True)
+            if crypt:
+                x.seek(0)
+                sig = librsync.SigFile(x)
+                message = {
+                    "message" : "SIG",
+                    "checksum": checksum
+                }
+                sendMessage(message)
+                sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+            x.close()
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -335,8 +377,11 @@ def mkFileInfo(dir, name):
     s = os.lstat(pathname)
     mode = s.st_mode
     if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
+        name = unicode(name.decode('utf8', 'ignore'))
+        if crypt:
+            name = crypt.encryptFilename(name)
         file =  {
-            'name':   unicode(name.decode('utf8', 'ignore')),
+            'name':   name,
             'inode':  s.st_ino,
             'dir':    S_ISDIR(mode),
             'link':   S_ISLNK(mode),
@@ -779,7 +824,6 @@ def makePrefix(root, path):
         parent = st.st_ino
         current = dirPath
      
-
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
@@ -788,6 +832,10 @@ def processCommandLine():
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
+
+    pwgroup = parser.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -842,7 +890,7 @@ def processCommandLine():
     return parser.parse_args()
 
 def main():
-    global starttime, args, config, conn, verbosity, ignorectime
+    global starttime, args, config, conn, verbosity, ignorectime, crypt
     args = processCommandLine()
 
     starttime = datetime.datetime.now()
@@ -881,6 +929,15 @@ def main():
 
     if args.copy:
         requestTargetDir()
+
+    password = args.password
+    args.password = None
+    if args.passwordfile:
+        with open(args.passwordfile, "r") as f:
+            password = f.readline()
+    if password:
+        crypt = TardisCrypto.TardisCrypto(password)
+    password = None
 
     # Now, do the actual work here.
     for x in map(os.path.realpath, args.directories):
