@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
     Size        INTEGER,
     Basis       INTEGER,
+    DeltaSize   INTEGER,
+    InitVector  BLOB,
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 

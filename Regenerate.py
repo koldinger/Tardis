@@ -35,6 +35,7 @@ import sys
 import argparse
 import socket
 import TardisDB
+import TardisCrypto
 import CacheDir
 import logging
 import subprocess
@@ -49,11 +50,23 @@ version = "0.1"
 database = "./tardisDB"
 
 class Regenerator:
-    def __init__(self, cache, db, tempdir="/tmp"):
+    def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
         self.logger = logging.getLogger("Recoverer")
         self.cacheDir = cache
         self.db = db
         self.tempdir = tempdir
+        self.crypt = crypt
+
+    def decryptFile(self, filename, size, iv):
+        if self.crypt == None:
+            raise Exception("Encrypted file.  No password specified")
+        cipher = self.crypt.getContentCipher(iv)
+        outfile = tempfile.TemporaryFile()
+        infile = self.cacheDir.open(filename, 'rb')
+        outfile.write(cipher.decrypt(infile.read()))
+        outfile.truncate(size)
+        outfile.seek(0)
+        return outfile
 
     def recoverChecksum(self, cksum):
         self.logger.debug("Recovering checksum: {}".format(cksum))
@@ -66,15 +79,25 @@ class Regenerator:
                 shutil.copyfileobj(basis, temp)
                 basis = temp
             #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
-            output = librsync.PatchedFile(basis, self.cacheDir.open(cksum, "rb"))
+            if cksInfo['iv']:
+                patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
+            else:
+                patchfile = self.cacheDir.open(cksum, 'rb')
+            output = librsync.PatchedFile(basis, patchfile)
             #output.seek(0)
             return output
         else:
-            return self.cacheDir.open(cksum, "rb")
+            if cksInfo['iv']:
+                return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+            else:
+                return self.cacheDir.open(cksum, "rb")
 
-    def recoverFile(self, filename, bset=False):
+    def recoverFile(self, filename, bset=False, nameEncrypted=False):
         self.logger.debug("Recovering file: {}".format(filename))
-        cksum = self.db.getChecksumByPath(filename, bset)
+        name = filename
+        if self.crypt and not nameEncrypted:
+            name = self.crypt.encryptPath(filename)
+        cksum = self.db.getChecksumByPath(name, bset)
         if cksum:
             return self.recoverChecksum(cksum)
         else:
@@ -90,6 +113,7 @@ def main():
     parser.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
     parser.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
     parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
+    parser.add_argument("--password", "-p", help="Password", dest='password', default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
@@ -111,7 +135,12 @@ def main():
     tardis = TardisDB.TardisDB(dbName, backup=False)
     cache = CacheDir.CacheDir(baseDir)
 
-    r = Regenerator(cache, tardis)
+    crypt = None
+
+    if args.password:
+        crypt = TardisCrypto.TardisCrypto(args.password)
+
+    r = Regenerator(cache, tardis, crypt=crypt)
 
     bset = False
 

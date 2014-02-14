@@ -88,6 +88,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Process an individual file.  Check to see if it's different from what's there already """
         name = f["name"]
         inode = f["inode"]
+
+        self.logger.debug("Processing Inode: %8d -- File: %s", inode, name)
+        
         if name in dirhash:
             old = dirhash[name]
         else:
@@ -278,23 +281,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processDelta(self, message):
         """ Receive a delta message. """
         self.logger.debug("Processing delta message: %s", message)
-        output = None
-        temp = None
-        digest = None
+        output  = None
+        temp    = None
         checksum = message["checksum"]
         basis    = message["basis"]
         inode    = message["inode"]
         size     = message["size"]          # size of the original file, not the content
+        iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        deltasize = message['deltasize'] if 'deltasize' in message else None
 
-        savefull = self.server.savefull
+        savefull = self.server.savefull and iv is not None
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
-            chainLength = self.db.getChainLength(basis)
-            if chainLength >= self.server.maxChain:
-                self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
-                savefull = True
+            if savefull:
+                chainLength = self.db.getChainLength(basis)
+                if chainLength >= self.server.maxChain:
+                    self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
+                    savefull = True
             if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
                 #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
@@ -311,6 +316,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if output: output.write(bytes)
             bytesReceived += len(bytes)
 
+        if deltasize is None:
+            deltasize = bytesReceived
+
         if output:
             if savefull:
                 output.seek(0)
@@ -323,9 +331,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     shutil.copyfileobj(temp, basisFile)
                 patched = librsync.PatchedFile(basisFile, output)
                 shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                self.db.insertChecksumFile(checksum, size)
+                self.db.insertChecksumFile(checksum, iv, size=size)
             else:
-                self.db.insertChecksumFile(checksum, size, basis=basis)
+                self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis)
             output.close()
             # TODO: This has gotta be wrong.
 
@@ -340,8 +348,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         output = None
         temp = None
         checksum = message["checksum"]
-        basis    = message["basis"]
-        inode    = message["inode"]
 
         # If a signature is specified, receive it as well.
         sigfile = checksum + ".sig"
@@ -351,15 +357,22 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             output = self.cache.open(sigfile, "wb")
         bytesReceived = 0
-        size = message["size"]
-        while (bytesReceived < size):
-            bytes = self.messenger.decode(chunk["data"])
-            output.write(bytes)
-            bytesReceived += len(bytes)
-        output.close()
+        while True:
+            chunk = self.messenger.recvMessage()
+            if chunk['chunk'] == 'done':
+                size = chunk["size"]
+                break
 
-        self.db.setChecksum(inode, checksum)
-        return ({"message" : "OK"}, False)
+            bytes = self.messenger.decode(chunk["data"])
+            if output is not None:
+                output.write(bytes)
+            bytesReceived += len(bytes)
+
+        if output is not None:
+            output.close()
+
+        #self.db.setChecksum(inode, checksum)
+        return (None, False)
 
     def processChecksum(self, message):
         """ Process a list of checksums """
@@ -386,7 +399,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Process a content message, including all the data content chunks """
         self.logger.debug("Processing content message: %s", message)
         temp = None
-        digest = None
         checksum = None
         if "checksum" in message:
             checksum = message["checksum"]
@@ -399,7 +411,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
-            #digest = hashlib.md5()
+
+        if 'iv' in message:
+            iv = self.messenger.decode(message['iv'])
+        else:
+            iv = None
 
         bytesReceived = 0
 
@@ -423,9 +439,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                 os.rename(temp.name, self.cache.path(checksum))
-                self.db.insertChecksumFile(checksum, bytesReceived)
+                self.db.insertChecksumFile(checksum, iv, size)
         else:
-            self.db.insertChecksumFile(checksum, size, basis=basis)
+            self.db.insertChecksumFile(checksum, iv, size, basis=basis)
 
         self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
         self.db.setChecksum(message["inode"], checksum)
@@ -441,6 +457,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         copyfile = message['file']
         checksum = message['checksum']
         size     = message['size']
+        if 'iv' in message:
+            iv = self.messenger.decode(message['iv'])
+        else:
+            iv = None
 
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
@@ -449,7 +469,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.cache.mkdir(checksum)
             self.logger.debug("Renaming %s to %s", copyfile, self.cache.path(checksum))
             os.rename(copyfile, self.cache.path(checksum))
-            self.db.insertChecksumFile(checksum, size)
+            self.db.insertChecksumFile(checksum, iv, size)
         self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
         self.db.setChecksum(inode, checksum)
         flush = False

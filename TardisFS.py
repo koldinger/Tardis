@@ -47,6 +47,7 @@ import tempfile
 import TardisDB
 import CacheDir
 import Regenerate
+import TardisCrypto
 
 def dirFromList(list):
     """
@@ -84,10 +85,16 @@ class TardisFS(fuse.Fuse):
         fuse.Fuse.__init__(self, *args, **kw)
         self.path=None
         self.repoint = False
+        self.password = None
+        self.passwordfile = None
+        self.crypt = None
         self.log = logging.getLogger("TardisFS")
 
-        self.parser.add_option(mountopt="path", help="Path to the directory containing the database for this filesystem")
-        self.parser.add_option(mountopt="repoint", help="Make absolute links relative to backupset")
+        self.parser.add_option(mountopt="password",     help="Password for this archive")
+        self.parser.add_option(mountopt="passwordfile", help="Read password for this archive from the file")
+        self.parser.add_option(mountopt="path",     help="Path to the directory containing the database for this filesystem")
+        self.parser.add_option(mountopt="repoint",  help="Make absolute links relative to backupset")
+
         res = self.parse(values=self, errex=1)
 
         self.mountpoint = res.mountpoint
@@ -95,11 +102,21 @@ class TardisFS(fuse.Fuse):
         self.log.info("Repoint Links: %s", self.repoint)
         self.log.info("MountPoint: %s", self.mountpoint)
 
+        password = self.password
+        self.password = None
+        if self.passwordfile:
+            with open(self.passwordfile, "r") as f:
+                password = f.readline()
+
+        if password:
+            self.crypt = TardisCrypto.TardisCrypto(password)
+        password = None
+
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, "tardis.db")
         self.tardis = TardisDB.TardisDB(dbPath, backup=False)
 
-        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis)
+        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
         self.files = {}
 
         self.log.debug('Init complete.')
@@ -126,6 +143,14 @@ class TardisFS(fuse.Fuse):
                     self.cacheTime = requestTime
             return i
 
+    def decryptNames(self, files):
+        outfiles = []
+        for x in files:
+            x['name'] = self.crypt.decryptFilename(x['name'])
+            outfiles.append(x)
+
+        return outfiles
+
     def getCachedDirInfo(self, path, requestTime=None):
         """ Return the inode and backupset of a directory """
         print "***** getCachedDirInfo: ", path
@@ -136,7 +161,10 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             bsInfo = self.getBackupSetInfo(parts[0])
             if len(parts) == 2:
-                fInfo = self.tardis.getFileInfoByPath(parts[1], bsInfo['backupset'])
+                subpath = parts[1]
+                if self.crypt:
+                    subpath = self.crypt.encryptPath(subpath)
+                fInfo = self.tardis.getFileInfoByPath(subpath, bsInfo['backupset'])
                 print "*******: fInfo", parts[1], "**", fInfo
                 if bsInfo and fInfo and fInfo['dir']:
                     self.dirInfo[path] = (bsInfo, fInfo)
@@ -151,11 +179,17 @@ class TardisFS(fuse.Fuse):
         (head, tail) = os.path.split(path)
         (bsInfo, dInfo) = self.getCachedDirInfo(head)
         if bsInfo:
+            if self.crypt:
+                tail = self.crypt.encryptPath(tail)
             f = self.tardis.getFileInfoByName(tail, dInfo['inode'], bsInfo['backupset'])
         else:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
-            f = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
+            subpath = parts[1]
+            if self.crypt:
+                subpath = self.crypt.encryptPath(subpath)
+            self.log.debug("getFileInfoByPath: %s=>%s", parts[1], subpath)
+            f = self.tardis.getFileInfoByPath(subpath, b['backupset'])
         return f
 
     def fsinit(self):
@@ -176,7 +210,7 @@ class TardisFS(fuse.Fuse):
                     or the time of creation on Windows).
         """
 
-        #print "*********", path, type(path)
+        print "*********", path, type(path)
         path = unicode(path.decode('utf-8'))
         depth = getDepth(path) # depth of path, zero-based from root
 
@@ -279,6 +313,8 @@ class TardisFS(fuse.Fuse):
                 #parent = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
                 (b, parent) = self.getCachedDirInfo(path)
                 entries = self.tardis.readDirectory(parent["inode"], b['backupset'])
+            if self.crypt:
+                entries = self.decryptNames(entries)
 
         dirents.extend([y["name"] for y in entries])
 
@@ -328,7 +364,10 @@ class TardisFS(fuse.Fuse):
         parts = getParts(path)
         b = self.getBackupSetInfo(parts[0])
         if b:
-            f = self.regenerator.recoverFile(parts[1], b['backupset'])
+            subpath = parts[1]
+            if self.crypt:
+                subpath = self.crypt.encryptPath(subpath)
+            f = self.regenerator.recoverFile(subpath, b['backupset'], True)
             if f:
                 try:
                     f.seek(0)
@@ -343,7 +382,7 @@ class TardisFS(fuse.Fuse):
                     f = temp
                     temp.seek(0)
 
-                self.files["path"] = {"file": f, "opens": 1}
+                self.files[path] = {"file": f, "opens": 1}
                 return 0
         # Otherwise.....
         return -errno.ENOENT
@@ -351,7 +390,7 @@ class TardisFS(fuse.Fuse):
 
     def read ( self, path, length, offset ):
         self.log.info('read {} {} {}'.format(path, length, offset))
-        f = self.files["path"]["file"]
+        f = self.files[path]["file"]
         if f:
             f.seek(offset)
             return f.read(length)
@@ -367,7 +406,7 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                f = self.regenerator.recoverFile(parts[1], b['backupset'])
+                f = self.regenerator.recoverFile(parts[1], b['backupset'], True)
                 link = f.readline()
                 f.close()
                 if self.repoint:
@@ -377,11 +416,11 @@ class TardisFS(fuse.Fuse):
         return -errno.ENOENT
 
     def release ( self, path, flags ):
-        if self.files["path"]:
-            self.files["path"]["opens"] -= 1;
-            if self.files["path"]["opens"] == 0:
-                self.files["path"]["file"].close()
-                del self.files["path"]
+        if self.files[path]:
+            self.files[path]["opens"] -= 1;
+            if self.files[path]["opens"] == 0:
+                self.files[path]["file"].close()
+                del self.files[path]
             return 0
         return -errno.EINVAL
 
