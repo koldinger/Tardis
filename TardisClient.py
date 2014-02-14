@@ -239,8 +239,9 @@ def processDelta(inode):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                sendMessage(message)
-                sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
+                if newsig:
+                    sendMessage(message)
+                    sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
