@@ -375,7 +375,7 @@ class TardisFS(fuse.Fuse):
                     self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)
-                    if chunk:
+                    while chunk:
                         temp.write(chunk)
                         chunk = f.read(65536)
                     f.close()
