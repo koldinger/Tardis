@@ -132,7 +132,7 @@ class TardisDB(object):
     dbName  = None
     db      = None
     currBackupSet = None
-    dirinodes = {}
+    devices = {}
 
     def __init__(self, dbname, backup=True, prevSet=None, initialize=None):
         """ Initialize the connection to a per-machine Tardis Database"""
@@ -229,7 +229,7 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, FileID as fileid "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -251,7 +251,7 @@ class TardisDB(object):
         for name in splitpath(path):
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
-                parent = info["inode"]
+                parent = info["fileid"]
             else:
                 break
         return info
@@ -282,7 +282,7 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, FileID as fileid "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -296,7 +296,7 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, FileID as fileid "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -313,7 +313,7 @@ class TardisDB(object):
         temp["backup"] = backupset
         c = self.cursor.execute("SELECT "
                                 "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
+                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum, FileID as fileid "
                                 "FROM Files "
                                 "JOIN Names ON Files.NameId = Names.NameId "
                                 "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -329,7 +329,7 @@ class TardisDB(object):
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         c = self.cursor.execute("SELECT "
                                 "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
+                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum, FileID as fileid "
                                 "FROM Files "
                                 "JOIN Names ON Files.NameId = Names.NameId "
                                 "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -395,11 +395,12 @@ class TardisDB(object):
         fields = {"backup": self.currBackupSet, "parent": parent}.items()
         temp = addFields(fields, fileInfo)
         self.setNameID([temp])
-        self.conn.execute("INSERT INTO Files "
+        self.cursor.execute("INSERT INTO Files "
                           "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
                           "VALUES  "
                           "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                           temp)
+        return self.cursor.lastrowid
 
     def insertFiles(self, files, parent):
         self.logger.debug("Inserting files: %d", len(files))
@@ -457,6 +458,22 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
+    def getDeviceID(self, device):
+        ## Check the cache
+        if device in self.devices:
+            return self.devices[device]
+        # If not yet cached, look it up
+        c = self.cursor.execute("SELECT DeviceID FROM Devices WHERE DeviceName = :device", {"device": device})
+        row = c.fetchone()
+        if row:
+            devid = row[0]
+            self.devices[device] = devid
+        else:
+            self.cursor.execute("INSERT INTO Devices (DeviceName) VALUES (:device)", {"device": device})
+            devid =  self.cursor.lastrowid
+            self.devices[device] = devid
+        return devid
+
     def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None):
         self.logger.debug("Inserting checksum file: %s -- %d bytes", checksum, size)
 
@@ -487,18 +504,18 @@ class TardisDB(object):
         else:
             return -1
 
-    def readDirectory(self, dirNode, current=False):
+    def readDirectory(self, parentId, current=False):
         backupset = self.bset(current)
-        self.logger.debug("Reading directory values for %d %d", dirNode, backupset)
+        self.logger.debug("Reading directory values for %d %d", parentId, backupset)
         c = self.conn.execute("SELECT "
                                "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Checksums.Size AS size, "
-                               "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
+                               "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum, FileID as fileid "
                                "FROM Files "
                                "JOIN Names ON Files.NameId = Names.NameId "
                                "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                               "WHERE Parent = :dirnode AND "
+                               "WHERE Parent = :parentid AND "
                                ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                               {"dirnode": dirNode, "backup": backupset})
+                               {"parentid": parentId, "backup": backupset})
         for row in c.fetchall():
             yield makeDict(c, row)
 
