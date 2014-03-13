@@ -295,7 +295,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
-            if savefull:
+            if not savefull:
                 chainLength = self.db.getChainLength(basis)
                 if chainLength >= self.server.maxChain:
                     self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
