@@ -97,12 +97,6 @@ def setEncoder(format):
         encoder = lambda x: x
         decoder = lambda x: x
 
-def findMountPoint(name):
-    path = os.path.abspath(name)
-    while not os.path.ismount(path):
-        path = os.path.dirname(path)
-    return path
-
 def filelist(dir, excludes):
     files = os.listdir(dir)
     for p in excludes:
@@ -493,18 +487,14 @@ def handleAckClone(message):
             if len(files) < args.batchdirs:
                 if verbosity:
                     print "[Batched]"
-                ### HACK: FIX THIS
-                device = findMountPoint(path)
-                batchDirs.append(makeDirMessage(path, inode, device, files))
+                batchDirs.append(makeDirMessage(path, inode, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
                 if verbosity:
                     print
                 flushBatchDirs()
-                #### Fix this
-                device = findMountPoint(path)
-                sendDirChunks(path, inode, device, files)
+                sendDirChunks(path, inode, files)
             del cloneContents[inode]
 
     # Purge out what hasn't changed
@@ -563,12 +553,11 @@ def sendPurge(relative):
 
         response = sendAndReceive(message)
 
-def sendDirChunks(path, inode, device, files):
+def sendDirChunks(path, inode, files):
     message = {
         'message': 'DIR',
         'path':  path,
-        'inode':  inode,
-        'device': device,
+        'inode':  inode
     }
 
     chunkNum = 0
@@ -583,17 +572,16 @@ def sendDirChunks(path, inode, device, files):
         response = sendAndReceive(message)
         handleAckDir(response)
 
-def makeDirMessage(path, inode, device, files):
+def makeDirMessage(path, inode, files):
     message = {
         'files':  files,
         'inode':  inode,
-        'device': device,
         'path':  path,
         'message': 'DIR',
         }
     return message
 
-def recurseTree(dir, top, device, depth=0, excludes=[]):
+def recurseTree(dir, top, depth=0, excludes=[]):
     newdepth = 0
     if depth > 0:
         newdepth = depth - 1
@@ -645,7 +633,7 @@ def recurseTree(dir, top, device, depth=0, excludes=[]):
                 if verbosity:
                     print " [Batched]"
                 flushClones()
-                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, device, files))
+                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
@@ -653,15 +641,12 @@ def recurseTree(dir, top, device, depth=0, excludes=[]):
                     print
                 flushClones()
                 flushBatchDirs()
-                sendDirChunks(os.path.relpath(dir, top), s.st_ino, device, files)
+                sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
             for subdir in sorted(subdirs):
-                if os.path.ismount(subdir):
-                    recurseTree(subdir, top, subdir, newdepth, subexcludes)
-                else:
-                    recurseTree(subdir, top, device, newdepth, subexcludes)
+                recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
         traceback.print_exc()
@@ -763,14 +748,13 @@ def sendAndReceive(message):
     sendMessage(message)
     return receiveMessage()
 
-def sendDirEntry(parent, device, files):
+def sendDirEntry(parent, files):
     # send a fake root directory
     message = {
         'message': 'DIR',
         'files':  files,
         'path':  None,
         'inode': parent,
-        'device': device,
         'files': files
         }
 
@@ -834,10 +818,9 @@ def makePrefix(root, path):
     for d in pathDirs:
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
-        device = findMountPoint(dirPath)
+        f = mkFileInfo(current, d)
         if dirPath not in sentDirs:
-            f = mkFileInfo(current, d, device)
-            sendDirEntry(parent, device, [f])
+            sendDirEntry(parent, [f])
             sentDirs[dirPath] = parent
         parent = st.st_ino
         current = dirPath
@@ -964,8 +947,7 @@ def main():
         else:
             (d, name) = os.path.split(x)
             f = mkFileInfo(d, name)
-            device = findMountPoint(x)
-            sendDirEntry(0, device, [f])
+            sendDirEntry(0, [f])
 
     for x in map(os.path.realpath, args.directories):
         if rootdir:
@@ -974,8 +956,7 @@ def main():
             (d, name) = os.path.split(x)
             root = d
 
-        device = findMountPoint(x)
-        recurseTree(x, root, device, depth=args.maxdepth, excludes=globalExcludes)
+        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone or batch requests still lying around, send them
     flushClones()

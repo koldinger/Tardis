@@ -78,38 +78,18 @@ logging.TRACE = logging.DEBUG - 1
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger = logging.getLogger('Tardis')
-    sessionid   = None
-    tempdir     = None
-    cache       = None
-    db          = None
-    purged      = False
-    lastParent  = None
-
-    # Grab the parent ID for a file.  Cache the last version used
-    # TODO: Would it be significantly faster to cache all parent ID's?
-    def getParentID(self, parentInode):
-        if self.lastParent == parentInode:
-            return self.lastParentID
-        else:
-            parentInfo = self.db.getFileInfoByInode(parentInode, current=True)
-            if parentInfo:
-                parentID = parentInfo['fileid']
-                self.lastParent = parentInode
-                self.lastParentID = parentID
-                return parentID
-            else:
-                # Throw an exception permaps??????
-                return 0
+    sessionid = None
+    tempdir = None
+    cache   = None
+    db      = None
+    purged  = False
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
         name = f["name"]
         inode = f["inode"]
 
-
         self.logger.debug("Processing Inode: %8d -- File: %s", inode, name)
-
-        parentid = self.getParentID(parent)
         
         if name in dirhash:
             old = dirhash[name]
@@ -119,11 +99,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if f["dir"] == 1:
             if old:
                 if (old["inode"] == inode) and (old["mtime"] == f["mtime"]):
-                    self.db.extendFile(parentid, f['name'])
+                    self.db.extendFile(parent, f['name'])
                 else:
-                    self.db.insertFile(f, parentid)
+                    self.db.insertFile(f, parent)
             else:
-                self.db.insertFile(f, parentid)
+                self.db.insertFile(f, parent)
             retVal = DONE
         else:
             # Get the last backup information
@@ -141,17 +121,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.db.extendFile(parent, f['name'])
                         retVal = DONE
                     else:
-                        self.db.insertFile(f, parentid)
+                        self.db.insertFile(f, parent)
                         retVal = CONTENT
                 elif f["size"] < 4096 or old["size"] is None:
                     # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
-                    self.db.insertFile(f, parentid)
+                    self.db.insertFile(f, parent)
                     retVal = CONTENT
                 else:
-                    self.db.insertFile(f, parentid)
+                    self.db.insertFile(f, parent)
                     retVal = DELTA
             else:
-                self.db.insertFile(f, parentid)
+                self.db.insertFile(f, parent)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled
                     self.logger.debug('Looking for file with same inode %d in backupset', inode)
@@ -203,13 +183,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         queues = [done, content, cksum, delta]
 
         parentInode = data['inode']
-        device = data['device']
         files = data['files']
 
         dirhash = {}
         oldDir = None
-
-        deviceId = self.db.getDeviceID(device)
 
         # Get the old directory info
         # If we're still in the same directory, use cached info
@@ -226,11 +203,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # Otherwise
                 dirInode = parentInode
             directory = self.db.readDirectory(dirInode)
-            # Create a hash
             for i in directory:
                 dirhash[i["name"]] = i
-
-            # Cache it.
             self.lastDirHash = dirhash
             self.lastDirNode = parentInode
 

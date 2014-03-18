@@ -171,7 +171,7 @@ class TardisFS(fuse.Fuse):
                     if self.cacheTime == None:
                         self.cacheTime = requestTime
             else:
-                fInfo = {'inode': 0, 'fileid': 0}
+                fInfo = {'inode': 0}
             return (bsInfo, fInfo)
             
     def getFileInfoByPath(self, path):
@@ -181,7 +181,7 @@ class TardisFS(fuse.Fuse):
         if bsInfo:
             if self.crypt:
                 tail = self.crypt.encryptPath(tail)
-            f = self.tardis.getFileInfoByName(tail, dInfo['fileid'], bsInfo['backupset'])
+            f = self.tardis.getFileInfoByName(tail, dInfo['inode'], bsInfo['backupset'])
         else:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
@@ -312,7 +312,7 @@ class TardisFS(fuse.Fuse):
             else:
                 #parent = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
                 (b, parent) = self.getCachedDirInfo(path)
-                entries = self.tardis.readDirectory(parent["fileid"], b['backupset'])
+                entries = self.tardis.readDirectory(parent["inode"], b['backupset'])
             if self.crypt:
                 entries = self.decryptNames(entries)
 
