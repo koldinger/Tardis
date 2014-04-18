@@ -49,6 +49,12 @@ version = "0.1"
 
 database = "./tardisDB"
 
+class RegenerateException(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 class Regenerator:
     def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
         self.logger = logging.getLogger("Recoverer")
@@ -83,7 +89,12 @@ class Regenerator:
                 patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
             else:
                 patchfile = self.cacheDir.open(cksum, 'rb')
-            output = librsync.PatchedFile(basis, patchfile)
+            try:
+                output = librsync.PatchedFile(basis, patchfile)
+            except librsyncError as e:
+                self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
+                raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+
             #output.seek(0)
             return output
         else:
@@ -99,7 +110,10 @@ class Regenerator:
             name = self.crypt.encryptPath(filename)
         cksum = self.db.getChecksumByPath(name, bset)
         if cksum:
-            return self.recoverChecksum(cksum)
+            try:
+                return self.recoverChecksum(cksum)
+            except:
+                raise RegenerateException("Error recovering file: {}".format(filename))
         else:
             self.logger.error("Could not open file {}".format(filename))
             return None
