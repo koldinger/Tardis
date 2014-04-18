@@ -236,6 +236,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Generate and send a signature for a file """
         #self.logger.debug("Processing signature request message: %s"format(str(message)))
         inode = message["inode"]
+        response = None
 
         ### TODO: Remove this function.  Clean up.
         info = self.db.getNewFileInfoByInode(inode)
@@ -254,29 +255,33 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 #(sig, err) = pipe.communicate()
                 # Cache the signature for later use.  Just in case.
                 # TODO: Better logic on this?
-                s = librsync.SigFile(rpipe)
-                sig = s.read()
+                if rpipe:
+                    try:
+                        s = librsync.SigFile(rpipe)
+                        sig = s.read()
 
-                outfile = self.cache.open(sigfile, "wb")
-                outfile.write(sig)
-                outfile.close()
-            # TODO: Break the signature out of here.
-            response = {
-                "message": "SIG",
-                "inode": inode,
-                "status": "OK",
-                "encoding": self.messenger.getEncoding(),
-                "checksum": chksum,
-                "size": len(sig),
-                "signature": self.messenger.encode(sig) }
-            return (response, False)
-        else:
+                        outfile = self.cache.open(sigfile, "wb")
+                        outfile.write(sig)
+                        outfile.close()
+                        # TODO: Break the signature out of here.
+                        response = {
+                            "message": "SIG",
+                            "inode": inode,
+                            "status": "OK",
+                            "encoding": self.messenger.getEncoding(),
+                            "checksum": chksum,
+                            "size": len(sig),
+                            "signature": self.messenger.encode(sig) }
+                    except (librsync.librsyncError, Regenerate.RegenerateException) as e:
+                        self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
+
+        if response is None:
             response = {
                 "message": "SIG",
                 "inode": inode,
                 "status": "FAIL"
             }
-            return (response, False)
+        return (response, False)
 
     def processDelta(self, message):
         """ Receive a delta message. """
@@ -295,7 +300,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
-            if savefull:
+            if not savefull:
                 chainLength = self.db.getChainLength(basis)
                 if chainLength >= self.server.maxChain:
                     self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
