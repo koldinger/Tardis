@@ -41,8 +41,8 @@ import ssl
 import hashlib
 import base64
 import subprocess
-import daemon
-import daemon.pidfile
+#import daemon
+#import daemon.pidfile
 import pprint
 import tempfile
 import shutil
@@ -787,7 +787,7 @@ def main():
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
     parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
-    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    #parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
@@ -828,12 +828,12 @@ def main():
         profiler = cProfile.Profile()
 
     try:
-        if config.getboolean('Tardis', 'Daemon'):
-            pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
-            with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
-                run_server(config)
-        else:
-            run_server(config)
+        #if config.getboolean('Tardis', 'Daemon'):
+        #    pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
+        #    with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
+        #        run_server(config)
+        #else:
+        run_server(config)
     except KeyboardInterrupt:
         pass
     except:
