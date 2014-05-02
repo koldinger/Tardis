@@ -9,13 +9,13 @@ setup(  name                    = 'Tardis',
         packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
         include_package_data    = True,
         zip_safe                = False,
-        install_requires = ['bson', 'pycrypto' ],
+        install_requires = ['bson', 'pycrypto', 'parsedatetime', 'fuse' ],
         entry_points = {
                 'console_scripts' : [
-                    'tardis = Tardis.TardisClient',
-                    'tardisd = Tardis.TardisDaemon',
-                    'tardisfs = Tardis.TardisFS',
-                    'regenerate = Tardis.Regenerate',
+                    'tardis = Tardis.TardisClient:main',
+                    'tardisd = Tardis.TardisDaemon:main',
+                    'tardisfs = Tardis.TardisFS:main',
+                    'regenerate = Tardis.Regenerate:main',
                 ],
         },
     )
