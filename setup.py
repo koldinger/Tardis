@@ -1,3 +1,5 @@
+#! /usr/bin/python
+
 from setuptools import setup, find_packages
 import sys, os
 
@@ -9,7 +11,8 @@ setup(  name                    = 'Tardis',
         packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
         include_package_data    = True,
         zip_safe                = False,
-        install_requires = ['bson', 'pycrypto', 'parsedatetime', 'fuse' ],
+        install_requires = ['bson', 'pycrypto', 'parsedatetime' ],
+        data_files = [( '/etc/tardis', ['tardisd.cfg'] )],
         entry_points = {
                 'console_scripts' : [
                     'tardis = Tardis.TardisClient:main',
