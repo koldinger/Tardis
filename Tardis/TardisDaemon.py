@@ -41,8 +41,8 @@ import ssl
 import hashlib
 import base64
 import subprocess
-import daemon
-import daemon.pidfile
+#import daemon
+#import daemon.pidfile
 import pprint
 import tempfile
 import shutil
@@ -68,7 +68,9 @@ DELTA   = 3
 
 config = None
 databaseName = 'tardis.db'
-schemaName   = 'tardis.sql'
+schemaName   = 'schema/tardis.sql'
+schemaFile   = None
+parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
 
 pp = pprint.PrettyPrinter(indent=2, width=200)
@@ -580,7 +582,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
         self.dbname = os.path.join(self.basedir, databaseName)
         if not os.path.exists(self.dbname):
-            script = schemaName
+            self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
+            script = schemaFile
         self.db = TardisDB.TardisDB(self.dbname, initialize=script)
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -781,13 +784,16 @@ def run_server(config):
 
 
 def main():
+    # Compute the path to the default schema.  Needs to be done here for some reason
+    schemaLocal   = os.path.join(parentDir, schemaName)
 
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
     parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
-    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    parser.add_argument('--schema',         dest='schema', default=schemaLocal, help='Path to the schema to use')
+    #parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
@@ -809,13 +815,15 @@ def main():
         'BaseDir'       : './cache',
         'SaveFull'      : str(True),
         'DBName'        : args.dbname,
+        'Schema'        : args.schema,
         'LogCfg'        : args.logcfg,
         'Profile'       : args.profile,
         'LogFile'       : args.logfile,
         'AllowCopies'   : str(args.copies),
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
-        'Daemon'        : str(args.daemon),
+        #'Daemon'        : str(args.daemon),
+        'Daemon'        : 'false',
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
         'KeyFile'       : args.keyfile
@@ -826,14 +834,17 @@ def main():
 
     if config.get('Tardis', 'Profile'):
         profiler = cProfile.Profile()
+    if config.get('Tardis', 'Schema'):
+        global schemaFile
+        schemaFile = config.get('Tardis', 'Schema')
 
     try:
-        if config.getboolean('Tardis', 'Daemon'):
-            pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
-            with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
-                run_server(config)
-        else:
-            run_server(config)
+        #if config.getboolean('Tardis', 'Daemon'):
+        #    pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
+        #    with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
+        #        run_server(config)
+        #else:
+        run_server(config)
     except KeyboardInterrupt:
         pass
     except:

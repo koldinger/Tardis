@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-import TardisDaemon
+from Tardis import TardisDaemon
 import sys
 
 sys.exit(TardisDaemon.main())
