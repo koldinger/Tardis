@@ -34,15 +34,19 @@ import socket
 import logging
 
 class CacheDir:
-    def __init__(self, root, parts=2, partsize=2):
+    def __init__(self, root, parts=2, partsize=2, create=True):
         logger.debug("Creating CacheDir: path={}, parts={}, partsize={})".format(root, parts, partsize))
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
-        try:
-            os.makedirs(self.root)
-        except OSError, error:
-            pass
+        if create:
+            try:
+                os.makedirs(self.root)
+            except OSError, error:
+                pass
+        else:
+            if not os.path.isdir(self.root):
+                return None
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
