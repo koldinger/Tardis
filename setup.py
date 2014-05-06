@@ -12,7 +12,8 @@ setup(  name                    = 'Tardis',
         include_package_data    = True,
         zip_safe                = False,
         install_requires = ['bson', 'pycrypto', 'parsedatetime' ],
-        data_files = [( '/etc/tardis', ['tardisd.cfg'] )],
+        data_files = [( 'etc/tardis', ['tardisd.cfg'] ),
+                      ( 'schema', ['schema/tardis.sql']) ],
         entry_points = {
                 'console_scripts' : [
                     'tardis = Tardis.TardisClient:main',
