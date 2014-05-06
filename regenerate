@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-import Regenerate
+from Tardis import Regenerate
 import sys
 
 sys.exit(Regenerate.main())
