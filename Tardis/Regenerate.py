@@ -142,7 +142,7 @@ def main():
     #logger.addHandler(handler)
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
-    logger.setLevel(logging.ERROR)
+    logger.setLevel(logging.DEBUG)
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
@@ -193,11 +193,15 @@ def main():
             f = r.recoverFile(i, bset)
 
         if f != None:
-            x = f.read(16 * 1024)
-            while x:
-                output.write(x)
+            try:
                 x = f.read(16 * 1024)
-            f.close()
+                while x:
+                    output.write(x)
+                    x = f.read(16 * 1024)
+            except Exception as e:
+                logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+            finally:
+                f.close()
 
 if __name__ == "__main__":
     sys.exit(main())
