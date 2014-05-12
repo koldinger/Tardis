@@ -110,23 +110,30 @@ def sendData(file, encrypt, checksum=False):
     """ Send a block of data """
     num = 0
     size = 0
+    status = "OK"
+
     if checksum:
         m = hashlib.md5()
-    for chunk in iter(partial(file.read, args.chunksize), ''):
+    try:
+        for chunk in iter(partial(file.read, args.chunksize), ''):
+            if checksum:
+                m.update(chunk)
+            data = conn.encode(encrypt(chunk))
+            chunkMessage = { "chunk" : num, "data": data }
+            conn.send(chunkMessage)
+            x = len(chunk)
+            stats["bytes"] += x
+            size += x
+            num += 1
+    except Exception as e:
+        status = "Fail"
+    finally:
+        message = {"chunk": "done", "size": size, "status": status}
         if checksum:
-            m.update(chunk)
-        data = conn.encode(encrypt(chunk))
-        chunkMessage = { "chunk" : num, "data": data }
-        conn.send(chunkMessage)
-        x = len(chunk)
-        stats["bytes"] += x
-        size += x
-        num += 1
-    message = {"chunk": "done", "size": size}
-    if checksum:
-        ck = m.hexdigest()
-        message["checksum"] = m.hexdigest()
-    conn.send(message)
+            ck = m.hexdigest()
+            message["checksum"] = m.hexdigest()
+        conn.send(message)
+
     if checksum:
         return ck
     else:
@@ -152,7 +159,7 @@ def processChecksums(inodes):
     message = {
         "message": "CKS",
         "files": files
-        }
+    }
 
     response = sendAndReceive(message)
 
@@ -305,26 +312,37 @@ def sendContent(inode):
                 }
             if iv:
                 message["iv"] = conn.encode(iv)
-            sendMessage(message)
+            # Attempt to open the data source
+            # Punt out if unsuccessful
+            try:
+                if S_ISLNK(mode):
+                    # It's a link.  Send the contents of readlink
+                    #chunk = os.readlink(pathname)
+                    x = cStringIO.StringIO(os.readlink(pathname))
+                else:
+                    x = open(pathname, "rb")
+            except IOError as e:
+                print "Error: Could not open {}: {}".format(pathname, e)
+                return
 
-            if S_ISLNK(mode):
-                # It's a link.  Send the contents of readlink
-                #chunk = os.readlink(pathname)
-                x = cStringIO.StringIO(os.readlink(pathname))
-                checksum = sendData(x, encrypt, checksum=True)
-            else:
-                x = open(pathname, "rb")
-                checksum = sendData(x, encrypt, checksum=True)
-            if crypt:
-                x.seek(0)
-                sig = librsync.SigFile(x)
-                message = {
-                    "message" : "SIG",
-                    "checksum": checksum
-                }
+            # Attempt to send the data.
+            try:
                 sendMessage(message)
-                sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
-            x.close()
+                checksum = sendData(x, encrypt, checksum=True)
+
+                if crypt:
+                    x.seek(0)
+                    sig = librsync.SigFile(x)
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                    sendMessage(message)
+                    sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+            except Exception as e:
+                print "Caught exception during sending of data {}".format(e)
+            finally:
+                x.close()
     else:
         print "Error: Unknown inode {}".format(inode)
 
