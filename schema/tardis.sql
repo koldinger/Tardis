@@ -1,3 +1,8 @@
+CREATE TABLE IF NOT EXISTS Config (
+    Key             CHARACTER PRIMARY KEY,
+    Value           CHARACTER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS Backups (
     Name            CHARACTER UNIQUE,
     BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +61,8 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 -- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
+
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "1");
 
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Names.Name AS Name, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
