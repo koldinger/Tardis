@@ -436,29 +436,32 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
     localExcludes.extend(loadExcludeFile(os.path.join(dir, localExcludeFile)))
 
     files = []
-
     subdirs = []
-    for f in filelist(dir, localExcludes):
-        try:
-            file = mkFileInfo(dir, f)
-            if file:
-                mode = file["mode"]
-                if S_ISLNK(mode):
-                    stats['links'] += 1
-                elif S_ISREG(mode):
-                    stats['files'] += 1
-                    stats['backed'] += file["size"]
 
-                if S_ISDIR(mode):
-                    if args.crossdev or device == file['dev']:
-                        subdirs.append(os.path.join(dir, f))
+    try:
+        for f in filelist(dir, localExcludes):
+            try:
+                file = mkFileInfo(dir, f)
+                if file:
+                    mode = file["mode"]
+                    if S_ISLNK(mode):
+                        stats['links'] += 1
+                    elif S_ISREG(mode):
+                        stats['files'] += 1
+                        stats['backed'] += file["size"]
 
-                files.append(file)
-        except IOError as e:
-            print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
-        except:
-            print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
-            traceback.print_exc()
+                    if S_ISDIR(mode):
+                        if args.crossdev or device == file['dev']:
+                            subdirs.append(os.path.join(dir, f))
+
+                    files.append(file)
+            except (IOError, OSError) as e:
+                print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
+            except:
+                print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
+                traceback.print_exc()
+    except (IOError, OSError) as e:
+        print "Error reading directory %s: %s" % (dir, str(e))
 
     return (files, subdirs, excludes)
 
@@ -667,7 +670,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
-        traceback.print_exc()
+        print "Error handling directory: %s: %s" % (dir, str(e))
+        #traceback.print_exc()
     except:
         # TODO: Clean this up
         raise
