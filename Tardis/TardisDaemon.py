@@ -212,14 +212,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            self.logger.debug(u'Processing file: %s %d', f["name"], inode)
+            fileId = (f['dev'], f['inode'])
+            self.logger.debug(u'Processing file: %s %d %s', f["name"], inode, fileId)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
             #elif res == 1: content.append(inode)
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
-            queues[res].add(inode)
+            queues[res].add(fileId)
 
         response = {
             "message"   : "ACKDIR",
@@ -237,7 +238,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
         #self.logger.debug("Processing signature request message: %s"format(str(message)))
-        inode = message["inode"]
+        (dev, inode) = message["inode"]
         response = None
 
         ### TODO: Remove this function.  Clean up.
@@ -292,8 +293,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         temp    = None
         checksum = message["checksum"]
         basis    = message["basis"]
-        inode    = message["inode"]
         size     = message["size"]          # size of the original file, not the content
+        (dev, inode)    = message["inode"]
         iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         deltasize = message['deltasize'] if 'deltasize' in message else None
 
@@ -450,8 +451,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             self.db.insertChecksumFile(checksum, iv, size, basis=basis)
 
-        self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
-        self.db.setChecksum(message["inode"], checksum)
+        (dev, inode) = message['inode']
+
+        self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
+        self.db.setChecksum(inode, checksum)
 
         #return {"message" : "OK", "inode": message["inode"]}
         flush = False
@@ -657,7 +660,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.startSession(name)
             self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
 
-
             self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
 
             if encoding == "JSON":
@@ -745,7 +747,6 @@ def setupLogging(config):
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
-        #format = logging.Formatter("%(asctime) %(levelname)s : %(name)s : %(message)s")
         format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
 
         verbosity = config.getint('Tardis', 'Verbose')
@@ -776,7 +777,10 @@ def run_server(config):
         if (config.getboolean('Tardis', 'Single')):
             server.handle_request()
         else:
-            server.serve_forever()
+            try:
+                server.serve_forever()
+            except:
+                logger.info("Socket server completed")
         logger.info("Ending")
     except:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
@@ -820,6 +824,7 @@ def main():
         'Profile'       : args.profile,
         'LogFile'       : args.logfile,
         'AllowCopies'   : str(args.copies),
+        'Single'        : str(args.single),
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         #'Daemon'        : str(args.daemon),

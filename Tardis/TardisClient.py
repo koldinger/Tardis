@@ -355,11 +355,11 @@ def handleAckDir(message):
     if verbosity > 2:
         print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
 
-    for i in done:
+    for i in [tuple(x) for x in done]:
         if i in inodeDB:
             del inodeDB[i]
 
-    for i in content:
+    for i in [tuple(x) for x in content]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
@@ -372,7 +372,7 @@ def handleAckDir(message):
         if i in inodeDB:
             del inodeDB[i]
 
-    for i in delta:
+    for i in [tuple(x) for x in delta]:
         if verbosity > 1:
 			if i in inodeDB:
 				(x, name) = inodeDB[i]
@@ -383,7 +383,7 @@ def handleAckDir(message):
 
     # Collect the ACK messages
     if len(cksum) > 0:
-        processChecksums(cksum)
+        processChecksums([tuple(x) for x in cksum])
 
     if verbosity > 3:
         print "----- AckDir complete"
@@ -399,7 +399,7 @@ def mkFileInfo(dir, name):
         name = unicode(name.decode('utf8', 'ignore'))
         if crypt:
             name = crypt.encryptFilename(name)
-        file =  {
+        finfo =  {
             'name':   name,
             'inode':  s.st_ino,
             'dir':    S_ISDIR(mode),
@@ -415,11 +415,11 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        inodeDB[s.st_ino] = (file, pathname)
+        inodeDB[(s.st_dev, s.st_ino)] = (finfo, pathname)
     else:
         if verbosity:
             print "Skipping special file: {}".format(pathname)
-    return file
+    return finfo
     
 def processDir(dir, dirstat, excludes=[], allowClones=True):
     stats['dirs'] += 1;
