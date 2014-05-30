@@ -165,14 +165,17 @@ def processChecksums(inodes):
 
     if not response["message"] == "ACKSUM":
         raise Exception
-    for i in response["done"]:
+    # First, delete all the files which are "done", ie, matched
+    for i in [tuple(x) for x in response['done']]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 print "File: [C]: {}".format(shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
-    for i in response["content"]:
+    # First, then send content for any files which don't
+    # FIXME: TODO: There should be a test in here for Delta's
+    for i in [tuple(x) for x in response['content']]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]

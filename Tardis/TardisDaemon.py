@@ -117,7 +117,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
                 #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
                                   #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
-                if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
+                #if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
+                if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]) and (old['mode'] == f['mode']):
                     if ("checksum") in old and not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
                         self.db.extendFile(parent, f['name'])
@@ -125,6 +126,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     else:
                         self.db.insertFile(f, parent)
                         retVal = CONTENT
+                elif (old["size"] == f["size"]) and ("checksum") in old and not (old["checksum"] is None):
+                        self.db.insertFile(f, parent)
+                        retVal = CKSUM
                 elif f["size"] < 4096 or old["size"] is None:
                     # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
                     self.db.insertFile(f, parent)
@@ -388,13 +392,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         done = []
         content = []
         for f in message["files"]:
-            inode = f["inode"]
+            (dev, inode) = f["inode"]
             cksum = f["checksum"]
             if self.cache.exists(cksum):
                 self.db.setChecksum(inode, cksum)
-                done.append(inode)
+                done.append(f['inode'])
             else:
-                content.append(inode)
+                # FIXME: TODO: If no checksum, should we request a delta???
+                content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",
