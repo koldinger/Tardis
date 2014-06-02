@@ -35,6 +35,10 @@ import os.path
 import functools
 import time
 
+import ConnIdLogAdapter
+
+import TardisDaemon
+
 # Expected SQL Schema
 """
 CREATE TABLE IF NOT EXISTS Backups (
@@ -134,10 +138,13 @@ class TardisDB(object):
     currBackupSet = None
     dirinodes = {}
 
-    def __init__(self, dbname, backup=True, prevSet=None, initialize=None):
+    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
+
+        if extra:
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(self.logger, extra)
 
         if backup:
             backup = dbname + ".bak"
@@ -189,6 +196,7 @@ class TardisDB(object):
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
+        self.conn.execute("PRAGMA journal_mode=truncate")
 
     def bset(self, current):
         """ Determine the backupset we're being asked about.  True == current, false = previous, otherwise a number is returned """

@@ -54,6 +54,8 @@ import cProfile
 import StringIO
 import pstats
 
+import ConnIdLogAdapter
+
 import Messages
 import CacheDir
 import TardisDB
@@ -79,12 +81,17 @@ logging.TRACE = logging.DEBUG - 1
 
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
-    logger = logging.getLogger('Tardis')
+    logger   = None
     sessionid = None
     tempdir = None
     cache   = None
     db      = None
     purged  = False
+
+    def setup(self):
+        self.sessionid = uuid.uuid1()
+        logger = logging.getLogger('Tardis')
+        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.client_address[0]})
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -592,11 +599,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if not os.path.exists(self.dbname):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
-        self.db = TardisDB.TardisDB(self.dbname, initialize=script)
+        self.db = TardisDB.TardisDB(self.dbname, initialize=script, extra={'connid': self.client_address[0]})
+
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
     def startSession(self, name):
-        self.sessionid = uuid.uuid1()
+        #self.sessionid = uuid.uuid1()
         self.name = name
         sid = str(self.sessionid)
         sessions[sid] = self
