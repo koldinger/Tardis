@@ -110,23 +110,30 @@ def sendData(file, encrypt, checksum=False):
     """ Send a block of data """
     num = 0
     size = 0
+    status = "OK"
+
     if checksum:
         m = hashlib.md5()
-    for chunk in iter(partial(file.read, args.chunksize), ''):
+    try:
+        for chunk in iter(partial(file.read, args.chunksize), ''):
+            if checksum:
+                m.update(chunk)
+            data = conn.encode(encrypt(chunk))
+            chunkMessage = { "chunk" : num, "data": data }
+            conn.send(chunkMessage)
+            x = len(chunk)
+            stats["bytes"] += x
+            size += x
+            num += 1
+    except Exception as e:
+        status = "Fail"
+    finally:
+        message = {"chunk": "done", "size": size, "status": status}
         if checksum:
-            m.update(chunk)
-        data = conn.encode(encrypt(chunk))
-        chunkMessage = { "chunk" : num, "data": data }
-        conn.send(chunkMessage)
-        x = len(chunk)
-        stats["bytes"] += x
-        size += x
-        num += 1
-    message = {"chunk": "done", "size": size}
-    if checksum:
-        ck = m.hexdigest()
-        message["checksum"] = m.hexdigest()
-    conn.send(message)
+            ck = m.hexdigest()
+            message["checksum"] = m.hexdigest()
+        conn.send(message)
+
     if checksum:
         return ck
     else:
@@ -152,20 +159,23 @@ def processChecksums(inodes):
     message = {
         "message": "CKS",
         "files": files
-        }
+    }
 
     response = sendAndReceive(message)
 
     if not response["message"] == "ACKSUM":
         raise Exception
-    for i in response["done"]:
+    # First, delete all the files which are "done", ie, matched
+    for i in [tuple(x) for x in response['done']]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 print "File: [C]: {}".format(shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
-    for i in response["content"]:
+    # First, then send content for any files which don't
+    # FIXME: TODO: There should be a test in here for Delta's
+    for i in [tuple(x) for x in response['content']]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
@@ -305,26 +315,37 @@ def sendContent(inode):
                 }
             if iv:
                 message["iv"] = conn.encode(iv)
-            sendMessage(message)
+            # Attempt to open the data source
+            # Punt out if unsuccessful
+            try:
+                if S_ISLNK(mode):
+                    # It's a link.  Send the contents of readlink
+                    #chunk = os.readlink(pathname)
+                    x = cStringIO.StringIO(os.readlink(pathname))
+                else:
+                    x = open(pathname, "rb")
+            except IOError as e:
+                print "Error: Could not open {}: {}".format(pathname, e)
+                return
 
-            if S_ISLNK(mode):
-                # It's a link.  Send the contents of readlink
-                #chunk = os.readlink(pathname)
-                x = cStringIO.StringIO(os.readlink(pathname))
-                checksum = sendData(x, encrypt, checksum=True)
-            else:
-                x = open(pathname, "rb")
-                checksum = sendData(x, encrypt, checksum=True)
-            if crypt:
-                x.seek(0)
-                sig = librsync.SigFile(x)
-                message = {
-                    "message" : "SIG",
-                    "checksum": checksum
-                }
+            # Attempt to send the data.
+            try:
                 sendMessage(message)
-                sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
-            x.close()
+                checksum = sendData(x, encrypt, checksum=True)
+
+                if crypt:
+                    x.seek(0)
+                    sig = librsync.SigFile(x)
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                    sendMessage(message)
+                    sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+            except Exception as e:
+                print "Caught exception during sending of data {}".format(e)
+            finally:
+                x.close()
     else:
         print "Error: Unknown inode {}".format(inode)
 
@@ -337,11 +358,11 @@ def handleAckDir(message):
     if verbosity > 2:
         print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
 
-    for i in done:
+    for i in [tuple(x) for x in done]:
         if i in inodeDB:
             del inodeDB[i]
 
-    for i in content:
+    for i in [tuple(x) for x in content]:
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
@@ -354,7 +375,7 @@ def handleAckDir(message):
         if i in inodeDB:
             del inodeDB[i]
 
-    for i in delta:
+    for i in [tuple(x) for x in delta]:
         if verbosity > 1:
 			if i in inodeDB:
 				(x, name) = inodeDB[i]
@@ -365,7 +386,7 @@ def handleAckDir(message):
 
     # Collect the ACK messages
     if len(cksum) > 0:
-        processChecksums(cksum)
+        processChecksums([tuple(x) for x in cksum])
 
     if verbosity > 3:
         print "----- AckDir complete"
@@ -381,7 +402,7 @@ def mkFileInfo(dir, name):
         name = unicode(name.decode('utf8', 'ignore'))
         if crypt:
             name = crypt.encryptFilename(name)
-        file =  {
+        finfo =  {
             'name':   name,
             'inode':  s.st_ino,
             'dir':    S_ISDIR(mode),
@@ -397,11 +418,11 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        inodeDB[s.st_ino] = (file, pathname)
+        inodeDB[(s.st_dev, s.st_ino)] = (finfo, pathname)
     else:
         if verbosity:
             print "Skipping special file: {}".format(pathname)
-    return file
+    return finfo
     
 def processDir(dir, dirstat, excludes=[], allowClones=True):
     stats['dirs'] += 1;
@@ -418,29 +439,32 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
     localExcludes.extend(loadExcludeFile(os.path.join(dir, localExcludeFile)))
 
     files = []
-
     subdirs = []
-    for f in filelist(dir, localExcludes):
-        try:
-            file = mkFileInfo(dir, f)
-            if file:
-                mode = file["mode"]
-                if S_ISLNK(mode):
-                    stats['links'] += 1
-                elif S_ISREG(mode):
-                    stats['files'] += 1
-                    stats['backed'] += file["size"]
 
-                if S_ISDIR(mode):
-                    if args.crossdev or device == file['dev']:
-                        subdirs.append(os.path.join(dir, f))
+    try:
+        for f in filelist(dir, localExcludes):
+            try:
+                file = mkFileInfo(dir, f)
+                if file:
+                    mode = file["mode"]
+                    if S_ISLNK(mode):
+                        stats['links'] += 1
+                    elif S_ISREG(mode):
+                        stats['files'] += 1
+                        stats['backed'] += file["size"]
 
-                files.append(file)
-        except IOError as e:
-            print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
-        except:
-            print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
-            traceback.print_exc()
+                    if S_ISDIR(mode):
+                        if args.crossdev or device == file['dev']:
+                            subdirs.append(os.path.join(dir, f))
+
+                    files.append(file)
+            except (IOError, OSError) as e:
+                print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
+            except:
+                print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
+                traceback.print_exc()
+    except (IOError, OSError) as e:
+        print "Error reading directory %s: %s" % (dir, str(e))
 
     return (files, subdirs, excludes)
 
@@ -649,7 +673,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
-        traceback.print_exc()
+        print "Error handling directory: %s: %s" % (dir, str(e))
+        #traceback.print_exc()
     except:
         # TODO: Clean this up
         raise
