@@ -475,7 +475,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return (None, flush)
 
     def processCopy(self, message):
-        inode = message['inode']
+        (dev, inode) = message['inode']
         copyfile = message['file']
         checksum = message['checksum']
         size     = message['size']

@@ -422,6 +422,7 @@ def mkFileInfo(dir, name):
     else:
         if verbosity:
             print "Skipping special file: {}".format(pathname)
+        finfo = None
     return finfo
     
 def processDir(dir, dirstat, excludes=[], allowClones=True):
