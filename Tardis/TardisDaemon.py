@@ -41,8 +41,7 @@ import ssl
 import hashlib
 import base64
 import subprocess
-#import daemon
-#import daemon.pidfile
+import daemonize
 import pprint
 import tempfile
 import shutil
@@ -779,7 +778,7 @@ def setupLogging(config):
 
     return logger
 
-def run_server(config):
+def run_server():
     logger = setupLogging(config)
     logger.info("Starting server");
 
@@ -810,7 +809,7 @@ def main():
     parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
     parser.add_argument('--schema',         dest='schema', default=schemaLocal, help='Path to the schema to use')
-    #parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
@@ -840,13 +839,14 @@ def main():
         'Single'        : str(args.single),
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
-        #'Daemon'        : str(args.daemon),
+        'Daemon'        : str(args.daemon),
         'Daemon'        : 'false',
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
         'KeyFile'       : args.keyfile
     }
 
+    global config
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
 
@@ -857,12 +857,11 @@ def main():
         schemaFile = config.get('Tardis', 'Schema')
 
     try:
-        #if config.getboolean('Tardis', 'Daemon'):
-        #    pidfile = daemon.pidfile.TimeoutPIDLockFile("/var/run/testdaemon/tardis.pid")
-        #    with daemon.DaemonContext(pidfile=pidfile, working_directory='.'):
-        #        run_server(config)
-        #else:
-        run_server(config)
+        if config.getboolean('Tardis', 'Daemon'):
+            daemon = daemonize.Daemonize(app="tardisd", pid="/var/run/tardisd.pid", action=run_server)
+            daemon.start()
+        else:
+            run_server()
     except KeyboardInterrupt:
         pass
     except:
