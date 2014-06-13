@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 import sys, os
 
-version = '0.1'
+version = '0.2'
 
 setup(  name                    = 'Tardis',
         version                 = version,
@@ -13,7 +13,8 @@ setup(  name                    = 'Tardis',
         zip_safe                = False,
         install_requires = ['bson', 'pycrypto', 'parsedatetime' ],
         data_files = [( 'etc/tardis', ['tardisd.cfg'] ),
-                      ( 'schema', ['schema/tardis.sql']) ],
+                      ( 'schema', ['schema/tardis.sql']),
+                      ( '/etc/init.d', [ 'init/tardisd' ] ) ],
         entry_points = {
                 'console_scripts' : [
                     'tardis = Tardis.TardisClient:main',
