@@ -12,10 +12,10 @@
 . /lib/lsb/init-functions
 
 # Process name ( For display )
-NAME=tardis
+NAME=tardisd
 
 # Daemon name, where is the actual executable
-DAEMON=/usr/bin/tardisd
+DAEMON=/usr/local/bin/tardisd
 
 # pid file for the daemon
 PIDFILE=/var/run/tardisd.pid
