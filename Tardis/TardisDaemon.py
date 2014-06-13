@@ -840,7 +840,6 @@ def main():
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         'Daemon'        : str(args.daemon),
-        'Daemon'        : 'false',
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
         'KeyFile'       : args.keyfile
