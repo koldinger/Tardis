@@ -809,13 +809,16 @@ def main():
     parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
     parser.add_argument('--schema',         dest='schema', default=schemaLocal, help='Path to the schema to use')
-    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
     parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
     parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
     parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
+
+    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
+    parser.add_argument('--user', '-U',     dest='user',  default=None, help='Run daemon as user.  Valid only if --daemon is set')
+    parser.add_argument('--group', '-G',    dest='group', default=None, help='Run daemon as group.  Valid only if --daemon is set')
 
     sslgroup = parser.add_mutually_exclusive_group()
     sslgroup.add_argument('--ssl', '-s',    dest='ssl', action='store_true', default=False, help='Use SSL connections')
@@ -840,6 +843,8 @@ def main():
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         'Daemon'        : str(args.daemon),
+        'User'          : args.user,
+        'Group'         : args.group,
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
         'KeyFile'       : args.keyfile
@@ -857,7 +862,9 @@ def main():
 
     try:
         if config.getboolean('Tardis', 'Daemon'):
-            daemon = daemonize.Daemonize(app="tardisd", pid="/var/run/tardisd.pid", action=run_server)
+            user  = config.get('Tardis', 'User')
+            group = config.get('Tardis', 'Group')
+            daemon = daemonize.Daemonize(app="tardisd", pid="/var/run/tardisd.pid", action=run_server, user=user, group=group)
             daemon.start()
         else:
             run_server()
