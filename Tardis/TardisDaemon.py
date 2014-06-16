@@ -860,19 +860,22 @@ def main():
         global schemaFile
         schemaFile = config.get('Tardis', 'Schema')
 
-    try:
-        if config.getboolean('Tardis', 'Daemon'):
-            user  = config.get('Tardis', 'User')
-            group = config.get('Tardis', 'Group')
+    if config.getboolean('Tardis', 'Daemon'):
+        user  = config.get('Tardis', 'User')
+        group = config.get('Tardis', 'Group')
+        try:
             daemon = daemonize.Daemonize(app="tardisd", pid="/var/run/tardisd.pid", action=run_server, user=user, group=group)
             daemon.start()
-        else:
+        except Exception as e:
+            print "Caught Exception on Daemonize call: {}".format(e)
+    else:
+        try:
             run_server()
-    except KeyboardInterrupt:
-        pass
-    except:
-        print "Unable to run server: {}".format(sys.exc_info()[1])
-        traceback.print_exc()
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            print "Unable to run server: {}".format(e)
+            traceback.print_exc()
 
 if __name__ == "__main__":
     sys.exit(main())
