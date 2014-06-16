@@ -28,7 +28,7 @@ Features currently planned to be implemented:
 4. Encrypted encryption key stored on server, decrypted on client?
 5. User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  Currently different backup sessions could use different keys, and basically create a mess of everything).
 6. ~~Python EGG setup.~~
-7. Better daemon support.
+7. ~~Better daemon support.~~
 8. LSB init script (systemctl support)?
 9. Space management.  Multiple purge schedules for different prioritys.  On demand purging when low on space.
 10. Client side configuration files.
@@ -47,7 +47,7 @@ If you want to use SSL, create a certificate and a key file (plenty of direction
 Set the 
 Start the client as a "service" (better configuration coming later):
   nohup tardisd --config <path-to-your-tardisd.cfg> &
-The --daemon argument probably works, but needs testing.
+~~The --daemon argument probably works, but needs testing.~~
 
 Running the Client
 ==================
