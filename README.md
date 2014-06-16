@@ -33,7 +33,7 @@ Features currently planned to be implemented:
 9. Space management.  Multiple purge schedules for different prioritys.  On demand purging when low on space.
 10. Client side configuration files.
 
-Tardis relies on the bson, xattrs, pycrypto, and ~~python-daemon~~ packages.
+Tardis relies on the bson, xattrs, pycrypto, and daemonize packages.
 Tardis currently uses the librsync from rdiff-backup, but I hope to remove that soon.
 
 Setup
@@ -47,7 +47,6 @@ If you want to use SSL, create a certificate and a key file (plenty of direction
 Set the 
 Start the client as a "service" (better configuration coming later):
   nohup tardisd --config <path-to-your-tardisd.cfg> &
-~~The --daemon argument probably works, but needs testing.~~
 
 Running the Client
 ==================
