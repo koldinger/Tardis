@@ -403,11 +403,15 @@ class TardisDB(object):
         fields = {"backup": self.currBackupSet, "parent": parent}.items()
         temp = addFields(fields, fileInfo)
         self.setNameID([temp])
-        self.conn.execute("INSERT INTO Files "
-                          "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
-                          "VALUES  "
-                          "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
-                          temp)
+        try:
+            self.conn.execute("INSERT INTO Files "
+                              "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                              "VALUES  "
+                              "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                              temp)
+        except IntegrityError as e:
+            self.logger.warning("Error inserting data: %s %s", temp, e)
+            raise e
 
     def insertFiles(self, files, parent):
         self.logger.debug("Inserting files: %d", len(files))
