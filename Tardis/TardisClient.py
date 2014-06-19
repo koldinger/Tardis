@@ -925,24 +925,42 @@ def main():
     verbosity=args.verbose
     ignorectime = args.ignorectime
 
-    # Figure out the name and the priority of this backupset
-    (name, priority) = setBackupName(args)
+    try:
+        # Figure out the name and the priority of this backupset
+        (name, priority) = setBackupName(args)
 
-    # Load the excludes
-    loadExcludes(args)
+        # Load the excludes
+        loadExcludes(args)
 
-    # Error check the purge parameter.  Disable it if need be
-    if args.purge and not purgeTime:
-        print "Must specify purge days with this option set"
-        args.purge=False
+        # Error check the purge parameter.  Disable it if need be
+        if args.purge and not purgeTime:
+            print "Must specify purge days with this option set"
+            args.purge=False
+
+        # Load any password info
+        password = args.password
+        args.password = None
+        if args.passwordfile:
+            with open(args.passwordfile, "r") as f:
+                password = f.readline()
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password)
+        password = None
+    except Exception as e:
+        print "Unable to initialize: {}".format(str(e))
+        sys.exit(1)
 
     # Open the connection
-    if args.protocol == 'json':
-        conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
-        setEncoder("base64")
-    elif args.protocol == 'bson':
-        conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
-        setEncoder("bin")
+    try:
+        if args.protocol == 'json':
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            setEncoder("base64")
+        elif args.protocol == 'bson':
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            setEncoder("bin")
+    except Exception as e:
+        print "Unable to open connection with {}:{} : {}".format(args.server, args.port, str(e))
+        sys.exit(1)
 
     if verbosity or args.stats:
         print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
@@ -956,15 +974,6 @@ def main():
 
     if args.copy:
         requestTargetDir()
-
-    password = args.password
-    args.password = None
-    if args.passwordfile:
-        with open(args.passwordfile, "r") as f:
-            password = f.readline()
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password)
-    password = None
 
     # Now, do the actual work here.
     for x in map(os.path.realpath, args.directories):
