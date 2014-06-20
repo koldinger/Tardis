@@ -83,7 +83,7 @@ batchDirs           = []
 
 crypt               = None
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0 }
 
 inodeDB             = {}
 
@@ -1004,14 +1004,16 @@ def main():
             sendPurge(True)
 
     if args.stats:
-        connstats = conn.stats
+        connstats = conn.getStats()
     conn.close()
 
     endtime = datetime.datetime.now()
 
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
-        print dict(stats.items() + connstats.items())
+        #print dict(stats.items() + connstats.items())
+        print stats
+        print connstats
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -86,6 +86,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     cache   = None
     db      = None
     purged  = False
+    statNewFiles = 0
+    statUpdFiles = 0
+    statDirs     = 0
+    statBytesReceived = 0
 
     def setup(self):
         self.sessionid = uuid.uuid1()
@@ -209,7 +213,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if data['path']:
                 oldDir = self.db.getFileInfoByPath(data['path'], current=False)
             # If found, read that' guys directory
-            if oldDir:
+            if oldDir and oldDir['dir'] == 1:
                 dirInode = oldDir['inode']
             else:
                 # Otherwise
@@ -355,6 +359,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             output.close()
             # TODO: This has gotta be wrong.
 
+        self.statUpdFiles += 1
+        self.statBytesReceived += bytesReceived
+
         self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
         self.db.setChecksum(inode, checksum)
         flush = True if size > 1000000 else False;
@@ -466,6 +473,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
         self.db.setChecksum(inode, checksum)
+
+        self.statNewFiles += 1
+        self.statBytesReceived += bytesReceived
 
         #return {"message" : "OK", "inode": message["inode"]}
         flush = False
@@ -716,12 +726,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ps.print_stats()
                 print s.getvalue()
             self.logger.info("Connection complete")
-
-        def finish(self):
-            self.logger.info("Removing orphans")
+            self.logger.info("New or replaced files:    %d", self.statNewFiles)
+            self.logger.info("Updated file:             %d", self.statUpdFiles)
+            self.logger.info("Total file data received: %d", self.statBytesReceived)
+            self.logger.debug("Removing orphans")
             self.removeOrphans()
             if self.purged:
                 self.db.compact()
+
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
