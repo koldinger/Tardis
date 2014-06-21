@@ -83,7 +83,7 @@ batchDirs           = []
 
 crypt               = None
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 }
 
 inodeDB             = {}
 
@@ -121,8 +121,7 @@ def sendData(file, encrypt, checksum=False):
             data = conn.encode(encrypt(chunk))
             chunkMessage = { "chunk" : num, "data": data }
             conn.send(chunkMessage)
-            x = len(chunk)
-            stats["bytes"] += x
+            x = len(data)
             size += x
             num += 1
     except Exception as e:
@@ -133,6 +132,8 @@ def sendData(file, encrypt, checksum=False):
             ck = m.hexdigest()
             message["checksum"] = m.hexdigest()
         conn.send(message)
+
+    stats['dataSent'] += size
 
     if checksum:
         return ck
@@ -1011,9 +1012,9 @@ def main():
 
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
-        #print dict(stats.items() + connstats.items())
-        print stats
-        print connstats
+        print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:,}".format(stats['dirs'], stats['files'], stats['links'], stats['backed'])
+        print "Messages:    Sent: {:,} ({:,}) Received: {:,} ({:,})".format(connstats['messagesSent'], connstats['bytesSent'], connstats['messagesRecvd'], connstats['bytesRecvd'])
+        print "Data Sent:   {:,} bytes".format(stats['dataSent'])
 
 if __name__ == '__main__':
     sys.exit(main())
