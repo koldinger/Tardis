@@ -409,7 +409,7 @@ class TardisDB(object):
                               "VALUES  "
                               "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                               temp)
-        except IntegrityError as e:
+        except sqlite3.IntegrityError as e:
             self.logger.warning("Error inserting data: %s %s", temp, e)
             raise e
 

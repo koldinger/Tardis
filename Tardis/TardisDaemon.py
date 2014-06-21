@@ -73,6 +73,7 @@ schemaName   = 'schema/tardis.sql'
 schemaFile   = None
 parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
+messages = [ "DIR", "SGR", "SIG", "DEL", "CON", "CKS", "CLN", "CPY", "BATCH", "TMPDIR", "PRG" ]
 
 pp = pprint.PrettyPrinter(indent=2, width=200)
 
@@ -90,6 +91,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     statUpdFiles = 0
     statDirs     = 0
     statBytesReceived = 0
+    statCommands = {}
 
     def setup(self):
         self.sessionid = uuid.uuid1()
@@ -574,6 +576,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
+        if not messageType in self.statCommands:
+            self.statCommands[messageType] = 1
+        else:
+            self.statCommands[messageType] += 1
 
         if messageType == "DIR":
             return self.processDir(message)
