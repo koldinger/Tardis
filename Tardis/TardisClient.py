@@ -43,11 +43,13 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
-from rdiff_backup import librsync
-from Connection import JsonConnection, BsonConnection
 from functools import partial
 
+from rdiff_backup import librsync
+
 import TardisCrypto
+from Connection import JsonConnection, BsonConnection
+import Util
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
@@ -1012,9 +1014,9 @@ def main():
 
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
-        print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:,}".format(stats['dirs'], stats['files'], stats['links'], stats['backed'])
-        print "Messages:    Sent: {:,} ({:,}) Received: {:,} ({:,})".format(connstats['messagesSent'], connstats['bytesSent'], connstats['messagesRecvd'], connstats['bytesRecvd'])
-        print "Data Sent:   {:,} bytes".format(stats['dataSent'])
+        print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed']))
+        print "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
+        print "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent']))
 
 if __name__ == '__main__':
     sys.exit(main())
