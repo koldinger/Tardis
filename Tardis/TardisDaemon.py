@@ -46,6 +46,9 @@ import pprint
 import tempfile
 import shutil
 import traceback
+import signal
+import thread
+import threading
 from rdiff_backup import librsync
 
 # For profiling
@@ -59,6 +62,7 @@ import Messages
 import CacheDir
 import TardisDB
 import Regenerate
+import Util
 
 sessions = {}
 
@@ -74,6 +78,9 @@ schemaFile   = None
 parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
 messages = [ "DIR", "SGR", "SIG", "DEL", "CON", "CKS", "CLN", "CPY", "BATCH", "TMPDIR", "PRG" ]
+
+server = None
+logger = None
 
 pp = pprint.PrettyPrinter(indent=2, width=200)
 
@@ -576,10 +583,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
-        if not messageType in self.statCommands:
-            self.statCommands[messageType] = 1
-        else:
-            self.statCommands[messageType] += 1
+        #if not messageType in self.statCommands:
+        #    self.statCommands[messageType] = 1
+        #else:
+        #    self.statCommands[messageType] += 1
+        self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
         if messageType == "DIR":
             return self.processDir(message)
@@ -662,7 +670,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     e = sys.exc_info()[0]
                     self.logger.exception(e)
                 self.db.deleteChecksum(c)
-            self.logger.info("Removed %d orphans, %d bytes", count, size)
+            self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
             if count:
                 self.purged = True
 
@@ -734,7 +742,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.info("Connection complete")
             self.logger.info("New or replaced files:    %d", self.statNewFiles)
             self.logger.info("Updated file:             %d", self.statUpdFiles)
-            self.logger.info("Total file data received: %d", self.statBytesReceived)
+            self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
+            self.logger.info("Command breakdown:        %s", self.statCommands)
             self.logger.debug("Removing orphans")
             self.removeOrphans()
             if self.purged:
@@ -797,6 +806,8 @@ def setupLogging(config):
     return logger
 
 def run_server():
+    global server
+    global logger
     logger = setupLogging(config)
     logger.info("Starting server");
 
@@ -812,10 +823,22 @@ def run_server():
             except:
                 logger.info("Socket server completed")
         logger.info("Ending")
-    except:
+    except Exception:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
         logger.exception(sys.exc_info()[1])
 
+def stop_server():
+    logger.info("Stopping server")
+    server.shutdown()
+
+def signal_term_handler(signal, frame):
+    logger.info("Caught term signal.  Stopping")
+    t = threading.Thread(target = shutdownHandler)
+    t.start()
+    logger.info("Server stopped")
+
+def shutdownHandler():
+    stop_server()
 
 def main():
     # Compute the path to the default schema.  Needs to be done here for some reason
@@ -837,6 +860,7 @@ def main():
     parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--user', '-U',     dest='user',  default=None, help='Run daemon as user.  Valid only if --daemon is set')
     parser.add_argument('--group', '-G',    dest='group', default=None, help='Run daemon as group.  Valid only if --daemon is set')
+    parser.add_argument('--pidfile', '-P',  dest='pidfile', default='/var/run/tardisd.pid', help='Use this pidfile to indicate running daemon')
 
     sslgroup = parser.add_mutually_exclusive_group()
     sslgroup.add_argument('--ssl', '-s',    dest='ssl', action='store_true', default=False, help='Use SSL connections')
@@ -865,7 +889,8 @@ def main():
         'Group'         : args.group,
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
-        'KeyFile'       : args.keyfile
+        'KeyFile'       : args.keyfile,
+        'PidFile'       : args.pidfile
     }
 
     global config
@@ -878,11 +903,15 @@ def main():
         global schemaFile
         schemaFile = config.get('Tardis', 'Schema')
 
+    # Set up a handler
+    signal.signal(signal.SIGTERM, signal_term_handler)
+
     if config.getboolean('Tardis', 'Daemon'):
         user  = config.get('Tardis', 'User')
         group = config.get('Tardis', 'Group')
+        pidfile = config.get('Tardis', 'PidFile')
         try:
-            daemon = daemonize.Daemonize(app="tardisd", pid="/var/run/tardisd.pid", action=run_server, user=user, group=group)
+            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group)
             daemon.start()
         except Exception as e:
             print "Caught Exception on Daemonize call: {}".format(e)
