@@ -807,8 +807,7 @@ def setupLogging(config):
 
 def run_server():
     global server
-    global logger
-    logger = setupLogging(config)
+
     logger.info("Starting server");
 
     try:
@@ -882,7 +881,6 @@ def main():
         'LogFile'       : args.logfile,
         'AllowCopies'   : str(args.copies),
         'Single'        : str(args.single),
-        'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         'Daemon'        : str(args.daemon),
         'User'          : args.user,
@@ -905,6 +903,12 @@ def main():
 
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
+    global logger
+    try:
+        logger = setupLogging(config)
+    except Exception as e:
+        print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
+        sys.exit(1)
 
     if config.getboolean('Tardis', 'Daemon'):
         user  = config.get('Tardis', 'User')
@@ -914,7 +918,7 @@ def main():
             daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group)
             daemon.start()
         except Exception as e:
-            print "Caught Exception on Daemonize call: {}".format(e)
+            print >> "Caught Exception on Daemonize call: {}".format(e)
     else:
         try:
             run_server()
@@ -925,4 +929,7 @@ def main():
             traceback.print_exc()
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:
+        traceback.print_exc()

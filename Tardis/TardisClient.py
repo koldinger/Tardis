@@ -979,43 +979,46 @@ def main():
         requestTargetDir()
 
     # Now, do the actual work here.
-    for x in map(os.path.realpath, args.directories):
-        if rootdir:
-            makePrefix(rootdir, x)
-        else:
-            (d, name) = os.path.split(x)
-            f = mkFileInfo(d, name)
-            sendDirEntry(0, [f])
+    try:
+        for x in map(os.path.realpath, args.directories):
+            if rootdir:
+                makePrefix(rootdir, x)
+            else:
+                (d, name) = os.path.split(x)
+                f = mkFileInfo(d, name)
+                sendDirEntry(0, [f])
 
-    for x in map(os.path.realpath, args.directories):
-        if rootdir:
-            root = rootdir
-        else:
-            (d, name) = os.path.split(x)
-            root = d
+        for x in map(os.path.realpath, args.directories):
+            if rootdir:
+                root = rootdir
+            else:
+                (d, name) = os.path.split(x)
+                root = d
 
-        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
+            recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
-    # If any clone or batch requests still lying around, send them
-    flushClones()
-    flushBatchDirs()
+        # If any clone or batch requests still lying around, send them
+        flushClones()
+        flushBatchDirs()
 
-    if args.purge:
-        if args.purgetime:
-            sendPurge(False)
-        else:
-            sendPurge(True)
-
-    if args.stats:
-        connstats = conn.getStats()
-    conn.close()
+        if args.purge:
+            if args.purgetime:
+                sendPurge(False)
+            else:
+                sendPurge(True)
+        conn.close()
+    except KeyboardInterrupt:
+        if verbosity or args.stats:
+            print "Backup Interupted"
 
     endtime = datetime.datetime.now()
 
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
         print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed']))
-        print "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
+        if conn is not None:
+            connstats = conn.getStats()
+            print "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
         print "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent']))
 
 if __name__ == '__main__':
