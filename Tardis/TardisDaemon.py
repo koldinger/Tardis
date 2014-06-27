@@ -194,7 +194,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Keep the order
         queues = [done, content, cksum, delta]
 
-        parentInode = data['inode']
+        parentInode = tuple(data['inode'])
         files = data['files']
 
         dirhash = {}
@@ -210,7 +210,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 oldDir = self.db.getFileInfoByPath(data['path'], current=False)
             # If found, read that' guys directory
             if oldDir:
-                dirInode = oldDir['inode']
+                #### TODO: FIXME: Get actual Device
+                dirInode = (oldDir['inode'], 0)
             else:
                 # Otherwise
                 dirInode = parentInode
@@ -222,7 +223,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         for f in files:
             inode = f['inode']
-            fileId = (f['dev'], f['inode'])
+            fileId = (f['inode'], f['dev'])
             self.logger.debug(u'Processing file: %s %d %s', f["name"], inode, fileId)
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
@@ -248,12 +249,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
         #self.logger.debug("Processing signature request message: %s"format(str(message)))
-        (dev, inode) = message["inode"]
+        (inode, dev) = message["inode"]
         response = None
+        chksum = None
 
         ### TODO: Remove this function.  Clean up.
         info = self.db.getNewFileInfoByInode(inode)
-        chksum = self.db.getChecksumByName(info["name"], info["parent"])      ### Assumption: Current parent is same as old
+        if info:
+            chksum = self.db.getChecksumByName(info["name"], info["parent"])      ### Assumption: Current parent is same as old
 
         if chksum:
             sigfile = chksum + ".sig"
@@ -304,7 +307,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message["checksum"]
         basis    = message["basis"]
         size     = message["size"]          # size of the original file, not the content
-        (dev, inode)    = message["inode"]
+        (inode, dev)    = message["inode"]
         iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         deltasize = message['deltasize'] if 'deltasize' in message else None
 
@@ -398,7 +401,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         done = []
         content = []
         for f in message["files"]:
-            (dev, inode) = f["inode"]
+            (inode, dev) = f["inode"]
             cksum = f["checksum"]
             if self.cache.exists(cksum):
                 self.db.setChecksum(inode, cksum)
@@ -462,7 +465,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             self.db.insertChecksumFile(checksum, iv, size, basis=basis)
 
-        (dev, inode) = message['inode']
+        (inode, dev) = message['inode']
 
         self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
         self.db.setChecksum(inode, checksum)
@@ -474,7 +477,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return (None, flush)
 
     def processCopy(self, message):
-        (dev, inode) = message['inode']
+        (inode, dev) = message['inode']
         copyfile = message['file']
         checksum = message['checksum']
         size     = message['size']
@@ -532,13 +535,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         content = []
         for d in message['clones']:
             inode = d['inode']
-            (numfiles, checksum) = self.checksumDir(inode)
+            device = d['dev']
+            (numfiles, checksum) = self.checksumDir((inode, device))
             if numfiles != d['numfiles'] or checksum != d['cksum']:
                 self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, numfiles, d['numfiles'], checksum, d['cksum'])
-                content.append(d['inode'])
+                content.append([inode, device])
             else:
-                rows = self.db.cloneDir(d['inode'])
-                done.append(d['inode'])
+                ### TODO Update to include device
+                rows = self.db.cloneDir((inode, device))
+                done.append([inode, device])
+        print "DONE!!!", done
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
     def processBatch(self, message):
@@ -796,7 +802,7 @@ def run_server():
         logger.info("Ending")
     except:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        logger.exception(sys.exc_info()[1])
+        #logger.exception(sys.exc_info()[1])
 
 
 def main():

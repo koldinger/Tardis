@@ -418,7 +418,7 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        inodeDB[(s.st_dev, s.st_ino)] = (finfo, pathname)
+        inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
         if verbosity:
             print "Skipping special file: {}".format(pathname)
@@ -469,34 +469,6 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
 
     return (files, subdirs, excludes)
 
-def checkClonable(dir, stat, files, subdirs):
-    if (ignorectime is False) and (stat.st_ctime > conn.lastTimestamp):
-        return False
-    if stat.st_mtime > conn.lastTimestamp:
-        return False
-
-    # Now, collect the timestamps of all the files, and determine the maximum
-    # If any are greater than the last timestamp, punt
-    extend = partial(os.path.join, path)
-    if subdirs and len(subdirs):
-        times = map(os.lstat, map(extend, subdirs))
-        if ignorectime:
-            time = max([x.st_mtime for x in times])
-        else:
-            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
-        if time > conn.lastTimestamp:
-            return False
-    if files and len(files):
-        times = map(os.lstat, map(extend, subs))
-        if ignorectime:
-            time = max([x.st_mtime for x in times])
-        else:
-            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
-        if time > conn.lastTimestamp:
-            return False
-
-    return True
-
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
         raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
@@ -504,7 +476,8 @@ def handleAckClone(message):
         print "Processing ACKCLN: Up-to-date: %d New Content: %d" % (len(message['done']), len(message['content']))
 
     # Process the directories that have changed
-    for inode in message["content"]:
+    for i in message["content"]:
+        inode = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity:
@@ -512,7 +485,7 @@ def handleAckClone(message):
             if len(files) < args.batchdirs:
                 if verbosity:
                     print "[Batched]"
-                batchDirs.append(makeDirMessage(path, inode, files))
+                batchDirs.append(makeDirMessage(path, inode[0], inode[1], files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
@@ -523,7 +496,8 @@ def handleAckClone(message):
             del cloneContents[inode]
 
     # Purge out what hasn't changed
-    for inode in message["done"]:
+    for i in message["done"]:
+        inode = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             for f in files:
@@ -582,7 +556,7 @@ def sendDirChunks(path, inode, files):
     message = {
         'message': 'DIR',
         'path':  path,
-        'inode':  inode
+        'inode': list(inode)
     }
 
     chunkNum = 0
@@ -597,11 +571,11 @@ def sendDirChunks(path, inode, files):
         response = sendAndReceive(message)
         handleAckDir(response)
 
-def makeDirMessage(path, inode, files):
+def makeDirMessage(path, inode, dev, files):
     message = {
         'files':  files,
-        'inode':  inode,
-        'path':  path,
+        'inode':  [inode, dev],
+        'path':   path,
         'message': 'DIR',
         }
     return message
@@ -648,8 +622,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             for f in filenames:
                 m.update(f.encode('utf8', 'ignore'))
 
-            cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
-            cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
+            cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
+            cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
             flushBatchDirs()
             if len(cloneDirs) >= args.clones:
                 flushClones()
@@ -658,7 +632,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 if verbosity:
                     print " [Batched]"
                 flushClones()
-                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
+                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
@@ -666,7 +640,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                     print
                 flushClones()
                 flushBatchDirs()
-                sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
+                sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -774,13 +748,13 @@ def sendAndReceive(message):
     sendMessage(message)
     return receiveMessage()
 
-def sendDirEntry(parent, files):
+def sendDirEntry(parent, device, files):
     # send a fake root directory
     message = {
         'message': 'DIR',
-        'files':  files,
+        'files': files,
         'path':  None,
-        'inode': parent,
+        'inode': [parent, device],
         'files': files
         }
 
@@ -837,10 +811,11 @@ sentDirs = {}
 
 def makePrefix(root, path):
     """ Create common path directories.  Will be empty, except for path elements to the repested directories. """
-    rPath = os.path.relpath(path, root)
-    pathDirs = splitDirs(rPath)
-    parent = 0
-    current = root
+    rPath     = os.path.relpath(path, root)
+    pathDirs  = splitDirs(rPath)
+    parent    = 0
+    parentDev = 0
+    current   = root
     for d in pathDirs:
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
@@ -848,8 +823,9 @@ def makePrefix(root, path):
         if dirPath not in sentDirs:
             sendDirEntry(parent, [f])
             sentDirs[dirPath] = parent
-        parent = st.st_ino
-        current = dirPath
+        parent    = st.st_ino
+        parentDev = st.st_dev
+        current   = dirPath
      
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
@@ -967,21 +943,23 @@ def main():
     password = None
 
     # Now, do the actual work here.
+
+    # First, send any fake directories
     for x in map(os.path.realpath, args.directories):
         if rootdir:
             makePrefix(rootdir, x)
         else:
             (d, name) = os.path.split(x)
             f = mkFileInfo(d, name)
-            sendDirEntry(0, [f])
+            sendDirEntry(0, 0, [f])
 
+    # Now, process all the actual directories
     for x in map(os.path.realpath, args.directories):
         if rootdir:
             root = rootdir
         else:
             (d, name) = os.path.split(x)
             root = d
-
         recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
     # If any clone or batch requests still lying around, send them
