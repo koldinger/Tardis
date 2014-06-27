@@ -78,7 +78,7 @@ class Connection(object):
     def put(self, message):
         self.sock.sendall(message)
         self.stats['messagesSent'] += 1
-        self.stats['bytesSent'] += len(message)
+        #self.stats['bytesSent'] += len(message)
         return
 
     def recv(n):
@@ -93,7 +93,7 @@ class Connection(object):
     def get(self, size):
         message = self.sock.recv(size).strip()
         self.stats['messagesRecvd'] += 1
-        self.stats['bytesRecvd'] += len(message)
+        #self.stats['bytesRecvd'] += len(message)
         return message
 
     def close(self):
@@ -105,6 +105,9 @@ class Connection(object):
     def getLastTimestap(self):
         return self.lastTimestamp
 
+    def getStats(self):
+        return self.stats
+
 class ProtocolConnection(Connection):
     sender = None
     def __init__(self, host, port, name, protocol, priority, use_ssl, hostname):
@@ -112,13 +115,13 @@ class ProtocolConnection(Connection):
 
     def send(self, message):
         self.stats['messagesSent'] += 1
-        self.stats['bytesSent'] += len(message)
+        #self.stats['bytesSent'] += len(message)
         self.sender.sendMessage(message)
 
     def receive(self):
         self.stats['messagesRecvd'] += 1
         message = self.sender.recvMessage()
-        self.stats['bytesRecvd'] += len(message)
+        #self.stats['bytesRecvd'] += len(message)
         return message
 
     def close(self):
@@ -136,13 +139,13 @@ class JsonConnection(ProtocolConnection):
     def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None):
         ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, hostname)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
-        self.sender = Messages.JsonMessages(self.sock)
+        self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
     def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None):
         ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, hostname)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
-        self.sender = Messages.BsonMessages(self.sock)
+        self.sender = Messages.BsonMessages(self.sock, stats=self.stats)
 
 class NullConnection(Connection):
     def __init__(self, host, port, name):

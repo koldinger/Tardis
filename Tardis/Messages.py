@@ -39,8 +39,9 @@ import struct
 class Messages(object):
     __socket = None
 
-    def __init__(self, socket):
+    def __init__(self, socket, stats=None):
         self.__socket = socket
+        self.__stats = stats
 
     def receiveBytes(self, n):
         msg = ''
@@ -49,14 +50,18 @@ class Messages(object):
             if chunk == '':
                 raise RuntimeError("socket connection broken")
             msg = msg + chunk
+        if self.__stats != None:
+            self.__stats['bytesRecvd'] += len(msg)
         return msg
 
     def sendBytes(self, bytes):
+        if self.__stats != None:
+            self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 
 class BinMessages(Messages):
-    def __init__(self, socket):
-        Messages.__init__(self, socket)
+    def __init__(self, socket, stats=None):
+        Messages.__init__(self, socket, stats)
 
     def sendMessage(self, message):
         length = struct.pack("!i", len(message))
@@ -69,8 +74,8 @@ class BinMessages(Messages):
         return self.receiveBytes(n)
 
 class TextMessages(Messages):
-    def __init__(self, socket):
-        Messages.__init__(self, socket)
+    def __init__(self, socket, stats=None):
+        Messages.__init__(self, socket, stats)
 
     def sendMessage(self, message):
         length = len(message)
@@ -83,8 +88,8 @@ class TextMessages(Messages):
         return self.receiveBytes(int(n))
 
 class JsonMessages(TextMessages):
-    def __init__(self, socket):
-        TextMessages.__init__(self, socket)
+    def __init__(self, socket, stats=None):
+        TextMessages.__init__(self, socket, stats)
     
     def sendMessage(self, message):
         self.lastMessageSent = message
@@ -105,8 +110,8 @@ class JsonMessages(TextMessages):
         return "base64"
 
 class BsonMessages(BinMessages):
-    def __init__(self, socket):
-        BinMessages.__init__(self, socket)
+    def __init__(self, socket, stats=None):
+        BinMessages.__init__(self, socket, stats)
     
     def sendMessage(self, message):
         self.lastMessageSent = message

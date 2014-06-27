@@ -43,11 +43,13 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
-from rdiff_backup import librsync
-from Connection import JsonConnection, BsonConnection
 from functools import partial
 
+from rdiff_backup import librsync
+
 import TardisCrypto
+from Connection import JsonConnection, BsonConnection
+import Util
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
@@ -83,7 +85,7 @@ batchDirs           = []
 
 crypt               = None
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'messages' : 0, 'bytes' : 0, 'backed' : 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 }
 
 inodeDB             = {}
 
@@ -121,8 +123,7 @@ def sendData(file, encrypt, checksum=False):
             data = conn.encode(encrypt(chunk))
             chunkMessage = { "chunk" : num, "data": data }
             conn.send(chunkMessage)
-            x = len(chunk)
-            stats["bytes"] += x
+            x = len(data)
             size += x
             num += 1
     except Exception as e:
@@ -133,6 +134,8 @@ def sendData(file, encrypt, checksum=False):
             ck = m.hexdigest()
             message["checksum"] = m.hexdigest()
         conn.send(message)
+
+    stats['dataSent'] += size
 
     if checksum:
         return ck
@@ -901,24 +904,42 @@ def main():
     verbosity=args.verbose
     ignorectime = args.ignorectime
 
-    # Figure out the name and the priority of this backupset
-    (name, priority) = setBackupName(args)
+    try:
+        # Figure out the name and the priority of this backupset
+        (name, priority) = setBackupName(args)
 
-    # Load the excludes
-    loadExcludes(args)
+        # Load the excludes
+        loadExcludes(args)
 
-    # Error check the purge parameter.  Disable it if need be
-    if args.purge and not purgeTime:
-        print "Must specify purge days with this option set"
-        args.purge=False
+        # Error check the purge parameter.  Disable it if need be
+        if args.purge and not purgeTime:
+            print "Must specify purge days with this option set"
+            args.purge=False
+
+        # Load any password info
+        password = args.password
+        args.password = None
+        if args.passwordfile:
+            with open(args.passwordfile, "r") as f:
+                password = f.readline()
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password)
+        password = None
+    except Exception as e:
+        print "Unable to initialize: {}".format(str(e))
+        sys.exit(1)
 
     # Open the connection
-    if args.protocol == 'json':
-        conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
-        setEncoder("base64")
-    elif args.protocol == 'bson':
-        conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
-        setEncoder("bin")
+    try:
+        if args.protocol == 'json':
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            setEncoder("base64")
+        elif args.protocol == 'bson':
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            setEncoder("bin")
+    except Exception as e:
+        print "Unable to open connection with {}:{} : {}".format(args.server, args.port, str(e))
+        sys.exit(1)
 
     if verbosity or args.stats:
         print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
@@ -933,54 +954,49 @@ def main():
     if args.copy:
         requestTargetDir()
 
-    password = args.password
-    args.password = None
-    if args.passwordfile:
-        with open(args.passwordfile, "r") as f:
-            password = f.readline()
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password)
-    password = None
-
     # Now, do the actual work here.
+    try:
+        # First, send any fake directories
+        for x in map(os.path.realpath, args.directories):
+            if rootdir:
+                makePrefix(rootdir, x)
+            else:
+                (d, name) = os.path.split(x)
+                f = mkFileInfo(d, name)
+                sendDirEntry(0, 0, [f])
 
-    # First, send any fake directories
-    for x in map(os.path.realpath, args.directories):
-        if rootdir:
-            makePrefix(rootdir, x)
-        else:
-            (d, name) = os.path.split(x)
-            f = mkFileInfo(d, name)
-            sendDirEntry(0, 0, [f])
+        # Now, process all the actual directories
+        for x in map(os.path.realpath, args.directories):
+            if rootdir:
+                root = rootdir
+            else:
+                (d, name) = os.path.split(x)
+                root = d
+            recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
-    # Now, process all the actual directories
-    for x in map(os.path.realpath, args.directories):
-        if rootdir:
-            root = rootdir
-        else:
-            (d, name) = os.path.split(x)
-            root = d
-        recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
+        # If any clone or batch requests still lying around, send them
+        flushClones()
+        flushBatchDirs()
 
-    # If any clone or batch requests still lying around, send them
-    flushClones()
-    flushBatchDirs()
-
-    if args.purge:
-        if args.purgetime:
-            sendPurge(False)
-        else:
-            sendPurge(True)
-
-    if args.stats:
-        connstats = conn.stats
-    conn.close()
+        if args.purge:
+            if args.purgetime:
+                sendPurge(False)
+            else:
+                sendPurge(True)
+        conn.close()
+    except KeyboardInterrupt:
+        if verbosity or args.stats:
+            print "Backup Interupted"
 
     endtime = datetime.datetime.now()
 
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
-        print dict(stats.items() + connstats.items())
+        print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed']))
+        if conn is not None:
+            connstats = conn.getStats()
+            print "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
+        print "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent']))
 
 if __name__ == '__main__':
     sys.exit(main())
