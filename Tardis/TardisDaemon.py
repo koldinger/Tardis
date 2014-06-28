@@ -676,8 +676,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     e = sys.exc_info()[0]
                     self.logger.exception(e)
                 self.db.deleteChecksum(c)
-            self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
             if count:
+                self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
                 self.purged = True
 
 

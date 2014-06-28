@@ -85,7 +85,7 @@ batchDirs           = []
 
 crypt               = None
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
 inodeDB             = {}
 
@@ -222,6 +222,7 @@ def processDelta(inode):
             ### BUG: If the file is being changed, this value and the above may be different.
             m = hashlib.md5()
             filesize = 0
+            stats['delta'] += 1
             with open(pathname, "rb") as file:
                 for chunk in iter(partial(file.read, args.chunksize), ''):
                     m.update(chunk)
@@ -252,7 +253,6 @@ def processDelta(inode):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                if newsig:
                     sendMessage(message)
                     sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
         else:
@@ -294,6 +294,7 @@ def copyContent(inode):
         }
     sendMessage(message)
     dest.close()
+    stats['new'] += 1
 
 def sendSignature(f):
     pass
@@ -349,8 +350,10 @@ def sendContent(inode):
                 print "Caught exception during sending of data {}".format(e)
             finally:
                 x.close()
+            stats['new'] += 1
     else:
-        print "Error: Unknown inode {}".format(inode)
+        #print "Error: Unknown inode {}".format(inode)
+        pass
 
 def handleAckDir(message):
     content = message["content"]
@@ -993,9 +996,10 @@ def main():
     if args.stats:
         print "Runtime: {}".format((endtime - starttime))
         print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed']))
+        print "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
         if conn is not None:
             connstats = conn.getStats()
-            print "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
+            print "Messages:    Sent: {:,} ({:})  Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
         print "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent']))
 
 if __name__ == '__main__':
