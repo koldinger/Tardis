@@ -224,7 +224,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
                 #### TODO: FIXME: Get actual Device
-                dirInode = (oldDir['inode'], 0)
+                dirInode = (oldDir['inode'], oldDir['device'])
             else:
                 # Otherwise
                 dirInode = parentInode

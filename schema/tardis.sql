@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS Files (
     FirstSet    INTEGER   NOT NULL,
     LastSet     INTEGER   NOT NULL,
     Inode       INTEGER   NOT NULL,
+    Device      INTEGER,            -- NOT NULL
     Parent      INTEGER   NOT NULL,
+    ParentDev   INTEGER,            -- NOT NULL
     ChecksumId  INTEGER,
     Dir         INTEGER,
     Link        INTEGER,
@@ -65,7 +67,7 @@ INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "1");
 
 CREATE VIEW IF NOT EXISTS VFiles AS
-    SELECT Names.Name AS Name, Inode, Parent, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
+    SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
     FROM Files
     JOIN Names ON Files.NameId = Names.NameId
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
