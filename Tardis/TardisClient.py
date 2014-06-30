@@ -173,7 +173,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                print "File: [C]: {}".format(shortPath(name))
+                print "File: [C]: {}".format(Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     # First, then send content for any files which don't
@@ -186,7 +186,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: {} {}".format(shortPath(name), size)
+                print "File: [N]: {} {}".format(Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -359,7 +359,7 @@ def handleAckDir(message):
     cksum   = message["cksum"]
 
     if verbosity > 2:
-        print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
+        print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
 
     for i in [tuple(x) for x in done]:
         if i in inodeDB:
@@ -373,7 +373,7 @@ def handleAckDir(message):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: {} {}".format(shortPath(name), size)
+                print "File: [N]: {} {}".format(Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -382,7 +382,7 @@ def handleAckDir(message):
         if verbosity > 1:
 			if i in inodeDB:
 				(x, name) = inodeDB[i]
-				print "File: [D]: {}".format(shortPath(name))
+				print "File: [D]: {}".format(Util.shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -511,7 +511,7 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if verbosity:
-                print "ResyncDir: {}".format(shortPath(path)),
+                print "ResyncDir: {}".format(Util.shortPath(path)),
             if len(files) < args.batchdirs:
                 if verbosity:
                     print "[Batched]"
@@ -620,7 +620,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
     try:
         if verbosity:
-            print "Dir: {}".format(shortPath(dir)),
+            print "Dir: {}".format(Util.shortPath(dir)),
             if verbosity > 2 and len(excludes) > 0:
                 print "\n   Excludes: {}".format(str(excludes))
 
@@ -808,19 +808,6 @@ def requestTargetDir():
             targetDir = t
         else:
             print "Unable to access target directory {}.  Ignorning copy directive".format(t)
-
-def shortPath(path, width=80):
-    if path == None or len(path) <= width:
-        return path
-
-    width -= 8
-    while len(path) > width:
-        try:
-            head, path = str.split(path, os.sep, 1)
-        except:
-            break
-    return ".../" + path
-
 
 def splitDirs(x):
     root, rest = os.path.split(x)
