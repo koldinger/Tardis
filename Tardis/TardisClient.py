@@ -30,6 +30,7 @@
 
 import os, sys
 import os.path
+import logging
 import socket
 import fnmatch
 from stat import *
@@ -84,6 +85,7 @@ cloneContents       = {}
 batchDirs           = []
 
 crypt               = None
+logger              = logging.getLogger('')
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
@@ -173,7 +175,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                print "File: [C]: {}".format(shortPath(name))
+                logger.info("File: [C]: %s", Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     # First, then send content for any files which don't
@@ -186,7 +188,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: {} {}".format(shortPath(name), size)
+                logger.info("File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -329,7 +331,7 @@ def sendContent(inode):
                 else:
                     x = open(pathname, "rb")
             except IOError as e:
-                print "Error: Could not open {}: {}".format(pathname, e)
+                logger.error("Error: Could not open %s: %s", pathname, e)
                 return
 
             # Attempt to send the data.
@@ -347,13 +349,12 @@ def sendContent(inode):
                     sendMessage(message)
                     sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
             except Exception as e:
-                print "Caught exception during sending of data {}".format(e)
+                logger.error("Caught exception during sending of data %s", e)
             finally:
                 x.close()
             stats['new'] += 1
     else:
-        #print "Error: Unknown inode {}".format(inode)
-        pass
+        logger.error("Error: Unknown inode {}".format(inode))
 
 def handleAckDir(message):
     content = message["content"]
@@ -362,7 +363,7 @@ def handleAckDir(message):
     cksum   = message["cksum"]
 
     if verbosity > 2:
-        print "Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s" % (len(done), len(content), len(delta), len(cksum), shortPath(message['path'], 40))
+        logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
 
     for i in [tuple(x) for x in done]:
         if i in inodeDB:
@@ -376,7 +377,7 @@ def handleAckDir(message):
                     size = x["size"]
                 else:
                     size = 0;
-                print "File: [N]: {} {}".format(shortPath(name), size)
+                logger.info("File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -385,7 +386,7 @@ def handleAckDir(message):
         if verbosity > 1:
 			if i in inodeDB:
 				(x, name) = inodeDB[i]
-				print "File: [D]: {}".format(shortPath(name))
+				logger.info("File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -393,11 +394,6 @@ def handleAckDir(message):
     # Collect the ACK messages
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
-
-    if verbosity > 3:
-        print "----- AckDir complete"
-
-    return
 
 def mkFileInfo(dir, name):
     file = None
@@ -427,7 +423,7 @@ def mkFileInfo(dir, name):
         inodeDB[(s.st_dev, s.st_ino)] = (finfo, pathname)
     else:
         if verbosity:
-            print "Skipping special file: {}".format(pathname)
+            logger.info("Skipping special file: %s", pathname)
         finfo = None
     return finfo
     
@@ -466,12 +462,14 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
 
                     files.append(file)
             except (IOError, OSError) as e:
-                print "Error processing %s: %s" % (os.path.join(dir, f), str(e))
-            except:
-                print "Error processing %s: %s" % (os.path.join(dir, f), sys.exc_info()[0])
-                traceback.print_exc()
+                logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
+            except Exception as e:
+                ## Is this necessary?  Fold into above?
+                logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
+                logger.exception(e)
+                #traceback.print_exc()
     except (IOError, OSError) as e:
-        print "Error reading directory %s: %s" % (dir, str(e))
+        logger.error("Error reading directory %s: %s" ,dir, str(e))
 
     return (files, subdirs, excludes)
 
@@ -507,23 +505,21 @@ def handleAckClone(message):
     if message["message"] != "ACKCLN":
         raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
     if verbosity > 2:
-        print "Processing ACKCLN: Up-to-date: %d New Content: %d" % (len(message['done']), len(message['content']))
+        logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
     # Process the directories that have changed
     for inode in message["content"]:
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
-            if verbosity:
-                print "ResyncDir: {}".format(shortPath(path)),
             if len(files) < args.batchdirs:
                 if verbosity:
-                    print "[Batched]"
+                    logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
                 batchDirs.append(makeDirMessage(path, inode, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
                 if verbosity:
-                    print
+                    logger.info("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, inode, files)
             del cloneContents[inode]
@@ -557,15 +553,13 @@ def sendBatchDirs():
         'message' : 'BATCH',
         'batch': batchDirs
     }
-    if verbosity > 2:
-        print "BATCH Starting. {} commands".format(len(batchDirs))
+    logger.debug("BATCH Starting. %s commands", len(batchDirs))
 
     response = sendAndReceive(message)
     for ack in response['responses']:
         handleAckDir(ack)
 
-    if verbosity > 2:
-        print "BATCH Ending."
+    logger.debug("BATCH Ending.")
 
     del batchDirs[:]
 
@@ -594,12 +588,12 @@ def sendDirChunks(path, inode, files):
     chunkNum = 0
     for x in range(0, len(files), args.dirslice):
         if verbosity > 3:
-            print "---- Generating chunk {} ----".format(chunkNum)
+            logger.debug("---- Generating chunk %d ----", chunkNum)
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
         message["files"] = chunk
         if verbosity > 3:
-            print "---- Sending chunk ----"
+            logger.debug("---- Sending chunk ----")
         response = sendAndReceive(message)
         handleAckDir(response)
 
@@ -622,10 +616,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     try:
-        if verbosity:
-            print "Dir: {}".format(shortPath(dir)),
-            if verbosity > 2 and len(excludes) > 0:
-                print "\n   Excludes: {}".format(str(excludes))
+        logger.info("Dir: %s", Util.shortPath(dir))
+        logger.debug("Excludes: %s", str(excludes))
 
         (files, subdirs, subexcludes) = processDir(dir, s, excludes)
 
@@ -646,8 +638,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            if verbosity:
-                print " [Clone]"
+            logger.debug("[Clone]")
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -661,15 +652,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 flushClones()
         else:
             if len(files) < args.batchdirs:
-                if verbosity:
-                    print " [Batched]"
+                logger.debug("[Batched]")
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity:
-                    print
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
@@ -680,12 +668,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
     except (IOError, OSError) as e:
-        print "Error handling directory: %s: %s" % (dir, str(e))
+        logger.error("Error handling directory: %s: %s", dir, str(e))
         #traceback.print_exc()
-    except:
+    except Exception as e:
         # TODO: Clean this up
+        logger.exception(e)
         raise
-        traceback.print_exc()
+        
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
@@ -736,7 +725,7 @@ def setBackupName(args):
             try:
                 purgeTime = time.mktime(time.strptime(args.purgetime, "%Y/%m/%d:%H:%M"))
             except ValueError:
-                print "Invalid format for --keep-time.  Needs to be YYYY/MM/DD:hh:mm, on a 24-hour clock"
+                logger.error("Invalid format for --keep-time.  Needs to be YYYY/MM/DD:hh:mm, on a 24-hour clock")
                 raise
 
     return (name, priority)
@@ -767,13 +756,13 @@ def loadExcludes(args):
 
 def sendMessage(message):
     if verbosity > 4:
-        print "Send: %s" % str(message)
+        logger.debug("Send: %s", str(message))
     conn.send(message)
 
 def receiveMessage():
     response = conn.receive()
     if verbosity > 4:
-        print "Receive: %s" % str(response)
+        logger.debug("Receive: %s", str(response))
     return response
 
 def sendAndReceive(message):
@@ -810,20 +799,7 @@ def requestTargetDir():
             targetStat = os.stat(t)
             targetDir = t
         else:
-            print "Unable to access target directory {}.  Ignorning copy directive".format(t)
-
-def shortPath(path, width=80):
-    if path == None or len(path) <= width:
-        return path
-
-    width -= 8
-    while len(path) > width:
-        try:
-            head, path = str.split(path, os.sep, 1)
-        except:
-            break
-    return ".../" + path
-
+            logger.error("Unable to access target directory %s.  Ignorning copy directive", t)
 
 def splitDirs(x):
     root, rest = os.path.split(x)
@@ -924,6 +900,7 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
+    logging.basicConfig(format="%(message)s")
     args = processCommandLine()
 
     starttime = datetime.datetime.now()
@@ -940,7 +917,7 @@ def main():
 
         # Error check the purge parameter.  Disable it if need be
         if args.purge and not purgeTime:
-            print "Must specify purge days with this option set"
+            logger.error("Must specify purge days with this option set")
             args.purge=False
 
         # Load any password info
@@ -953,7 +930,7 @@ def main():
             crypt = TardisCrypto.TardisCrypto(password)
         password = None
     except Exception as e:
-        print "Unable to initialize: {}".format(str(e))
+        logger.critical("Unable to initialize: %s", (str(e)))
         sys.exit(1)
 
     # Open the connection
@@ -965,11 +942,11 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
             setEncoder("bin")
     except Exception as e:
-        print "Unable to open connection with {}:{} : {}".format(args.server, args.port, str(e))
+        logger.critical("Unable to open connection with %s:%d: ", args.server, args.port, str(e))
         sys.exit(1)
 
     if verbosity or args.stats:
-        print "Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId())
+        logger.info("Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId()))
 
     if args.basepath == 'common':
         rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
@@ -1011,19 +988,19 @@ def main():
                 sendPurge(True)
         conn.close()
     except KeyboardInterrupt:
-        if verbosity or args.stats:
-            print "Backup Interupted"
+        logger.warning("Backup Interupted")
 
     endtime = datetime.datetime.now()
 
     if args.stats:
-        print "Runtime: {}".format((endtime - starttime))
-        print "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed']))
-        print "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
+        logger.info("Runtime: {}".format((endtime - starttime)))
+        logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
+        logger.info("Runtime: {}".format((endtime - starttime))
         if conn is not None:
             connstats = conn.getStats()
-            print "Messages:    Sent: {:,} ({:})  Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd']))
-        print "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent']))
+            logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+        logger.info("Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
 
 if __name__ == '__main__':
     sys.exit(main())
