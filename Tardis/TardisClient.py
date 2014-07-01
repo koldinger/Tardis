@@ -87,7 +87,7 @@ batchDirs           = []
 crypt               = None
 logger              = logging.getLogger('')
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 }
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
 inodeDB             = {}
 
@@ -224,6 +224,7 @@ def processDelta(inode):
             ### BUG: If the file is being changed, this value and the above may be different.
             m = hashlib.md5()
             filesize = 0
+            stats['delta'] += 1
             with open(pathname, "rb") as file:
                 for chunk in iter(partial(file.read, args.chunksize), ''):
                     m.update(chunk)
@@ -254,7 +255,6 @@ def processDelta(inode):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                if newsig:
                     sendMessage(message)
                     sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
         else:
@@ -296,6 +296,7 @@ def copyContent(inode):
         }
     sendMessage(message)
     dest.close()
+    stats['new'] += 1
 
 def sendSignature(f):
     pass
@@ -351,6 +352,7 @@ def sendContent(inode):
                 logger.error("Caught exception during sending of data %s", e)
             finally:
                 x.close()
+            stats['new'] += 1
     else:
         logger.error("Error: Unknown inode {}".format(inode))
 
@@ -993,6 +995,8 @@ def main():
     if args.stats:
         logger.info("Runtime: {}".format((endtime - starttime)))
         logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
+        logger.info("Runtime: {}".format((endtime - starttime))
         if conn is not None:
             connstats = conn.getStats()
             logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
