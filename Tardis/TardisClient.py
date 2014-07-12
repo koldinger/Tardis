@@ -995,8 +995,8 @@ def main():
     if args.stats:
         logger.info("Runtime: {}".format((endtime - starttime)))
         logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
-        logger.info("Runtime: {}".format((endtime - starttime))
+        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+        logger.info("Runtime: {}".format((endtime - starttime)))
         if conn is not None:
             connstats = conn.getStats()
             logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
