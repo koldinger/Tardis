@@ -942,7 +942,7 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
             setEncoder("bin")
     except Exception as e:
-        logger.critical("Unable to open connection with %s:%d: ", args.server, args.port, str(e))
+        logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
         sys.exit(1)
 
     if verbosity or args.stats:
