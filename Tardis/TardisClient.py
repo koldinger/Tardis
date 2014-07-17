@@ -667,9 +667,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
-    except (IOError, OSError) as e:
+    except (OSError) as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
+        #raise
         #traceback.print_exc()
+    except (IOError) as e:
+        logger.error("Error handling directory: %s: %s", dir, str(e))
+        raise
     except Exception as e:
         # TODO: Clean this up
         logger.exception(e)
