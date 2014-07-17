@@ -222,8 +222,12 @@ class TardisDB(object):
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
-        c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
-                  {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+        try:
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
+                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+        except sqlite3.IntegrityError as e:
+            raise Exception("Backupset {} already exists".format(name))
+
         self.currBackupSet = c.lastrowid
         self.currBackupName = name
         self.conn.commit()

@@ -900,6 +900,9 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
+
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+
     logging.basicConfig(format="%(message)s")
     args = processCommandLine()
 
@@ -907,6 +910,9 @@ def main():
 
     verbosity=args.verbose
     ignorectime = args.ignorectime
+
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logger.setLevel(loglevel)
 
     try:
         # Figure out the name and the priority of this backupset
@@ -942,7 +948,7 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
             setEncoder("bin")
     except Exception as e:
-        logger.critical("Unable to open connection with %s:%d: ", args.server, args.port, str(e))
+        logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
         sys.exit(1)
 
     if verbosity or args.stats:
@@ -995,8 +1001,7 @@ def main():
     if args.stats:
         logger.info("Runtime: {}".format((endtime - starttime)))
         logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta'])
-        logger.info("Runtime: {}".format((endtime - starttime))
+        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
         if conn is not None:
             connstats = conn.getStats()
             logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))

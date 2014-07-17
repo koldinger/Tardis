@@ -49,6 +49,7 @@ import traceback
 import signal
 import thread
 import threading
+import json
 from rdiff_backup import librsync
 
 # For profiling
@@ -85,6 +86,9 @@ logger = None
 pp = pprint.PrettyPrinter(indent=2, width=200)
 
 logging.TRACE = logging.DEBUG - 1
+
+class InitFailedException(Exception):
+    pass
 
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
@@ -686,25 +690,45 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.request.sendall("TARDIS 1.0")
             message = self.request.recv(256).strip()
             self.logger.info(message)
-            fields = message.split()
-            if (len(fields) != 6 or fields[0] != 'BACKUP'):
-                self.request.sendall("FAIL")
-                raise Exception("Unrecognized command", message)
-            (command, host, name, encoding, priority, clienttime) = fields
 
-            self.getDB(host)
-            self.startSession(name)
-            self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
+            if not message.startswith('BACKUP'):
+                #self.logger.error("Unrecognized message: %s", message)
+                raise InitFailedException("Unrecognized message: {}".format(message))
+            else:
+                message = message.lstrip("BACKUP ")
+                try:
+                    fields = json.loads(message)
+                    host        = fields['host']
+                    encoding    = fields['encoding']
+                    name        = fields['name']
+                    priority    = fields['priority']
+                    autoname    = fields['autoname']
+                    force       = fields['force']
+                    clienttime  = fields['time']
+                    version     = fields['version']
 
-            self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
+                except ValueError as e:
+                    raise InitFailedException("Cannot parse JSON field: {}".format(message))
+                except KeyError as e:
+                    raise InitFailedException(str(e))
+
+            try:
+                self.getDB(host)
+                self.startSession(name)
+                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
+            except Exception as e:
+                self.request.sendall("FAIL: " + str(e))
+                raise InitFailedException(str(e))
 
             if encoding == "JSON":
                 self.messenger = Messages.JsonMessages(self.request)
             elif encoding == "BSON":
                 self.messenger = Messages.BsonMessages(self.request)
             else:
-                raise Exception("Unknown encoding", encoding)
+                self.request.sendall("FAIL: Unknown encoding: {}".format(encoding))
+                raise InitFailedException("Unknown encoding", encoding)
 
+            self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
             done = False;
 
             while not done:
@@ -724,9 +748,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.commit()
 
             self.db.completeBackup()
-        except:
-            e = sys.exc_info()[0]
-            self.logger.error("Caught exception: %s", e)
+        except InitFailedException as e:
+            self.logger.warning("Connection initialization failed: %s", e)
+        except Exception as e:
+            self.logger.warning("Caught exception: %s", e)
             self.logger.exception(e)
         finally:
             self.request.close()
@@ -748,7 +773,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.removeOrphans()
             if self.purged:
                 self.db.compact()
-
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -808,7 +832,7 @@ def setupLogging(config):
 def run_server():
     global server
 
-    logger.info("Starting server");
+    logger.info("Starting server: %d", config.getint('Tardis', 'Port'));
 
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
@@ -824,7 +848,7 @@ def run_server():
         logger.info("Ending")
     except Exception:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        logger.exception(sys.exc_info()[1])
+        #logger.exception(sys.exc_info()[1])
 
 def stop_server():
     logger.info("Stopping server")
