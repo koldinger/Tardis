@@ -912,7 +912,7 @@ def main():
 
     starttime = datetime.datetime.now()
 
-    verbosity=args.verbose
+    verbosity=args.verbose if args.verbose else 0
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logger.setLevel(loglevel)
 

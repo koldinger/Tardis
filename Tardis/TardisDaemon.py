@@ -914,8 +914,12 @@ def main():
         user  = config.get('Tardis', 'User')
         group = config.get('Tardis', 'Group')
         pidfile = config.get('Tardis', 'PidFile')
+        fds = [h.stream.fileno() for h in logger.handlers if isinstance(h, logging.StreamHandler)]
+        print fds
+        logger.info("About to daemonize")
+
         try:
-            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group)
+            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
             print >> "Caught Exception on Daemonize call: {}".format(e)
