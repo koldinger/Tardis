@@ -616,8 +616,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     try:
-        logger.info("Dir: %s", Util.shortPath(dir))
-        logger.debug("Excludes: %s", str(excludes))
+        #logger.info("Dir: %s", Util.shortPath(dir))
+        logmsg = "Dir: {}".format(Util.shortPath(dir))
+        #logger.debug("Excludes: %s", str(excludes))
 
         (files, subdirs, subexcludes) = processDir(dir, s, excludes)
 
@@ -638,7 +639,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            logger.debug("[Clone]")
+            logmsg += " [Clone]"
+            logger.debug(logmsg)
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -652,12 +654,14 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 flushClones()
         else:
             if len(files) < args.batchdirs:
-                logger.debug("[Batched]")
+                logmsg += " [Batched]"
+                logger.debug(logmsg)
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
+                logger.debug(logmsg)
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
@@ -904,15 +908,18 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
-
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
+    logger = logging.getLogger('')
     args = processCommandLine()
 
     starttime = datetime.datetime.now()
 
-    verbosity=args.verbose
+    verbosity=args.verbose if args.verbose else 0
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logger.setLevel(loglevel)
+
     ignorectime = args.ignorectime
 
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
