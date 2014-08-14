@@ -234,6 +234,16 @@ class TardisDB(object):
         self.logger.info("Created new backup set: {}: {} {}".format(self.currBackupSet, name, session))
         return self.currBackupSet
 
+    def setBackupSetName(self, name, priority, current=True):
+        """ Change the name of a backupset.  Return True if it can be changed, false otherwise. """
+        backupset = self.bset(current)
+        try:
+            self.conn.execute("UPDATE Backups SET Name = :name, Priority = :priority WHERE BackupSet = :backupset",
+                      {"name": name, "priority": priority, "backupset": backupset})
+            return True
+        except sqlite3.IntegrityError as e:
+            return False
+
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self.bset(current)

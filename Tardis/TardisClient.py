@@ -691,14 +691,6 @@ def setBackupName(args):
     priority = 1
     keepdays = None
     # If auto is set, pick based on the day of the month, week, or just a daily
-    if args.auto:
-        if starttime.day == 1:
-            args.monthly = True
-        elif starttime.weekday() == 0:
-            args.weekly = True
-        else:
-            args.daily = True
-
     if args.hourly:
         name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
         priority = 10
@@ -953,10 +945,10 @@ def main():
     # Open the connection
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))

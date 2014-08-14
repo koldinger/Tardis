@@ -50,6 +50,7 @@ import signal
 import thread
 import threading
 import json
+from datetime import datetime
 from rdiff_backup import librsync
 
 # For profiling
@@ -678,6 +679,28 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
                 self.purged = True
 
+    def setBackupName(self, clienttime):
+        starttime = datetime.fromtimestamp(clienttime)
+        # Figure out if a monthly set has been made.
+        name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
+        priority = 40
+        if (self.db.setBackupSetName(name, priority)):
+            return (name, priority)
+
+        # Figure out if we've tried something this week.
+        name = 'Weekly-{}'.format(starttime.strftime("%Y-%U"))
+        priority = 30
+        if (self.db.setBackupSetName(name, priority)):
+            return (name, priority)
+
+        # Must be daily
+        name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
+        priority = 20
+        if (self.db.setBackupSetName(name, priority)):
+            return (name, priority)
+
+        # Oops, nothing worked.  Didn't change the name.
+        return (None, None)
 
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
@@ -702,11 +725,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     encoding    = fields['encoding']
                     name        = fields['name']
                     priority    = fields['priority']
-                    autoname    = fields['autoname']
                     force       = fields['force']
-                    clienttime  = fields['time']
                     version     = fields['version']
-
+                    clienttime  = fields['time']
+                    autoname    = fields['autoname']
                 except ValueError as e:
                     raise InitFailedException("Cannot parse JSON field: {}".format(message))
                 except KeyError as e:
@@ -748,6 +770,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.commit()
 
             self.db.completeBackup()
+            if autoname:
+                (newName, newPriority) = self.setBackupName(clienttime)
+                self.logger.info("Changed backupset name from %s to %s.  Priority is %s", name, newName, newPriority)
+                #self.db.renameBackupSet(newName, newPriority)
         except InitFailedException as e:
             self.logger.warning("Connection initialization failed: %s", e)
         except Exception as e:
