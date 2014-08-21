@@ -251,13 +251,34 @@ class TardisDB(object):
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
-        c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
-                  {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+        try:
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
+                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+        except sqlite3.IntegrityError as e:
+            raise Exception("Backupset {} already exists".format(name))
+
         self.currBackupSet = c.lastrowid
         self.currBackupName = name
         self.conn.commit()
         self.logger.info("Created new backup set: {}: {} {}".format(self.currBackupSet, name, session))
         return self.currBackupSet
+
+    def setBackupSetName(self, name, priority, current=True):
+        """ Change the name of a backupset.  Return True if it can be changed, false otherwise. """
+        backupset = self.bset(current)
+        try:
+            self.conn.execute("UPDATE Backups SET Name = :name, Priority = :priority WHERE BackupSet = :backupset",
+                      {"name": name, "priority": priority, "backupset": backupset})
+            return True
+        except sqlite3.IntegrityError as e:
+            return False
+
+    def checkBackupSetName(self, name):
+        """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
+        c = self.conn.execute("SELECT COUNT(*) FROM Backups WHERE Name = :name",
+                              { "name": name })
+        row = c.fetchone()
+        return True if row[0] == 0 else False;
 
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""

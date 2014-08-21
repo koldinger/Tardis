@@ -36,12 +36,14 @@ import time
 import Messages
 import ssl
 
+class ConnectionException(Exception):
+    pass
+
 class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, use_ssl=False, hostname=None):
+    def __init__(self, host, port, name, encoding, priority, use_ssl, hostname, autoname, force=False, version=0):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
-
 
         if hostname is None:
             hostname = socket.gethostname()
@@ -59,19 +61,32 @@ class Connection(object):
             message = self.get(10)
             if message != "TARDIS 1.0":
                 raise Exception
-            message = "BACKUP {} {} {} {} {}".format(hostname, name, encoding, priority, time.time())
+            #message = "BACKUP {} {} {} {} {}".format(hostname, name, encoding, priority, time.time())
+            data = {
+                'host'      : hostname,
+                'encoding'  : encoding,
+                'name'      : name,
+                'priority'  : priority,
+                'autoname'  : autoname,
+                'force'     : force,
+                'time'      : time.time(),
+                'version'   : version
+            }
+            # BACKUP { json message }
+            message = 'BACKUP ' + json.dumps(data)
             self.put(message)
 
             message = self.sock.recv(256).strip()
             fields = message.split()
-            if len(fields) != 3:
+            if len(fields) != 4:
                 print message
                 raise Exception("Unexpected response: {}".format(message))
             if fields[0] != 'OK':
-                raise Exception
+                raise ConnectionException(str(e))
             self.sessionid = uuid.UUID(fields[1])
             self.lastTimestamp = float(fields[2])
-        except:
+            self.name = fields[3]
+        except Exception as e:
             self.sock.close()
             raise
 
@@ -102,6 +117,9 @@ class Connection(object):
     def getSessionId(self):
         return str(self.sessionid)
 
+    def getBackupName(self):
+        return str(self.name)
+
     def getLastTimestap(self):
         return self.lastTimestamp
 
@@ -110,8 +128,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, use_ssl, hostname):
-        Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname)
+    def __init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname):
+        Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname)
 
     def send(self, message):
         self.stats['messagesSent'] += 1
@@ -136,14 +154,14 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, hostname)
+    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, hostname, autoname)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, hostname)
+    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, hostname, autoname)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats)
 
