@@ -568,15 +568,13 @@ def flushBatchDirs():
         sendBatchDirs()
 
 def sendPurge(relative):
-    if purgePriority and purgeTime:
-        message = {
-            'message': 'PRG',
-            'priority': purgePriority,
-            'time'    : purgeTime,
-            'relative': relative
-        }
+    message =  { 'message': 'PRG' }
+    if purgePriority:
+        message['priority'] = purgPriority
+    if purgeTime:
+        message.update( { 'time': purgeTime, 'relative': relative })
 
-        response = sendAndReceive(message)
+    response = sendAndReceive(message)
 
 def sendDirChunks(path, inode, files):
     message = {
@@ -688,7 +686,7 @@ def setBackupName(args):
     """ Calculate the name of the backup set """
     global purgeTime, purgePriority, starttime
     name = args.name
-    priority = 1
+    priority = None
     keepdays = None
     # If auto is set, pick based on the day of the month, week, or just a daily
     if args.hourly:
@@ -925,7 +923,7 @@ def main():
         loadExcludes(args)
 
         # Error check the purge parameter.  Disable it if need be
-        if args.purge and not purgeTime:
+        if args.purge and not (purgeTime is not None or args.auto):
             logger.error("Must specify purge days with this option set")
             args.purge=False
 
@@ -955,7 +953,7 @@ def main():
         sys.exit(1)
 
     if verbosity or args.stats:
-        logger.info("Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId()))
+        logger.info("Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
     if args.basepath == 'common':
         rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))

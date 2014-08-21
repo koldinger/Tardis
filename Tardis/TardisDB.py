@@ -244,6 +244,13 @@ class TardisDB(object):
         except sqlite3.IntegrityError as e:
             return False
 
+    def checkBackupSetName(self, name):
+        """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
+        c = self.conn.execute("SELECT COUNT(*) FROM Backups WHERE Name = :name",
+                              { "name": name })
+        row = c.fetchone()
+        return True if row[0] == 0 else False;
+
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self.bset(current)

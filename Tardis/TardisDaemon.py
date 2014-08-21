@@ -524,17 +524,29 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def processPurge(self, message):
         self.logger.debug("Processing purge message: {}".format(str(message)))
-        if message['relative']:
-            prevTime = float(self.db.prevBackupDate) - float(message['time'])
+        prevTime = None
+        if 'time' in message:
+            if message['relative']:
+                prevTime = float(self.db.prevBackupDate) - float(message['time'])
+            else:
+                prevTime = float(message['time'])
+        elif self.serverKeepTime:
+            prevTime = float(self.db.prevBackupDate) - float(self.serverKeepTime)
+
+        if 'priority' in message:
+            priority = message['priority']
         else:
-            prevTime = float(message['time'])
+            priority = self.serverPriority
 
         # Purge the files
-        (files, sets) = self.db.purgeFiles(message['priority'], prevTime)
-        self.logger.info("Purged %d files in %d backup sets", files, sets)
-        if files:
-            self.purged = True
-        return ({"message" : "PURGEOK"}, True)
+        if prevTime:
+            (files, sets) = self.db.purgeFiles(priority, prevTime)
+            self.logger.info("Purged %d files in %d backup sets", files, sets)
+            if files:
+                self.purged = True
+            return ({"message" : "OK"}, True)
+        else:
+            return ({"message": "FAIL"}, True)
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""
@@ -679,28 +691,26 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
                 self.purged = True
 
-    def setBackupName(self, clienttime):
+    def calcAutoInfo(self, clienttime):
         starttime = datetime.fromtimestamp(clienttime)
         # Figure out if a monthly set has been made.
-        name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
-        priority = 40
-        if (self.db.setBackupSetName(name, priority)):
-            return (name, priority)
+        name = starttime.strftime(self.server.monthfmt)
+        if (self.db.checkBackupSetName(name)):
+            return (name, self.server.monthprio, self.server.monthkeep)
 
-        # Figure out if we've tried something this week.
-        name = 'Weekly-{}'.format(starttime.strftime("%Y-%U"))
-        priority = 30
-        if (self.db.setBackupSetName(name, priority)):
-            return (name, priority)
+        # Figure out if we've tried something this week
+        name = starttime.strftime(self.server.weekfmt)
+        if (self.db.checkBackupSetName(name)):
+            return (name, self.server.weekprio, self.server.weekkeep)
 
         # Must be daily
-        name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
-        priority = 20
-        if (self.db.setBackupSetName(name, priority)):
-            return (name, priority)
+        #name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
+        name = starttime.strftime(self.server.dayfmt)
+        if (self.db.checkBackupSetName(name)):
+            return (name, self.server.dayprio, self.server.daykeep)
 
         # Oops, nothing worked.  Didn't change the name.
-        return (None, None)
+        return (None, None, None)
 
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
@@ -738,8 +748,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.getDB(host)
                 self.startSession(name)
                 self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
+                if autoname:
+                    (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
+                    self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))
+                    if serverName:
+                        self.serverKeepTime = serverKeepDays * 3600 * 24
+                        self.serverPriority = serverPriority
+                    else:
+                        self.serverKeepTime = None
+                        self.serverPriority = None
             except Exception as e:
                 self.request.sendall("FAIL: " + str(e))
+                self.logger.exception(e)
                 raise InitFailedException(str(e))
 
             if encoding == "JSON":
@@ -750,7 +770,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.request.sendall("FAIL: Unknown encoding: {}".format(encoding))
                 raise InitFailedException("Unknown encoding", encoding)
 
-            self.request.sendall("OK {} {}".format(str(self.sessionid), str(self.db.prevBackupDate)))
+            self.request.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
             done = False;
 
             while not done:
@@ -771,13 +791,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             self.db.completeBackup()
             if autoname:
-                (newName, newPriority) = self.setBackupName(clienttime)
-                self.logger.info("Changed backupset name from %s to %s.  Priority is %s", name, newName, newPriority)
+                self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
+                self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
         except InitFailedException as e:
-            self.logger.warning("Connection initialization failed: %s", e)
+            self.logger.error("Connection initialization failed: %s", e)
+            self.logger.exception(e)
         except Exception as e:
-            self.logger.warning("Caught exception: %s", e)
+            self.logger.error("Caught exception: %s", e)
             self.logger.exception(e)
         finally:
             self.request.close()
@@ -814,6 +835,16 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
         self.dbname         = config.get('Tardis', 'DBName')
         self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
+
+        self.monthfmt       = config.get('Tardis', 'MonthFmt')
+        self.monthprio      = config.getint('Tardis', 'MonthPrio')
+        self.monthkeep      = Util.getIntOrNone(config, 'Tardis', 'MonthKeep')
+        self.weekfmt        = config.get('Tardis', 'WeekFmt')
+        self.weekprio       = config.getint('Tardis', 'WeekPrio')
+        self.weekkeep       = Util.getIntOrNone(config, 'Tardis', 'WeekKeep')
+        self.dayfmt         = config.get('Tardis', 'DayFmt')
+        self.dayprio        = config.getint('Tardis', 'DayPrio')
+        self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
 
         self.ssl        = config.getboolean('Tardis', 'SSL')
         if self.ssl:
@@ -874,7 +905,7 @@ def run_server():
         logger.info("Ending")
     except Exception:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        #logger.exception(sys.exc_info()[1])
+        logger.exception(sys.exc_info()[1])
 
 def stop_server():
     logger.info("Stopping server")
@@ -918,6 +949,7 @@ def main():
     parser.add_argument('--certfile', '-c', dest='certfile', default=None, help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile', '-k',  dest='keyfile',  default=None, help='Path to key file for SSL connections')
 
+
     args = parser.parse_args()
 
     configDefaults = {
@@ -938,7 +970,16 @@ def main():
         'SSL'           : str(args.ssl),
         'CertFile'      : args.certfile,
         'KeyFile'       : args.keyfile,
-        'PidFile'       : args.pidfile
+        'PidFile'       : args.pidfile,
+        'MonthFmt'      : 'Monthly-%Y-%m',
+        'WeekFmt'       : 'Weekly-%Y-%U',
+        'DayFmt'        : 'Daily-%Y-%m-%d',
+        'MonthPrio'     : '40',
+        'WeekPrio'      : '30',
+        'DayPrio'       : '20',
+        'MonthKeep'     : '0',
+        'WeekKeep'      : '180',
+        'DayKeep'       : '30'
     }
 
     global config

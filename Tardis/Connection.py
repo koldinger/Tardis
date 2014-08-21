@@ -78,13 +78,14 @@ class Connection(object):
 
             message = self.sock.recv(256).strip()
             fields = message.split()
-            if len(fields) != 3:
+            if len(fields) != 4:
                 print message
                 raise Exception("Unexpected response: {}".format(message))
             if fields[0] != 'OK':
                 raise ConnectionException(str(e))
             self.sessionid = uuid.UUID(fields[1])
             self.lastTimestamp = float(fields[2])
+            self.name = fields[3]
         except Exception as e:
             self.sock.close()
             raise
@@ -115,6 +116,9 @@ class Connection(object):
 
     def getSessionId(self):
         return str(self.sessionid)
+
+    def getBackupName(self):
+        return str(self.name)
 
     def getLastTimestap(self):
         return self.lastTimestamp
