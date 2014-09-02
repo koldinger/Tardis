@@ -730,26 +730,26 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             message = self.request.recv(256).strip()
             self.logger.info(message)
 
-            if not message.startswith('BACKUP'):
-                #self.logger.error("Unrecognized message: %s", message)
-                raise InitFailedException("Unrecognized message: {}".format(message))
-            else:
-                message = message.lstrip("BACKUP ")
-                try:
-                    fields = json.loads(message)
-                    host        = fields['host']
-                    encoding    = fields['encoding']
-                    name        = fields['name']
-                    priority    = fields['priority']
-                    force       = fields['force']
-                    version     = fields['version']
-                    clienttime  = fields['time']
-                    autoname    = fields['autoname']
-                except ValueError as e:
-                    raise InitFailedException("Cannot parse JSON field: {}".format(message))
-                except KeyError as e:
-                    raise InitFailedException(str(e))
+            fields = json.loads(message)
+            try:
+                messType    = fields['message']
+                if not messType == 'BACKUP':
+                    raise InitFailedException("Unknown message type: {}".format(messType))
 
+                host        = fields['host']
+                encoding    = fields['encoding']
+                name        = fields['name']
+                priority    = fields['priority']
+                force       = fields['force']
+                version     = fields['version']
+                clienttime  = fields['time']
+                autoname    = fields['autoname']
+            except ValueError as e:
+                raise InitFailedException("Cannot parse JSON field: {}".format(message))
+            except KeyError as e:
+                raise InitFailedException(str(e))
+
+            serverName = None
             try:
                 self.getDB(host)
                 self.startSession(name)
@@ -764,7 +764,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.serverKeepTime = None
                         self.serverPriority = None
             except Exception as e:
-                self.request.sendall("FAIL: " + str(e))
+                message = {"status": "FAIL", "error": str(e)}
+                self.request.sendall(json.dumps(message))
                 self.logger.exception(e)
                 raise InitFailedException(str(e))
 
@@ -773,10 +774,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             elif encoding == "BSON":
                 self.messenger = Messages.BsonMessages(self.request)
             else:
-                self.request.sendall("FAIL: Unknown encoding: {}".format(encoding))
-                raise InitFailedException("Unknown encoding", encoding)
+                message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
+                self.request.sendall(json.dumps(mesage))
+                raise InitFailedException("Unknown encoding: ", encoding)
 
-            self.request.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
+            response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "name": serverName if serverName else name}
+            self.request.sendall(json.dumps(response))
+
+            #self.request.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
             done = False;
 
             while not done:
@@ -826,6 +831,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.removeOrphans()
             if self.purged:
                 self.db.compact()
+
+#class TardisSocketServer(SocketServer.TCPServer):
+class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
+    config = None
+
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -991,12 +1001,7 @@ def main():
     global config
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
-
-    if config.get('Tardis', 'Profile'):
-        profiler = cProfile.Profile()
-    if config.get('Tardis', 'Schema'):
-        global schemaFile
-        schemaFile = config.get('Tardis', 'Schema')
+    schemaFile = config.get('Tardis', 'Schema')
 
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
