@@ -63,6 +63,7 @@ class Connection(object):
                 raise Exception
             #message = "BACKUP {} {} {} {} {}".format(hostname, name, encoding, priority, time.time())
             data = {
+                'message'   : 'BACKUP',
                 'host'      : hostname,
                 'encoding'  : encoding,
                 'name'      : name,
@@ -73,19 +74,16 @@ class Connection(object):
                 'version'   : version
             }
             # BACKUP { json message }
-            message = 'BACKUP ' + json.dumps(data)
+            message = json.dumps(data)
             self.put(message)
 
-            message = self.sock.recv(256).strip()
-            fields = message.split()
-            if len(fields) != 4:
-                print message
-                raise Exception("Unexpected response: {}".format(message))
-            if fields[0] != 'OK':
+            message = self.sock.recv(1024).strip()
+            fields = json.loads(message)
+            if fields['status'] != 'OK':
                 raise ConnectionException(str(e))
-            self.sessionid = uuid.UUID(fields[1])
-            self.lastTimestamp = float(fields[2])
-            self.name = fields[3]
+            self.sessionid = uuid.UUID(fields['sessionid'])
+            self.lastTimestamp = float(fields['prevDate'])
+            self.name = fields['name']
         except Exception as e:
             self.sock.close()
             raise
