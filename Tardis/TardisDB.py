@@ -241,7 +241,7 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, FirstSet AS firstset "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -401,6 +401,18 @@ class TardisDB(object):
             return self.getChecksumByName(f["name"], f["parent"], current)
         else:
             return None
+
+    def getFirstBackupSet(self, name, current=False):
+        backupset = self.bset(current)
+        f = self.getFileInfoByPath(name, current)
+        if f:
+            c = self.conn.execute("SELECT Name FROM Backups WHERE BackupSet >= :first ORDER BY BackupSet ASC LIMIT 1",
+                                  {"first": f["firstset"]})
+            row = c.fetchone()
+            if row:
+                return row[0]
+        # General purpose failure
+        return None
 
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: %s", fileInfo)

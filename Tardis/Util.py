@@ -29,6 +29,12 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import Messages
+import Connection
+import hashlib
+from functools import partial
+
+import logging
 
 def fmtSize(num, base=1024):
     fmt = "%d %s"
@@ -52,3 +58,60 @@ def shortPath(path, width=80):
         except:
             break
     return ".../" + path
+
+def sendData(sender, file, encrypt, chunksize=16536, checksum=False):
+    """ Send a block of data """
+    # logger = logging.getLogger('Data')
+    if isinstance(sender, Connection.Connection):
+        sender = sender.sender
+    num = 0
+    size = 0
+    status = "OK"
+    ck = None
+
+    if checksum:
+        m = hashlib.md5()
+    try:
+        for chunk in iter(partial(file.read, chunksize), ''):
+            if checksum:
+                m.update(chunk)
+            data = sender.encode(encrypt(chunk))
+            chunkMessage = { "chunk" : num, "data": data }
+            sender.sendMessage(chunkMessage)
+            x = len(chunk)
+            size += x
+            num += 1
+    except Exception as e:
+        status = "Fail"
+        raise e
+    finally:
+        message = { "chunk": "done", "size": size, "status": status }
+        # logger.debug("Sent %d chunks, %d bytes", num, size);
+        if checksum:
+            ck = m.hexdigest()
+            message["checksum"] = ck
+        sender.sendMessage(message)
+    return size, ck
+
+def receiveData(receiver, output):
+    # logger = logging.getLogger('Data')
+    if isinstance(receiver, Connection.Connection):
+        receiver = receiver.sender
+    bytesReceived = 0
+    checksum = None
+    while True:
+        chunk = receiver.recvMessage()
+        # logger.debug("Chunk: %s", str(chunk))
+        if chunk['chunk'] == 'done':
+            status = chunk['status']
+            size   = chunk['size']
+            if 'checksum' in chunk:
+                checksum = chunk['checksum']
+            break
+        bytes = receiver.decode(chunk["data"])
+        if output:
+            output.write(bytes)
+            output.flush()
+        bytesReceived += len(bytes)
+
+    return (bytesReceived, status, size, checksum)

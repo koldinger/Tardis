@@ -293,17 +293,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         outfile = self.cache.open(sigfile, "wb")
                         outfile.write(sig)
                         outfile.close()
-                        # TODO: Break the signature out of here.
-                        response = {
-                            "message": "SIG",
-                            "inode": inode,
-                            "status": "OK",
-                            "encoding": self.messenger.getEncoding(),
-                            "checksum": chksum,
-                            "size": len(sig),
-                            "signature": self.messenger.encode(sig) }
+
                     except (librsync.librsyncError, Regenerate.RegenerateException) as e:
                         self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
+            # TODO: Break the signature out of here.
+            response = {
+                "message": "SIG",
+                "inode": inode,
+                "status": "OK",
+                "encoding": self.messenger.getEncoding(),
+                "checksum": chksum,
+                "size": len(sig) }
+            self.messenger.sendMessage(response)
+            sigio = StringIO.StringIO(sig)
+            Util.sendData(self.messenger, sigio, lambda x:x)
+            return (None, False)
 
         if response is None:
             response = {
@@ -312,6 +316,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "status": "FAIL"
             }
         return (response, False)
+
+    """
+    def receiveData(self, messenger, output):
+        bytesReceived = 0
+        checksum = None
+        while True:
+            chunk = messenger.recvMessage()
+            if chunk['chunk'] == 'done':
+                status = chunk['status']
+                size   = chunk['size']
+                if 'checksum' in chunk:
+                    checksum = chunk['checksum']
+                break
+            bytes = messenger.decode(chunk["data"])
+            if output:
+                output.write(bytes)
+            bytesReceived += len(bytes)
+        return bytesReceived, status, checksum, size
+    """
 
     def processDelta(self, message):
         """ Receive a delta message. """
@@ -342,14 +365,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "wb")
 
-        bytesReceived = 0
-
-        while True:
-            chunk = self.messenger.recvMessage()
-            if chunk['chunk'] == 'done': break
-            bytes = self.messenger.decode(chunk["data"])
-            if output: output.write(bytes)
-            bytesReceived += len(bytes)
+        (bytesReceived, status, size, deltaChecksum) = Util.receiveData(self.messenger, output)
+        if status != 'OK':
+            self.logger.warning("Received invalid status on data reception")
+            pass
 
         if deltasize is None:
             deltasize = bytesReceived
@@ -394,17 +413,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # Abort read
         else:
             output = self.cache.open(sigfile, "wb")
-        bytesReceived = 0
-        while True:
-            chunk = self.messenger.recvMessage()
-            if chunk['chunk'] == 'done':
-                size = chunk["size"]
-                break
 
-            bytes = self.messenger.decode(chunk["data"])
-            if output is not None:
-                output.write(bytes)
-            bytesReceived += len(bytes)
+        (bytesReceived, status, size, checksum) = Util.receiveData(messenger, output)
 
         if output is not None:
             output.close()
@@ -451,23 +461,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
 
-        if 'iv' in message:
-            iv = self.messenger.decode(message['iv'])
-        else:
-            iv = None
+        iv = self.messenger.decode(message['iv']) if 'iv' in message else None
 
-        bytesReceived = 0
+        (bytesReceived, status, size, checksum) = Util.receiveData(self.messenger, output)
+        logger.debug("Data Received: %d %s %d %s", bytesReceived, status, size, checksum)
 
-        while True:
-            chunk = self.messenger.recvMessage()
-            if chunk['chunk'] == 'done':
-                size = chunk["size"]
-                checksum = chunk['checksum']
-                break
-
-            bytes = self.messenger.decode(chunk["data"])
-            output.write(bytes)
-            bytesReceived += len(bytes)
         output.close()
 
         if temp:
@@ -961,3 +959,4 @@ if __name__ == "__main__":
         sys.exit(main())
     except Exception as e:
         traceback.print_exc()
+

@@ -76,7 +76,6 @@ ignorectime         = False
 
 conn                = None
 args                = None
-conn                = None
 targetDir           = None
 targetStat          = None
 
@@ -110,11 +109,13 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
+"""
 def sendData(file, encrypt, checksum=False):
-    """ Send a block of data """
+    # Send a block of data 
     num = 0
     size = 0
     status = "OK"
+    ck = None
 
     if checksum:
         m = hashlib.md5()
@@ -134,15 +135,13 @@ def sendData(file, encrypt, checksum=False):
         message = {"chunk": "done", "size": size, "status": status}
         if checksum:
             ck = m.hexdigest()
-            message["checksum"] = m.hexdigest()
+            message["checksum"] = ck
         conn.send(message)
 
     stats['dataSent'] += size
 
-    if checksum:
-        return ck
-    else:
-        return None
+    return size, ck
+    """
 
 def processChecksums(inodes):
     """ Generate a delta and send it """
@@ -217,8 +216,11 @@ def processDelta(inode):
         if sigmessage['status'] == 'OK':
             newsig = None
             oldchksum = sigmessage['checksum']
+            sigfile = cStringIO.StringIO()
+            #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+            Util.receiveData(conn.sender, sigfile)
+            sigfile.seek(0)
 
-            sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
             delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
 
             ### BUG: If the file is being changed, this value and the above may be different.
@@ -248,7 +250,7 @@ def processDelta(inode):
                     message["iv"] = conn.encode(iv)
 
                 sendMessage(message)
-                sendData(delta, encrypt)
+                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize)
                 delta.close()
                 if newsig:
                     message = {
@@ -256,7 +258,7 @@ def processDelta(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
+                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -337,7 +339,7 @@ def sendContent(inode):
             # Attempt to send the data.
             try:
                 sendMessage(message)
-                checksum = sendData(x, encrypt, checksum=True)
+                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize)
 
                 if crypt:
                     x.seek(0)
@@ -347,7 +349,7 @@ def sendContent(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data %s", e)
             finally:

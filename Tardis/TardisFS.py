@@ -489,7 +489,7 @@ class TardisFS(fuse.Fuse):
             if b:
                 checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                 if checksum:
-                    return retFunc(['user.checksum'])
+                    return retFunc(['user.checksum', 'user.since'])
 
         return None
 
@@ -516,6 +516,11 @@ class TardisFS(fuse.Fuse):
                     checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                     if checksum:
                         return retFunc(checksum)
+            elif attr == 'user.since':
+                if b: 
+                    since = self.tardis.getFirstBackupSet(parts[1], b['backupset'])
+                    if since:
+                        return retFunc(since)
         return 0
 
 def main():
