@@ -298,7 +298,7 @@ class TardisFS(fuse.Fuse):
         self.log.info('readdir {} {}'.format(path, offset))
         inodes = {}
         dirents = ['.', '..']
-        parent = 0
+        parent = None
 
         depth = getDepth(path)
         if depth == 0:
@@ -308,11 +308,11 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             if depth == 1:
                 b = self.getBackupSetInfo(parts[0])
-                entries = self.tardis.readDirectory(0, b['backupset'])
+                entries = self.tardis.readDirectory((0, 0), b['backupset'])
             else:
                 #parent = self.tardis.getFileInfoByPath(parts[1], b['backupset'])
                 (b, parent) = self.getCachedDirInfo(path)
-                entries = self.tardis.readDirectory(parent["inode"], b['backupset'])
+                entries = self.tardis.readDirectory((parent["inode"], parent["device"]), b['backupset'])
             if self.crypt:
                 entries = self.decryptNames(entries)
 

@@ -46,6 +46,11 @@ def fmtSize(num, base=1024):
         fmt = "%3.1f %s"
     return fmt % (num, 'TB')
 
+def getIntOrNone(config, section, name):
+    try:
+        return config.getint(section, name)
+    except:
+        return None
 
 def shortPath(path, width=80):
     if path == None or len(path) <= width:
