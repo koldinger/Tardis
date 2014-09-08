@@ -594,7 +594,7 @@ class TardisDB(object):
     def listBackupSets(self):
         c = self.execute("SELECT "
                          "Name AS name, BackupSet AS backupset "
-                         "FROM Backups")
+                         "FROM Backups", {})
         for row in c.fetchall():
             yield makeDict(c, row)
 
