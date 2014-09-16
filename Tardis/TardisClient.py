@@ -109,40 +109,6 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-"""
-def sendData(file, encrypt, checksum=False):
-    # Send a block of data 
-    num = 0
-    size = 0
-    status = "OK"
-    ck = None
-
-    if checksum:
-        m = hashlib.md5()
-    try:
-        for chunk in iter(partial(file.read, args.chunksize), ''):
-            if checksum:
-                m.update(chunk)
-            data = conn.encode(encrypt(chunk))
-            chunkMessage = { "chunk" : num, "data": data }
-            conn.send(chunkMessage)
-            x = len(data)
-            size += x
-            num += 1
-    except Exception as e:
-        status = "Fail"
-    finally:
-        message = {"chunk": "done", "size": size, "status": status}
-        if checksum:
-            ck = m.hexdigest()
-            message["checksum"] = ck
-        conn.send(message)
-
-    stats['dataSent'] += size
-
-    return size, ck
-    """
-
 def processChecksums(inodes):
     """ Generate a delta and send it """
     files = []
@@ -468,7 +434,7 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
             except Exception as e:
                 ## Is this necessary?  Fold into above?
                 logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
-                logger.exception(e)
+                #logger.exception(e)
                 #traceback.print_exc()
     except (IOError, OSError) as e:
         logger.error("Error reading directory %s: %s" ,dir, str(e))
@@ -483,13 +449,14 @@ def handleAckClone(message):
 
     # Process the directories that have changed
     for i in message["content"]:
-        inode = tuple(i)
+        (inode, device) = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             if len(files) < args.batchdirs:
                 if verbosity:
                     logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
-                batchDirs.append(makeDirMessage(path, inode, files))
+                print inode
+                batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
@@ -654,7 +621,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         raise
     except Exception as e:
         # TODO: Clean this up
-        logger.exception(e)
+        #logger.exception(e)
         raise
         
 
@@ -928,6 +895,7 @@ def main():
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
+        #logger.exception(e)
         sys.exit(1)
 
     if verbosity or args.stats:

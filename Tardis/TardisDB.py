@@ -151,7 +151,6 @@ def splitpath(path):
 
 class TardisDB(object):
     """ Main source for all interaction with the Tardis DB """
-    logger  = logging.getLogger("DB")
     conn    = None
     cursor  = None
     dbName  = None
@@ -161,6 +160,7 @@ class TardisDB(object):
 
     def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None):
         """ Initialize the connection to a per-machine Tardis Database"""
+        self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
 
@@ -179,7 +179,7 @@ class TardisDB(object):
         self.conn.text_factory = str
 
         if (initialize):
-            self.logger.info("Creating database: {}".format(initialize))
+            self.logger.info("Creating database from schema: {}".format(initialize))
             try:
                 with open(initialize, "r") as f:
                     script = f.read()
@@ -288,7 +288,7 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
-                  "Parent AS parent, ParentDev AS ParentDev, Size AS size, "
+                  "Parent AS parent, ParentDev AS parentdev, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
@@ -303,7 +303,7 @@ class TardisDB(object):
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self.bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
-        parent = 0              # Root directory value
+        parent = (0, 0)         # Root directory value
         info = None
 
         (dirname, name) = os.path.split(path)
@@ -311,49 +311,32 @@ class TardisDB(object):
         for name in splitpath(path):
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
-                parent = info["inode"]
+                parent = (info["inode"], info["device"])
             else:
                 break
         return info
 
-    """
-    def __getFileInfoByPath(self, path, backupset):
-        try:
-            (dirname, filename) = os.path.split(path)
-            try:
-                parent = self.dirinodes[(backupset, dirname)]
-                return self.getFileInfoByName(name, parent, backupset)
-            except KeyError:
-                parentInfo = self.__getFileInfoByPath(dirname, backupset)
-                parent = parentInfo['inode']
-                self.dirinodes[(backupset, dirname)] = parent
-                return self.getFileInfoByName(name, parent, backupset)
-        except:
-            return self.getFileInfoByName(path, 0, backupset)
-
-    def getFileInfoByPath(self, path, current=False):
+    def getFileInfoByInode(self, info, current=False):
         backupset = self.bset(current)
-        return self.__getFileInfoByPath(path, backupset)
-    """
-
-    def getFileInfoByInode(self, inode, current=False):
-        backupset = self.bset(current)
-        self.logger.debug("Looking up file by inode %d %d", inode, backupset)
+        (inode, device) = info
+        self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
-                  "Parent AS parent, ParentDev AS ParentDev, Size AS size, "
+                  "Parent AS parent, ParentDev AS parentdev, Size AS size, "
                   "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND "
+                  "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
-                  {"inode": inode, "backup": backupset})
+                  {"inode": inode, "device": device, "backup": backupset})
         return makeDict(c, c.fetchone())
 
-    def getNewFileInfoByInode(self, inode):
+    """
+    def getNewFileInfoByInode(self, info):
         self.logger.debug("Looking up file by inode %d %d", inode, self.currBackupSet)
+        (inode, device) = info
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
@@ -361,10 +344,11 @@ class TardisDB(object):
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND "
+                  "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
-                  {"inode": inode, "backup": self.currBackupSet})
+                  {"inode": inode, "device": device, "backup": self.currBackupSet})
         return makeDict(c, c.fetchone())
+    """
 
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
@@ -448,7 +432,7 @@ class TardisDB(object):
         self.logger.debug("Looking up checksum for path %s %d", name, backupset)
         f = self.getFileInfoByPath(name, current)
         if f:
-            return self.getChecksumByName(f["name"], f["parent"], current)
+            return self.getChecksumByName(f["name"], (f["parent"], f["parentdev"]), current)
         else:
             return None
 
@@ -592,6 +576,7 @@ class TardisDB(object):
     """
 
     def listBackupSets(self):
+        self.logger.debug("list backup sets")
         c = self.execute("SELECT "
                          "Name AS name, BackupSet AS backupset "
                          "FROM Backups", {})

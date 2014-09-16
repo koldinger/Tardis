@@ -272,9 +272,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         chksum = None
 
         ### TODO: Remove this function.  Clean up.
-        info = self.db.getNewFileInfoByInode(inode)
+        info = self.db.getFileInfoByInode((inode, dev), current=True)
         if info:
-            chksum = self.db.getChecksumByName(info["name"], info["parent"])      ### Assumption: Current parent is same as old
+            chksum = self.db.getChecksumByName(info["name"], (info["parent"], info["parentdev"]))      ### Assumption: Current parent is same as old
 
         if chksum:
             sigfile = chksum + ".sig"
@@ -636,6 +636,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             raise Exception("Unknown message type", messageType)
 
     def getDB(self, host):
+        self.logger.debug("getDB")
         script = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
@@ -799,7 +800,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.commit()
 
             self.db.completeBackup()
-            if autoname:
+            if autoname and servername is not None:
                 self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
@@ -996,7 +997,7 @@ def main():
         'DayKeep'       : '30'
     }
 
-    global config
+    global config, schemaFile
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
     schemaFile = config.get('Tardis', 'Schema')
