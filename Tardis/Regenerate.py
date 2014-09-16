@@ -75,8 +75,12 @@ class Regenerator:
         return outfile
 
     def recoverChecksum(self, cksum):
-        self.logger.debug("Recovering checksum: {}".format(cksum))
+        self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = self.db.getChecksumInfo(cksum)
+        if cksInfo is None:
+            self.logger.error("Checksum %s not found", cksum)
+            return None
+
         if cksInfo['basis']:
             basis = self.recoverChecksum(cksInfo['basis'])
             # UGLY.  Put the basis into an actual file for librsync
