@@ -492,12 +492,12 @@ class TardisFS(fuse.Fuse):
             if b:
                 checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                 if checksum:
-                    return retFunc(['user.checksum', 'user.since'])
+                    return retFunc(['user.checksum', 'user.since', 'user.chain'])
 
         return None
 
     def getxattr (self, path, attr, size):
-        self.log.info('getxattr {} {} {}'.format(path, attr, size))
+        self.log.info('CALL getxattr: %s %s %s', path, attr, size)
         if size == 0:
             retFunc = lambda x: len(str(x))
         else:
@@ -517,13 +517,22 @@ class TardisFS(fuse.Fuse):
             if attr == 'user.checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
             elif attr == 'user.since':
                 if b: 
                     since = self.tardis.getFirstBackupSet(parts[1], b['backupset'])
+                    self.log.debug(str(since))
                     if since:
                         return retFunc(since)
+            elif attr == 'user.chain':
+                    checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    self.log.debug(str(checksum))
+                    if checksum:
+                        chain = self.tardis.getChainLength(checksum)
+                        self.log.debug(str(chain))
+                        return retFunc(chain)
         return 0
 
 def main():
