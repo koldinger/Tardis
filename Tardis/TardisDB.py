@@ -414,7 +414,7 @@ class TardisDB(object):
     def getChecksumByName(self, name, parent, current=False):
         backupset = self.bset(current)
         (inode, device) = parent
-        self.logger.debug("Looking up checksum for file %s %d %d", name, parent, backupset)
+        self.logger.debug("Looking up checksum for file %s (%d %d) in %d", name, inode, device, backupset)
         c = self.execute("SELECT CheckSums.CheckSum AS checksum "
                          "FROM Files "
                          "JOIN Names ON Files.NameID = Names.NameId "
