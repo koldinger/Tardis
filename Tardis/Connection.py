@@ -80,7 +80,10 @@ class Connection(object):
             message = self.sock.recv(1024).strip()
             fields = json.loads(message)
             if fields['status'] != 'OK':
-                raise ConnectionException(str(e))
+                errmesg = "BACKUP request failed"
+                if 'error' in fields:
+                    errmesg = errmesg + ": " + fields['error']
+                raise ConnectionException(errmesg)
             self.sessionid = uuid.UUID(fields['sessionid'])
             self.lastTimestamp = float(fields['prevDate'])
             self.name = fields['name']

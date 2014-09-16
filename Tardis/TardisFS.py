@@ -88,6 +88,7 @@ class TardisFS(fuse.Fuse):
         self.password = None
         self.passwordfile = None
         self.crypt = None
+        logging.basicConfig(level=logging.DEBUG)
         self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="password",     help="Password for this archive")
@@ -125,7 +126,7 @@ class TardisFS(fuse.Fuse):
         if requestTime == None:
             requestTime = time()
         if self.cacheTime < requestTime - 30.0:
-            print "Flushing caches"
+            self.log.info("Flushing caches")
             self.dirInfo = {} 
             self.backupsets = {}
             self.cacheTime = None
@@ -153,7 +154,7 @@ class TardisFS(fuse.Fuse):
 
     def getCachedDirInfo(self, path, requestTime=None):
         """ Return the inode and backupset of a directory """
-        print "***** getCachedDirInfo: ", path
+        self.log.info("getCachedDirInfo: %s", path)
         requestTime = self.checkFlush(requestTime)
         if path in self.dirInfo:
             return self.dirInfo[path]
@@ -165,23 +166,24 @@ class TardisFS(fuse.Fuse):
                 if self.crypt:
                     subpath = self.crypt.encryptPath(subpath)
                 fInfo = self.tardis.getFileInfoByPath(subpath, bsInfo['backupset'])
-                print "*******: fInfo", parts[1], "**", fInfo
+                self.log.info("fInfo %s %s %s", parts[1], "**", str(fInfo))
                 if bsInfo and fInfo and fInfo['dir']:
                     self.dirInfo[path] = (bsInfo, fInfo)
                     if self.cacheTime == None:
                         self.cacheTime = requestTime
             else:
-                fInfo = {'inode': 0}
+                fInfo = {'inode': 0, 'device': 0}
             return (bsInfo, fInfo)
             
     def getFileInfoByPath(self, path):
-        print "***** getFileInfoByPath: ", path
+        self.log.info("getFileInfoByPath: %s", path)
         (head, tail) = os.path.split(path)
         (bsInfo, dInfo) = self.getCachedDirInfo(head)
         if bsInfo:
             if self.crypt:
                 tail = self.crypt.encryptPath(tail)
-            f = self.tardis.getFileInfoByName(tail, dInfo['inode'], bsInfo['backupset'])
+            self.log.debug(str(dInfo))
+            f = self.tardis.getFileInfoByName(tail, (dInfo['inode'], dInfo['device']), bsInfo['backupset'])
         else:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
@@ -210,7 +212,7 @@ class TardisFS(fuse.Fuse):
                     or the time of creation on Windows).
         """
 
-        print "*********", path, type(path)
+        self.log.info("CALL getattr: %s",  path)
         path = unicode(path.decode('utf-8'))
         depth = getDepth(path) # depth of path, zero-based from root
 
@@ -291,11 +293,11 @@ class TardisFS(fuse.Fuse):
         """
         return: [[('file1', 0), ('file2', 0), ... ]]
         """
-        self.log.info('*** getdir {}'.format(path))
+        self.log.info('CALL getdir {}'.format(path))
         return -errno.ENOSYS
 
     def readdir(self, path, offset):
-        self.log.info('readdir {} {}'.format(path, offset))
+        self.log.info("CALL readdir %s Offset: %d", path, offset)
         inodes = {}
         dirents = ['.', '..']
         parent = None
@@ -317,6 +319,7 @@ class TardisFS(fuse.Fuse):
                 entries = self.decryptNames(entries)
 
         dirents.extend([y["name"] for y in entries])
+        self.log.debug("Direntries: %s", str(dirents))
 
         for e in dirents:
             yield fuse.Direntry(e)
@@ -489,12 +492,12 @@ class TardisFS(fuse.Fuse):
             if b:
                 checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
                 if checksum:
-                    return retFunc(['user.checksum', 'user.since'])
+                    return retFunc(['user.checksum', 'user.since', 'user.chain'])
 
         return None
 
     def getxattr (self, path, attr, size):
-        self.log.info('getxattr {} {} {}'.format(path, attr, size))
+        self.log.info('CALL getxattr: %s %s %s', path, attr, size)
         if size == 0:
             retFunc = lambda x: len(str(x))
         else:
@@ -514,13 +517,22 @@ class TardisFS(fuse.Fuse):
             if attr == 'user.checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
             elif attr == 'user.since':
                 if b: 
                     since = self.tardis.getFirstBackupSet(parts[1], b['backupset'])
+                    self.log.debug(str(since))
                     if since:
                         return retFunc(since)
+            elif attr == 'user.chain':
+                    checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    self.log.debug(str(checksum))
+                    if checksum:
+                        chain = self.tardis.getChainLength(checksum)
+                        self.log.debug(str(chain))
+                        return retFunc(chain)
         return 0
 
 def main():
