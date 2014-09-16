@@ -578,7 +578,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ### TODO Update to include device
                 rows = self.db.cloneDir((inode, device))
                 done.append([inode, device])
-        print "DONE!!!", done
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
     def processBatch(self, message):
@@ -800,7 +799,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.commit()
 
             self.db.completeBackup()
-            if autoname and servername is not None:
+            if autoname and serverName is not None:
                 self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
@@ -1016,7 +1015,6 @@ def main():
         group = config.get('Tardis', 'Group')
         pidfile = config.get('Tardis', 'PidFile')
         fds = [h.stream.fileno() for h in logger.handlers if isinstance(h, logging.StreamHandler)]
-        print fds
         logger.info("About to daemonize")
 
         try:

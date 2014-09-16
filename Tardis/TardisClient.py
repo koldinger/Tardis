@@ -455,7 +455,6 @@ def handleAckClone(message):
             if len(files) < args.batchdirs:
                 if verbosity:
                     logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
-                print inode
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
@@ -783,7 +782,9 @@ def processCommandLine():
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
-    parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
+    parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection.  Default: %(default)s')
+
+    parser.add_argument('--hostname',           dest='hostname', default=socket.gethostname(),            help='Set the hostname.  Default: %(default)s')
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
@@ -791,7 +792,7 @@ def processCommandLine():
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
-    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,  help='Set the backup name')
+    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,  help='Set the backup name.  Default: %(default)s')
     namegroup.add_argument('--hourly', '-H',    dest='hourly', action='store_true',     help='Run an hourly backup')
     namegroup.add_argument('--daily',  '-D',    dest='daily', action='store_true',      help='Run a daily backup')
     namegroup.add_argument('--weekly', '-W',    dest='weekly', action='store_true',     help='Run a weekly backup')
@@ -801,7 +802,6 @@ def processCommandLine():
     parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
-    parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
     parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
