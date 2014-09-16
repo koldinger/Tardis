@@ -289,7 +289,8 @@ class TardisDB(object):
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
                   "Parent AS parent, ParentDev AS parentdev, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, "
+                  "FirstSet as firstset, LastSet as lastset "
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -460,20 +461,6 @@ class TardisDB(object):
                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                      temp)
 
-    """
-    def insertFiles(self, files, parent):
-        self.logger.debug("Inserting files: %d", len(files))
-        fields = {"backup": self.currBackupSet, "parent": parent}.items()
-        f = functools.partial(addFields, fields)
-        self.setNameID(files)
-        
-        self.conn.executemany("INSERT INTO Files "
-                              "(NameId, FirstSet, LastSet, Inode, Parent, Dir, Link, MTime, CTime, ATime, Mode, UID, GID, NLinks) "
-                              "VALUES "
-                              "(:nameid, :backup, :backup, :inode, :parent, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
-                              map(f, files))
-    """
-
     def extendFile(self, parent, name, old=False, current=True):
         old = self.bset(old)
         (parIno, parDev) = parent
@@ -496,21 +483,6 @@ class TardisDB(object):
                               ":old BETWEEN FirstSet AND LastSet",
                               { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
         return cursor.rowcount
-
-    """
-    def cloneDirs(self, parents, new=True, old=False):
-       newBSet = self.bset(new)
-       oldBSet = self.bset(old)
-       self.logger.debug("Cloning directory inodes %s from %d to %d", parents, oldBSet, newBSet)
-
-       self.cursor.executemany("UPDATE Files "
-                               "SET LastSet = :new "
-                               "WHERE "
-                               "Parent = :parent AND ParentDev = :parentDev AND "
-                               ":old BETWEEN FirstSet AND LastSet",
-                               map(lambda x:{"new": newBSet, "old": oldBSet, "parent": x}, parents))
-       return self.cursor.rowcount
-    """
 
     def setNameID(self, files):
         for f in files:
@@ -539,9 +511,11 @@ class TardisDB(object):
         if row:
             return makeDict(c, row)
         else:
+            self.logger.debug("No checksum found for %s", checksum)
             return None
 
     def getChainLength(self, checksum):
+        """
         data = self.getChecksumInfo(checksum)
         if data:
             if data['basis'] is None:
@@ -550,6 +524,17 @@ class TardisDB(object):
                 return self.getChainLength(data['basis']) + 1
         else:
             return -1
+        """
+        c = self.execute("WITH RECURSIVE x(n) AS (VALUES(:checksum) UNION SELECT Basis FROM Checksums, x WHERE x.n=Checksums.Checksum) "
+                         "SELECT COUNT(*) FROM Checksums WHERE Checksum IN x",
+                         {"checksum": checksum});
+        r = c.fetchone()
+        if r:
+            return int(r[0])
+        else:
+            return -1
+
+
 
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
