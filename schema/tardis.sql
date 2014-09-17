@@ -34,9 +34,9 @@ CREATE TABLE IF NOT EXISTS Files (
     FirstSet    INTEGER   NOT NULL,
     LastSet     INTEGER   NOT NULL,
     Inode       INTEGER   NOT NULL,
-    Device      INTEGER,            -- NOT NULL
+    Device      INTEGER   NOT NULL,
     Parent      INTEGER   NOT NULL,
-    ParentDev   INTEGER,            -- NOT NULL
+    ParentDev   INTEGER   NOT NULL,
     ChecksumId  INTEGER,
     Dir         INTEGER,
     Link        INTEGER,
