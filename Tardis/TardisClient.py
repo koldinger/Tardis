@@ -416,7 +416,7 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
         for f in filelist(dir, localExcludes):
             try:
                 file = mkFileInfo(dir, f)
-                if file:
+                if file and (args.crossdev or device == file['dev']):
                     mode = file["mode"]
                     if S_ISLNK(mode):
                         stats['links'] += 1
@@ -425,7 +425,6 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
                         stats['backed'] += file["size"]
 
                     if S_ISDIR(mode):
-                        if args.crossdev or device == file['dev']:
                             subdirs.append(os.path.join(dir, f))
 
                     files.append(file)
@@ -449,12 +448,13 @@ def handleAckClone(message):
 
     # Process the directories that have changed
     for i in message["content"]:
-        (inode, device) = tuple(i)
-        if inode in cloneContents:
-            (path, files) = cloneContents[inode]
+        finfo = tuple(i)
+        if finfo in cloneContents:
+            (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
                 if verbosity:
                     logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
+                (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
@@ -462,8 +462,8 @@ def handleAckClone(message):
                 if verbosity:
                     logger.info("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
-                sendDirChunks(path, inode, files)
-            del cloneContents[inode]
+                sendDirChunks(path, finfo, files)
+            del cloneContents[finfo]
 
     # Purge out what hasn't changed
     for i in message["done"]:
@@ -934,6 +934,10 @@ def main():
         # If any clone or batch requests still lying around, send them
         flushClones()
         flushBatchDirs()
+
+        # Sanity check.
+        if len(cloneContents) != 0:
+            log.warning("Warning: Some cloned directories not processed")
 
         if args.purge:
             if args.purgetime:
