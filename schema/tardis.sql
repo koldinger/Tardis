@@ -64,7 +64,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "1");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "2");
 
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
