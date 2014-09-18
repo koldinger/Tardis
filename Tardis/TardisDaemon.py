@@ -77,9 +77,9 @@ config = None
 databaseName = 'tardis.db'
 schemaName   = 'schema/tardis.sql'
 schemaFile   = None
+dbFile       = None
 parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
-messages = [ "DIR", "SGR", "SIG", "DEL", "CON", "CKS", "CLN", "CPY", "BATCH", "TMPDIR", "PRG" ]
 
 server = None
 logger = None
@@ -112,10 +112,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
+        self.logger.debug("Processing file: %s", str(f))
         name = f["name"]
         inode = f["inode"]
+        device = f["dev"]
 
-        self.logger.debug("Processing Inode: %8d -- File: %s", inode, name)
+        self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
         
         if name in dirhash:
             old = dirhash[name]
@@ -124,7 +126,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if f["dir"] == 1:
             if old:
-                if (old["inode"] == inode) and (old["mtime"] == f["mtime"]):
+                if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
                     self.db.extendFile(parent, f['name'])
                 else:
                     self.db.insertFile(f, parent)
@@ -233,16 +235,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 # Otherwise
                 dirInode = parentInode
+
             directory = self.db.readDirectory(dirInode)
             for i in directory:
                 dirhash[i["name"]] = i
             self.lastDirHash = dirhash
             self.lastDirNode = parentInode
 
+            self.logger.debug("Got directory: %s", str(dirhash))
+
         for f in files:
             inode = f['inode']
             fileId = (f['inode'], f['dev'])
-            self.logger.debug(u'Processing file: %s %d %s', f["name"], inode, fileId)
+            self.logger.debug(u'Processing file: %s %s', f["name"], str(fileId))
             res = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
@@ -639,7 +644,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         script = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
-        self.dbname = os.path.join(self.basedir, databaseName)
+        self.dbname = os.path.join(self.basedir, dbFile)
         if not os.path.exists(self.dbname):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
@@ -996,10 +1001,11 @@ def main():
         'DayKeep'       : '30'
     }
 
-    global config, schemaFile
+    global config, schemaFile, dbFile
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
     schemaFile = config.get('Tardis', 'Schema')
+    dbFile = config.get('Tardis', 'DBName')
 
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
