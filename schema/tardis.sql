@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
-    PRIMARY KEY(NameId, FirstSet, LastSet, Parent),
+    PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
     FOREIGN KEY(NameId)      REFERENCES Names(NameId),
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
 );
