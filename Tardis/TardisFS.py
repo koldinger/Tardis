@@ -87,6 +87,7 @@ class TardisFS(fuse.Fuse):
         self.repoint = False
         self.password = None
         self.passwordfile = None
+        self.database = "tardis.db"
         self.crypt = None
         logging.basicConfig(level=logging.DEBUG)
         self.log = logging.getLogger("TardisFS")
@@ -95,6 +96,7 @@ class TardisFS(fuse.Fuse):
         self.parser.add_option(mountopt="passwordfile", help="Read password for this archive from the file")
         self.parser.add_option(mountopt="path",     help="Path to the directory containing the database for this filesystem")
         self.parser.add_option(mountopt="repoint",  help="Make absolute links relative to backupset")
+        self.parser.add_option(mountopt="database", help="Database Name")
 
         res = self.parse(values=self, errex=1)
 
@@ -114,7 +116,7 @@ class TardisFS(fuse.Fuse):
         password = None
 
         self.cache = CacheDir.CacheDir(self.path)
-        dbPath = os.path.join(self.path, "tardis.db")
+        dbPath = os.path.join(self.path, self.database)
         self.tardis = TardisDB.TardisDB(dbPath, backup=False)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
