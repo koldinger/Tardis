@@ -1,18 +1,51 @@
 import sqlite3
 import sys
+import os.path
+
+
+def processDir(path, bset, parent, device):
+    #print u"  Processing {}".format(path)
+    s = conn.execute("UPDATE Files SET ParentDev = :device WHERE Parent = :parent AND :bset BETWEEN FirstSet AND LastSet",
+                    {"parent": parent, "device": device, "bset": bset})
+    s = conn.execute("UPDATE Files SET Device = :device WHERE Parent = :parent AND Device IS NULL AND :bset BETWEEN FirstSet AND LastSet",
+                    {"parent": parent, "device": device, "bset": bset})
+    s = conn.execute("SELECT Name, INode, Device, ParentDev FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent = :parent AND ParentDev != Device AND ParentDev != 0 AND :bset BETWEEN FirstSet AND LastSet",
+                    {"parent": parent, "device": device, "bset": bset})
+    for row in s.fetchall():
+        name  = row[0]
+        inode = row[1]
+        device = row[2]
+        parentdev = row[3]
+        sub = os.path.join(path, name)
+        print "    {} ({}) has different device from parent: {} {}".format(sub, inode, device, parentdev)
+    s = conn.execute("SELECT Name, inode, device FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent = :parent AND dir = 1 AND :bset BETWEEN FirstSet AND LastSet", 
+                    {"parent": parent, "bset": bset})
+    for row in s.fetchall():
+        name  = row[0]
+        inode = row[1]
+        device = row[2]
+        sub = os.path.join(path, name)
+        processDir(sub, bset, inode, device)
 
 schemaFile = "schema/tardis.sql"
+## Update this list of files to express all top level mount points.
+## At this point, interior mounted files are not updated.
 topfiles = [
-            ("CVSROOT", 2305),
-            ("GITROOT", 2305),
             ("etc", 2082),
+            ("GITROOT", 2305),
+            ("CVSROOT", 2305),
             ("home", 2305),
             ("music", 2305),
             ("pictures", 2305),
             ("videos", 2097),
             ]
 
-conn = sqlite3.connect("tardis.db")
+if len(sys.argv) > 1:
+    db = sys.argv[1]
+else:
+    db = "tardis.db"
+
+conn = sqlite3.connect(db)
 
 s = conn.execute('SELECT Value FROM Config WHERE Key = "SchemaVersion"')
 t = s.fetchone()
@@ -31,17 +64,14 @@ for i in topfiles:
                      "WHERE Inode = (SELECT Inode FROM Files JOIN Names ON Files.nameid = Names.nameid AND ParentDev = 0 and Names.name = :name)",
                      {"name": name, "device": device})
 
-s = conn.execute("SELECT Inode, Device FROM Files WHERE Device IS NOT NULL AND Parent = 0;");
+s = conn.execute("SELECT BackupSet, Name FROM Backups ORDER BY BackupSet ASC");
 for row in s.fetchall():
-    inode = row[0]
-    device = row[1]
+    bset = row[0]
+    name = row[1]
+    print "Processing set {} ({})".format(name, bset)
+    processDir("/", bset, 0, 0)
 
-    print("Inode: {} Device: {}".format(inode, device))
-
-    t = conn.execute("WITH RECURSIVE x(n) AS (VALUES(:inode) UNION SELECT Inode FROM Files, x WHERE Files.Parent = x.n) "
-                     "UPDATE Files SET Device = :device, ParentDev = :device WHERE Parent in x",
-                     #"SELECT Name, Inode, Parent FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent IN x",
-                     {"inode": inode, "device": device});
+print "Done updating.  Rearranging tables to meet new schema"
 
 # Rename the orginal table and delete the vfiles
 conn.execute("ALTER TABLE Files RENAME TO Temp")
