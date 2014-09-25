@@ -676,12 +676,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def removeOrphans(self):
         # Now remove any leftover orphans
+        size = 0
+        count = 0
         if self.db:
             # Get a list of orphan'd files
             orphans = self.db.listOrphanChecksums()
             self.logger.debug("Attempting to remove orphans")
-            size = 0
-            count = 0
             for c in orphans:
                 # And remove them each....
                 try:
@@ -697,8 +697,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.exception(e)
                 self.db.deleteChecksum(c)
             if count:
-                self.logger.info("Removed %d orphans, %s", count, Util.fmtSize(size))
                 self.purged = True
+            return (count, size)
+
 
     def calcAutoInfo(self, clienttime):
         starttime = datetime.fromtimestamp(clienttime)
@@ -723,6 +724,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
+        completed = False
+        starttime = datetime.now()
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -731,7 +734,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             self.request.sendall("TARDIS 1.0")
             message = self.request.recv(256).strip()
-            self.logger.info(message)
+            #self.logger.debug(message)
 
             fields = json.loads(message)
             try:
@@ -747,6 +750,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 version     = fields['version']
                 clienttime  = fields['time']
                 autoname    = fields['autoname']
+                self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", host, name, str(autoname), version, clienttime)
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
             except KeyError as e:
@@ -808,6 +812,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
+            completed = True
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
             self.logger.exception(e)
@@ -817,6 +822,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         finally:
             self.request.close()
             self.endSession()
+            endtime = datetime.now()
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
                 self.server.profiler.disable()
@@ -825,13 +831,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ps = pstats.Stats(self.server.profiler, stream=s).sort_stats(sortby)
                 ps.print_stats()
                 print s.getvalue()
-            self.logger.info("Connection complete")
+
+            (count, size) = self.removeOrphans()
+
+            self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
             self.logger.info("New or replaced files:    %d", self.statNewFiles)
             self.logger.info("Updated file:             %d", self.statUpdFiles)
             self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
             self.logger.info("Command breakdown:        %s", self.statCommands)
+            self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
+
             self.logger.debug("Removing orphans")
-            self.removeOrphans()
             if self.purged:
                 self.db.compact()
 
