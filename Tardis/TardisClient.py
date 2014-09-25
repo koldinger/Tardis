@@ -769,7 +769,7 @@ def makePrefix(root, path):
         st = os.lstat(dirPath)
         f = mkFileInfo(current, d)
         if dirPath not in sentDirs:
-            sendDirEntry(parent, [f])
+            sendDirEntry(parent, parentDev, [f])
             sentDirs[dirPath] = parent
         parent    = st.st_ino
         parentDev = st.st_dev
