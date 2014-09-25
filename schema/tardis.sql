@@ -55,17 +55,16 @@ CREATE TABLE IF NOT EXISTS Files (
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
-CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, LastSet ASC);
-CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, Device ASC, FirstSet ASC);
+CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, ParentDev ASC, FirstSet ASC);
+CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, Device ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
-
--- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "2");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
 
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
