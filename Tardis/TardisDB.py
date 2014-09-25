@@ -229,10 +229,10 @@ class TardisDB(object):
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, Completed AS completed "
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime , Priority AS priority "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime , Priority AS priority , Completed AS completed "
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         if row:
@@ -515,7 +515,6 @@ class TardisDB(object):
             return None
 
     def getChainLength(self, checksum):
-        """
         data = self.getChecksumInfo(checksum)
         if data:
             if data['basis'] is None:
@@ -533,6 +532,7 @@ class TardisDB(object):
             return int(r[0])
         else:
             return -1
+        """
 
 
 
