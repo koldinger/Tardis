@@ -452,14 +452,14 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                if verbosity:
+                if verbosity > 1:
                     logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity:
+                if verbosity > 1:
                     logger.info("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
