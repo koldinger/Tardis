@@ -653,10 +653,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
     def startSession(self, name):
-        #self.sessionid = uuid.uuid1()
         self.name = name
         sid = str(self.sessionid)
+        # TODO: Lock the sessions structure.
         sessions[sid] = self
+
+            
 
         self.tempdir = os.path.join(self.basedir, "tmp_" + sid)
         os.makedirs(self.tempdir)
@@ -844,11 +846,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Removing orphans")
             if self.purged:
                 self.db.compact()
-
-#class TardisSocketServer(SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
-    config = None
-
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):

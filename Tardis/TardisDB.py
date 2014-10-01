@@ -627,6 +627,9 @@ class TardisDB(object):
             yield row[0]
 
     def compact(self):
+        # Purge out any unused names
+        c = self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files)");
+        # And clean up the database
         c = self.conn.execute("VACUUM")
 
     def deleteChecksum(self, checksum):
