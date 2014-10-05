@@ -108,6 +108,7 @@ class TardisFS(fuse.Fuse):
         self.log.info("Dir: %s", self.path)
         self.log.info("Repoint Links: %s", self.repoint)
         self.log.info("MountPoint: %s", self.mountpoint)
+        self.log.info("DBName: %s", self.dbname)
 
         password = self.password
         self.password = None
@@ -165,6 +166,7 @@ class TardisFS(fuse.Fuse):
         if path in self.dirInfo:
             return self.dirInfo[path]
         else:
+            self.log.debug("No cache info available for %s", path)
             parts = getParts(path)
             bsInfo = self.getBackupSetInfo(parts[0])
             if len(parts) == 2:
@@ -335,31 +337,31 @@ class TardisFS(fuse.Fuse):
         return -errno.ENOSYS
 
     def chmod ( self, path, mode ):
-        self.log.info('chmod {} {}'.format(path, oct(mode)))
+        self.log.info('CALL chmod {} {}'.format(path, oct(mode)))
         return -errno.EROFS
 
     def chown ( self, path, uid, gid ):
-        self.log.info( 'chown {} {} {}'.format(path, uid, gid))
+        self.log.info( 'CALL chown {} {} {}'.format(path, uid, gid))
         return -errno.EROFS
 
     def fsync ( self, path, isFsyncFile ):
-        self.log.info( 'fsync {} {}'.format(path, isFsyncFile))
+        self.log.info( 'CALL fsync {} {}'.format(path, isFsyncFile))
         return -errno.EROFS
 
     def link ( self, targetPath, linkPath ):
-        self.log.info( 'link {} {}'.format(targetPath, linkPath))
+        self.log.info( 'CALL link {} {}'.format(targetPath, linkPath))
         return -errno.EROFS
 
     def mkdir ( self, path, mode ):
-        self.log.info( 'mkdir {} {}'.format(path, oct(mode)))
+        self.log.info( 'CALL mkdir {} {}'.format(path, oct(mode)))
         return -errno.EROFS
 
     def mknod ( self, path, mode, dev ):
-        self.log.info( 'mknod {} {} {}'.format(path, oct(mode), dev))
+        self.log.info( 'CALL mknod {} {} {}'.format(path, oct(mode), dev))
         return -errno.EROFS
 
     def open ( self, path, flags ):
-        self.log.info('open'.format(path, flags))
+        self.log.info('CALL open {} {})'.format(path, flags))
         depth = getDepth(path) # depth of path, zero-based from root
 
         if (depth < 2):
@@ -379,17 +381,22 @@ class TardisFS(fuse.Fuse):
             f = self.regenerator.recoverFile(subpath, b['backupset'], True)
             if f:
                 try:
+                    f.flush()
                     f.seek(0)
                 except AttributeError, IOError:
+                    bytesCopied = 0
                     self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)
                     while chunk:
+                        bytesCopied = bytesCopied + len(chunk)
                         temp.write(chunk)
                         chunk = f.read(65536)
                     f.close()
-                    f = temp
+                    self.log.debug("Copied %d bytes to tempfile", bytesCopied)
+                    temp.flush()
                     temp.seek(0)
+                    f = temp
 
                 self.files[path] = {"file": f, "opens": 1}
                 return 0
@@ -398,7 +405,7 @@ class TardisFS(fuse.Fuse):
 
 
     def read ( self, path, length, offset ):
-        self.log.info('read {} {} {}'.format(path, length, offset))
+        self.log.info('CALL read {} {} {}'.format(path, length, offset))
         f = self.files[path]["file"]
         if f:
             f.seek(offset)
@@ -406,7 +413,7 @@ class TardisFS(fuse.Fuse):
         return -errno.EINVAL
 
     def readlink ( self, path ):
-        self.log.info('readlink {}'.format(path))
+        self.log.info('CALL readlink {}'.format(path))
         if path == '/Current':
             target = self.tardis.lastBackupSet()
             self.log.debug("Path: {} Target: {} {}".format(path, target['name'], target['backupset']))
@@ -416,6 +423,7 @@ class TardisFS(fuse.Fuse):
             b = self.getBackupSetInfo(parts[0])
             if b:
                 f = self.regenerator.recoverFile(parts[1], b['backupset'], True)
+                f.flush()
                 link = f.readline()
                 f.close()
                 if self.repoint:
