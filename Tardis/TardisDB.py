@@ -299,8 +299,8 @@ class TardisDB(object):
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return makeDict(c, c.fetchone())
 
-        """ Lookup a file by a full path. """
     def getFileInfoByPath(self, path, current=False):
+        """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self.bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
