@@ -326,25 +326,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             }
         return (response, False)
 
-    """
-    def receiveData(self, messenger, output):
-        bytesReceived = 0
-        checksum = None
-        while True:
-            chunk = messenger.recvMessage()
-            if chunk['chunk'] == 'done':
-                status = chunk['status']
-                size   = chunk['size']
-                if 'checksum' in chunk:
-                    checksum = chunk['checksum']
-                break
-            bytes = messenger.decode(chunk["data"])
-            if output:
-                output.write(bytes)
-            bytesReceived += len(bytes)
-        return bytesReceived, status, checksum, size
-    """
-
     def processDelta(self, message):
         """ Receive a delta message. """
         self.logger.debug("Processing delta message: %s", message)
@@ -374,7 +355,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "wb")
 
-        (bytesReceived, status, size, deltaChecksum) = Util.receiveData(self.messenger, output)
+        (bytesReceived, status, deltaSize, deltaChecksum) = Util.receiveData(self.messenger, output)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
             pass
