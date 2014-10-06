@@ -32,7 +32,10 @@ import os
 import Messages
 import Connection
 import hashlib
+import StringIO
 from functools import partial
+
+import pycurl
 
 import logging
 
@@ -63,6 +66,30 @@ def shortPath(path, width=80):
         except:
             break
     return ".../" + path
+
+def getPassword(password, pwfile, pwurl):
+    methods = 0
+    if password: methods += 1
+    if pwfile:   methods += 1
+    if pwurl:    methods += 1
+
+    if methods > 1:
+        raise Exception("Cannot specify more than one password retrieval mechanism")
+
+    if pwfile:
+        with open(pwfile, "r") as f:
+            password = f.readline()
+
+    if pwurl:
+        buffer = StringIO.StringIO()
+        c = pycurl.Curl()
+        c.setopt(c.URL, pwurl)
+        c.setopt(c.WRITEDATA, buffer)
+        c.perform()
+        c.close()
+        password = buffer.getvalue()
+
+    return password
 
 def sendData(sender, file, encrypt, chunksize=16536, checksum=False):
     """ Send a block of data """

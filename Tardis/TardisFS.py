@@ -48,6 +48,7 @@ import TardisDB
 import CacheDir
 import Regenerate
 import TardisCrypto
+import Util
 
 def dirFromList(list):
     """
@@ -86,17 +87,19 @@ class TardisFS(fuse.Fuse):
         self.path=None
         self.repoint = False
         self.password = None
-        self.passwordfile = None
+        self.pwfile = None
+        self.pwurl  = None
         self.dbname = "tardis.db"
         self.crypt = None
         logging.basicConfig(level=logging.DEBUG)
         self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="password",     help="Password for this archive")
-        self.parser.add_option(mountopt="passwordfile", help="Read password for this archive from the file")
-        self.parser.add_option(mountopt="path",     help="Path to the directory containing the database for this filesystem")
-        self.parser.add_option(mountopt="repoint",  help="Make absolute links relative to backupset")
-        self.parser.add_option(mountopt="dbname", help="Database Name")
+        self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
+        self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
+        self.parser.add_option(mountopt="path",         help="Path to the directory containing the database for this filesystem")
+        self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
+        self.parser.add_option(mountopt="dbname",       help="Database Name")
 
         res = self.parse(values=self, errex=1)
 
@@ -110,11 +113,8 @@ class TardisFS(fuse.Fuse):
         self.log.info("MountPoint: %s", self.mountpoint)
         self.log.info("DBName: %s", self.dbname)
 
-        password = self.password
+        password = Util.getPassword(self.password, self.pwfile, self.pwurl)
         self.password = None
-        if self.passwordfile:
-            with open(self.passwordfile, "r") as f:
-                password = f.readline()
 
         if password:
             self.crypt = TardisCrypto.TardisCrypto(password)
@@ -123,6 +123,14 @@ class TardisFS(fuse.Fuse):
         self.cache = CacheDir.CacheDir(self.path)
         dbPath = os.path.join(self.path, self.dbname)
         self.tardis = TardisDB.TardisDB(dbPath, backup=False)
+
+        token = None
+        if self.crypt:
+            (dirname, hostname) = os.path.split(self.path)
+            token = self.crypt.encryptFilename(hostname)
+        if not self.tardis.checkToken(token):
+            self.log.critical("Login failed.  Password does not match")
+            sys.exit(1)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
         self.files = {}
@@ -513,7 +521,10 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                subpath = parts[1]
+                if self.crypt:
+                    subpath = self.crypt.encryptPath(subpath)
+                checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                 if checksum:
                     return retFunc(['user.checksum', 'user.since', 'user.chain'])
 
@@ -537,20 +548,23 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
 
+            subpath = parts[1]
+            if self.crypt:
+                subpath = self.crypt.encryptPath(subpath)
             if attr == 'user.checksum':
                 if b:
-                    checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
             elif attr == 'user.since':
                 if b: 
-                    since = self.tardis.getFirstBackupSet(parts[1], b['backupset'])
+                    since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
                     self.log.debug(str(since))
                     if since:
                         return retFunc(since)
             elif attr == 'user.chain':
-                    checksum = self.tardis.getChecksumByPath(parts[1], b['backupset'])
+                    checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     self.log.debug(str(checksum))
                     if checksum:
                         chain = self.tardis.getChainLength(checksum)
@@ -565,7 +579,11 @@ def main():
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
 
-    fs = TardisFS()
+    try:
+        fs = TardisFS()
+    except:
+        sys.exit(1)
+
     fs.flags = 0
     fs.multithreaded = 0
     try:

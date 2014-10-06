@@ -37,9 +37,11 @@ import socket
 import TardisDB
 import TardisCrypto
 import CacheDir
+import Util
 import logging
 import subprocess
 import time
+
 from rdiff_backup import librsync
 import tempfile
 import shutil
@@ -128,11 +130,18 @@ def main():
 
     parser.add_argument("--output", "-o", dest="output", help="Output file", default=None)
     parser.add_argument("--database", "-d", help="Path to database directory", dest="database", default=database)
-    parser.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
-    parser.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
     parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
-    parser.add_argument("--password", "-p", help="Password", dest='password', default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
+
+    bsetgroup = parser.add_mutually_exclusive_group()
+    bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
+    bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
+
+    pwgroup = parser.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password',      dest='password', default=None,          help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
+    pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
@@ -155,10 +164,20 @@ def main():
 
     crypt = None
 
-    if args.password:
-        crypt = TardisCrypto.TardisCrypto(args.password)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+    args.password = None
+    if password:
+        crypt = TardisCrypto.TardisCrypto(password)
+    password = None
 
     r = Regenerator(cache, tardis, crypt=crypt)
+
+    token = None
+    if crypt:
+        token = self.crypt.encryptFilename(args.host)
+        if not self.tardis.checkToken(token):
+            self.logger.critical("Login failed.  Password does not match")
+            sys.exit(1)
 
     bset = False
 
