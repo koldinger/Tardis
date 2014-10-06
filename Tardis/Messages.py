@@ -59,6 +59,36 @@ class Messages(object):
             self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 
+    def sendFile(self, file, encrypt, checksum=False):
+        """ Send a block of data """
+        num = 0
+        size = 0
+        status = "OK"
+        ck = None
+
+        if checksum:
+            m = hashlib.md5()
+        try:
+            for chunk in iter(partial(file.read, args.chunksize), ''):
+                if checksum:
+                    m.update(chunk)
+                data = conn.encode(encrypt(chunk))
+                chunkMessage = { "chunk" : num, "data": data }
+                conn.send(chunkMessage)
+                x = len(data)
+                size += x
+                num += 1
+        except Exception as e:
+            status = "Fail"
+        finally:
+            message = {"chunk": "done", "size": size, "status": status}
+            if checksum:
+                ck = m.hexdigest()
+                message["checksum"] = ck
+            conn.send(message)
+
+        return size, ck
+
 class BinMessages(Messages):
     def __init__(self, socket, stats=None):
         Messages.__init__(self, socket, stats)

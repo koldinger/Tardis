@@ -21,17 +21,17 @@ Tardis consists of several components:
 Tardis is currently under development, but appears to be sufficiently bug free to start some use.
 Features currently planned to be implemented:
 
-1. Handling multiple filesystems
+1. ~~Handling multiple filesystems~~ (mostly handled.  Some potential issues)
 2. Saving of extended attributes
-2. Saving of per-connection configuration values in the server DB
-3. Authenitcation of password
+2. ~~Saving of per-connection configuration values in the server DB~~
+3. ~~Authenitcation of password~~
 4. Encrypted encryption key stored on server, decrypted on client?
-5. User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  Currently different backup sessions could use different keys, and basically create a mess of everything).
+5. User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  ~~Currently different backup sessions could use different keys, and basically create a mess of everything).~~
 6. ~~Python EGG setup.~~
 7. ~~Better daemon support.~~
 8. ~~LSB init script (systemctl support)?~~
 9. Space management.  Multiple purge schedules for different prioritys.  On demand purging when low on space.
-10. Client side configuration files.
+10. ~~Client side configuration files.~~ (as argument files)
 
 Tardis relies on the bson, xattrs, pycrypto, and daemonize packages.
 Tardis currently uses the librsync from rdiff-backup, but I hope to remove that soon.
@@ -39,14 +39,25 @@ Tardis currently uses the librsync from rdiff-backup, but I hope to remove that 
 Setup
 =====
 Setting up the server is relatively straightforward.
-Install into a directory (will be replaced with egg support at a later date).
-Edit the config file, tardisd.cfg (in /etc, should you so desire)
-Set the BaseDir variable to point at a location to store all your databases.
-Set the port to be the port you want to use.  Default is currently 9999.
-If you want to use SSL, create a certificate and a key file (plenty of directions on the web).
-Set the 
-Start the client as a "service" (better configuration coming later):
-  nohup tardisd --config <path-to-your-tardisd.cfg> &
+  * Install rdiff_backup and librsync
+    * Fedora: yum install librsync rdiff_backup
+    * Ubuntu: apt-get install librsync rdiff_backup
+  * Run the python setup:
+    * python setup.py
+  * Edit the config file, tardisd.cfg (in /etc, should you so desire)
+  * Set the BaseDir variable to point at a location to store all your databases.
+  * Set the port to be the port you want to use.  Default is currently 9999.
+  * If you want to use SSL, create a certificate and a key file (plenty of directions on the web).
+  * Edit other parameters as necessary.
+  * Copy the appropriate startup script as desired
+      * Systemd/systemctl
+         * cp init/tardisd.service /usr/lib/systemd/system
+         * systemctl enable tardisd.service
+      * SysV init
+         * cp init/tardisd /etc/init.d
+         * chkconfig --add tardisd
+         * chkconfig tardisd on
+         * service tardisd start
 
 Running the Client
 ==================

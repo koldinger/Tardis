@@ -37,9 +37,11 @@ import socket
 import TardisDB
 import TardisCrypto
 import CacheDir
+import Util
 import logging
 import subprocess
 import time
+
 from rdiff_backup import librsync
 import tempfile
 import shutil
@@ -75,33 +77,41 @@ class Regenerator:
         return outfile
 
     def recoverChecksum(self, cksum):
-        self.logger.debug("Recovering checksum: {}".format(cksum))
+        self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = self.db.getChecksumInfo(cksum)
-        if cksInfo['basis']:
-            basis = self.recoverChecksum(cksInfo['basis'])
-            # UGLY.  Put the basis into an actual file for librsync
-            if type(basis) is not types.FileType:
-                temp = tempfile.TemporaryFile()
-                shutil.copyfileobj(basis, temp)
-                basis = temp
-            #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
-            if cksInfo['iv']:
-                patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
-            else:
-                patchfile = self.cacheDir.open(cksum, 'rb')
-            try:
-                output = librsync.PatchedFile(basis, patchfile)
-            except librsyncError as e:
-                self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
-                raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+        if cksInfo is None:
+            self.logger.error("Checksum %s not found", cksum)
+            return None
 
-            #output.seek(0)
-            return output
-        else:
-            if cksInfo['iv']:
-                return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+        try:
+            if cksInfo['basis']:
+                basis = self.recoverChecksum(cksInfo['basis'])
+                # UGLY.  Put the basis into an actual file for librsync
+                if type(basis) is not types.FileType:
+                    temp = tempfile.TemporaryFile()
+                    shutil.copyfileobj(basis, temp)
+                    basis = temp
+                #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
+                if cksInfo['iv']:
+                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
+                else:
+                    patchfile = self.cacheDir.open(cksum, 'rb')
+                try:
+                    output = librsync.PatchedFile(basis, patchfile)
+                except librsyncError as e:
+                    self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
+                    raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+
+                #output.seek(0)
+                return output
             else:
-                return self.cacheDir.open(cksum, "rb")
+                if cksInfo['iv']:
+                    return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                else:
+                    return self.cacheDir.open(cksum, "rb")
+        except Exception as e:
+            self.logger.error("Unable to recover checksum %s: %s", chksum, e)
+            raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False):
         self.logger.debug("Recovering file: {}".format(filename))
@@ -112,6 +122,8 @@ class Regenerator:
         if cksum:
             try:
                 return self.recoverChecksum(cksum)
+            except RegenerateException:
+                raise
             except:
                 raise RegenerateException("Error recovering file: {}".format(filename))
         else:
@@ -124,11 +136,18 @@ def main():
 
     parser.add_argument("--output", "-o", dest="output", help="Output file", default=None)
     parser.add_argument("--database", "-d", help="Path to database directory", dest="database", default=database)
-    parser.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
-    parser.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
     parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
-    parser.add_argument("--password", "-p", help="Password", dest='password', default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
+
+    bsetgroup = parser.add_mutually_exclusive_group()
+    bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
+    bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
+
+    pwgroup = parser.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password',      dest='password', default=None,          help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
+    pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
@@ -151,10 +170,20 @@ def main():
 
     crypt = None
 
-    if args.password:
-        crypt = TardisCrypto.TardisCrypto(args.password)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+    args.password = None
+    if password:
+        crypt = TardisCrypto.TardisCrypto(password)
+    password = None
 
     r = Regenerator(cache, tardis, crypt=crypt)
+
+    token = None
+    if crypt:
+        token = crypt.encryptFilename(args.host)
+        if not tardis.checkToken(token):
+            logger.critical("Login failed.  Password does not match")
+            sys.exit(1)
 
     bset = False
 

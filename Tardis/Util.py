@@ -29,6 +29,15 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import Messages
+import Connection
+import hashlib
+import StringIO
+from functools import partial
+
+import pycurl
+
+import logging
 
 def fmtSize(num, base=1024):
     fmt = "%d %s"
@@ -40,6 +49,11 @@ def fmtSize(num, base=1024):
         fmt = "%3.1f %s"
     return fmt % (num, 'TB')
 
+def getIntOrNone(config, section, name):
+    try:
+        return config.getint(section, name)
+    except:
+        return None
 
 def shortPath(path, width=80):
     if path == None or len(path) <= width:
@@ -52,3 +66,84 @@ def shortPath(path, width=80):
         except:
             break
     return ".../" + path
+
+def getPassword(password, pwfile, pwurl):
+    methods = 0
+    if password: methods += 1
+    if pwfile:   methods += 1
+    if pwurl:    methods += 1
+
+    if methods > 1:
+        raise Exception("Cannot specify more than one password retrieval mechanism")
+
+    if pwfile:
+        with open(pwfile, "r") as f:
+            password = f.readline().rstrip()
+
+    if pwurl:
+        buffer = StringIO.StringIO()
+        c = pycurl.Curl()
+        c.setopt(c.URL, pwurl)
+        c.setopt(c.WRITEDATA, buffer)
+        c.perform()
+        c.close()
+        password = buffer.getvalue().rstrip()
+
+    return password
+
+def sendData(sender, file, encrypt, chunksize=16536, checksum=False):
+    """ Send a block of data """
+    # logger = logging.getLogger('Data')
+    if isinstance(sender, Connection.Connection):
+        sender = sender.sender
+    num = 0
+    size = 0
+    status = "OK"
+    ck = None
+
+    if checksum:
+        m = hashlib.md5()
+    try:
+        for chunk in iter(partial(file.read, chunksize), ''):
+            if checksum:
+                m.update(chunk)
+            data = sender.encode(encrypt(chunk))
+            chunkMessage = { "chunk" : num, "data": data }
+            sender.sendMessage(chunkMessage)
+            x = len(chunk)
+            size += x
+            num += 1
+    except Exception as e:
+        status = "Fail"
+        raise e
+    finally:
+        message = { "chunk": "done", "size": size, "status": status }
+        # logger.debug("Sent %d chunks, %d bytes", num, size);
+        if checksum:
+            ck = m.hexdigest()
+            message["checksum"] = ck
+        sender.sendMessage(message)
+    return size, ck
+
+def receiveData(receiver, output):
+    # logger = logging.getLogger('Data')
+    if isinstance(receiver, Connection.Connection):
+        receiver = receiver.sender
+    bytesReceived = 0
+    checksum = None
+    while True:
+        chunk = receiver.recvMessage()
+        # logger.debug("Chunk: %s", str(chunk))
+        if chunk['chunk'] == 'done':
+            status = chunk['status']
+            size   = chunk['size']
+            if 'checksum' in chunk:
+                checksum = chunk['checksum']
+            break
+        bytes = receiver.decode(chunk["data"])
+        if output:
+            output.write(bytes)
+            output.flush()
+        bytesReceived += len(bytes)
+
+    return (bytesReceived, status, size, checksum)

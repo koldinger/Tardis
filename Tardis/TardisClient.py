@@ -44,6 +44,7 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
+import pycurl
 from functools import partial
 
 from rdiff_backup import librsync
@@ -76,7 +77,6 @@ ignorectime         = False
 
 conn                = None
 args                = None
-conn                = None
 targetDir           = None
 targetStat          = None
 
@@ -90,6 +90,18 @@ logger              = logging.getLogger('')
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
 inodeDB             = {}
+
+class CustomArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super(CustomArgumentParser, self).__init__(*args, **kwargs)
+
+    def convert_arg_line_to_args(self, line):
+        for arg in line.split():
+            if not arg.strip():
+                continue
+            if arg[0] == '#':
+                break
+            yield arg
 
 def setEncoder(format):
     if format == 'base64':
@@ -109,40 +121,6 @@ def filelist(dir, excludes):
             files = list(set(files) - set(remove))
     for f in files:
         yield f
-
-def sendData(file, encrypt, checksum=False):
-    """ Send a block of data """
-    num = 0
-    size = 0
-    status = "OK"
-
-    if checksum:
-        m = hashlib.md5()
-    try:
-        for chunk in iter(partial(file.read, args.chunksize), ''):
-            if checksum:
-                m.update(chunk)
-            data = conn.encode(encrypt(chunk))
-            chunkMessage = { "chunk" : num, "data": data }
-            conn.send(chunkMessage)
-            x = len(data)
-            size += x
-            num += 1
-    except Exception as e:
-        status = "Fail"
-    finally:
-        message = {"chunk": "done", "size": size, "status": status}
-        if checksum:
-            ck = m.hexdigest()
-            message["checksum"] = m.hexdigest()
-        conn.send(message)
-
-    stats['dataSent'] += size
-
-    if checksum:
-        return ck
-    else:
-        return None
 
 def processChecksums(inodes):
     """ Generate a delta and send it """
@@ -217,8 +195,11 @@ def processDelta(inode):
         if sigmessage['status'] == 'OK':
             newsig = None
             oldchksum = sigmessage['checksum']
+            sigfile = cStringIO.StringIO()
+            #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+            Util.receiveData(conn.sender, sigfile)
+            sigfile.seek(0)
 
-            sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
             delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
 
             ### BUG: If the file is being changed, this value and the above may be different.
@@ -248,7 +229,7 @@ def processDelta(inode):
                     message["iv"] = conn.encode(iv)
 
                 sendMessage(message)
-                sendData(delta, encrypt)
+                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize)
                 delta.close()
                 if newsig:
                     message = {
@@ -256,7 +237,7 @@ def processDelta(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    sendData(newsig, lambda x:x)            # Don't bother to encrypt the signature
+                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -337,7 +318,7 @@ def sendContent(inode):
             # Attempt to send the data.
             try:
                 sendMessage(message)
-                checksum = sendData(x, encrypt, checksum=True)
+                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize)
 
                 if crypt:
                     x.seek(0)
@@ -347,7 +328,7 @@ def sendContent(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    sendData(sig, lambda x:x)            # Don't bother to encrypt the signature
+                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data %s", e)
             finally:
@@ -420,7 +401,7 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        inodeDB[(s.st_dev, s.st_ino)] = (finfo, pathname)
+        inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
         if verbosity:
             logger.info("Skipping special file: %s", pathname)
@@ -448,7 +429,7 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
         for f in filelist(dir, localExcludes):
             try:
                 file = mkFileInfo(dir, f)
-                if file:
+                if file and (args.crossdev or device == file['dev']):
                     mode = file["mode"]
                     if S_ISLNK(mode):
                         stats['links'] += 1
@@ -457,7 +438,6 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
                         stats['backed'] += file["size"]
 
                     if S_ISDIR(mode):
-                        if args.crossdev or device == file['dev']:
                             subdirs.append(os.path.join(dir, f))
 
                     files.append(file)
@@ -466,40 +446,12 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
             except Exception as e:
                 ## Is this necessary?  Fold into above?
                 logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
-                logger.exception(e)
+                #logger.exception(e)
                 #traceback.print_exc()
     except (IOError, OSError) as e:
         logger.error("Error reading directory %s: %s" ,dir, str(e))
 
     return (files, subdirs, excludes)
-
-def checkClonable(dir, stat, files, subdirs):
-    if (ignorectime is False) and (stat.st_ctime > conn.lastTimestamp):
-        return False
-    if stat.st_mtime > conn.lastTimestamp:
-        return False
-
-    # Now, collect the timestamps of all the files, and determine the maximum
-    # If any are greater than the last timestamp, punt
-    extend = partial(os.path.join, path)
-    if subdirs and len(subdirs):
-        times = map(os.lstat, map(extend, subdirs))
-        if ignorectime:
-            time = max([x.st_mtime for x in times])
-        else:
-            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
-        if time > conn.lastTimestamp:
-            return False
-    if files and len(files):
-        times = map(os.lstat, map(extend, subs))
-        if ignorectime:
-            time = max([x.st_mtime for x in times])
-        else:
-            time = max(map(lambda x: max(x.st_ctime, x.st_mtime), times))
-        if time > conn.lastTimestamp:
-            return False
-
-    return True
 
 def handleAckClone(message):
     if message["message"] != "ACKCLN":
@@ -508,24 +460,27 @@ def handleAckClone(message):
         logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
     # Process the directories that have changed
-    for inode in message["content"]:
-        if inode in cloneContents:
-            (path, files) = cloneContents[inode]
+    for i in message["content"]:
+        finfo = tuple(i)
+        if finfo in cloneContents:
+            (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                if verbosity:
+                if verbosity > 1:
                     logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
-                batchDirs.append(makeDirMessage(path, inode, files))
+                (inode, device) = finfo
+                batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity:
+                if verbosity > 1:
                     logger.info("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
-                sendDirChunks(path, inode, files)
-            del cloneContents[inode]
+                sendDirChunks(path, finfo, files)
+            del cloneContents[finfo]
 
     # Purge out what hasn't changed
-    for inode in message["done"]:
+    for i in message["done"]:
+        inode = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             for f in files:
@@ -568,21 +523,19 @@ def flushBatchDirs():
         sendBatchDirs()
 
 def sendPurge(relative):
-    if purgePriority and purgeTime:
-        message = {
-            'message': 'PRG',
-            'priority': purgePriority,
-            'time'    : purgeTime,
-            'relative': relative
-        }
+    message =  { 'message': 'PRG' }
+    if purgePriority:
+        message['priority'] = purgPriority
+    if purgeTime:
+        message.update( { 'time': purgeTime, 'relative': relative })
 
-        response = sendAndReceive(message)
+    response = sendAndReceive(message)
 
 def sendDirChunks(path, inode, files):
     message = {
         'message': 'DIR',
         'path':  path,
-        'inode':  inode
+        'inode': list(inode)
     }
 
     chunkNum = 0
@@ -597,11 +550,11 @@ def sendDirChunks(path, inode, files):
         response = sendAndReceive(message)
         handleAckDir(response)
 
-def makeDirMessage(path, inode, files):
+def makeDirMessage(path, inode, dev, files):
     message = {
         'files':  files,
-        'inode':  inode,
-        'path':  path,
+        'inode':  [inode, dev],
+        'path':   path,
         'message': 'DIR',
         }
     return message
@@ -647,8 +600,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             for f in filenames:
                 m.update(f.encode('utf8', 'ignore'))
 
-            cloneDirs.append({'inode':  s.st_ino, 'numfiles':  len(files), 'cksum': m.hexdigest()})
-            cloneContents[s.st_ino] = (os.path.relpath(dir, top), files)
+            cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
+            cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
             flushBatchDirs()
             if len(cloneDirs) >= args.clones:
                 flushClones()
@@ -657,26 +610,30 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 logmsg += " [Batched]"
                 logger.debug(logmsg)
                 flushClones()
-                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, files))
+                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
                 logger.debug(logmsg)
                 flushClones()
                 flushBatchDirs()
-                sendDirChunks(os.path.relpath(dir, top), s.st_ino, files)
+                sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
             for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
-    except (IOError, OSError) as e:
+    except (OSError) as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
+        #raise
         #traceback.print_exc()
+    except (IOError) as e:
+        logger.error("Error handling directory: %s: %s", dir, str(e))
+        raise
     except Exception as e:
         # TODO: Clean this up
-        logger.exception(e)
+        #logger.exception(e)
         raise
         
 
@@ -684,17 +641,9 @@ def setBackupName(args):
     """ Calculate the name of the backup set """
     global purgeTime, purgePriority, starttime
     name = args.name
-    priority = 1
+    priority = None
     keepdays = None
     # If auto is set, pick based on the day of the month, week, or just a daily
-    if args.auto:
-        if starttime.day == 1:
-            args.monthly = True
-        elif starttime.weekday() == 0:
-            args.weekly = True
-        else:
-            args.daily = True
-
     if args.hourly:
         name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
         priority = 10
@@ -773,13 +722,13 @@ def sendAndReceive(message):
     sendMessage(message)
     return receiveMessage()
 
-def sendDirEntry(parent, files):
+def sendDirEntry(parent, device, files):
     # send a fake root directory
     message = {
         'message': 'DIR',
-        'files':  files,
+        'files': files,
         'path':  None,
-        'inode': parent,
+        'inode': [parent, device],
         'files': files
         }
 
@@ -823,36 +772,48 @@ sentDirs = {}
 
 def makePrefix(root, path):
     """ Create common path directories.  Will be empty, except for path elements to the repested directories. """
-    rPath = os.path.relpath(path, root)
-    pathDirs = splitDirs(rPath)
-    parent = 0
-    current = root
+    rPath     = os.path.relpath(path, root)
+    pathDirs  = splitDirs(rPath)
+    parent    = 0
+    parentDev = 0
+    current   = root
     for d in pathDirs:
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(current, d)
         if dirPath not in sentDirs:
-            sendDirEntry(parent, [f])
+            sendDirEntry(parent, parentDev, [f])
             sentDirs[dirPath] = parent
-        parent = st.st_ino
-        current = dirPath
-     
+        parent    = st.st_ino
+        parentDev = st.st_dev
+        current   = dirPath
+
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
-    parser = argparse.ArgumentParser(description='Tardis Backup Client')
+    #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
+    # Use the custom arg parser, which handles argument files more cleanly
+    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
-    parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection')
+    parser.add_argument('--ssl', '-S',          dest='ssl', action='store_true', default=False,           help='Use SSL connection.  Default: %(default)s')
+
+    parser.add_argument('--hostname',           dest='hostname', default=socket.gethostname(),            help='Set the hostname.  Default: %(default)s')
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
+    pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+
+    parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
+    parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
+    parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
+    parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
-    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,  help='Set the backup name')
+    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,  help='Set the backup name.  Default: %(default)s')
     namegroup.add_argument('--hourly', '-H',    dest='hourly', action='store_true',     help='Run an hourly backup')
     namegroup.add_argument('--daily',  '-D',    dest='daily', action='store_true',      help='Run a daily backup')
     namegroup.add_argument('--weekly', '-W',    dest='weekly', action='store_true',     help='Run a weekly backup')
@@ -862,7 +823,6 @@ def processCommandLine():
     parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
     parser.add_argument('--crossdevice', '-c',  action='store_true', dest='crossdev',       help='Cross devices')
-    parser.add_argument('--hostname',           dest='hostname', default=None,              help='Set the hostname')
 
     parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
@@ -894,7 +854,6 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
-
     dangergroup = parser.add_argument_group("DANGEROUS", "Dangerous options, use only if you're very knowledgable of Tardis functionality")
     dangergroup.add_argument('--ignore-ctime',      dest='ignorectime', action='store_true', default=False,     help='Ignore CTime when determining clonability')
 
@@ -903,7 +862,7 @@ def processCommandLine():
     return parser.parse_args()
 
 def main():
-    global starttime, args, config, conn, verbosity, ignorectime, crypt,  logger
+    global starttime, args, config, conn, verbosity, ignorectime, crypt
     levels = [logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
@@ -918,6 +877,9 @@ def main():
 
     ignorectime = args.ignorectime
 
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logger.setLevel(loglevel)
+
     try:
         # Figure out the name and the priority of this backupset
         (name, priority) = setBackupName(args)
@@ -926,19 +888,26 @@ def main():
         loadExcludes(args)
 
         # Error check the purge parameter.  Disable it if need be
-        if args.purge and not purgeTime:
+        if args.purge and not (purgeTime is not None or args.auto):
             logger.error("Must specify purge days with this option set")
             args.purge=False
 
         # Load any password info
-        password = args.password
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
         args.password = None
-        if args.passwordfile:
-            with open(args.passwordfile, "r") as f:
-                password = f.readline()
+
+        token = None
         if password:
             crypt = TardisCrypto.TardisCrypto(password)
+            token = crypt.encryptFilename(args.hostname)
         password = None
+
+        if args.basepath == 'common':
+            rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
+        elif args.basepath == 'full':
+            rootdir = '/'
+        else:
+            rootdir = None
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
         sys.exit(1)
@@ -946,50 +915,49 @@ def main():
     # Open the connection
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
+        #logger.exception(e)
         sys.exit(1)
 
     if verbosity or args.stats:
-        logger.info("Name: {} Server: {}:{} Session: {}".format(name, args.server, args.port, conn.getSessionId()))
-
-    if args.basepath == 'common':
-        rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
-    elif args.basepath == 'full':
-        rootdir = '/'
-    else:
-        rootdir = None
-
-    if args.copy:
-        requestTargetDir()
+        logger.info("Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
     # Now, do the actual work here.
     try:
+        if args.copy:
+            requestTargetDir()
+
+        # First, send any fake directories
         for x in map(os.path.realpath, args.directories):
             if rootdir:
                 makePrefix(rootdir, x)
             else:
                 (d, name) = os.path.split(x)
                 f = mkFileInfo(d, name)
-                sendDirEntry(0, [f])
+                sendDirEntry(0, 0, [f])
 
+        # Now, process all the actual directories
         for x in map(os.path.realpath, args.directories):
             if rootdir:
                 root = rootdir
             else:
                 (d, name) = os.path.split(x)
                 root = d
-
             recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
 
         # If any clone or batch requests still lying around, send them
         flushClones()
         flushBatchDirs()
+
+        # Sanity check.
+        if len(cloneContents) != 0:
+            log.warning("Warning: Some cloned directories not processed")
 
         if args.purge:
             if args.purgetime:
@@ -1006,7 +974,6 @@ def main():
         logger.info("Runtime: {}".format((endtime - starttime)))
         logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
         logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-        logger.info("Runtime: {}".format((endtime - starttime)))
         if conn is not None:
             connstats = conn.getStats()
             logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
