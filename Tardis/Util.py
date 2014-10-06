@@ -78,7 +78,7 @@ def getPassword(password, pwfile, pwurl):
 
     if pwfile:
         with open(pwfile, "r") as f:
-            password = f.readline()
+            password = f.readline().rstrip()
 
     if pwurl:
         buffer = StringIO.StringIO()
@@ -87,7 +87,7 @@ def getPassword(password, pwfile, pwurl):
         c.setopt(c.WRITEDATA, buffer)
         c.perform()
         c.close()
-        password = buffer.getvalue()
+        password = buffer.getvalue().rstrip()
 
     return password
 
