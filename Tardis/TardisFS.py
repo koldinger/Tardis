@@ -442,13 +442,16 @@ class TardisFS(fuse.Fuse):
         return -errno.EINVAL
 
     def rename ( self, oldPath, newPath ):
+        self.log.info('CALL rename {} {}'.format(oldPath, newPath))
         return -errno.EROFS
 
     def rmdir ( self, path ):
+        self.log.info('CALL rmdir {}'.format(path))
         return -errno.EROFS
 
     def statfs ( self ):
         """ StatFS """
+        self.log.info('CALL statfs')
         fs = os.statvfs(self.path)
 
         st = fuse.Stat()
@@ -466,20 +469,26 @@ class TardisFS(fuse.Fuse):
         return st
 
     def symlink ( self, targetPath, linkPath ):
+        self.log.info('CALL symlink {} {}'.format(path, linkPath))
         return -errno.EROFS
 
     def truncate ( self, path, size ):
+        self.log.info('CALL truncate {} {}'.format(path, size))
         return -errno.EROFS
 
     def unlink ( self, path ):
+        self.log.info('CALL unlink {}'.format(path))
         return -errno.EROFS
 
     def utime ( self, path, times ):
+        self.log.info('CALL utime {} {} '.format(path, str(times)))
         return -errno.EROFS
 
     def write ( self, path, buf, offset ):
+        self.log.info('CALL write {} {} {}'.format(path, offset, len(buf)))
         return -errno.EROFS
 
+    # Map extrenal attribute names for the top level directories to backupset info names
     attrMap = {
         'user.priority' : 'priority',
         'user.complete' : 'completed',
@@ -488,7 +497,7 @@ class TardisFS(fuse.Fuse):
     }
 
     def listxattr ( self, path, size ):
-        self.log.info('listxattr {} {}'.format(path, size))
+        self.log.info('CALL listxattr {} {}'.format(path, size))
         if size == 0:
             retFunc = lambda x: len("".join(x)) + len(str(x))
         else:
