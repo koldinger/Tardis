@@ -81,31 +81,35 @@ class Regenerator:
             self.logger.error("Checksum %s not found", cksum)
             return None
 
-        if cksInfo['basis']:
-            basis = self.recoverChecksum(cksInfo['basis'])
-            # UGLY.  Put the basis into an actual file for librsync
-            if type(basis) is not types.FileType:
-                temp = tempfile.TemporaryFile()
-                shutil.copyfileobj(basis, temp)
-                basis = temp
-            #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
-            if cksInfo['iv']:
-                patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
-            else:
-                patchfile = self.cacheDir.open(cksum, 'rb')
-            try:
-                output = librsync.PatchedFile(basis, patchfile)
-            except librsyncError as e:
-                self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
-                raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+        try:
+            if cksInfo['basis']:
+                basis = self.recoverChecksum(cksInfo['basis'])
+                # UGLY.  Put the basis into an actual file for librsync
+                if type(basis) is not types.FileType:
+                    temp = tempfile.TemporaryFile()
+                    shutil.copyfileobj(basis, temp)
+                    basis = temp
+                #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
+                if cksInfo['iv']:
+                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
+                else:
+                    patchfile = self.cacheDir.open(cksum, 'rb')
+                try:
+                    output = librsync.PatchedFile(basis, patchfile)
+                except librsyncError as e:
+                    self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
+                    raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
 
-            #output.seek(0)
-            return output
-        else:
-            if cksInfo['iv']:
-                return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                #output.seek(0)
+                return output
             else:
-                return self.cacheDir.open(cksum, "rb")
+                if cksInfo['iv']:
+                    return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                else:
+                    return self.cacheDir.open(cksum, "rb")
+        except Exception as e:
+            self.logger.error("Unable to recover checksum %s: %s", chksum, e)
+            raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False):
         self.logger.debug("Recovering file: {}".format(filename))
@@ -116,6 +120,8 @@ class Regenerator:
         if cksum:
             try:
                 return self.recoverChecksum(cksum)
+            except RegenerateException:
+                raise
             except:
                 raise RegenerateException("Error recovering file: {}".format(filename))
         else:
