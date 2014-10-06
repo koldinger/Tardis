@@ -180,9 +180,9 @@ def main():
 
     token = None
     if crypt:
-        token = self.crypt.encryptFilename(args.host)
-        if not self.tardis.checkToken(token):
-            self.logger.critical("Login failed.  Password does not match")
+        token = crypt.encryptFilename(args.host)
+        if not tardis.checkToken(token):
+            logger.critical("Login failed.  Password does not match")
             sys.exit(1)
 
     bset = False
