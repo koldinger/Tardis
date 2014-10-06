@@ -44,6 +44,7 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
+import pycurl
 from functools import partial
 
 from rdiff_backup import librsync
@@ -774,6 +775,22 @@ def makePrefix(root, path):
         parent    = st.st_ino
         parentDev = st.st_dev
         current   = dirPath
+
+def getPasswordFromURL(url):
+    """ Use pycurl to retrieve a password from a file """
+    password = ""
+    buffer = cStringIO.StringIO()
+    try:
+        c = pycurl.Curl()
+        c.setopt(c.URL, url)
+        c.setopt(c.WRITEDATA, buffer)
+        c.perform()
+        c.close()
+        password = buffer.getvalue()
+    except pycurl.error as e:
+        logger.critical("Unable able to retrieve password: %s", e)
+        raise e
+    return password
      
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
@@ -789,6 +806,7 @@ def processCommandLine():
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
+    pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -878,6 +896,8 @@ def main():
         if args.passwordfile:
             with open(args.passwordfile, "r") as f:
                 password = f.readline()
+        if args.passwordurl:
+            password = getPasswordFromURL(args.passwordurl)
         if password:
             crypt = TardisCrypto.TardisCrypto(password)
         password = None
