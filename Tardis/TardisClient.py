@@ -71,7 +71,7 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
 verbosity           = 0
-version             = "0.1"
+version             = "0.4"
 
 ignorectime         = False
 
@@ -793,7 +793,8 @@ def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
     # Use the custom arg parser, which handles argument files more cleanly
-    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
+    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@',
+                                  epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
