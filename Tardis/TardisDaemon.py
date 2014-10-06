@@ -404,7 +404,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             output = self.cache.open(sigfile, "wb")
 
-        (bytesReceived, status, size, checksum) = Util.receiveData(messenger, output)
+        (bytesReceived, status, size, checksum) = Util.receiveData(self.messenger, output)
 
         if output is not None:
             output.close()
@@ -633,13 +633,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
-    def startSession(self, name):
+    def startSession(self, name, token):
         self.name = name
         sid = str(self.sessionid)
         # TODO: Lock the sessions structure.
         sessions[sid] = self
-
-            
 
         self.tempdir = os.path.join(self.basedir, "tmp_" + sid)
         os.makedirs(self.tempdir)
@@ -683,7 +681,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.purged = True
             return (count, size)
 
-
     def calcAutoInfo(self, clienttime):
         starttime = datetime.fromtimestamp(clienttime)
         # Figure out if a monthly set has been made.
@@ -705,6 +702,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Oops, nothing worked.  Didn't change the name.
         return (None, None, None)
 
+    def confirmToken(self, token):
+        dbToken = self.db.getToken()
+        if dbToken:
+            if dbToken != token:
+                if token:
+                    self.logger.warning("Login attempt with invalid token: %s", token)
+                    raise InitFailedException("Password doesn't match")
+                else:
+                    self.logger.warning("No token specified for login")
+                    raise InitFailedException("Password required for login")
+        elif token:
+            self.logger.info("Setting token to: %s", token)
+            self.db.setToken(token)
+
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
         completed = False
@@ -716,8 +727,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         try:
             self.request.sendall("TARDIS 1.0")
-            message = self.request.recv(256).strip()
-            #self.logger.debug(message)
+            message = self.request.recv(1024).strip()
+            self.logger.debug(message)
 
             fields = json.loads(message)
             try:
@@ -733,6 +744,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 version     = fields['version']
                 clienttime  = fields['time']
                 autoname    = fields['autoname']
+                if 'token' in fields:
+                    token = fields['token']
+                else:
+                    token = None
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", host, name, str(autoname), version, clienttime)
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
@@ -742,7 +757,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             serverName = None
             try:
                 self.getDB(host)
-                self.startSession(name)
+                self.confirmToken(token)
+                self.startSession(name, token)
                 self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
                 if autoname:
                     (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
@@ -756,7 +772,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 self.request.sendall(json.dumps(message))
-                self.logger.exception(e)
+                #self.logger.exception(e)
                 raise InitFailedException(str(e))
 
             if encoding == "JSON":

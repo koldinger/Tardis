@@ -42,7 +42,7 @@ class ConnectionException(Exception):
 class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, use_ssl, hostname, autoname, force=False, version=0):
+    def __init__(self, host, port, name, encoding, priority, use_ssl, hostname, autoname, token, force=False, version=0):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         if hostname is None:
@@ -73,6 +73,8 @@ class Connection(object):
                 'time'      : time.time(),
                 'version'   : version
             }
+            if token:
+                data['token'] = token
             # BACKUP { json message }
             message = json.dumps(data)
             self.put(message)
@@ -129,8 +131,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname):
-        Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname)
+    def __init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname, token):
+        Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname, token)
 
     def send(self, message):
         self.stats['messagesSent'] += 1
@@ -155,14 +157,14 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, hostname, autoname)
+    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False, token=None):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, hostname, autoname, token)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, hostname, autoname)
+    def __init__(self, host, port, name, priority=0, use_ssl=False, hostname=None, autoname=False, token=None):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, hostname, autoname,  token)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats)
 

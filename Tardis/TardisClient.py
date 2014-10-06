@@ -44,6 +44,7 @@ import subprocess
 import hashlib
 import tempfile
 import cStringIO
+import pycurl
 from functools import partial
 
 from rdiff_backup import librsync
@@ -89,6 +90,18 @@ logger              = logging.getLogger('')
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
 inodeDB             = {}
+
+class CustomArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super(CustomArgumentParser, self).__init__(*args, **kwargs)
+
+    def convert_arg_line_to_args(self, line):
+        for arg in line.split():
+            if not arg.strip():
+                continue
+            if arg[0] == '#':
+                break
+            yield arg
 
 def setEncoder(format):
     if format == 'base64':
@@ -774,11 +787,13 @@ def makePrefix(root, path):
         parent    = st.st_ino
         parentDev = st.st_dev
         current   = dirPath
-     
+
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
-    parser = argparse.ArgumentParser(description='Tardis Backup Client')
+    #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
+    # Use the custom arg parser, which handles argument files more cleanly
+    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
@@ -789,6 +804,12 @@ def processCommandLine():
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
+    pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+
+    parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
+    parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
+    parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
+    parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -833,7 +854,6 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
-
     dangergroup = parser.add_argument_group("DANGEROUS", "Dangerous options, use only if you're very knowledgable of Tardis functionality")
     dangergroup.add_argument('--ignore-ctime',      dest='ignorectime', action='store_true', default=False,     help='Ignore CTime when determining clonability')
 
@@ -873,14 +893,21 @@ def main():
             args.purge=False
 
         # Load any password info
-        password = args.password
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
         args.password = None
-        if args.passwordfile:
-            with open(args.passwordfile, "r") as f:
-                password = f.readline()
+
+        token = None
         if password:
             crypt = TardisCrypto.TardisCrypto(password)
+            token = crypt.encryptFilename(args.hostname)
         password = None
+
+        if args.basepath == 'common':
+            rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
+        elif args.basepath == 'full':
+            rootdir = '/'
+        else:
+            rootdir = None
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
         sys.exit(1)
@@ -888,10 +915,10 @@ def main():
     # Open the connection
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto)
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
@@ -901,18 +928,11 @@ def main():
     if verbosity or args.stats:
         logger.info("Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
-    if args.basepath == 'common':
-        rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
-    elif args.basepath == 'full':
-        rootdir = '/'
-    else:
-        rootdir = None
-
-    if args.copy:
-        requestTargetDir()
-
     # Now, do the actual work here.
     try:
+        if args.copy:
+            requestTargetDir()
+
         # First, send any fake directories
         for x in map(os.path.realpath, args.directories):
             if rootdir:

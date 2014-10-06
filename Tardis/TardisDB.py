@@ -592,9 +592,32 @@ class TardisDB(object):
         else:
             return None
 
+    def getConfigValue(self, key):
+        c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
+        row = c.fetchone()
+        if row:
+            return row[0]
+        else:
+            return None
+
+    def setConfigValue(self, key, value):
+        c = self.execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})
+
+    def getToken(self):
+        return self.getConfigValue('Token')
+
+    def setToken(self, token):
+        self.setConfigValue('Token', token)
+
+    def checkToken(self, token):
+        dbToken = self.getToken()
+        if dbToken == token:
+            return True
+        else:
+            return False
+
     def beginTransaction(self):
         self.cursor.execute("BEGIN")
-
 
     def completeBackup(self):
         self.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
