@@ -334,23 +334,6 @@ class TardisDB(object):
                   {"inode": inode, "device": device, "backup": backupset})
         return makeDict(c, c.fetchone())
 
-    """
-    def getNewFileInfoByInode(self, info):
-        self.logger.debug("Looking up file by inode %d %d", inode, self.currBackupSet)
-        (inode, device) = info
-        c = self.cursor
-        c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
-                  "FROM Files "
-                  "JOIN Names ON Files.NameId = Names.NameId "
-                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  "WHERE Inode = :inode AND Device = :device AND "
-                  ":backup BETWEEN FirstSet AND LastSet",
-                  {"inode": inode, "device": device, "backup": self.currBackupSet})
-        return makeDict(c, c.fetchone())
-    """
-
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         backupset = self.bset(current)
@@ -553,13 +536,6 @@ class TardisDB(object):
         for row in c.fetchall():
             yield makeDict(c, row)
 
-    """
-    def getPathForFileByName(self, name, parent, current=False):
-        backupSet = self.bset(current)
-        self.logger.debug("Extracting path for file %s %d %d", name, parent, backupSet)
-        return None
-    """
-
     def listBackupSets(self):
         self.logger.debug("list backup sets")
         c = self.execute("SELECT "
@@ -650,10 +626,17 @@ class TardisDB(object):
             yield row[0]
 
     def compact(self):
+        self.logger.debug("Removing unused names")
         # Purge out any unused names
         c = self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files)");
-        # And clean up the database
-        c = self.conn.execute("VACUUM")
+
+        # Check if we've hit an interval where we want to do a vacuum
+        bset = self.bset(True)
+        interval = self.getConfig("VacuumInterval")
+        if interval and bset % int(interval):
+            self.logger.debug("Vaccuuming database")
+            # And clean up the database
+            c = self.conn.execute("VACUUM")
 
     def deleteChecksum(self, checksum):
         self.logger.debug("Deleting checksum: %s", checksum)

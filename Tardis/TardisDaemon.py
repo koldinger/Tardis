@@ -841,8 +841,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 
             self.logger.debug("Removing orphans")
-            if self.purged:
-                self.db.compact()
+            self.db.compact()
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
