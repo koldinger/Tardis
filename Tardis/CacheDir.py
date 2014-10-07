@@ -35,18 +35,17 @@ import logging
 
 class CacheDir:
     def __init__(self, root, parts=2, partsize=2, create=True):
-        logger.debug("Creating CacheDir: path={}, parts={}, partsize={})".format(root, parts, partsize))
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
-        if create:
-            try:
+        if not os.path.isdir(self.root):
+            if create:
+                #try:
                 os.makedirs(self.root)
-            except OSError, error:
-                pass
-        else:
-            if not os.path.isdir(self.root):
-                return None
+                #except OSError, error:
+                    #pass
+            else:
+                raise Exception("CacheDir does not exist: " + root)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
@@ -84,7 +83,7 @@ logger = logging.getLogger("CacheDir")
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
     path = os.path.join("cache", socket.gethostname())
-    c = CacheDir(path, 4, 2)
+    c = CacheDir(path, 4, 2, True)
     print c.comps(test)
     print c.dir(test)
     print c.path(test)

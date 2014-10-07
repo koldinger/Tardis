@@ -621,10 +621,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             raise Exception("Unknown message type", messageType)
 
     def getDB(self, host):
-        self.logger.debug("getDB")
         script = None
         self.basedir = os.path.join(self.server.basedir, host)
-        self.cache = CacheDir.CacheDir(self.basedir, 2, 2)
+        self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
         self.dbname = os.path.join(self.basedir, dbFile)
         if not os.path.exists(self.dbname):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
@@ -718,6 +717,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
+        started   = False
         completed = False
         starttime = datetime.now()
 
@@ -787,6 +787,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "name": serverName if serverName else name}
             self.request.sendall(json.dumps(response))
 
+            started = True
+
             #self.request.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
             done = False;
 
@@ -820,7 +822,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.exception(e)
         finally:
             self.request.close()
-            self.endSession()
+            if started:
+                self.endSession()
             endtime = datetime.now()
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
@@ -831,17 +834,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 ps.print_stats()
                 print s.getvalue()
 
-            (count, size) = self.removeOrphans()
+            if started:
+                (count, size) = self.removeOrphans()
+                self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
+                self.logger.info("New or replaced files:    %d", self.statNewFiles)
+                self.logger.info("Updated file:             %d", self.statUpdFiles)
+                self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
+                self.logger.info("Command breakdown:        %s", self.statCommands)
+                self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 
-            self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
-            self.logger.info("New or replaced files:    %d", self.statNewFiles)
-            self.logger.info("Updated file:             %d", self.statUpdFiles)
-            self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
-            self.logger.info("Command breakdown:        %s", self.statCommands)
-            self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
-
-            self.logger.debug("Removing orphans")
-            self.db.compact()
+                self.logger.debug("Removing orphans")
+                self.db.compact()
+            self.logger.info("Session handler completing")
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -857,6 +861,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
         self.dbname         = config.get('Tardis', 'DBName')
         self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
+        self.allowNew       = config.getboolean('Tardis', 'AllowNewHosts')
 
         self.monthfmt       = config.get('Tardis', 'MonthFmt')
         self.monthprio      = config.getint('Tardis', 'MonthPrio')
@@ -957,6 +962,7 @@ def main():
     parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
     parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
+    parser.add_argument('--allow-new-hosts',    action='store_true', dest='newhosts', default=False, help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
 
     parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
@@ -984,6 +990,7 @@ def main():
         'Profile'       : args.profile,
         'LogFile'       : args.logfile,
         'AllowCopies'   : str(args.copies),
+        'AllowNewHosts' : str(args.newhosts),
         'Single'        : str(args.single),
         'Verbose'       : str(args.verbose),
         'Daemon'        : str(args.daemon),

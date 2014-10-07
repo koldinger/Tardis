@@ -924,7 +924,7 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("bin")
     except Exception as e:
-        logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
+        logger.critical("Unable to start session with %s:%d: %s", args.server, args.port, str(e))
         #logger.exception(e)
         sys.exit(1)
 

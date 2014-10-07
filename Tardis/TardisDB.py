@@ -632,7 +632,7 @@ class TardisDB(object):
 
         # Check if we've hit an interval where we want to do a vacuum
         bset = self.bset(True)
-        interval = self.getConfig("VacuumInterval")
+        interval = self.getConfigValue("VacuumInterval")
         if interval and bset % int(interval):
             self.logger.debug("Vaccuuming database")
             # And clean up the database
