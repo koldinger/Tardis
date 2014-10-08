@@ -71,7 +71,7 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
 verbosity           = 0
-version             = "0.1"
+version             = "0.4"
 
 ignorectime         = False
 
@@ -793,7 +793,8 @@ def processCommandLine():
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
     # Use the custom arg parser, which handles argument files more cleanly
-    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
+    parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@',
+                                  epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
     parser.add_argument('--server', '-s',       dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',         dest='port', type=int, default=9999,    help='Set the destination server port. Default: %(default)s')
@@ -806,10 +807,12 @@ def processCommandLine():
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
 
+    """
     parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
     parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
+    """
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -921,7 +924,7 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("bin")
     except Exception as e:
-        logger.critical("Unable to open connection with %s:%d: %s", args.server, args.port, str(e))
+        logger.critical("Unable to start session with %s:%d: %s", args.server, args.port, str(e))
         #logger.exception(e)
         sys.exit(1)
 
