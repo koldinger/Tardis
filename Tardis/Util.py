@@ -91,7 +91,7 @@ def getPassword(password, pwfile, pwurl):
 
     return password
 
-def sendData(sender, file, encrypt, chunksize=16536, checksum=False):
+def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False):
     """ Send a block of data """
     # logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -109,7 +109,7 @@ def sendData(sender, file, encrypt, chunksize=16536, checksum=False):
                 m.update(chunk)
             data = sender.encode(encrypt(chunk))
             chunkMessage = { "chunk" : num, "data": data }
-            sender.sendMessage(chunkMessage)
+            sender.sendMessage(chunkMessage, compress=compress)
             x = len(chunk)
             size += x
             num += 1
