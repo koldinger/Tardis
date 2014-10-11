@@ -24,7 +24,7 @@ Features currently planned to be implemented:
 1. ~~Handling multiple filesystems~~ (mostly handled.  Some potential issues)
 2. Saving of extended attributes
 2. ~~Saving of per-connection configuration values in the server DB~~
-3. ~~Authenitcation of password~~
+3. ~~Authentication of password~~
 4. Encrypted encryption key stored on server, decrypted on client?
 5. User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  ~~Currently different backup sessions could use different keys, and basically create a mess of everything).~~
 6. ~~Python EGG setup.~~
@@ -43,7 +43,7 @@ Setting up the server is relatively straightforward.
     * Fedora: yum install librsync rdiff_backup
     * Ubuntu: apt-get install librsync rdiff_backup
   * Run the python setup:
-    * python setup.py
+    * python setup.py install
   * Edit the config file, tardisd.cfg (in /etc, should you so desire)
   * Set the BaseDir variable to point at a location to store all your databases.
   * Set the port to be the port you want to use.  Default is currently 9999.
