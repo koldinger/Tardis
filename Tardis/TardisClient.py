@@ -229,7 +229,7 @@ def processDelta(inode):
                     message["iv"] = conn.encode(iv)
 
                 sendMessage(message)
-                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize)
+                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=False)
                 delta.close()
                 if newsig:
                     message = {
@@ -237,7 +237,7 @@ def processDelta(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
+                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -318,7 +318,7 @@ def sendContent(inode):
             # Attempt to send the data.
             try:
                 sendMessage(message)
-                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize)
+                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=False)
 
                 if crypt:
                     x.seek(0)
@@ -328,7 +328,7 @@ def sendContent(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
+                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, compress=False)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data %s", e)
             finally:
@@ -843,7 +843,7 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
-    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"], help='Protocol for data transfer.  Default: %(default)s')
+    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson", "bsonc"], help='Protocol for data transfer.  Default: %(default)s')
     parser.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
 
     parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
@@ -921,7 +921,10 @@ def main():
             conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=False)
+            setEncoder("bin")
+        elif args.protocol == 'bsonc':
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=True)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%d: %s", args.server, args.port, str(e))

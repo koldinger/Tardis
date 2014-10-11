@@ -315,7 +315,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "size": len(sig) }
             self.messenger.sendMessage(response)
             sigio = StringIO.StringIO(sig)
-            Util.sendData(self.messenger, sigio, lambda x:x)
+            Util.sendData(self.messenger, sigio, lambda x:x, compress=False)
             return (None, False)
 
         if response is None:
@@ -454,7 +454,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         iv = self.messenger.decode(message['iv']) if 'iv' in message else None
 
         (bytesReceived, status, size, checksum) = Util.receiveData(self.messenger, output)
-        logger.debug("Data Received: %d %s %d %s", bytesReceived, status, size, checksum)
+        #logger.debug("Data Received: %d %s %d %s", bytesReceived, status, size, checksum)
 
         output.close()
 
@@ -744,6 +744,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 version     = fields['version']
                 clienttime  = fields['time']
                 autoname    = fields['autoname']
+                compress    = fields['compress']
                 if 'token' in fields:
                     token = fields['token']
                 else:
@@ -776,9 +777,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 raise InitFailedException(str(e))
 
             if encoding == "JSON":
-                self.messenger = Messages.JsonMessages(self.request)
+                self.messenger = Messages.JsonMessages(self.request, compress=compress)
             elif encoding == "BSON":
-                self.messenger = Messages.BsonMessages(self.request)
+                self.messenger = Messages.BsonMessages(self.request, compress=compress)
             else:
                 message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
                 self.request.sendall(json.dumps(mesage))
