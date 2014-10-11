@@ -35,6 +35,7 @@ import json
 import bson
 import base64
 import struct
+import zlib
 
 class Messages(object):
     __socket = None
@@ -90,24 +91,42 @@ class Messages(object):
         return size, ck
 
 class BinMessages(Messages):
-    def __init__(self, socket, stats=None):
+    compress = None
+    decompress = None
+    def __init__(self, socket, stats=None, compress=False):
         Messages.__init__(self, socket, stats)
+        if compress:
+            self.compress = zlib.compressobj()
+            self.decompress = zlib.decompressobj()
 
-    def sendMessage(self, message):
-        length = struct.pack("!i", len(message))
-        self.sendBytes(length)
+    def sendMessage(self, message, compress=True):
+        if compress and self.compress:
+            message = self.compress.compress(message)
+            message += self.compress.flush(zlib.Z_SYNC_FLUSH)
+        length = len(message)
+        if compress and self.compress:
+            length |= 0x80000000
+        lBytes = struct.pack("!I", length)
+        self.sendBytes(lBytes)
         self.sendBytes(message)
 
     def recvMessage(self):
+        comp = False
         x = self.receiveBytes(4)
-        n = struct.unpack("!i", x)[0]
-        return self.receiveBytes(n)
+        n = struct.unpack("!I", x)[0]
+        if (n & 0x80000000) != 0:
+            n &= 0x7fffffff
+            comp = True
+        bytes = self.receiveBytes(n)
+        if comp:
+            bytes = self.decompress.decompress(bytes)
+        return bytes
 
 class TextMessages(Messages):
     def __init__(self, socket, stats=None):
         Messages.__init__(self, socket, stats)
 
-    def sendMessage(self, message):
+    def sendMessage(self, message, compress=True):
         length = len(message)
         output = "{:06d}".format(length)
         self.sendBytes(output)
@@ -118,10 +137,10 @@ class TextMessages(Messages):
         return self.receiveBytes(int(n))
 
 class JsonMessages(TextMessages):
-    def __init__(self, socket, stats=None):
+    def __init__(self, socket, stats=None, compress=False):
         TextMessages.__init__(self, socket, stats)
     
-    def sendMessage(self, message):
+    def sendMessage(self, message, compress=False):
         self.lastMessageSent = message
         super(JsonMessages, self).sendMessage(json.dumps(message))
 
@@ -140,12 +159,12 @@ class JsonMessages(TextMessages):
         return "base64"
 
 class BsonMessages(BinMessages):
-    def __init__(self, socket, stats=None):
-        BinMessages.__init__(self, socket, stats)
+    def __init__(self, socket, stats=None, compress=True):
+        BinMessages.__init__(self, socket, stats, compress=compress)
     
-    def sendMessage(self, message):
+    def sendMessage(self, message, compress=True):
         self.lastMessageSent = message
-        super(BsonMessages, self).sendMessage(bson.dumps(message))
+        super(BsonMessages, self).sendMessage(bson.dumps(message), compress=compress)
 
     def recvMessage(self):
         message = bson.loads(super(BsonMessages, self).recvMessage())
