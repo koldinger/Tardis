@@ -92,7 +92,7 @@ def getPassword(password, pwfile, pwurl):
 
     return password
 
-def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False):
+def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False, stats=None):
     """ Send a block of data """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -120,6 +120,11 @@ def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=Fa
     finally:
         size = stream.size()
         compressed = stream.isCompressed()
+        if stats and 'dataSent' in stats:
+            if compressed:
+                stats['dataSent'] += stream.compsize()
+            else:
+                stats['dataSent'] += size
         message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
         if checksum:
             ck = stream.checksum()

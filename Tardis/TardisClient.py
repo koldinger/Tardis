@@ -231,7 +231,8 @@ def processDelta(inode):
 
                 sendMessage(message)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress)
+                (sent, ck) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+                stats['dataSent']
                 delta.close()
                 if newsig:
                     message = {
@@ -239,7 +240,7 @@ def processDelta(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
+                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -323,7 +324,7 @@ def sendContent(inode):
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
                 sendMessage(message)
-                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress)
+                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, stats=stats)
 
                 if crypt:
                     x.seek(0)
@@ -333,7 +334,7 @@ def sendContent(inode):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
+                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
