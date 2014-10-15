@@ -477,17 +477,18 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False):
         self.logger.debug("Inserting checksum file: %s -- %d bytes", checksum, size)
 
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize) "
-                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize)",
-                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize})
+        comp = 1 if compressed else 0
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed) "
+                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed)",
+                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
-        c = self.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size, DeltaSize AS deltasize "
+        c = self.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size, DeltaSize AS deltasize, Compressed as compressed "
                   "FROM Checksums WHERE CheckSum = :checksum",
                   {"checksum": checksum})
         row = c.fetchone()

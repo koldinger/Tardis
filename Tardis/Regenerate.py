@@ -38,6 +38,7 @@ import TardisDB
 import TardisCrypto
 import CacheDir
 import Util
+import CompressedBuffer
 import logging
 import subprocess
 import time
@@ -83,6 +84,8 @@ class Regenerator:
             self.logger.error("Checksum %s not found", cksum)
             return None
 
+        self.logger.debug(" %s: %s", cksum, str(cksInfo))
+
         try:
             if cksInfo['basis']:
                 basis = self.recoverChecksum(cksInfo['basis'])
@@ -96,6 +99,14 @@ class Regenerator:
                     patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
+
+                if cksInfo['compressed']:
+                    self.logger.debug("Decompressing %s", cksum)
+                    temp = tempfile.TemporaryFile()
+                    buf = CompressedBuffer.UncompressedBufferedReader(patchfile)
+                    shutil.copyfileobj(buf, temp)
+                    temp.seek(0)
+                    patchfile = temp
                 try:
                     output = librsync.PatchedFile(basis, patchfile)
                 except librsyncError as e:
@@ -106,12 +117,24 @@ class Regenerator:
                 return output
             else:
                 if cksInfo['iv']:
-                    return self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                    output =  self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
                 else:
-                    return self.cacheDir.open(cksum, "rb")
+                    output =  self.cacheDir.open(cksum, "rb")
+
+                if cksInfo['compressed']:
+                    self.logger.debug("Decompressing %s", cksum)
+                    temp = tempfile.TemporaryFile()
+                    buf = CompressedBuffer.UncompressedBufferedReader(output)
+                    shutil.copyfileobj(buf, temp)
+                    temp.seek(0)
+                    output = temp
+
+                return output
+
         except Exception as e:
-            self.logger.error("Unable to recover checksum %s: %s", chksum, e)
-            raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+            self.logger.error("Unable to recover checksum %s: %s", cksum, e)
+            self.logger.exception(e)
+            raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False):
         self.logger.debug("Recovering file: {}".format(filename))

@@ -153,7 +153,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.info("File: [C]: %s", Util.shortPath(name))
+                logger.debug("File: [C]: %s", Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     # First, then send content for any files which don't
@@ -166,7 +166,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.info("File: [N]: %s %d", Util.shortPath(name), size)
+                logger.debug("File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -229,7 +229,8 @@ def processDelta(inode):
                     message["iv"] = conn.encode(iv)
 
                 sendMessage(message)
-                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize)
+                compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress)
                 delta.close()
                 if newsig:
                     message = {
@@ -291,6 +292,7 @@ def sendContent(inode):
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
             mode = fileInfo["mode"]
+            filesize = fileInfo["size"]
             if S_ISDIR(mode):
                 return
             (encrypt, iv) = makeEncryptor()
@@ -317,8 +319,9 @@ def sendContent(inode):
 
             # Attempt to send the data.
             try:
+                compress = True if (args.compress and (filesize > args.mincompsize)) else False
                 sendMessage(message)
-                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize)
+                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress)
 
                 if crypt:
                     x.seek(0)
@@ -330,7 +333,8 @@ def sendContent(inode):
                     sendMessage(message)
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize)            # Don't bother to encrypt the signature
             except Exception as e:
-                logger.error("Caught exception during sending of data %s", e)
+                logger.error("Caught exception during sending of data: %s", e)
+                logger.exception(e)
             finally:
                 x.close()
             stats['new'] += 1
@@ -466,14 +470,14 @@ def handleAckClone(message):
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
                 if verbosity > 1:
-                    logger.info("ResyncDir: [Batched] %s", Util.shortPath(path))
+                    logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
                 if verbosity > 1:
-                    logger.info("ResyncDir: %s", Util.shortPath(path))
+                    logger.debug("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -593,7 +597,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         if cloneable:
             logmsg += " [Clone]"
-            logger.debug(logmsg)
+            logger.info(logmsg)
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -608,13 +612,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         else:
             if len(files) < args.batchdirs:
                 logmsg += " [Batched]"
-                logger.debug(logmsg)
+                logger.info(logmsg)
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.debug(logmsg)
+                logger.info(logmsg)
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -807,9 +811,9 @@ def processCommandLine():
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
 
-    """
     parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
+    """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
     parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
     """
