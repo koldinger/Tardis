@@ -42,6 +42,7 @@ import CompressedBuffer
 import logging
 import subprocess
 import time
+import base64
 
 from rdiff_backup import librsync
 import tempfile
@@ -69,7 +70,7 @@ class Regenerator:
     def decryptFile(self, filename, size, iv):
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
-        cipher = self.crypt.getContentCipher(iv)
+        cipher = self.crypt.getContentCipher(base64.b64decode(iv))
         outfile = tempfile.TemporaryFile()
         infile = self.cacheDir.open(filename, 'rb')
         outfile.write(cipher.decrypt(infile.read()))
@@ -184,6 +185,7 @@ def main():
     #logger.addHandler(handler)
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
+    #logger.setLevel(logging.INFO)
     logger.setLevel(logging.DEBUG)
 
     baseDir = os.path.join(args.database, args.host)

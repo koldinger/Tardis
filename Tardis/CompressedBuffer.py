@@ -128,6 +128,7 @@ class CompressedBufferedReader(BufferedReader):
                         ret = self.compressor.compress(buffer)
                 else:
                     ret = buffer
+                    break       # Make sure we don't got around the loop at the EOF
 
             self.compressed += len(ret)
             return ret
@@ -176,17 +177,17 @@ class UncompressedBufferedReader(BufferedReader):
 
 if __name__ == "__main__":
     print "Opening {}".format(sys.argv[1])
-    x = BufferedReader(file(sys.argv[1], "rb"), checksum=True)
+    x = CompressedBufferedReader(file(sys.argv[1], "rb"), checksum=True)
     #line = x.get()
     with file(sys.argv[2], "wb") as f:
-        line = x.read(1024)
+        line = x.read(16536)
         while line:
             f.write(line)
             #print "==== ",  len(line), " :: ", base64.b64encode(line)
             #line = x.get()
-            line = x.read(1024)
+            line = x.read(16536)
 
-    #print x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum()
+    print x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum()
 
 """
     print "Opening {}".format(sys.argv[2])

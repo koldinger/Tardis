@@ -226,7 +226,8 @@ def processDelta(inode):
                     "encoding": encoding
                 }
                 if iv:
-                    message["iv"] = conn.encode(iv)
+                    #message["iv"] = conn.encode(iv)
+                    message["iv"] = base64.b64encode(iv)
 
                 sendMessage(message)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
@@ -303,7 +304,8 @@ def sendContent(inode):
                 "pathname" : pathname
                 }
             if iv:
-                message["iv"] = conn.encode(iv)
+                #message["iv"] = conn.encode(iv)
+                message["iv"] = base64.b64encode(iv)
             # Attempt to open the data source
             # Punt out if unsuccessful
             try:
