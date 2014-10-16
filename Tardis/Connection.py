@@ -49,12 +49,16 @@ class Connection(object):
             hostname = socket.gethostname()
 
         # Create and open the socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, int(port)))
-        if use_ssl:
-            self.sock = ssl.wrap_socket(sock)
+        if host:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, int(port)))
+            if use_ssl:
+                self.sock = ssl.wrap_socket(sock)
+            else:
+                self.sock = sock
         else:
-            self.sock = sock
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.sock.connect(port)
 
         try:
             # Receive a string.  TARDIS proto=1.0
