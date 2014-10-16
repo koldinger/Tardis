@@ -45,6 +45,7 @@ import hashlib
 import tempfile
 import cStringIO
 import pycurl
+import shlex
 from functools import partial
 
 from rdiff_backup import librsync
@@ -794,6 +795,17 @@ def makePrefix(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
+def run_server(args, tempfile):
+    server_cmd = shlex.split(args.serverprog) + ['--single', '--local', tempfile]
+    #if args.serverargs:
+        #server_cmd = server_cmd + args.serverargs
+    logger.info("Invoking server: " + str(server_cmd))
+    subp = subprocess.Popen(server_cmd)
+    time.sleep(.5)
+    if subp.poll():
+        raise Exception("Subprocess died:" + subp.returncode)
+    return subp
+
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
@@ -819,6 +831,11 @@ def processCommandLine():
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
     parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
     """
+
+    locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
+    locgrp.add_argument('--local',                      dest='local', action='store_true', default=False,       help='Run server as a local client')
+    locgrp.add_argument('--local-server-cmd',           dest='serverprog', default='tardisd --config /etc/tardis/tardisd.cfg',                   help='Local server program to run')
+    #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
     # Create a group of mutually exclusive options for naming the backup set
     namegroup = parser.add_mutually_exclusive_group()
@@ -922,6 +939,12 @@ def main():
         sys.exit(1)
 
     # Open the connection
+    if args.local:
+        tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
+        args.port = tempsocket
+        args.server = None
+        run_server(args, tempsocket)
+
     try:
         if args.protocol == 'json':
             conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
@@ -933,7 +956,7 @@ def main():
             conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=True)
             setEncoder("bin")
     except Exception as e:
-        logger.critical("Unable to start session with %s:%d: %s", args.server, args.port, str(e))
+        logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
         #logger.exception(e)
         sys.exit(1)
 
@@ -990,6 +1013,9 @@ def main():
             connstats = conn.getStats()
             logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
         logger.info("Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+
+    if args.local:
+        os.unlink(tempsocket)
 
 if __name__ == '__main__':
     sys.exit(main())

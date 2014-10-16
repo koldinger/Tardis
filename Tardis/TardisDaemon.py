@@ -108,7 +108,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def setup(self):
         self.sessionid = uuid.uuid1()
         logger = logging.getLogger('Tardis')
-        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.client_address[0]})
+        if self.client_address:
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.client_address[0]})
+        else:
+            self.logger = logger
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -623,13 +626,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getDB(self, host):
         script = None
+        extra = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
         self.dbname = os.path.join(self.basedir, dbFile)
         if not os.path.exists(self.dbname):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
-        self.db = TardisDB.TardisDB(self.dbname, initialize=script, extra={'connid': self.client_address[0]})
+        if self.client_address:
+            extra = {'connid': self.client_address[0]}
+
+        self.db = TardisDB.TardisDB(self.dbname, initialize=script, extra=extra)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -856,35 +863,48 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, config):
         self.config = config
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
+        setConfig(self, config)
+        logger.info("TCP Server Running: %s", self.dbname)
 
-        self.basedir        = config.get('Tardis', 'BaseDir')
-        self.savefull       = config.getboolean('Tardis', 'SaveFull')
-        self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
-        self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
-        self.dbname         = config.get('Tardis', 'DBName')
-        self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
-        self.allowNew       = config.getboolean('Tardis', 'AllowNewHosts')
+class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStreamServer):
+    config = None
 
-        self.monthfmt       = config.get('Tardis', 'MonthFmt')
-        self.monthprio      = config.getint('Tardis', 'MonthPrio')
-        self.monthkeep      = Util.getIntOrNone(config, 'Tardis', 'MonthKeep')
-        self.weekfmt        = config.get('Tardis', 'WeekFmt')
-        self.weekprio       = config.getint('Tardis', 'WeekPrio')
-        self.weekkeep       = Util.getIntOrNone(config, 'Tardis', 'WeekKeep')
-        self.dayfmt         = config.get('Tardis', 'DayFmt')
-        self.dayprio        = config.getint('Tardis', 'DayPrio')
-        self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
+    def __init__(self, config):
+        self.config = config
+        SocketServer.UnixStreamServer.__init__(self, config.get('Tardis', 'Local'), TardisServerHandler)
+        setConfig(self, config)
 
-        self.ssl        = config.getboolean('Tardis', 'SSL')
-        if self.ssl:
-            certfile   = config.get('Tardis', 'CertFile')
-            keyfile    = config.get('Tardis', 'KeyFile')
-            self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+# HACK.  Operate on an object, but not in the class.
+# Want to do this in multiple classes.
+def setConfig(self, config):
+    self.basedir        = config.get('Tardis', 'BaseDir')
+    self.savefull       = config.getboolean('Tardis', 'SaveFull')
+    self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
+    self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
+    self.dbname         = config.get('Tardis', 'DBName')
+    self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
+    self.allowNew       = config.getboolean('Tardis', 'AllowNewHosts')
 
-        if config.get('Tardis', 'Profile'):
-            self.profiler = cProfile.Profile()
-        else:
-            self.profiler = None
+    self.monthfmt       = config.get('Tardis', 'MonthFmt')
+    self.monthprio      = config.getint('Tardis', 'MonthPrio')
+    self.monthkeep      = Util.getIntOrNone(config, 'Tardis', 'MonthKeep')
+    self.weekfmt        = config.get('Tardis', 'WeekFmt')
+    self.weekprio       = config.getint('Tardis', 'WeekPrio')
+    self.weekkeep       = Util.getIntOrNone(config, 'Tardis', 'WeekKeep')
+    self.dayfmt         = config.get('Tardis', 'DayFmt')
+    self.dayprio        = config.getint('Tardis', 'DayPrio')
+    self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
+
+    self.ssl        = config.getboolean('Tardis', 'SSL')
+    if self.ssl:
+        certfile   = config.get('Tardis', 'CertFile')
+        keyfile    = config.get('Tardis', 'KeyFile')
+        self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+
+    if config.get('Tardis', 'Profile'):
+        self.profiler = cProfile.Profile()
+    else:
+        self.profiler = None
 
 def setupLogging(config):
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
@@ -922,7 +942,10 @@ def run_server():
 
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
-        server = TardisSocketServer(config)
+        if config.get('Tardis', 'Local'):
+            server = TardisDomainSocketServer(config)
+        else:
+            server = TardisSocketServer(config)
 
         if (config.getboolean('Tardis', 'Single')):
             server.handle_request()
@@ -956,7 +979,6 @@ def main():
     parser = argparse.ArgumentParser(description='Tardis Backup Server')
 
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
-    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
     parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
     parser.add_argument('--schema',         dest='schema', default=schemaLocal, help='Path to the schema to use')
     parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
@@ -966,6 +988,9 @@ def main():
     parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
     parser.add_argument('--allow-new-hosts',    action='store_true', dest='newhosts', default=False, help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
+
+    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
+    parser.add_argument('--local',          dest='local', default=None, help='Run as a Unix Domain Socket Server on the specified filename')
 
     parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
     parser.add_argument('--user', '-U',     dest='user',  default=None, help='Run daemon as user.  Valid only if --daemon is set')
@@ -1010,7 +1035,8 @@ def main():
         'DayPrio'       : '20',
         'MonthKeep'     : '0',
         'WeekKeep'      : '180',
-        'DayKeep'       : '30'
+        'DayKeep'       : '30',
+        'Local'         : args.local
     }
 
     global config, schemaFile, dbFile
