@@ -213,7 +213,7 @@ class TardisDB(object):
         #row = self.cursor.fetchone()
         #self.prevBackupName = row[0]
         #self.prevBackupSet = row[1]
-        self.logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
+        self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
@@ -648,7 +648,7 @@ class TardisDB(object):
         self.conn.commit()
 
     def __del__(self):
-        self.logger.info("Closing DB: {}".format(self.dbName))
+        self.logger.debug("Closing DB: {}".format(self.dbName))
         if self.conn:
             if self.currBackupSet:
                 self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
