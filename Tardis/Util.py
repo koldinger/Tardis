@@ -33,6 +33,7 @@ import Messages
 import Connection
 import hashlib
 import StringIO
+import CompressedBuffer
 from functools import partial
 
 import pycurl
@@ -91,9 +92,9 @@ def getPassword(password, pwfile, pwurl):
 
     return password
 
-def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False):
+def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False, stats=None):
     """ Send a block of data """
-    # logger = logging.getLogger('Data')
+    #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
         sender = sender.sender
     num = 0
@@ -101,27 +102,34 @@ def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=Fa
     status = "OK"
     ck = None
 
-    if checksum:
-        m = hashlib.md5()
+    if compress:
+        stream = CompressedBuffer.CompressedBufferedReader(file, checksum=checksum)
+    else:
+        stream = CompressedBuffer.BufferedReader(file, checksum=checksum)
+
     try:
-        for chunk in iter(partial(file.read, chunksize), ''):
-            if checksum:
-                m.update(chunk)
+        for chunk in iter(partial(stream.read, chunksize), ''):
             data = sender.encode(encrypt(chunk))
             chunkMessage = { "chunk" : num, "data": data }
-            sender.sendMessage(chunkMessage, compress=compress)
-            x = len(chunk)
-            size += x
+            sender.sendMessage(chunkMessage)
             num += 1
     except Exception as e:
         status = "Fail"
+        #print e
         raise e
     finally:
-        message = { "chunk": "done", "size": size, "status": status }
-        # logger.debug("Sent %d chunks, %d bytes", num, size);
+        size = stream.size()
+        compressed = stream.isCompressed()
+        if stats and 'dataSent' in stats:
+            if compressed:
+                stats['dataSent'] += stream.compsize()
+            else:
+                stats['dataSent'] += size
+        message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
         if checksum:
-            ck = m.hexdigest()
+            ck = stream.checksum()
             message["checksum"] = ck
+        #print message
         sender.sendMessage(message)
     return size, ck
 
@@ -131,14 +139,18 @@ def receiveData(receiver, output):
         receiver = receiver.sender
     bytesReceived = 0
     checksum = None
+    compressed = False
     while True:
         chunk = receiver.recvMessage()
+        #print chunk
         # logger.debug("Chunk: %s", str(chunk))
         if chunk['chunk'] == 'done':
             status = chunk['status']
             size   = chunk['size']
             if 'checksum' in chunk:
                 checksum = chunk['checksum']
+            if 'compressed' in chunk:
+                compressed = chunk['compressed']
             break
         bytes = receiver.decode(chunk["data"])
         if output:
@@ -146,4 +158,4 @@ def receiveData(receiver, output):
             output.flush()
         bytesReceived += len(bytes)
 
-    return (bytesReceived, status, size, checksum)
+    return (bytesReceived, status, size, checksum, compressed)

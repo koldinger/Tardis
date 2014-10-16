@@ -355,7 +355,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "wb")
 
-        (bytesReceived, status, deltaSize, deltaChecksum) = Util.receiveData(self.messenger, output)
+        (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
+        logger.debug("Data Received: %d %s %d %s", bytesReceived, status, deltaSize, deltaChecksum, compressed)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
             pass
@@ -377,7 +378,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                 self.db.insertChecksumFile(checksum, iv, size=size)
             else:
-                self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis)
+                self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
             output.close()
             # TODO: This has gotta be wrong.
 
@@ -404,7 +405,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             output = self.cache.open(sigfile, "wb")
 
-        (bytesReceived, status, size, checksum) = Util.receiveData(self.messenger, output)
+        (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
 
         if output is not None:
             output.close()
@@ -453,8 +454,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         iv = self.messenger.decode(message['iv']) if 'iv' in message else None
 
-        (bytesReceived, status, size, checksum) = Util.receiveData(self.messenger, output)
-        #logger.debug("Data Received: %d %s %d %s", bytesReceived, status, size, checksum)
+        (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
+        logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
 
@@ -466,9 +467,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.cache.mkdir(checksum)
                 self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                 os.rename(temp.name, self.cache.path(checksum))
-                self.db.insertChecksumFile(checksum, iv, size)
+                self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
         else:
-            self.db.insertChecksumFile(checksum, iv, size, basis=basis)
+            self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
 
         (inode, dev) = message['inode']
 
