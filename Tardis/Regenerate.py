@@ -154,6 +154,15 @@ class Regenerator:
             self.logger.error("Could not open file {}".format(filename))
             return None
 
+def mkOutputDir(name):
+    if os.path.isdir(name):
+        return name
+    elif os.path.exists(name):
+        self.logger.error("%s is not a directory")
+    else:
+        os.mkdir(name)
+        return name
+
 
 def main():
     parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file")
@@ -185,8 +194,7 @@ def main():
     #logger.addHandler(handler)
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
-    #logger.setLevel(logging.INFO)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
@@ -234,8 +242,15 @@ def main():
             logger.critical("No backupset at for name: %s", args.backup)
             sys.exit(1)
 
+    outputdir = None
     if args.output:
-        output = file(args.output, "wb")
+        if len(args.files) > 1:
+            outputdir = mkOutputDir(args.files)
+        elif os.isdir(args.output):
+            outputdir = args.output
+        else:
+            output = file(args.output, "wb")
+
     else:
         output = sys.stdout
 
@@ -247,6 +262,8 @@ def main():
             f = r.recoverFile(i, bset)
 
         if f != None:
+            if outputdir:
+                output = file(os.path.join(outputdir, i))
             try:
                 x = f.read(16 * 1024)
                 while x:
@@ -256,6 +273,8 @@ def main():
                 logger.error("Unable to read file: {}: {}".format(i, repr(e)))
             finally:
                 f.close()
+                if outputdir:
+                    output.close()
 
 if __name__ == "__main__":
     sys.exit(main())
