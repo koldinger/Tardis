@@ -728,6 +728,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         started   = False
         completed = False
         starttime = datetime.now()
+        host = ""
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -854,7 +855,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 self.logger.debug("Removing orphans")
                 self.db.compact()
-            self.logger.info("Session handler completing")
+        self.logger.info("Session from %s Ending: %s: %s", host, str(completed), str(datetime.now() - starttime))
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -873,6 +874,7 @@ class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStrea
         self.config = config
         SocketServer.UnixStreamServer.__init__(self, config.get('Tardis', 'Local'), TardisServerHandler)
         setConfig(self, config)
+        logger.info("Unix Domain Socket Server Running: %s", self.dbname)
 
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
