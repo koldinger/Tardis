@@ -76,8 +76,6 @@ DELTA   = 3
 config = None
 databaseName = 'tardis.db'
 schemaName   = 'schema/tardis.sql'
-schemaFile   = None
-dbFile       = None
 parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
 
@@ -629,14 +627,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         extra = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
-        self.dbname = os.path.join(self.basedir, dbFile)
-        if not os.path.exists(self.dbname):
+        self.dbfile = os.path.join(self.basedir, self.server.dbname)
+        if not os.path.exists(self.dbfile):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
         if self.client_address:
             extra = {'connid': self.client_address[0]}
 
-        self.db = TardisDB.TardisDB(self.dbname, initialize=script, extra=extra)
+        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -886,6 +884,7 @@ def setConfig(self, config):
     self.dbname         = config.get('Tardis', 'DBName')
     self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
     self.allowNew       = config.getboolean('Tardis', 'AllowNewHosts')
+    self.schemaFile     = config.get('Tardis', 'Schema')
 
     self.monthfmt       = config.get('Tardis', 'MonthFmt')
     self.monthprio      = config.getint('Tardis', 'MonthPrio')
@@ -1041,11 +1040,9 @@ def main():
         'Local'         : args.local
     }
 
-    global config, schemaFile, dbFile
+    global config
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
-    schemaFile = config.get('Tardis', 'Schema')
-    dbFile = config.get('Tardis', 'DBName')
 
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
