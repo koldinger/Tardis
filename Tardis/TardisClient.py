@@ -1002,6 +1002,9 @@ def main():
         conn.close()
     except KeyboardInterrupt:
         logger.warning("Backup Interupted")
+    except Exception as e:
+        logger.error("Caught exeception: %s", e)
+        #logger.exception(e)
 
     endtime = datetime.datetime.now()
 

@@ -61,7 +61,7 @@ class RegenerateException(Exception):
 
 class Regenerator:
     def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
-        self.logger = logging.getLogger("Recoverer")
+        self.logger = logging.getLogger("Regenerator")
         self.cacheDir = cache
         self.db = db
         self.tempdir = tempdir
@@ -85,7 +85,7 @@ class Regenerator:
             self.logger.error("Checksum %s not found", cksum)
             return None
 
-        self.logger.debug(" %s: %s", cksum, str(cksInfo))
+        #self.logger.debug(" %s: %s", cksum, str(cksInfo))
 
         try:
             if cksInfo['basis']:
@@ -151,14 +151,23 @@ class Regenerator:
             except:
                 raise RegenerateException("Error recovering file: {}".format(filename))
         else:
-            self.logger.error("Could not open file {}".format(filename))
+            self.logger.error("Could not locate file {}".format(filename))
             return None
+
+def mkOutputDir(name):
+    if os.path.isdir(name):
+        return name
+    elif os.path.exists(name):
+        self.logger.error("%s is not a directory")
+    else:
+        os.mkdir(name)
+        return name
 
 
 def main():
     parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file")
 
-    parser.add_argument("--output", "-o", dest="output", help="Output file", default=None)
+    parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
     parser.add_argument("--database", "-d", help="Path to database directory", dest="database", default=database)
     parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
@@ -185,8 +194,11 @@ def main():
     #logger.addHandler(handler)
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
-    #logger.setLevel(logging.INFO)
-    logger.setLevel(logging.DEBUG)
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+    logging.getLogger("parsedatetime").setLevel(logging.WARNING)
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
@@ -217,9 +229,11 @@ def main():
         (then, success) = cal.parse(args.date)
         if success:
             timestamp = time.mktime(then)
+            logger.info("Using time: %s", time.asctime(then))
             bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
             if bsetInfo and bsetInfo['backupset'] != 1:
                 bset = bsetInfo['backupset']
+                logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
             else:
                 logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
                 sys.exit(1)
@@ -234,8 +248,15 @@ def main():
             logger.critical("No backupset at for name: %s", args.backup)
             sys.exit(1)
 
+    outputdir = None
     if args.output:
-        output = file(args.output, "wb")
+        if len(args.files) > 1:
+            outputdir = mkOutputDir(args.output)
+        elif os.path.isdir(args.output):
+            outputdir = args.output
+        else:
+            output = file(args.output, "wb")
+
     else:
         output = sys.stdout
 
@@ -244,9 +265,16 @@ def main():
         if args.cksum:
             f = r.recoverChecksum(i)
         else:
+            #if not os.path.isabs(i):
+            #i = os.path.join(".", i)
+            #logger.debug("Changing path to %s", i)
+            i = os.path.abspath(i)      # Should this be conditional?
             f = r.recoverFile(i, bset)
 
         if f != None:
+            if outputdir:
+                (d, n) = os.path.split(i)
+                output = file(os.path.join(outputdir, n), "wb")
             try:
                 x = f.read(16 * 1024)
                 while x:
@@ -256,6 +284,8 @@ def main():
                 logger.error("Unable to read file: {}: {}".format(i, repr(e)))
             finally:
                 f.close()
+                if outputdir:
+                    output.close()
 
 if __name__ == "__main__":
     sys.exit(main())

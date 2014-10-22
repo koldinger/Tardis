@@ -213,7 +213,7 @@ class TardisDB(object):
         #row = self.cursor.fetchone()
         #self.prevBackupName = row[0]
         #self.prevBackupSet = row[1]
-        self.logger.info("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
+        self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
@@ -284,7 +284,7 @@ class TardisDB(object):
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self.bset(current)
         (inode, device) = parent
-        #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, self.prevBackupSet))
+        #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
         c = self.cursor
         c.execute("SELECT "
                   "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
@@ -307,9 +307,12 @@ class TardisDB(object):
         parent = (0, 0)         # Root directory value
         info = None
 
-        (dirname, name) = os.path.split(path)
+        #(dirname, name) = os.path.split(path)
         # Walk the path
+        c = self.cursor
         for name in splitpath(path):
+            if name == '/':
+                continue
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
                 parent = (info["inode"], info["device"])
@@ -548,8 +551,8 @@ class TardisDB(object):
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT "
                           "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, "
-                          "Completed AS completed, Session AS session "
-                          "FROM Backups WHERE name = :name",
+                          "Completed AS completed, Session AS session, Name AS name "
+                          "FROM Backups WHERE Name = :name",
                           { "name": name })
         row = c.fetchone()
         if row:
@@ -560,7 +563,7 @@ class TardisDB(object):
     def getBackupSetInfoForTime(self, time):
         c = self.execute("SELECT "
                          "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, "
-                         "Completed AS completed, Session AS session "
+                         "Completed AS completed, Session AS session, Name AS name "
                          "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
                          { "time": time })
         row = c.fetchone()
@@ -648,7 +651,7 @@ class TardisDB(object):
         self.conn.commit()
 
     def __del__(self):
-        self.logger.info("Closing DB: {}".format(self.dbName))
+        self.logger.debug("Closing DB: {}".format(self.dbName))
         if self.conn:
             if self.currBackupSet:
                 self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
