@@ -648,7 +648,7 @@ def setBackupName(args):
     """ Calculate the name of the backup set """
     global purgeTime, purgePriority, starttime
     name = args.name
-    priority = None
+    priority = 0
     keepdays = None
     # If auto is set, pick based on the day of the month, week, or just a daily
     if args.hourly:
