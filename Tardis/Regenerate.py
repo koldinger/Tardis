@@ -52,6 +52,7 @@ import parsedatetime as pdt
 version = "0.1"
 
 database = "./tardisDB"
+logger = None
 
 class RegenerateException(Exception):
     def __init__(self, value):
@@ -154,6 +155,34 @@ class Regenerator:
             self.logger.error("Could not locate file {}".format(filename))
             return None
 
+
+def findDirInRoot(tardis, bset, path):
+    comps = path.split(os.sep)
+    comps.pop(0)
+    for i in range(0, len(comps)):
+        name = comps[i]
+        logger.debug("Looking for root directory %s (%d)", name, i)
+        info = tardis.getFileInfoByName(name, (0, 0), bset)
+        if info and info['dir'] == 1:
+            return i
+    return None
+
+def computePath(tardis, bset, path, reduce):
+    logger.debug("Computing path for %s (%d)", path, reduce)
+    path = os.path.abspath(path)
+    if reduce == sys.maxint:
+        reduce = findDirInRoot(tardis, bset, path)
+    if reduce:
+        logger.debug("Reducing path by %d entries: %s", reduce, path)
+        comps = path.split(os.sep)
+        if reduce > len(comps):
+            logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduce, len(comps), path)
+            return None
+        tmp = os.path.join(os.sep, *comps[reduce + 1:])
+        logger.info("Reduced path %s to %s", path, tmp)
+        path = tmp
+    return path
+
 def mkOutputDir(name):
     if os.path.isdir(name):
         return name
@@ -164,7 +193,7 @@ def mkOutputDir(name):
         return name
 
 
-def main():
+def parseArgs():
     parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file")
 
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
@@ -181,12 +210,19 @@ def main():
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
 
+    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N', help='Reduce path by N directories.  No value for "smart" reduction')
+    parser.add_argument('--set-times', '-T',    dest='settime', default=False, action='store_true', help='Set file times to match original file')
+    parser.add_argument('--set-perms', '-P',    dest='setperm', default=False, action='store_true', help='Set file owner and permisions to match original file')
+
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
     args = parser.parse_args()
 
+    return args
+
+def setupLogging(args):
     FORMAT = "%(levelname)s : %(name)s : %(message)s"
     #formatter = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
     #handler = logging.StreamHandler(stream=sys.stderr)
@@ -199,6 +235,13 @@ def main():
     else:
         logger.setLevel(logging.INFO)
     logging.getLogger("parsedatetime").setLevel(logging.WARNING)
+
+    return logger
+
+def main():
+    global logger
+    args = parseArgs()
+    logger = setupLogging(args)
 
     baseDir = os.path.join(args.database, args.host)
     dbName = os.path.join(baseDir, "tardis.db")
@@ -249,6 +292,7 @@ def main():
             sys.exit(1)
 
     outputdir = None
+    output = sys.stdout
     if args.output:
         if len(args.files) > 1:
             outputdir = mkOutputDir(args.output)
@@ -257,24 +301,24 @@ def main():
         else:
             output = file(args.output, "wb")
 
-    else:
-        output = sys.stdout
-
+    # do the work here
     for i in args.files:
         f = None
+        outname = None
         if args.cksum:
             f = r.recoverChecksum(i)
         else:
-            #if not os.path.isabs(i):
-            #i = os.path.join(".", i)
-            #logger.debug("Changing path to %s", i)
-            i = os.path.abspath(i)      # Should this be conditional?
-            f = r.recoverFile(i, bset)
+            path = computePath(tardis, bset, i, args.reduce)
+            if not path:
+                continue
+            f = r.recoverFile(path, bset)
 
         if f != None:
             if outputdir:
                 (d, n) = os.path.split(i)
-                output = file(os.path.join(outputdir, n), "wb")
+                outname = os.path.join(outputdir, n)
+                logger.debug("Writing output from %s to %s", path, outname)
+                output = file(outname,  "wb")
             try:
                 x = f.read(16 * 1024)
                 while x:
@@ -286,6 +330,16 @@ def main():
                 f.close()
                 if outputdir:
                     output.close()
+                if output is not None:
+                    if args.settime or args.setperm:
+                        info = tardis.getFileInfoByPath(path, bset)
+                        if info:
+                            if args.settime:
+                                os.utime(outname, (info['mtime'], info['mtime']))
+                            if args.setperm:
+                                os.chmod(outname, info['mode'])
+                                os.chown(outname, info['uid'], info['gid'])
+
 
 if __name__ == "__main__":
     sys.exit(main())

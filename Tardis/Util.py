@@ -29,16 +29,19 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import Messages
-import Connection
+import logging
+import argparse
+import sys
 import hashlib
 import StringIO
+
+import Messages
+import Connection
 import CompressedBuffer
 from functools import partial
 
 import pycurl
 
-import logging
 
 def fmtSize(num, base=1024):
     fmt = "%d %s"
@@ -57,6 +60,9 @@ def getIntOrNone(config, section, name):
         return None
 
 def shortPath(path, width=80):
+    """ Compress a path to only show the last elements if it's wider than specified.
+    Replaces early elements with ".../"
+    """
     if path == None or len(path) <= width:
         return path
 
@@ -93,7 +99,7 @@ def getPassword(password, pwfile, pwurl):
     return password
 
 def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False, stats=None):
-    """ Send a block of data """
+    """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
         sender = sender.sender
@@ -134,6 +140,9 @@ def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=Fa
     return size, ck
 
 def receiveData(receiver, output):
+    """ Receive a block of data from the sender, and store it in the specified file.
+    Collect some info sent, and return it.
+    """
     # logger = logging.getLogger('Data')
     if isinstance(receiver, Connection.Connection):
         receiver = receiver.sender
@@ -159,3 +168,75 @@ def receiveData(receiver, output):
         bytesReceived += len(bytes)
 
     return (bytesReceived, status, size, checksum, compressed)
+
+"""
+Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,
+or --argument to store a true.
+"""
+class StoreBoolean(argparse.Action):
+    def __init__(self, option_strings, dest, negate="no", nargs=0, **kwargs):
+        if nargs is not 0:
+            raise ValueError("nargs not allowed")
+        if len(option_strings) > 1:
+            raise ValueError("Multiple option strings not allowed")
+        self.negative_option = "--" + negate + option_strings[0][2:]
+        self.help_option = "--[" + negate + "]" + option_strings[0][2:]
+        option_strings.append(self.negative_option)
+        super(StoreBoolean, self).__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, args, values, option_string=None):
+        #print "Here: ", option_string, " :: ", self.option_strings
+        if option_string == self.negative_option:
+            value = False
+        else:
+            value = True
+        setattr(args, self.dest, value)
+
+"""
+Class to handle toggling options.  -x = true -xx = false -xxx = true, etc
+"""
+class Toggle(argparse.Action):
+    def __init__(self,
+                 option_strings,
+                 dest,
+                 default=None,
+                 required=False,
+                 help=None):
+        super(Toggle, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            default=default,
+            required=required,
+            help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        new_value = not argparse._ensure_value(namespace, self.dest, False)
+        setattr(namespace, self.dest, new_value)
+
+"""
+Help formatter to handle the StoreBoolean options.
+Only handles overriding the basic HelpFormatter class.
+"""
+class HelpFormatter(argparse.HelpFormatter):
+    def _format_action_invocation(self, action):
+        #print "_format_action_invocation", str(action)
+        if isinstance(action, StoreBoolean):
+            ret = action.help_option
+        else:
+            ret = super(HelpFormatter, self)._format_action_invocation(action)
+        #print "Got ", ret
+        return ret
+
+"""
+'Test' code
+"""
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(formatter_class=MyHelpFormatter)
+
+    p.add_argument("--doit", action=StoreBoolean, help="Yo mama")
+    p.add_argument("-x", action=Toggle, help="Whatever")
+
+    args = p.parse_args()
+    print args
