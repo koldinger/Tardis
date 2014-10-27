@@ -600,7 +600,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         if cloneable:
             logmsg += " [Clone]"
-            logger.info(logmsg)
+            if verbosity:
+                logger.info(logmsg)
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -615,13 +616,15 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         else:
             if len(files) < args.batchdirs:
                 logmsg += " [Batched]"
-                logger.info(logmsg)
+                if verbosity:
+                    logger.info(logmsg)
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.info(logmsg)
+                if verbosity:
+                    logger.info(logmsg)
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -889,7 +892,7 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.INFO, logging.INFO, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')

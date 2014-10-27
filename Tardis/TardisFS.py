@@ -91,7 +91,7 @@ class TardisFS(fuse.Fuse):
         self.pwurl  = None
         self.dbname = "tardis.db"
         self.crypt = None
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.INFO)
         self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="password",     help="Password for this archive")
