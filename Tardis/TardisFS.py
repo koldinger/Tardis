@@ -254,7 +254,7 @@ class TardisFS(fuse.Fuse):
             st = fuse.Stat()
             if (lead[0] == 'Current'):
                 target = self.tardis.lastBackupSet()
-                timestamp = float(target['starttime'])
+                timestamp = float(target['endtime'])
                 st.st_mode = stat.S_IFLNK | 0755
                 st.st_ino = 1
                 st.st_dev = 0

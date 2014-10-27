@@ -128,6 +128,14 @@ CREATE VIEW IF NOT EXISTS VFiles AS
 
 # Utility functions
 
+fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, " \
+                 "Parent AS parent, ParentDev AS parentdev, Size AS size, " \
+                 "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
+                 "FirstSet as firstset, LastSet as lastset "
+
+backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
+                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
+
 def makeDict(cursor, row):
     """ Convert a row from the db into a dict """
     if row != None and cursor != None and len(row) != 0:
@@ -220,7 +228,9 @@ class TardisDB(object):
         self.conn.execute("PRAGMA journal_mode=truncate")
 
     def bset(self, current):
-        """ Determine the backupset we're being asked about.  True == current, false = previous, otherwise a number is returned """
+        """ Determine the backupset we're being asked about.
+            True == current, false = previous, otherwise a number is returned
+        """
         if type(current) is bool:
             return self.currBackupSet if current else self.prevBackupSet
         else:
@@ -229,16 +239,17 @@ class TardisDB(object):
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, Completed AS completed "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, "
+                                    "StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, "
+                                    "Priority AS priority, Completed AS completed "
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime , Priority AS priority , Completed AS completed "
+            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, "
+                                    "StartTime AS starttime, ClientTime AS clienttime, "
+                                    "Priority AS priority, Completed AS completed "
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
-        if row:
-            return makeDict(c, row)
-        else:
-            return None
+        return makeDict(c, row)
 
     def execute(self, query, data):
         try:
@@ -252,7 +263,8 @@ class TardisDB(object):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) VALUES (:name, 0, :now, :session, :priority, :clienttime)",
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) "
+                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime)",
                       {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
@@ -286,11 +298,8 @@ class TardisDB(object):
         (inode, device) = parent
         #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
         c = self.cursor
-        c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
-                  "Parent AS parent, ParentDev AS parentdev, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, "
-                  "FirstSet as firstset, LastSet as lastset "
+        c.execute("SELECT " +
+                  fileInfoFields +
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -325,10 +334,8 @@ class TardisDB(object):
         (inode, device) = info
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
-        c.execute("SELECT "
-                  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
-                  "Parent AS parent, ParentDev AS parentdev, Size AS size, "
-                  "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks "
+        c.execute("SELECT " +
+                  fileInfoFields +
                   "FROM Files "
                   "JOIN Names ON Files.NameId = Names.NameId "
                   "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -343,9 +350,8 @@ class TardisDB(object):
         self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
         temp["backup"] = backupset
-        c = self.cursor.execute("SELECT "
-                                "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
+        c = self.cursor.execute("SELECT " + 
+                                fileInfoFields +
                                 "FROM Files "
                                 "JOIN Names ON Files.NameId = Names.NameId "
                                 "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -359,9 +365,8 @@ class TardisDB(object):
         self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
-        c = self.cursor.execute("SELECT "
-                                "Name AS name, Inode AS inode, Dir AS dir, Parent AS parent, Size AS size, "
-                                "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, Checksum AS checksum "
+        c = self.cursor.execute("SELECT " +
+                                fileInfoFields +
                                 "FROM Files "
                                 "JOIN Names ON Files.NameId = Names.NameId "
                                 "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -392,10 +397,8 @@ class TardisDB(object):
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 { "backup" : backupset, "inode" : inode })
         row = c.fetchone()
-        if row:
-            return row[0]
-        else:
-            return None
+        return row[0] if row else None
+        #if row: return row[0] else: return None
 
     def getChecksumByName(self, name, parent, current=False):
         backupset = self.bset(current)
@@ -409,10 +412,8 @@ class TardisDB(object):
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          { "name": name, "parent": inode, "parentDev": device, "backup": backupset })
         row = c.fetchone()
-        if row:
-            return row[0]
-        else:
-            return None
+        return row[0] if row else None
+        #if row: return row[0] else: return None
 
     def getChecksumByPath(self, name, current=False):
         backupset = self.bset(current)
@@ -485,15 +486,17 @@ class TardisDB(object):
 
         comp = 1 if compressed else 0
         self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed) "
-                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed)",
-                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp})
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed)",
+                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
-        c = self.execute("SELECT Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, Size AS size, DeltaSize AS deltasize, Compressed as compressed "
-                  "FROM Checksums WHERE CheckSum = :checksum",
-                  {"checksum": checksum})
+        c = self.execute("SELECT "
+                         "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, "
+                         "Size AS size, DeltaSize AS deltasize, Compressed as compressed "
+                         "FROM Checksums WHERE CheckSum = :checksum",
+                         {"checksum": checksum})
         row = c.fetchone()
         if row:
             return makeDict(c, row)
@@ -511,6 +514,7 @@ class TardisDB(object):
         else:
             return -1
         """
+        Could do this, but not all versions of SQLite3 seem to support "WITH RECURSIVE" statements
         c = self.execute("WITH RECURSIVE x(n) AS (VALUES(:checksum) UNION SELECT Basis FROM Checksums, x WHERE x.n=Checksums.Checksum) "
                          "SELECT COUNT(*) FROM Checksums WHERE Checksum IN x",
                          {"checksum": checksum});
@@ -549,11 +553,10 @@ class TardisDB(object):
             yield makeDict(c, row)
 
     def getBackupSetInfo(self, name):
-        c = self.execute("SELECT "
-                          "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, "
-                          "Completed AS completed, Session AS session, Name AS name "
-                          "FROM Backups WHERE Name = :name",
-                          { "name": name })
+        c = self.execute("SELECT " + 
+                         backupSetInfoFields +
+                         "FROM Backups WHERE Name = :name",
+                         { "name": name })
         row = c.fetchone()
         if row:
             return makeDict(c, row)
@@ -561,9 +564,8 @@ class TardisDB(object):
             return None
 
     def getBackupSetInfoForTime(self, time):
-        c = self.execute("SELECT "
-                         "BackupSet AS backupset, StartTime AS starttime, ClientTime AS clienttime, Priority AS priority, "
-                         "Completed AS completed, Session AS session, Name AS name "
+        c = self.execute("SELECT " + 
+                         backupSetInfoFields +
                          "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
                          { "time": time })
         row = c.fetchone()
@@ -575,10 +577,7 @@ class TardisDB(object):
     def getConfigValue(self, key):
         c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
         row = c.fetchone()
-        if row:
-            return row[0]
-        else:
-            return None
+        return row[0] if row else None
 
     def setConfigValue(self, key, value):
         c = self.execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})

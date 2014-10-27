@@ -51,8 +51,9 @@ import parsedatetime as pdt
 
 version = "0.1"
 
-database = "./tardisDB"
-logger = None
+dbname  = "./tardisDB"
+basedir = "/srv/Tardis"
+logger  = None
 
 class RegenerateException(Exception):
     def __init__(self, value):
@@ -194,12 +195,18 @@ def mkOutputDir(name):
 
 
 def parseArgs():
-    parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file")
+    global basedir
+    if 'TARDIS_DB' in os.environ:
+        basedir = os.environ['TARDIS_DB']
+
+    parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file", formatter_class=Util.HelpFormatter)
 
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
-    parser.add_argument("--database", "-d", help="Path to database directory", dest="database", default=database)
-    parser.add_argument("--host", "-H", help="Host to process for", dest='host', default=socket.gethostname())
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
+
+    parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="basedir", default=basedir)
+    parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
+    parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=socket.gethostname())
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
@@ -210,9 +217,10 @@ def parseArgs():
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
 
-    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N', help='Reduce path by N directories.  No value for "smart" reduction')
-    parser.add_argument('--set-times', '-T',    dest='settime', default=False, action='store_true', help='Set file times to match original file')
-    parser.add_argument('--set-perms', '-P',    dest='setperm', default=False, action='store_true', help='Set file owner and permisions to match original file')
+    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
+                        help='Reduce path by N directories.  No value for "smart" reduction')
+    parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean, help='Set file times to match original file')
+    parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
@@ -243,9 +251,9 @@ def main():
     args = parseArgs()
     logger = setupLogging(args)
 
-    baseDir = os.path.join(args.database, args.host)
-    dbName = os.path.join(baseDir, "tardis.db")
-    tardis = TardisDB.TardisDB(dbName, backup=False)
+    baseDir = os.path.join(args.basedir, args.host)
+    dbPath = os.path.join(baseDir, args.dbname)
+    tardis = TardisDB.TardisDB(dbPath, backup=False)
     cache = CacheDir.CacheDir(baseDir)
 
     crypt = None
@@ -335,7 +343,7 @@ def main():
                         info = tardis.getFileInfoByPath(path, bset)
                         if info:
                             if args.settime:
-                                os.utime(outname, (info['mtime'], info['mtime']))
+                                os.utime(outname, (info['atime'], info['mtime']))
                             if args.setperm:
                                 os.chmod(outname, info['mode'])
                                 os.chown(outname, info['uid'], info['gid'])

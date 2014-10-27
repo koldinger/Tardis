@@ -221,7 +221,7 @@ Only handles overriding the basic HelpFormatter class.
 class HelpFormatter(argparse.HelpFormatter):
     def _format_action_invocation(self, action):
         #print "_format_action_invocation", str(action)
-        if isinstance(action, StoreBoolean):
+        if hasattr(action, 'help_option'):
             ret = action.help_option
         else:
             ret = super(HelpFormatter, self)._format_action_invocation(action)

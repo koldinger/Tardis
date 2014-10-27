@@ -74,10 +74,51 @@ CKSUM   = 2
 DELTA   = 3
 
 config = None
+args   = None
 databaseName = 'tardis.db'
 schemaName   = 'schema/tardis.sql'
-parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 configName   = '/etc/tardis/tardisd.cfg'
+pidFileName  = '/var/run/tardisd.pid'
+baseDir      = '/srv/Tardis'
+
+portNumber   = '7243'
+
+parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+schemaFile   = os.path.join(parentDir, schemaName)
+
+configDefaults = {
+    'Port'              : portNumber,
+    'BaseDir'           : baseDir,
+    'DBName'            : databaseName,
+    'Schema'            : schemaFile,
+    'LogCfg'            : None,
+    'Profile'           : str(False),
+    'LogFile'           : None,
+    'AllowCopies'       : str(False),
+    'AllowNewHosts'     : str(False),
+    'Single'            : str(False),
+    'Local'             : str(False),
+    'Verbose'           : 0,
+    'Daemon'            : str(False),
+    'User'              : None,
+    'Group'             : None,
+    'SSL'               : str(False),
+    'CertFile'          : None,
+    'KeyFile'           : None,
+    'PidFile'           : pidFileName,
+    'MonthFmt'          : 'Monthly-%Y-%m',
+    'WeekFmt'           : 'Weekly-%Y-%U',
+    'DayFmt'            : 'Daily-%Y-%m-%d',
+    'MonthPrio'         : '40',
+    'WeekPrio'          : '30',
+    'DayPrio'           : '20',
+    'MonthKeep'         : '0',
+    'WeekKeep'          : '180',
+    'DayKeep'           : '30',
+    'MaxDeltaChain'     : '5',
+    'MaxChangePercent'  : '50',
+    'SaveFull'          : str(False),
+}
 
 server = None
 logger = None
@@ -857,34 +898,33 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
-    config = None
-
-    def __init__(self, config):
+    def __init__(self, args, config):
         self.config = config
+        self.args = args
         SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
-        setConfig(self, config)
+        setConfig(self, args, config)
         logger.info("TCP Server Running: %s", self.dbname)
 
 class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStreamServer):
-    config = None
-
-    def __init__(self, config):
+    def __init__(self, args, config):
         self.config = config
+        self.args = args
         SocketServer.UnixStreamServer.__init__(self, config.get('Tardis', 'Local'), TardisServerHandler)
-        setConfig(self, config)
+        setConfig(self, args, config)
         logger.info("Unix Domain Socket Server Running: %s", self.dbname)
 
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
-def setConfig(self, config):
+def setConfig(self, args, config):
     self.basedir        = config.get('Tardis', 'BaseDir')
     self.savefull       = config.getboolean('Tardis', 'SaveFull')
     self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
     self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
-    self.dbname         = config.get('Tardis', 'DBName')
-    self.allowCopies    = config.getboolean('Tardis', 'AllowCopies')
-    self.allowNew       = config.getboolean('Tardis', 'AllowNewHosts')
-    self.schemaFile     = config.get('Tardis', 'Schema')
+
+    self.dbname         = args.dbname
+    self.allowCopies    = args.copies
+    self.allowNew       = args.newhosts
+    self.schemaFile     = args.schema
 
     self.monthfmt       = config.get('Tardis', 'MonthFmt')
     self.monthprio      = config.getint('Tardis', 'MonthPrio')
@@ -896,13 +936,11 @@ def setConfig(self, config):
     self.dayprio        = config.getint('Tardis', 'DayPrio')
     self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
 
-    self.ssl        = config.getboolean('Tardis', 'SSL')
+    self.ssl            = args.ssl
     if self.ssl:
-        certfile   = config.get('Tardis', 'CertFile')
-        keyfile    = config.get('Tardis', 'KeyFile')
-        self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=certfile, keyfile=keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+        self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=args.certfile, keyfile=args.keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
 
-    if config.get('Tardis', 'Profile'):
+    if args.profile:
         self.profiler = cProfile.Profile()
     else:
         self.profiler = None
@@ -912,18 +950,18 @@ def setupLogging(config):
 
     logging.addLevelName(logging.TRACE, 'Message')
 
-    if config.get('Tardis', 'LogCfg'):
-        logging.config.fileConfig(config.get('Tardis', 'LogCfg'))
+    if args.logcfg:
+        logging.config.fileConfig(args.logcfg)
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
         format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
 
-        verbosity = config.getint('Tardis', 'Verbose')
+        verbosity = args.verbose
 
-        if config.get('Tardis', 'LogFile'):
+        if args.logfile:
             handler = logging.handlers.WatchedFileHandler(config.get('Tardis', 'LogFile'))
-        elif config.getboolean('Tardis', 'Daemon'):
+        elif args.daemon:
             handler = logging.handlers.SysLogHandler()
         else:
             handler = logging.StreamHandler()
@@ -943,12 +981,12 @@ def run_server():
 
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
-        if config.get('Tardis', 'Local'):
-            server = TardisDomainSocketServer(config)
+        if args.local:
+            server = TardisDomainSocketServer(args, config)
         else:
-            server = TardisSocketServer(config)
+            server = TardisSocketServer(args, config)
 
-        if (config.getboolean('Tardis', 'Single')):
+        if args.single:
             server.handle_request()
         else:
             try:
@@ -973,90 +1011,65 @@ def signal_term_handler(signal, frame):
 def shutdownHandler():
     stop_server()
 
-def main():
-    # Compute the path to the default schema.  Needs to be done here for some reason
-    schemaLocal   = os.path.join(parentDir, schemaName)
-
-    parser = argparse.ArgumentParser(description='Tardis Backup Server')
+def processArgs():
+    parser = argparse.ArgumentParser(description='Tardis Backup Server', formatter_class=Util.HelpFormatter, add_help=False)
 
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file")
-    parser.add_argument('--dbname', '-d',   dest='dbname', default=databaseName, help='Use the database name')
-    parser.add_argument('--schema',         dest='schema', default=schemaLocal, help='Path to the schema to use')
-    parser.add_argument('--logfile', '-l',  dest='logfile', default=None, help='Log to file')
-    parser.add_argument('--version',        action='version', version='%(prog)s 0.1', help='Show the version')
-    parser.add_argument('--logcfg', '-L',   dest='logcfg', default=None, help='Logging configuration file');
-    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--allow-copies',   action='store_true', dest='copies', default=False, help='Allow the client to copy files in directly')
-    parser.add_argument('--allow-new-hosts',    action='store_true', dest='newhosts', default=False, help='Allow new clients to attach and create new backup sets')
-    parser.add_argument('--profile',        dest='profile', default=None, help='Generate a profile')
+    (args, remaining) = parser.parse_known_args()
 
-    parser.add_argument('--single',         dest='single', action='store_true', help='Run a single transaction and quit')
-    parser.add_argument('--local',          dest='local', default=None, help='Run as a Unix Domain Socket Server on the specified filename')
-
-    parser.add_argument('--daemon', '-D',   action='store_true', dest='daemon', default=False, help='Run as a daemon')
-    parser.add_argument('--user', '-U',     dest='user',  default=None, help='Run daemon as user.  Valid only if --daemon is set')
-    parser.add_argument('--group', '-G',    dest='group', default=None, help='Run daemon as group.  Valid only if --daemon is set')
-    parser.add_argument('--pidfile', '-P',  dest='pidfile', default='/var/run/tardisd.pid', help='Use this pidfile to indicate running daemon')
-
-    sslgroup = parser.add_mutually_exclusive_group()
-    sslgroup.add_argument('--ssl', '-s',    dest='ssl', action='store_true', default=False, help='Use SSL connections')
-    sslgroup.add_argument('--nossl',        dest='ssl', action='store_false', help='Do not use SSL connections')
-
-    parser.add_argument('--certfile', '-c', dest='certfile', default=None, help='Path to certificate file for SSL connections')
-    parser.add_argument('--keyfile', '-k',  dest='keyfile',  default=None, help='Path to key file for SSL connections')
-
-
-    args = parser.parse_args()
-
-    configDefaults = {
-        'Port'          : '9999',
-        'BaseDir'       : './cache',
-        'SaveFull'      : str(True),
-        'DBName'        : args.dbname,
-        'Schema'        : args.schema,
-        'LogCfg'        : args.logcfg,
-        'Profile'       : args.profile,
-        'LogFile'       : args.logfile,
-        'AllowCopies'   : str(args.copies),
-        'AllowNewHosts' : str(args.newhosts),
-        'Single'        : str(args.single),
-        'Verbose'       : str(args.verbose),
-        'Daemon'        : str(args.daemon),
-        'User'          : args.user,
-        'Group'         : args.group,
-        'SSL'           : str(args.ssl),
-        'CertFile'      : args.certfile,
-        'KeyFile'       : args.keyfile,
-        'PidFile'       : args.pidfile,
-        'MonthFmt'      : 'Monthly-%Y-%m',
-        'WeekFmt'       : 'Weekly-%Y-%U',
-        'DayFmt'        : 'Daily-%Y-%m-%d',
-        'MonthPrio'     : '40',
-        'WeekPrio'      : '30',
-        'DayPrio'       : '20',
-        'MonthKeep'     : '0',
-        'WeekKeep'      : '180',
-        'DayKeep'       : '30',
-        'Local'         : args.local
-    }
-
-    global config
     config = ConfigParser.ConfigParser(configDefaults)
     config.read(args.config)
 
+    t = 'Tardis'
+
+    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name')
+    parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use')
+    parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
+    parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file');
+    parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
+    parser.add_argument('--allow-copies',       dest='copies',          action=Util.StoreBoolean, default=config.getboolean(t, 'AllowCopies'),
+                                                                        help='Allow the client to copy files in directly')
+    parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=Util.StoreBoolean, default=config.getboolean(t, 'AllowNewHosts'),
+                                                                        help='Allow new clients to attach and create new backup sets')
+    parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
+
+    parser.add_argument('--single',             dest='single',          action=Util.StoreBoolean, default=config.getboolean(t, 'Single'), 
+                                                                        help='Run a single transaction and quit')
+    parser.add_argument('--local',              dest='local',           action=Util.StoreBoolean, default=config.getboolean(t, 'Local'),
+                                                                        help='Run as a Unix Domain Socket Server on the specified filename')
+
+    parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
+                                                                        help='Run as a daemon')
+    parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
+    parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
+    parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')
+
+    parser.add_argument('--ssl',                dest='ssl',             action=Util.StoreBoolean, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
+    parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
+    parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
+
+    parser.add_argument('--version',            action='version', version='%(prog)s 0.1', help='Show the version')
+    parser.add_argument('--help', '-h',         action='help')
+
+    args = parser.parse_args(remaining)
+    return(args, config)
+
+def main():
+    global logger, args, config
+    (args, config) = processArgs()
+
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
-    global logger
     try:
         logger = setupLogging(config)
     except Exception as e:
         print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
         sys.exit(1)
 
-    if config.getboolean('Tardis', 'Daemon'):
-        user  = config.get('Tardis', 'User')
-        group = config.get('Tardis', 'Group')
-        pidfile = config.get('Tardis', 'PidFile')
+    if args.daemon:
+        user  = args.user
+        group = args.group
+        pidfile = args.pidfile
         fds = [h.stream.fileno() for h in logger.handlers if isinstance(h, logging.StreamHandler)]
         logger.info("About to daemonize")
 
