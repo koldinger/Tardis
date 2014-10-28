@@ -57,6 +57,7 @@ import Util
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
+excludeDirs         = []
 
 starttime           = None
 
@@ -372,9 +373,9 @@ def handleAckDir(message):
 
     for i in [tuple(x) for x in delta]:
         if verbosity > 1:
-			if i in inodeDB:
-				(x, name) = inodeDB[i]
-				logger.info("File: [D]: %s", Util.shortPath(name))
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                logger.info("File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -417,8 +418,9 @@ def mkFileInfo(dir, name):
     return finfo
     
 def processDir(dir, dirstat, excludes=[], allowClones=True):
-    stats['dirs'] += 1;
 
+    #logger.debug("Processing directory : %s", dir)
+    stats['dirs'] += 1;
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
@@ -446,7 +448,12 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
                         stats['backed'] += file["size"]
 
                     if S_ISDIR(mode):
-                            subdirs.append(os.path.join(dir, f))
+                        sub = os.path.join(dir, f)
+                        if sub in excludeDirs:
+                            logger.debug("%s excluded.  Skipping", sub)
+                            continue
+                        else:
+                            subdirs.append(sub)
 
                     files.append(file)
             except (IOError, OSError) as e:
@@ -577,6 +584,10 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     try:
+        if os.path.abspath(dir) in excludeDirs:
+            logger.debug("%s excluded.  Skipping", dir)
+            return
+
         #logger.info("Dir: %s", Util.shortPath(dir))
         logmsg = "Dir: {}".format(Util.shortPath(dir))
         #logger.debug("Excludes: %s", str(excludes))
@@ -703,6 +714,7 @@ def loadExcludeFile(name):
 
 # Load all the excludes we might want
 def loadExcludes(args):
+    global excludeFile, localExcludeFile
     if not args.ignoreglobalexcludes:
         globalExcludes.extend(loadExcludeFile(globalExcludeFile))
     if args.cvs:
@@ -714,6 +726,11 @@ def loadExcludes(args):
             globalExcludes.extend(loadExcludeFile(f))
     excludeFile         = args.excludefilename
     localExcludeFile    = args.localexcludefilename
+
+def loadExcludedDirs(args):
+    global excludeDirs
+    if args.excludedirs is not None:
+        excludeDirs.extend([os.path.abspath(i) for i in args.excludedirs])
 
 def sendMessage(message):
     if verbosity > 4:
@@ -858,7 +875,8 @@ def processCommandLine():
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
     excgrp.add_argument('--exclude', '-x',      dest='excludes', action='append',           help='Patterns to exclude globally (may be repeated)')
     excgrp.add_argument('--exclude-file', '-X', dest='excludefiles', action='append',       help='Load patterns from exclude file (may be repeated)')
-    excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,                            help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--exclude-dir',        dest='excludedirs', action='append',        help='Exclude certain directories by path')
     excgrp.add_argument('--local-exclude-file-name',  dest='localexcludefilename', default=localExcludeFile,            help='Load local exclude files from this.  Default: %(default)s')
     excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
 
@@ -917,6 +935,9 @@ def main():
 
         # Load the excludes
         loadExcludes(args)
+
+        # Load any excluded directories
+        loadExcludedDirs(args)
 
         # Error check the purge parameter.  Disable it if need be
         if args.purge and not (purgeTime is not None or args.auto):
