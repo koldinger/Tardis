@@ -844,7 +844,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog',     dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
+    parser.add_argument('--compress-data', '-z',dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -886,8 +886,9 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
-    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson", "bsonc"], help='Protocol for data transfer.  Default: %(default)s')
-    parser.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
+    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],  help='Protocol for data transfer.  Default: %(default)s')
+    comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action='store_true',    help='Compress messages.  Default: %(default)s')
+    comgrp.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
 
     parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
     parser.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,          help='Delete below this priority (Default: Backup priority)')
@@ -976,10 +977,7 @@ def main():
             conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=False)
-            setEncoder("bin")
-        elif args.protocol == 'bsonc':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=True)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=args.compressmsgs)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
