@@ -83,12 +83,13 @@ class TardisFS(fuse.Fuse):
     cacheTime = None
 
     def __init__(self, *args, **kw):
-        fuse.Fuse.__init__(self, *args, **kw)
+        super(TardisFS, self).__init__(*args, **kw)
         self.path=None
         self.repoint = False
         self.password = None
         self.pwfile = None
         self.pwurl  = None
+        self.pwprog = None
         self.dbname = "tardis.db"
         self.crypt = None
         logging.basicConfig(level=logging.DEBUG)
@@ -97,6 +98,7 @@ class TardisFS(fuse.Fuse):
         self.parser.add_option(mountopt="password",     help="Password for this archive")
         self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
         self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
+        self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
         self.parser.add_option(mountopt="path",         help="Path to the directory containing the database for this filesystem")
         self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
         self.parser.add_option(mountopt="dbname",       help="Database Name")
@@ -113,7 +115,11 @@ class TardisFS(fuse.Fuse):
         self.log.info("MountPoint: %s", self.mountpoint)
         self.log.info("DBName: %s", self.dbname)
 
-        password = Util.getPassword(self.password, self.pwfile, self.pwurl)
+        self.log.debug("%s %s %s %s", self.password, self.pwfile, self.pwurl, self.pwprog)
+
+        password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
+
+        self.log.info("Password: %s", password)
         self.password = None
 
         if password:

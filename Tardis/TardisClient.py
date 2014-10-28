@@ -825,6 +825,7 @@ def processCommandLine():
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-prog',     dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
@@ -890,7 +891,10 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    logging.STATS = logging.INFO + 1
+    logging.addLevelName(logging.STATS, "STATS")
+
+    levels = [logging.STATS, logging.INFO, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')
@@ -920,7 +924,7 @@ def main():
             args.purge=False
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
         args.password = None
 
         token = None
@@ -962,7 +966,7 @@ def main():
         sys.exit(1)
 
     if verbosity or args.stats:
-        logger.info("Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
+        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
     # Now, do the actual work here.
     try:
@@ -1010,13 +1014,13 @@ def main():
     endtime = datetime.datetime.now()
 
     if args.stats:
-        logger.info("Runtime: {}".format((endtime - starttime)))
-        logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+        logger.log(logging.STATS, "Runtime: {}".format((endtime - starttime)))
+        logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+        logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
         if conn is not None:
             connstats = conn.getStats()
-            logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-        logger.info("Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+            logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+        logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
 
     if args.local:
         os.unlink(tempsocket)

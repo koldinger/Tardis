@@ -216,6 +216,7 @@ def parseArgs():
     pwgroup.add_argument('--password',      dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
@@ -258,7 +259,7 @@ def main():
 
     crypt = None
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
     args.password = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password)
