@@ -197,7 +197,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 elif (old["size"] == f["size"]) and ("checksum") in old and not (old["checksum"] is None):
                         self.db.insertFile(f, parent)
                         retVal = CKSUM
-                elif f["size"] < 4096 or old["size"] is None:
+                elif (f["size"] < 4096) or (old["size"] is None) or ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.server.maxChain)):
                     # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
                     self.db.insertFile(f, parent)
                     retVal = CONTENT
@@ -256,7 +256,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Keep the order
         queues = [done, content, cksum, delta]
 
-        parentInode = tuple(data['inode'])
+        parentInode = tuple(data['inode'])      # Contains both inode and device in message
         files = data['files']
 
         dirhash = {}
@@ -380,12 +380,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         deltasize = message['deltasize'] if 'deltasize' in message else None
 
-        savefull = self.server.savefull and iv is not None
+        savefull = self.server.savefull and iv is None
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
-            if not savefull:
+            if not savefull and iv is None:
                 chainLength = self.db.getChainLength(basis)
                 if chainLength >= self.server.maxChain:
                     self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)

@@ -389,9 +389,10 @@ def mkFileInfo(dir, name):
     s = os.lstat(pathname)
     mode = s.st_mode
     if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
-        name = unicode(name.decode('utf8', 'ignore'))
         if crypt:
             name = crypt.encryptFilename(name)
+        else:
+            name = unicode(name.decode('utf8', 'ignore'))
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
