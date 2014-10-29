@@ -717,6 +717,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         count += 1
                         size += s.st_size
                     self.cache.remove(c)
+                    sig = c + ".sig"
+                    sigpath = self.cache.path(sig)
+                    if os.path.exists(sigpath):
+                        s = os.stat(self.cache.path(sig))
+                        if s:
+                            count += 1
+                            size += s.st_size
+                        self.cache.remove(sig)
                 except OSError:
                     self.logger.warning("No checksum file for checksum %s", c)
                 except:
