@@ -538,7 +538,7 @@ def flushBatchDirs():
 def sendPurge(relative):
     message =  { 'message': 'PRG' }
     if purgePriority:
-        message['priority'] = purgPriority
+        message['priority'] = purgePriority
     if purgeTime:
         message.update( { 'time': purgeTime, 'relative': relative })
 
@@ -690,7 +690,7 @@ def setBackupName(args):
         if args.purgedays:
             purgeTime = args.purgedays * 3600 * 24
         if args.purgehours:
-            purgeTime = args.purgedays * 3600
+            purgeTime = args.purgehours * 3600
         if args.purgetime:
             try:
                 purgeTime = time.mktime(time.strptime(args.purgetime, "%Y/%m/%d:%H:%M"))
@@ -966,6 +966,7 @@ def main():
             rootdir = None
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
+        #logger.exception(e)
         sys.exit(1)
 
     # Open the connection
