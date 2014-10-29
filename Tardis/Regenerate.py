@@ -232,11 +232,8 @@ def parseArgs():
     return args
 
 def setupLogging(args):
-    FORMAT = "%(levelname)s : %(name)s : %(message)s"
-    #formatter = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-    #handler = logging.StreamHandler(stream=sys.stderr)
-    #handler.setFormatter(formatter)
-    #logger.addHandler(handler)
+    #FORMAT = "%(levelname)s : %(name)s : %(message)s"
+    FORMAT = "%(levelname)s : %(message)s"
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
     if args.verbose:
@@ -310,8 +307,12 @@ def main():
         else:
             output = file(args.output, "wb")
 
+    if args.cksum and (args.settime or args.setperm):
+        logger.warning("Unable to set time or permissions on files specified by checksum.")
+
     # do the work here
     for i in args.files:
+        path = None
         f = None
         outname = None
         if args.cksum:
@@ -326,6 +327,8 @@ def main():
             if outputdir:
                 (d, n) = os.path.split(i)
                 outname = os.path.join(outputdir, n)
+                if args.cksum:
+                    path = i
                 logger.debug("Writing output from %s to %s", path, outname)
                 output = file(outname,  "wb")
             try:
@@ -340,7 +343,8 @@ def main():
                 if outputdir:
                     output.close()
                 if output is not None:
-                    if args.settime or args.setperm:
+                    # TODO: Figure out a correct timestamp and/or permissions for this file?
+                    if not args.cksum and (args.settime or args.setperm):
                         info = tardis.getFileInfoByPath(path, bset)
                         if info:
                             if args.settime:
