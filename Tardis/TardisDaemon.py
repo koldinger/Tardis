@@ -960,7 +960,7 @@ def setupLogging(config):
         verbosity = args.verbose
 
         if args.logfile:
-            handler = logging.handlers.WatchedFileHandler(config.get('Tardis', 'LogFile'))
+            handler = logging.handlers.WatchedFileHandler(args.logfile)
         elif args.daemon:
             handler = logging.handlers.SysLogHandler()
         else:
@@ -1064,6 +1064,7 @@ def main():
         logger = setupLogging(config)
     except Exception as e:
         print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
+        traceback.print_exc()
         sys.exit(1)
 
     if args.daemon:
