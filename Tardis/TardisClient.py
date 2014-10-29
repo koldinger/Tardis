@@ -155,7 +155,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.debug("File: [C]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     # First, then send content for any files which don't
@@ -168,7 +168,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.debug("File: [N]: %s %d", Util.shortPath(name), size)
+                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -366,7 +366,7 @@ def handleAckDir(message):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.info("File: [N]: %s %d", Util.shortPath(name), size)
+                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -375,7 +375,7 @@ def handleAckDir(message):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.info("File: [D]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -480,15 +480,13 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                if verbosity > 1:
-                    logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
+                logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity > 1:
-                    logger.debug("ResyncDir: %s", Util.shortPath(path))
+                logger.debug("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -612,7 +610,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         if cloneable:
             logmsg += " [Clone]"
-            logger.info(logmsg)
+            logger.log(logging.DIRS, logmsg)
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -627,13 +625,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         else:
             if len(files) < args.batchdirs:
                 logmsg += " [Batched]"
-                logger.info(logmsg)
+                logger.log(logging.DIRS, logmsg)
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.info(logmsg)
+                logger.log(logging.DIRS, logmsg)
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -910,10 +908,15 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
+    # Create some new special intermediate logging levels
     logging.STATS = logging.INFO + 1
-    logging.addLevelName(logging.STATS, "STATS")
+    logging.DIRS  = logging.INFO - 1
+    logging.FILES = logging.INFO - 2
+    logging.addLevelName(logging.STATS, "STAT")
+    logging.addLevelName(logging.FILES, "FILE")
+    logging.addLevelName(logging.DIRS,  "DIR")
 
-    levels = [logging.STATS, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')
