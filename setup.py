@@ -2,12 +2,13 @@
 
 from setuptools import setup, find_packages
 import sys, os
+import Tardis
 
-version = '0.5'
+version = Tardis.__version__
 
-setup(  name                    = 'Tardis',
+setup(  name                    = 'Tardis-Backup',
         version                 = version,
-        description             = "Demo Pakcage",
+        description             = "Tardis Backup System",
         packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
         include_package_data    = True,
         zip_safe                = False,

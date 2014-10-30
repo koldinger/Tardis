@@ -51,6 +51,7 @@ from functools import partial
 from rdiff_backup import librsync
 
 import TardisCrypto
+import Tardis
 from Connection import JsonConnection, BsonConnection
 import Util
 
@@ -73,7 +74,6 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
 verbosity           = 0
-version             = "0.4"
 
 ignorectime         = False
 
@@ -895,7 +895,7 @@ def processCommandLine():
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + version,    help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 

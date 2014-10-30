@@ -49,7 +49,7 @@ import tempfile
 import shutil
 import parsedatetime as pdt
 
-version = "0.1"
+import Tardis
 
 dbname  = "./tardisDB"
 basedir = "/srv/Tardis"
@@ -224,7 +224,7 @@ def parseArgs():
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
     args = parser.parse_args()
