@@ -51,12 +51,14 @@ from functools import partial
 from rdiff_backup import librsync
 
 import TardisCrypto
+import Tardis
 from Connection import JsonConnection, BsonConnection
 import Util
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
 globalExcludeFile   = "/etc/tardis/excludes"
+excludeDirs         = []
 
 starttime           = None
 
@@ -72,7 +74,6 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
 verbosity           = 0
-version             = "0.4"
 
 ignorectime         = False
 
@@ -154,7 +155,7 @@ def processChecksums(inodes):
         if verbosity > 1:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.debug("File: [C]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
     # First, then send content for any files which don't
@@ -167,7 +168,7 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.debug("File: [N]: %s %d", Util.shortPath(name), size)
+                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -365,16 +366,16 @@ def handleAckDir(message):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.info("File: [N]: %s %d", Util.shortPath(name), size)
+                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
         if i in inodeDB:
             del inodeDB[i]
 
     for i in [tuple(x) for x in delta]:
         if verbosity > 1:
-			if i in inodeDB:
-				(x, name) = inodeDB[i]
-				logger.info("File: [D]: %s", Util.shortPath(name))
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         if i in inodeDB:
             del inodeDB[i]
@@ -417,8 +418,9 @@ def mkFileInfo(dir, name):
     return finfo
     
 def processDir(dir, dirstat, excludes=[], allowClones=True):
-    stats['dirs'] += 1;
 
+    #logger.debug("Processing directory : %s", dir)
+    stats['dirs'] += 1;
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
@@ -446,7 +448,12 @@ def processDir(dir, dirstat, excludes=[], allowClones=True):
                         stats['backed'] += file["size"]
 
                     if S_ISDIR(mode):
-                            subdirs.append(os.path.join(dir, f))
+                        sub = os.path.join(dir, f)
+                        if sub in excludeDirs:
+                            logger.debug("%s excluded.  Skipping", sub)
+                            continue
+                        else:
+                            subdirs.append(sub)
 
                     files.append(file)
             except (IOError, OSError) as e:
@@ -473,15 +480,13 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                if verbosity > 1:
-                    logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
+                logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity > 1:
-                    logger.debug("ResyncDir: %s", Util.shortPath(path))
+                logger.debug("ResyncDir: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -533,7 +538,7 @@ def flushBatchDirs():
 def sendPurge(relative):
     message =  { 'message': 'PRG' }
     if purgePriority:
-        message['priority'] = purgPriority
+        message['priority'] = purgePriority
     if purgeTime:
         message.update( { 'time': purgeTime, 'relative': relative })
 
@@ -577,6 +582,10 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     try:
+        if os.path.abspath(dir) in excludeDirs:
+            logger.debug("%s excluded.  Skipping", dir)
+            return
+
         #logger.info("Dir: %s", Util.shortPath(dir))
         logmsg = "Dir: {}".format(Util.shortPath(dir))
         #logger.debug("Excludes: %s", str(excludes))
@@ -601,8 +610,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         if cloneable:
             logmsg += " [Clone]"
-            if verbosity:
-                logger.info(logmsg)
+            logger.log(logging.DIRS, logmsg)
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -617,15 +625,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         else:
             if len(files) < args.batchdirs:
                 logmsg += " [Batched]"
-                if verbosity:
-                    logger.info(logmsg)
+                logger.log(logging.DIRS, logmsg)
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                if verbosity:
-                    logger.info(logmsg)
+                logger.log(logging.DIRS, logmsg)
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -684,7 +690,7 @@ def setBackupName(args):
         if args.purgedays:
             purgeTime = args.purgedays * 3600 * 24
         if args.purgehours:
-            purgeTime = args.purgedays * 3600
+            purgeTime = args.purgehours * 3600
         if args.purgetime:
             try:
                 purgeTime = time.mktime(time.strptime(args.purgetime, "%Y/%m/%d:%H:%M"))
@@ -706,6 +712,7 @@ def loadExcludeFile(name):
 
 # Load all the excludes we might want
 def loadExcludes(args):
+    global excludeFile, localExcludeFile
     if not args.ignoreglobalexcludes:
         globalExcludes.extend(loadExcludeFile(globalExcludeFile))
     if args.cvs:
@@ -717,6 +724,11 @@ def loadExcludes(args):
             globalExcludes.extend(loadExcludeFile(f))
     excludeFile         = args.excludefilename
     localExcludeFile    = args.localexcludefilename
+
+def loadExcludedDirs(args):
+    global excludeDirs
+    if args.excludedirs is not None:
+        excludeDirs.extend([os.path.abspath(i) for i in args.excludedirs])
 
 def sendMessage(message):
     if verbosity > 4:
@@ -828,8 +840,9 @@ def processCommandLine():
     pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-prog',     dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--compress', '-z',     dest='compress', default=False, action='store_true',    help='Compress files')
+    parser.add_argument('--compress-data', '-z',dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -860,7 +873,8 @@ def processCommandLine():
     excgrp.add_argument('--cvs-ignore',         dest='cvs', action='store_true',            help='Ignore files like CVS')
     excgrp.add_argument('--exclude', '-x',      dest='excludes', action='append',           help='Patterns to exclude globally (may be repeated)')
     excgrp.add_argument('--exclude-file', '-X', dest='excludefiles', action='append',       help='Load patterns from exclude file (may be repeated)')
-    excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,                            help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--exclude-dir',        dest='excludedirs', action='append',        help='Exclude certain directories by path')
     excgrp.add_argument('--local-exclude-file-name',  dest='localexcludefilename', default=localExcludeFile,            help='Load local exclude files from this.  Default: %(default)s')
     excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
 
@@ -870,8 +884,9 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
-    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson", "bsonc"], help='Protocol for data transfer.  Default: %(default)s')
-    parser.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
+    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],  help='Protocol for data transfer.  Default: %(default)s')
+    comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action='store_true',    help='Compress messages.  Default: %(default)s')
+    comgrp.add_argument('--copy',               dest='copy', action='store_true',                   help='Copy files directly to target.  Only works if target is localhost')
 
     parser.add_argument('--purge', '-P',        dest='purge', action='store_true', default=False,   help='Purge old backup sets when backup complete')
     parser.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,          help='Delete below this priority (Default: Backup priority)')
@@ -880,7 +895,7 @@ def processCommandLine():
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + version,    help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
@@ -893,7 +908,15 @@ def processCommandLine():
 
 def main():
     global starttime, args, config, conn, verbosity, ignorectime, crypt
-    levels = [logging.INFO, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    # Create some new special intermediate logging levels
+    logging.STATS = logging.INFO + 1
+    logging.DIRS  = logging.INFO - 1
+    logging.FILES = logging.INFO - 2
+    logging.addLevelName(logging.STATS, "STAT")
+    logging.addLevelName(logging.FILES, "FILE")
+    logging.addLevelName(logging.DIRS,  "DIR")
+
+    levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')
@@ -917,13 +940,16 @@ def main():
         # Load the excludes
         loadExcludes(args)
 
+        # Load any excluded directories
+        loadExcludedDirs(args)
+
         # Error check the purge parameter.  Disable it if need be
         if args.purge and not (purgeTime is not None or args.auto):
             logger.error("Must specify purge days with this option set")
             args.purge=False
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
         args.password = None
 
         token = None
@@ -940,6 +966,7 @@ def main():
             rootdir = None
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
+        #logger.exception(e)
         sys.exit(1)
 
     # Open the connection
@@ -954,10 +981,7 @@ def main():
             conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=False)
-            setEncoder("bin")
-        elif args.protocol == 'bsonc':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=True)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=args.compressmsgs)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
@@ -965,7 +989,7 @@ def main():
         sys.exit(1)
 
     if verbosity or args.stats:
-        logger.info("Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
+        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
     # Now, do the actual work here.
     try:
@@ -1013,13 +1037,13 @@ def main():
     endtime = datetime.datetime.now()
 
     if args.stats:
-        logger.info("Runtime: {}".format((endtime - starttime)))
-        logger.info("Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.info("Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+        logger.log(logging.STATS, "Runtime: {}".format((endtime - starttime)))
+        logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+        logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
         if conn is not None:
             connstats = conn.getStats()
-            logger.info("Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-        logger.info("Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+            logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+        logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
 
     if args.local:
         os.unlink(tempsocket)

@@ -49,7 +49,7 @@ import tempfile
 import shutil
 import parsedatetime as pdt
 
-version = "0.1"
+import Tardis
 
 dbname  = "./tardisDB"
 basedir = "/srv/Tardis"
@@ -216,6 +216,7 @@ def parseArgs():
     pwgroup.add_argument('--password',      dest='password', default=None,          help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
@@ -223,7 +224,7 @@ def parseArgs():
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version', action='version', version='%(prog)s ' + version, help='Show the version')
+    parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
     args = parser.parse_args()
@@ -231,11 +232,8 @@ def parseArgs():
     return args
 
 def setupLogging(args):
-    FORMAT = "%(levelname)s : %(name)s : %(message)s"
-    #formatter = logging.Formatter("%(levelname)s : %(name)s : %(message)s")
-    #handler = logging.StreamHandler(stream=sys.stderr)
-    #handler.setFormatter(formatter)
-    #logger.addHandler(handler)
+    #FORMAT = "%(levelname)s : %(name)s : %(message)s"
+    FORMAT = "%(levelname)s : %(message)s"
     logging.basicConfig(stream=sys.stderr, format=FORMAT)
     logger = logging.getLogger("")
     if args.verbose:
@@ -258,7 +256,7 @@ def main():
 
     crypt = None
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
     args.password = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password)
@@ -309,8 +307,12 @@ def main():
         else:
             output = file(args.output, "wb")
 
+    if args.cksum and (args.settime or args.setperm):
+        logger.warning("Unable to set time or permissions on files specified by checksum.")
+
     # do the work here
     for i in args.files:
+        path = None
         f = None
         outname = None
         if args.cksum:
@@ -325,6 +327,8 @@ def main():
             if outputdir:
                 (d, n) = os.path.split(i)
                 outname = os.path.join(outputdir, n)
+                if args.cksum:
+                    path = i
                 logger.debug("Writing output from %s to %s", path, outname)
                 output = file(outname,  "wb")
             try:
@@ -339,7 +343,8 @@ def main():
                 if outputdir:
                     output.close()
                 if output is not None:
-                    if args.settime or args.setperm:
+                    # TODO: Figure out a correct timestamp and/or permissions for this file?
+                    if not args.cksum and (args.settime or args.setperm):
                         info = tardis.getFileInfoByPath(path, bset)
                         if info:
                             if args.settime:

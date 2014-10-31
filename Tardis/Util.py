@@ -32,7 +32,9 @@ import os
 import logging
 import argparse
 import sys
+import subprocess
 import hashlib
+import shlex
 import StringIO
 
 import Messages
@@ -74,11 +76,12 @@ def shortPath(path, width=80):
             break
     return ".../" + path
 
-def getPassword(password, pwfile, pwurl):
+def getPassword(password, pwfile, pwurl, pwprog):
     methods = 0
     if password: methods += 1
     if pwfile:   methods += 1
     if pwurl:    methods += 1
+    if pwprog:   methods += 1
 
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
@@ -95,6 +98,11 @@ def getPassword(password, pwfile, pwurl):
         c.perform()
         c.close()
         password = buffer.getvalue().rstrip()
+
+    if pwprog:
+        args = shlex.split(pwprog)
+        output =subprocess.check_output(args)
+        password = output.split('\n')[0].rstrip()
 
     return password
 
