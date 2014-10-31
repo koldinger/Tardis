@@ -34,6 +34,7 @@ import logging
 import os.path
 import functools
 import time
+import hashlib
 
 import ConnIdLogAdapter
 
@@ -587,11 +588,17 @@ class TardisDB(object):
         return self.getConfigValue('Token')
 
     def setToken(self, token):
-        self.setConfigValue('Token', token)
+        s = hashlib.sha1()
+        s.update(token)
+        tokenhash = s.hexdigest()
+        self.setConfigValue('Token', tokenhash)
 
     def checkToken(self, token):
         dbToken = self.getToken()
-        if dbToken == token:
+        s = hashlib.sha1()
+        s.update(token)
+        tokenhash = s.hexdigest()
+        if dbToken == tokenhash:
             return True
         else:
             return False

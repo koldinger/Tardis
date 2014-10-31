@@ -761,7 +761,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def confirmToken(self, token):
         dbToken = self.db.getToken()
         if dbToken:
-            if dbToken != token:
+            if not self.db.checkToken(token):
                 if token:
                     self.logger.warning("Login attempt with invalid token: %s", token)
                     raise InitFailedException("Password doesn't match")
