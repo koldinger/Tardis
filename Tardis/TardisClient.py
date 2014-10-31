@@ -815,7 +815,7 @@ def run_server(args, tempfile):
     server_cmd = shlex.split(args.serverprog) + ['--single', '--local', tempfile]
     #if args.serverargs:
         #server_cmd = server_cmd + args.serverargs
-    logger.info("Invoking server: " + str(server_cmd))
+    logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
     time.sleep(.5)
     if subp.poll():

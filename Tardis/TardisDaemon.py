@@ -99,7 +99,7 @@ configDefaults = {
     'AllowCopies'       : str(False),
     'AllowNewHosts'     : str(False),
     'Single'            : str(False),
-    'Local'             : str(False),
+    'Local'             : None,
     'Verbose'           : 0,
     'Daemon'            : str(False),
     'User'              : None,
@@ -911,7 +911,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args
-        SocketServer.TCPServer.__init__(self, ("", config.getint('Tardis', 'Port')), TardisServerHandler)
+        SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
         logger.info("TCP Server Running: %s", self.dbname)
 
@@ -919,7 +919,7 @@ class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStrea
     def __init__(self, args, config):
         self.config = config
         self.args = args
-        SocketServer.UnixStreamServer.__init__(self, config.get('Tardis', 'Local'), TardisServerHandler)
+        SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
         setConfig(self, args, config)
         logger.info("Unix Domain Socket Server Running: %s", self.dbname)
 
@@ -987,13 +987,14 @@ def setupLogging(config):
 def run_server():
     global server
 
-    logger.info("Starting server: %d", config.getint('Tardis', 'Port'));
 
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         if args.local:
+            logger.info("Starting server: %s", args.local);
             server = TardisDomainSocketServer(args, config)
         else:
+            logger.info("Starting server: %d", config.getint('Tardis', 'Port'));
             server = TardisSocketServer(args, config)
 
         if args.single:
@@ -1006,7 +1007,7 @@ def run_server():
         logger.info("Ending")
     except Exception:
         logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        #logger.exception(sys.exc_info()[1])
+        logger.exception(sys.exc_info()[1])
 
 def stop_server():
     logger.info("Stopping server")
@@ -1045,7 +1046,7 @@ def processArgs():
 
     parser.add_argument('--single',             dest='single',          action=Util.StoreBoolean, default=config.getboolean(t, 'Single'), 
                                                                         help='Run a single transaction and quit')
-    parser.add_argument('--local',              dest='local',           action=Util.StoreBoolean, default=config.getboolean(t, 'Local'),
+    parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
 
     parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
@@ -1077,7 +1078,7 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
-    if args.daemon:
+    if args.daemon and not args.local:
         user  = args.user
         group = args.group
         pidfile = args.pidfile
