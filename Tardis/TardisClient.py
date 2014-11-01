@@ -196,13 +196,19 @@ def processDelta(inode):
 
         if sigmessage['status'] == 'OK':
             newsig = None
-            oldchksum = sigmessage['checksum']
-            sigfile = cStringIO.StringIO()
-            #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-            Util.receiveData(conn.sender, sigfile)
-            sigfile.seek(0)
+            # Try to process the signature and the delta.  If we fail, send the whole content.
+            try:
+                oldchksum = sigmessage['checksum']
+                sigfile = cStringIO.StringIO()
+                #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+                Util.receiveData(conn.sender, sigfile)
+                sigfile.seek(0)
 
-            delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
+                delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
+            except Exception as e:
+                logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
+                sendContent(inode)
+                return
 
             ### BUG: If the file is being changed, this value and the above may be different.
             m = hashlib.md5()
