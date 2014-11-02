@@ -51,7 +51,7 @@ import parsedatetime as pdt
 
 import Tardis
 
-dbname  = "./tardisDB"
+dbname  = "tardis.db"
 basedir = "/srv/Tardis"
 logger  = None
 
@@ -344,7 +344,7 @@ def main():
                     output.close()
                 if output is not None:
                     # TODO: Figure out a correct timestamp and/or permissions for this file?
-                    if not args.cksum and (args.settime or args.setperm):
+                    if not args.cksum and (args.settime or args.setperm) and (not output is sys.stdout):
                         info = tardis.getFileInfoByPath(path, bset)
                         if info:
                             if args.settime:
