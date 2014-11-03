@@ -296,12 +296,14 @@ def main():
 
     outputdir = None
     output = sys.stdout
+    outname = None
     if args.output:
         if len(args.files) > 1:
             outputdir = mkOutputDir(args.output)
         elif os.path.isdir(args.output):
             outputdir = args.output
         else:
+            outname = args.output
             output = file(args.output, "wb")
 
     if args.cksum and (args.settime or args.setperm):
@@ -311,7 +313,6 @@ def main():
     for i in args.files:
         path = None
         f = None
-        outname = None
         if args.cksum:
             f = r.recoverChecksum(i)
         else:
