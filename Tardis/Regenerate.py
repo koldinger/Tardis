@@ -213,7 +213,7 @@ def parseArgs():
     bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
 
     pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password',      dest='password', default=None,          help='Encrypt files with this password')
+    pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
@@ -249,27 +249,26 @@ def main():
     args = parseArgs()
     logger = setupLogging(args)
 
-    baseDir = os.path.join(args.basedir, args.host)
-    dbPath = os.path.join(baseDir, args.dbname)
-    tardis = TardisDB.TardisDB(dbPath, backup=False)
-    cache = CacheDir.CacheDir(baseDir)
-
-    crypt = None
-
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
     args.password = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password)
     password = None
 
-    r = Regenerator(cache, tardis, crypt=crypt)
-
     token = None
     if crypt:
         token = crypt.encryptFilename(args.host)
-        if not tardis.checkToken(token):
-            logger.critical("Login failed.  Password does not match")
-            sys.exit(1)
+
+    baseDir = os.path.join(args.basedir, args.host)
+    dbPath = os.path.join(baseDir, args.dbname)
+    tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+    cache = CacheDir.CacheDir(baseDir)
+
+    crypt = None
+
+
+    r = Regenerator(cache, tardis, crypt=crypt)
+
 
     bset = False
 

@@ -167,7 +167,7 @@ class TardisDB(object):
     currBackupSet = None
     dirinodes = {}
 
-    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None):
+    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
@@ -186,6 +186,7 @@ class TardisDB(object):
 
         self.conn = sqlite3.connect(self.dbName)
         self.conn.text_factory = str
+        self.cursor = self.conn.cursor()
 
         if (initialize):
             self.logger.info("Creating database from schema: {}".format(initialize))
@@ -201,8 +202,18 @@ class TardisDB(object):
                 self.logger.error("Could not execute initialization script {}".format(initialize))
                 self.logger.exception(e)
                 raise
+            if token:
+                self.setToken(token)
 
-        self.cursor = self.conn.cursor()
+        if token:
+            if not self.checkToken(token):
+                self.logger.error("Token/password does not match")
+                raise Exception("Password does not match")
+        else:
+            if self.getToken() is not None:
+                self.logger.error("No token/password specified")
+                raise Exception("No password specified")
+
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
@@ -223,6 +234,8 @@ class TardisDB(object):
         #self.prevBackupName = row[0]
         #self.prevBackupSet = row[1]
         self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
+
+        self.conn.commit()
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")

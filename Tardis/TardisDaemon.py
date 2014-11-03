@@ -98,6 +98,7 @@ configDefaults = {
     'LogFile'           : None,
     'AllowCopies'       : str(False),
     'AllowNewHosts'     : str(False),
+    'RequirePassword'   : str(False),
     'Single'            : str(False),
     'Local'             : None,
     'Verbose'           : 0,
@@ -665,19 +666,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             raise Exception("Unknown message type", messageType)
 
-    def getDB(self, host):
+    def getDB(self, host, token):
         script = None
         extra = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
         if not os.path.exists(self.dbfile):
+            if self.server.requirePW and token is None:
+                self.logger.warning("No password specified.  Cannot create")
+                raise InitFailedException("Password required for creation")
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
+
         if self.client_address:
             extra = {'connid': self.client_address[0]}
 
-        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra)
+        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra, token=token)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -815,8 +820,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             serverName = None
             try:
-                self.getDB(host)
-                self.confirmToken(token)
+                self.getDB(host, token)
+                #self.confirmToken(token)
                 self.startSession(name, token)
                 self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
                 if autoname:
@@ -875,7 +880,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             completed = True
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
-            self.logger.exception(e)
+            #self.logger.exception(e)
         except Exception as e:
             self.logger.error("Caught exception: %s", e)
             self.logger.exception(e)
@@ -935,6 +940,8 @@ def setConfig(self, args, config):
     self.allowCopies    = args.copies
     self.allowNew       = args.newhosts
     self.schemaFile     = args.schema
+
+    self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
 
     self.monthfmt       = config.get('Tardis', 'MonthFmt')
     self.monthprio      = config.getint('Tardis', 'MonthPrio')

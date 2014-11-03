@@ -36,6 +36,7 @@ import subprocess
 import hashlib
 import shlex
 import StringIO
+import getpass
 
 import Messages
 import Connection
@@ -85,6 +86,10 @@ def getPassword(password, pwfile, pwurl, pwprog):
 
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
+
+    if password == True:
+        password = getpass.getpass()
+        password.rstrip()       # Delete trailing characters
 
     if pwfile:
         with open(pwfile, "r") as f:

@@ -843,10 +843,10 @@ def processCommandLine():
     parser.add_argument('--hostname',           dest='hostname', default=socket.gethostname(),            help='Set the hostname.  Default: %(default)s')
 
     pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password',          dest='password', default=None,          help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,      help='Read password from file')
-    pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
-    pwgroup.add_argument('--password-prog',     dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument('--password',          dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file',     dest='passwordfile', default=None,                      help='Read password from file')
+    pwgroup.add_argument('--password-url',      dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-prog',     dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--compress-data', '-z',dest='compress', default=False, action='store_true',    help='Compress files')
     parser.add_argument('--compress-min',       dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
@@ -927,8 +927,7 @@ def main():
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')
     args = processCommandLine()
-
-    starttime = datetime.datetime.now()
+    
 
     verbosity=args.verbose if args.verbose else 0
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
@@ -954,6 +953,13 @@ def main():
             logger.error("Must specify purge days with this option set")
             args.purge=False
 
+        if args.basepath == 'common':
+            rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
+        elif args.basepath == 'full':
+            rootdir = '/'
+        else:
+            rootdir = None
+
         # Load any password info
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
         args.password = None
@@ -964,16 +970,12 @@ def main():
             token = crypt.encryptFilename(args.hostname)
         password = None
 
-        if args.basepath == 'common':
-            rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
-        elif args.basepath == 'full':
-            rootdir = '/'
-        else:
-            rootdir = None
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
         #logger.exception(e)
         sys.exit(1)
+
+    starttime = datetime.datetime.now()
 
     # Open the connection
     if args.local:
@@ -999,7 +1001,7 @@ def main():
 
     # Now, do the actual work here.
     try:
-        if args.copy:
+        if args.copy and not (args.compress or crypt):
             requestTargetDir()
 
         # First, send any fake directories
