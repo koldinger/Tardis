@@ -51,7 +51,7 @@ import thread
 import threading
 import json
 from datetime import datetime
-from rdiff_backup import librsync
+import librsync
 
 # For profiling
 import cProfile
@@ -341,14 +341,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # TODO: Better logic on this?
                 if rpipe:
                     try:
-                        s = librsync.SigFile(rpipe)
+                        s = librsync.signature(rpipe)
                         sig = s.read()
 
                         outfile = self.cache.open(sigfile, "wb")
                         outfile.write(sig)
                         outfile.close()
 
-                    except (librsync.librsyncError, Regenerate.RegenerateException) as e:
+                    except (librsync.LibrsyncError, Regenerate.RegenerateException) as e:
                         self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
             # TODO: Break the signature out of here.
             response = {
@@ -419,7 +419,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     temp = basisFile
                     basisFile = tempfile.TemporaryFile(dir=self.tempdir)
                     shutil.copyfileobj(temp, basisFile)
-                patched = librsync.PatchedFile(basisFile, output)
+                patched = librsync.patch(basisFile, output)
                 shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                 self.db.insertChecksumFile(checksum, iv, size=size)
             else:

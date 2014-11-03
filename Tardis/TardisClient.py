@@ -48,7 +48,7 @@ import pycurl
 import shlex
 from functools import partial
 
-from rdiff_backup import librsync
+import librsync
 
 import TardisCrypto
 import Tardis
@@ -204,7 +204,7 @@ def processDelta(inode):
                 Util.receiveData(conn.sender, sigfile)
                 sigfile.seek(0)
 
-                delta = librsync.DeltaFile(sigfile, open(pathname, "rb"))
+                delta = librsync.delta(open(pathname, "rb"), sigfile)
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 sendContent(inode)
@@ -220,7 +220,7 @@ def processDelta(inode):
                     filesize += len(chunk)
                 if crypt:
                     file.seek(0)
-                    newsig = librsync.SigFile(file)
+                    newsig = librsync.signature(file)
                 checksum = m.hexdigest()
 
                 (encrypt, iv) = makeEncryptor()
@@ -335,7 +335,7 @@ def sendContent(inode):
 
                 if crypt:
                     x.seek(0)
-                    sig = librsync.SigFile(x)
+                    sig = librsync.signature(x)
                     message = {
                         "message" : "SIG",
                         "checksum": checksum
