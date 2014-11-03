@@ -44,7 +44,7 @@ import subprocess
 import time
 import base64
 
-from rdiff_backup import librsync
+import librsync
 import tempfile
 import shutil
 import parsedatetime as pdt
@@ -112,8 +112,8 @@ class Regenerator:
                     temp.seek(0)
                     patchfile = temp
                 try:
-                    output = librsync.PatchedFile(basis, patchfile)
-                except librsyncError as e:
+                    output = librsync.patch(basis, patchfile)
+                except librsync.LibrsyncError as e:
                     self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
                     raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
 
