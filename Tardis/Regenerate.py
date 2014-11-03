@@ -249,6 +249,8 @@ def main():
     args = parseArgs()
     logger = setupLogging(args)
 
+    crypt = None
+
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
     args.password = None
     if password:
@@ -260,15 +262,11 @@ def main():
         token = crypt.encryptFilename(args.host)
 
     baseDir = os.path.join(args.basedir, args.host)
+    cache = CacheDir.CacheDir(baseDir, create=False)
     dbPath = os.path.join(baseDir, args.dbname)
     tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
-    cache = CacheDir.CacheDir(baseDir)
-
-    crypt = None
-
 
     r = Regenerator(cache, tardis, crypt=crypt)
-
 
     bset = False
 

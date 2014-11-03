@@ -115,8 +115,6 @@ class TardisFS(fuse.Fuse):
         self.log.info("MountPoint: %s", self.mountpoint)
         self.log.info("DBName: %s", self.dbname)
 
-        self.log.debug("%s %s %s %s", self.password, self.pwfile, self.pwurl, self.pwprog)
-
         password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
 
         self.log.info("Password: %s", password)
@@ -126,17 +124,14 @@ class TardisFS(fuse.Fuse):
             self.crypt = TardisCrypto.TardisCrypto(password)
         password = None
 
-        self.cache = CacheDir.CacheDir(self.path)
-        dbPath = os.path.join(self.path, self.dbname)
-        self.tardis = TardisDB.TardisDB(dbPath, backup=False)
-
         token = None
         if self.crypt:
             (dirname, hostname) = os.path.split(self.path)
             token = self.crypt.encryptFilename(hostname)
-        if not self.tardis.checkToken(token):
-            self.log.critical("Login failed.  Password does not match")
-            sys.exit(1)
+
+        self.cache = CacheDir.CacheDir(self.path, create=False)
+        dbPath = os.path.join(self.path, self.dbname)
+        self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
         self.files = {}
