@@ -48,11 +48,12 @@ import pycurl
 
 def fmtSize(num, base=1024):
     fmt = "%d %s"
+    num = float(num)
     for x in ['bytes','KB','MB','GB']:
         #if num < base and num > -base:
         if -base < num < base:
             return fmt % (num, x)
-        num /= base
+        num /= float(base)
         fmt = "%3.1f %s"
     return fmt % (num, 'TB')
 
