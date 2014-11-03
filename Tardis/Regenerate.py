@@ -70,6 +70,7 @@ class Regenerator:
         self.crypt = crypt
 
     def decryptFile(self, filename, size, iv):
+        self.logger.debug("Decrypting %s", filename)
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
         cipher = self.crypt.getContentCipher(base64.b64decode(iv))
@@ -125,7 +126,7 @@ class Regenerator:
                     output =  self.cacheDir.open(cksum, "rb")
 
                 if cksInfo['compressed']:
-                    self.logger.debug("Decompressing %s", cksum)
+                    self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
                     buf = CompressedBuffer.UncompressedBufferedReader(output)
                     shutil.copyfileobj(buf, temp)

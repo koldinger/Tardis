@@ -111,7 +111,7 @@ def getPassword(password, pwfile, pwurl, pwprog):
 
     return password
 
-def sendData(sender, file, encrypt, chunksize=16536, checksum=False, compress=False, stats=None):
+def sendData(sender, file, encrypt, chunksize=(16 * 1024), checksum=False, compress=False, stats=None):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):

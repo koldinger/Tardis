@@ -34,8 +34,10 @@ import sys
 import StringIO
 import hashlib
 
+_defaultChunksize = 128 * 1024
+
 class BufferedReader(object):
-    def __init__(self, stream, chunksize=(128 * 1024), checksum=False):
+    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False):
         self.stream = stream
         self.chunksize = chunksize
         self.numbytes = 0
@@ -58,6 +60,7 @@ class BufferedReader(object):
         #    avail = len(self.buffer)
         #print "read called: {}  {} bytes available".format(size, avail)
         out = ""
+        left = size
         while(len(out) < size):
             #print "read loop: so far: {}".format(len(out))
             if (not self.buffer) or (len(self.buffer) == 0):
@@ -68,10 +71,11 @@ class BufferedReader(object):
                     #print "_get return None, leaving read: {}".format(len(out))
                     return out
                 #print "_get returned {} bytes".format(len(self.buffer))
-            amount = (size - len(out)) if size <= len(self.buffer) else len(self.buffer)
+            amount = min(left, len(self.buffer))
             #print "Adding {} bytes to output".format(amount)
             out = out + self.buffer[:amount]
             self.buffer = self.buffer[amount:]
+            left -= amount
 
         #print "leaving read: {}".format(len(out))
         return out
@@ -86,7 +90,7 @@ class BufferedReader(object):
         return False
 
 class CompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=(128 * 1024), checksum=False, threshold=0.80):
+    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, threshold=0.80):
         super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, checksum=checksum)
         self.compressor = None
         self.compressed = 0
@@ -150,7 +154,7 @@ class CompressedBufferedReader(BufferedReader):
         return self.compressor != None
 
 class UncompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=16536):
+    def __init__(self, stream, chunksize=_defaultChunksize):
         super(UncompressedBufferedReader, self).__init__(stream, chunksize=chunksize)
         self.compressor = zlib.decompressobj()
         self.compressed = 0.0
@@ -180,12 +184,12 @@ if __name__ == "__main__":
     x = CompressedBufferedReader(file(sys.argv[1], "rb"), checksum=True)
     #line = x.get()
     with file(sys.argv[2], "wb") as f:
-        line = x.read(16536)
+        line = x.read(16384)
         while line:
             f.write(line)
             #print "==== ",  len(line), " :: ", base64.b64encode(line)
             #line = x.get()
-            line = x.read(16536)
+            line = x.read(16384)
 
     print x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum()
 
