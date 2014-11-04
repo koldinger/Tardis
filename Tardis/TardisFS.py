@@ -95,7 +95,7 @@ class TardisFS(fuse.Fuse):
         logging.basicConfig(level=logging.INFO)
         self.log = logging.getLogger("TardisFS")
 
-        self.parser.add_option(mountopt="password",     help="Password for this archive")
+        self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
         self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
         self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
         self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
@@ -117,7 +117,6 @@ class TardisFS(fuse.Fuse):
 
         password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
 
-        self.log.info("Password: %s", password)
         self.password = None
 
         if password:
@@ -129,12 +128,16 @@ class TardisFS(fuse.Fuse):
             (dirname, hostname) = os.path.split(self.path)
             token = self.crypt.encryptFilename(hostname)
 
-        self.cache = CacheDir.CacheDir(self.path, create=False)
-        dbPath = os.path.join(self.path, self.dbname)
-        self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+        try:
+            self.cache = CacheDir.CacheDir(self.path, create=False)
+            dbPath = os.path.join(self.path, self.dbname)
+            self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
-        self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
-        self.files = {}
+            self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
+            self.files = {}
+        except Exception as e:
+            self.log.critical("Could not initialize: %s", str(e))
+            sys.exit(1)
 
         self.log.debug('Init complete.')
 
@@ -578,7 +581,7 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     try:
         fs = TardisFS()

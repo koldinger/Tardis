@@ -88,7 +88,7 @@ def getPassword(password, pwfile, pwurl, pwprog):
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
 
-    if password == True:
+    if password == True or password == '':
         password = getpass.getpass()
         password.rstrip()       # Delete trailing characters
 
