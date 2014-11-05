@@ -81,6 +81,10 @@ class Regenerator:
         outfile.seek(0)
         return outfile
 
+    def recoverChecksumFile(self, cksum):
+        self.logger.info("Recovering checksum: %s", cksum)
+        return self.recoverChecksum(cksum)
+
     def recoverChecksum(self, cksum):
         self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = self.db.getChecksumInfo(cksum)
@@ -105,7 +109,7 @@ class Regenerator:
                     patchfile = self.cacheDir.open(cksum, 'rb')
 
                 if cksInfo['compressed']:
-                    self.logger.debug("Decompressing %s", cksum)
+                    self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
                     buf = CompressedBuffer.UncompressedBufferedReader(patchfile)
                     shutil.copyfileobj(buf, temp)
@@ -141,7 +145,7 @@ class Regenerator:
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False):
-        self.logger.debug("Recovering file: {}".format(filename))
+        self.logger.info("Recovering file: {}".format(filename))
         name = filename
         if self.crypt and not nameEncrypted:
             name = self.crypt.encryptPath(filename)
@@ -306,16 +310,18 @@ def main():
         else:
             outname = args.output
             output = file(args.output, "wb")
+    logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
 
-    if args.cksum and (args.settime or args.setperm):
-        logger.warning("Unable to set time or permissions on files specified by checksum.")
+    #if args.cksum and (args.settime or args.setperm):
+        #logger.warning("Unable to set time or permissions on files specified by checksum.")
 
     # do the work here
     for i in args.files:
         path = None
         f = None
+        # Recover the file
         if args.cksum:
-            f = r.recoverChecksum(i)
+            f = r.recoverChecksumFile(i)
         else:
             path = computePath(tardis, bset, i, args.reduce)
             if not path:
@@ -323,6 +329,7 @@ def main():
             f = r.recoverFile(path, bset)
 
         if f != None:
+            # Generate an output name
             if outputdir:
                 (d, n) = os.path.split(i)
                 outname = os.path.join(outputdir, n)
@@ -339,7 +346,7 @@ def main():
                 logger.error("Unable to read file: {}: {}".format(i, repr(e)))
             finally:
                 f.close()
-                if outputdir:
+                if output is not sys.stdout:
                     output.close()
                 if output is not None:
                     # TODO: Figure out a correct timestamp and/or permissions for this file?
