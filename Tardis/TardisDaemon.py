@@ -96,7 +96,6 @@ configDefaults = {
     'LogCfg'            : None,
     'Profile'           : str(False),
     'LogFile'           : None,
-    'AllowCopies'       : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
     'Single'            : str(False),
@@ -530,31 +529,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             flush = True;
         return (None, flush)
 
-    def processCopy(self, message):
-        (inode, dev) = message['inode']
-        copyfile = message['file']
-        checksum = message['checksum']
-        size     = message['size']
-        if 'iv' in message:
-            iv = self.messenger.decode(message['iv'])
-        else:
-            iv = None
-
-        if self.cache.exists(checksum):
-            self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-            os.remove(copyfile)
-        else:
-            self.cache.mkdir(checksum)
-            self.logger.debug("Renaming %s to %s", copyfile, self.cache.path(checksum))
-            os.rename(copyfile, self.cache.path(checksum))
-            self.db.insertChecksumFile(checksum, iv, size)
-        self.logger.debug("Setting checksum for inode %d to %s", message['inode'], checksum)
-        self.db.setChecksum(inode, checksum)
-        flush = False
-        if size > 1000000:
-            flush = True;
-        return (None, flush)
-
     def processPurge(self, message):
         self.logger.debug("Processing purge message: {}".format(str(message)))
         prevTime = None
@@ -625,13 +599,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, True)
 
-    def processTmpDir(self, message):
-        if self.server.allowCopies:
-            response = {'message': 'ACKTDIR', "status": "OK", "target": self.tempdir }
-        else:
-            response = {'message': 'ACKTDIR', "status": "FAIL" }
-        return (response, False)
-
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -655,12 +622,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return self.processChecksum(message)
         elif messageType == "CLN":
             return self.processClone(message)
-        elif messageType == "CPY":
-            return self.processCopy(message)
         elif messageType == "BATCH":
             return self.processBatch(message)
-        elif messageType == "TMPDIR":
-            return self.processTmpDir(message)
         elif messageType == "PRG":
             return self.processPurge(message)
         else:
@@ -822,7 +785,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 else:
                     token = None
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", host, name, str(autoname), version, clienttime)
-                self.logger.info("%s", str(message))
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
             except KeyError as e:
@@ -946,7 +908,6 @@ def setConfig(self, args, config):
     self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
 
     self.dbname         = args.dbname
-    self.allowCopies    = args.copies
     self.allowNew       = args.newhosts
     self.schemaFile     = args.schema
 
@@ -1057,8 +1018,6 @@ def processArgs():
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file');
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
-    parser.add_argument('--allow-copies',       dest='copies',          action=Util.StoreBoolean, default=config.getboolean(t, 'AllowCopies'),
-                                                                        help='Allow the client to copy files in directly')
     parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=Util.StoreBoolean, default=config.getboolean(t, 'AllowNewHosts'),
                                                                         help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
