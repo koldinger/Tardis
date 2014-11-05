@@ -83,7 +83,7 @@ configName   = '/etc/tardis/tardisd.cfg'
 pidFileName  = '/var/run/tardisd.pid'
 baseDir      = '/srv/Tardis'
 
-portNumber   = '7243'
+portNumber   = '7430'
 
 parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 schemaFile   = os.path.join(parentDir, schemaName)
@@ -672,6 +672,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
+
         if not os.path.exists(self.dbfile):
             if self.server.requirePW and token is None:
                 self.logger.warning("No password specified.  Cannot create")
@@ -686,11 +687,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
-    def startSession(self, name, token):
+    def startSession(self, name, force):
         self.name = name
         sid = str(self.sessionid)
         # TODO: Lock the sessions structure.
         sessions[sid] = self
+
+        # Check if the previous backup session completed.
+        prev = self.db.lastBackupSet(completed=False)
+        if prev['endtime'] is None:
+            if force:
+                self.logger.warning("Staring session %s while previous backup still warning: %s", name, prev['name'])
+            else:
+                raise InitFailedException("Previous backup session still running: {}.  Run with --force to force starting the new backup".format(prev['name']))
 
         self.tempdir = os.path.join(self.basedir, "tmp_" + sid)
         os.makedirs(self.tempdir)
@@ -813,6 +822,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 else:
                     token = None
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", host, name, str(autoname), version, clienttime)
+                self.logger.info("%s", str(message))
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
             except KeyError as e:
@@ -821,8 +831,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             serverName = None
             try:
                 self.getDB(host, token)
-                #self.confirmToken(token)
-                self.startSession(name, token)
+                self.startSession(name, force)
                 self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
                 if autoname:
                     (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
@@ -997,7 +1006,6 @@ def setupLogging():
 def run_server():
     global server
 
-
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         if args.local:
@@ -1083,7 +1091,7 @@ def main():
     # Set up a handler
     signal.signal(signal.SIGTERM, signal_term_handler)
     try:
-        logger = setupLogging(config)
+        logger = setupLogging()
     except Exception as e:
         print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
         traceback.print_exc()
