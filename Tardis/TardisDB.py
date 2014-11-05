@@ -253,14 +253,12 @@ class TardisDB(object):
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, "
-                                    "StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, "
-                                    "Priority AS priority, Completed AS completed "
+            c = self.cursor.execute("SELECT " +
+                                     backupSetInfoFields +
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            c = self.cursor.execute("SELECT Name AS name, BackupSet AS backupset, "
-                                    "StartTime AS starttime, ClientTime AS clienttime, "
-                                    "Priority AS priority, Completed AS completed "
+            c = self.cursor.execute("SELECT " +
+                                     backupSetInfoFields +
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         return makeDict(c, row)
