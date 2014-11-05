@@ -962,7 +962,7 @@ def setConfig(self, args, config):
     else:
         self.profiler = None
 
-def setupLogging(config):
+def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
 
     logging.addLevelName(logging.TRACE, 'Message')
@@ -976,7 +976,10 @@ def setupLogging(config):
 
         verbosity = args.verbose
 
-        if args.logfile:
+        if args.local:
+            # Always send output to stderr for local connections
+            handler = logging.StreamHandler()
+        elif args.logfile:
             handler = logging.handlers.WatchedFileHandler(args.logfile)
         elif args.daemon:
             handler = logging.handlers.SysLogHandler()
