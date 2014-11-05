@@ -938,6 +938,8 @@ def main():
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logger.setLevel(loglevel)
 
+    starttime = datetime.datetime.now()
+
     try:
         # Figure out the name and the priority of this backupset
         (name, priority) = setBackupName(args)
@@ -974,8 +976,6 @@ def main():
         logger.critical("Unable to initialize: %s", (str(e)))
         #logger.exception(e)
         sys.exit(1)
-
-    starttime = datetime.datetime.now()
 
     # Open the connection
     if args.local:
