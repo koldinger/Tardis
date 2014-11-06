@@ -54,6 +54,7 @@ import TardisCrypto
 import Tardis
 from Connection import JsonConnection, BsonConnection
 import Util
+import parsedatetime
 
 excludeFile         = ".tardis-excludes"
 localExcludeFile    = ".tardis-local-excludes"
@@ -650,11 +651,13 @@ def setBackupName(args):
         if args.purgehours:
             purgeTime = args.purgehours * 3600
         if args.purgetime:
-            try:
-                purgeTime = time.mktime(time.strptime(args.purgetime, "%Y/%m/%d:%H:%M"))
-            except ValueError:
-                logger.error("Invalid format for --keep-time.  Needs to be YYYY/MM/DD:hh:mm, on a 24-hour clock")
-                raise
+            cal = parsedatetime.Calendar()
+            (then, success) = cal.parse(args.purgetime)
+            if success:
+                purgeTime = time.mktime(then)
+            else:
+                #logger.error("Could not parse --keep-time argument: %s", args.purgetime)
+                raise Exception("Could not parse --keep-time argument: {} ".format(args.purgetime))
 
     return (name, priority)
 
@@ -769,6 +772,11 @@ def run_server(args, tempfile):
     return subp
 
 def processCommandLine():
+    if os.path.exists('/etc/tardis/tardisd.local.cfg'):
+        local_config = '/etc/tardis/tardisd.local.cfg'
+    else:
+        local_config = '/etc/tardis/tardisd.cfg'
+
     """ Do the command line thing.  Register arguments.  Parse it. """
     defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
@@ -789,8 +797,8 @@ def processCommandLine():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,    help='Compress files')
-    parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,              help='Minimum size to compress')
+    parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
+    parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -798,8 +806,8 @@ def processCommandLine():
     """
 
     locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
-    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,       help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config /etc/tardis/tardisd.cfg',                   help='Local server program to run')
+    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,          help='Run server as a local client')
+    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,  help='Local server program to run')
     #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
     # Create a group of mutually exclusive options for naming the backup set
@@ -846,7 +854,7 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
-    parser.add_argument('directories',          nargs='*', default='.', help="List of files to sync")
+    parser.add_argument('directories',          nargs='*', default='.', help="List of directories to sync")
 
     return parser.parse_args()
 
@@ -873,6 +881,7 @@ def main():
 
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logger.setLevel(loglevel)
+    logging.getLogger("parsedatetime").setLevel(logging.WARNING)
 
     starttime = datetime.datetime.now()
 

@@ -47,7 +47,7 @@ import base64
 import librsync
 import tempfile
 import shutil
-import parsedatetime as pdt
+import parsedatetime
 
 import Tardis
 
@@ -276,7 +276,7 @@ def main():
     bset = False
 
     if args.date:
-        cal = pdt.Calendar()
+        cal = parsedatetime.Calendar()
         (then, success) = cal.parse(args.date)
         if success:
             timestamp = time.mktime(then)
