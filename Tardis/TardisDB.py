@@ -38,8 +38,6 @@ import hashlib
 
 import ConnIdLogAdapter
 
-import TardisDaemon
-
 # Expected SQL Schema
 """
 CREATE TABLE IF NOT EXISTS Config (
