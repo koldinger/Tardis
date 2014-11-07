@@ -715,6 +715,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             return (count, size)
 
     def calcAutoInfo(self, clienttime):
+        """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
         # Figure out if a monthly set has been made.
         name = starttime.strftime(self.server.monthfmt)
@@ -889,7 +890,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         self.args = args
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("TCP Server Running: %s", self.dbname)
+        logger.info("TCP Server %s Running: %s", Tardis.__version__, self.dbname)
 
 class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStreamServer):
     def __init__(self, args, config):
@@ -897,7 +898,7 @@ class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStrea
         self.args = args
         SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("Unix Domain Socket Server Running: %s", self.dbname)
+        logger.info("Unix Domain Socket %s Server Running: %s", Tardis.__version__, self.dbname)
 
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
@@ -970,10 +971,10 @@ def run_server():
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         if args.local:
-            logger.info("Starting server: %s", args.local);
+            logger.info("Starting server Socket: %s", args.local);
             server = TardisDomainSocketServer(args, config)
         else:
-            logger.info("Starting server: %d", config.getint('Tardis', 'Port'));
+            logger.info("Starting server Port: %d", config.getint('Tardis', 'Port'));
             server = TardisSocketServer(args, config)
 
         if args.single:
