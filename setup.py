@@ -20,8 +20,8 @@ setup(  name                    = 'Tardis-Backup',
                      ],
         entry_points = {
                 'console_scripts' : [
-                    'tardis = Tardis.TardisClient:main',
-                    'tardisd = Tardis.TardisDaemon:main',
+                    'tardis = Tardis.Client:main',
+                    'tardisd = Tardis.Daemon:main',
                     'tardisfs = Tardis.TardisFS:main',
                     'regenerate = Tardis.Regenerate:main',
                 ],
