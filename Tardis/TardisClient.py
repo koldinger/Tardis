@@ -380,7 +380,9 @@ def mkFileInfo(dir, name):
         finfo = None
     return finfo
     
-def processDir(dir, dirstat, excludes=[], allowClones=True):
+def getDirContents(dir, dirstat, excludes=[]):
+    """ Read a directory, load any new exclusions, delete the excluded files, and return a list
+        of the files, a list of sub directories, and the new list of excluded patterns """
 
     #logger.debug("Processing directory : %s", dir)
     stats['dirs'] += 1;
@@ -499,6 +501,7 @@ def flushBatchDirs():
         sendBatchDirs()
 
 def sendPurge(relative):
+    """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
     message =  { 'message': 'PRG' }
     if purgePriority:
         message['priority'] = purgePriority
@@ -508,6 +511,7 @@ def sendPurge(relative):
     response = sendAndReceive(message)
 
 def sendDirChunks(path, inode, files):
+    """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     message = {
         'message': 'DIR',
         'path':  path,
@@ -536,6 +540,7 @@ def makeDirMessage(path, inode, dev, files):
     return message
 
 def recurseTree(dir, top, depth=0, excludes=[]):
+    """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
     newdepth = 0
     if depth > 0:
         newdepth = depth - 1
@@ -553,7 +558,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         logmsg = "Dir: {}".format(Util.shortPath(dir))
         #logger.debug("Excludes: %s", str(excludes))
 
-        (files, subdirs, subexcludes) = processDir(dir, s, excludes)
+        (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
         # Check the max time on all the files.  If everything is before last timestamp, just clone
         cloneable = False
@@ -903,9 +908,9 @@ def main():
         loadExcludedDirs(args)
 
         # Error check the purge parameter.  Disable it if need be
-        if args.purge and not (purgeTime is not None or auto):
-            logger.error("Must specify purge days with this option set")
-            args.purge=False
+        #if args.purge and not (purgeTime is not None or auto):
+        #   logger.error("Must specify purge days with this option set")
+        #   args.purge=False
 
         if args.basepath == 'common':
             rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
