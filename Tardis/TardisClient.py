@@ -155,6 +155,7 @@ def processChecksums(inodes):
                 logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
         if i in inodeDB:
             del inodeDB[i]
+
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
     for i in [tuple(x) for x in response['content']]:
@@ -617,8 +618,10 @@ def setBackupName(args):
     """ Calculate the name of the backup set """
     global purgeTime, purgePriority, starttime
     name = args.name
-    priority = 0
+    priority = args.priority
     keepdays = None
+    auto = True
+
     # If auto is set, pick based on the day of the month, week, or just a daily
     if args.hourly:
         name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
@@ -636,9 +639,12 @@ def setBackupName(args):
         name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
         priority = 40
 
-    # If priority was set, set it here
-    if args.priority:
-        priority = args.priority
+    # If a name has been specified, we're not an automatic set.
+    if name:
+        auto = False
+    else:
+        # Else, no name specified, we're auto.  Create a default name.
+        name = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
 
     if args.purge:
         purgePriority = priority
@@ -659,7 +665,7 @@ def setBackupName(args):
                 #logger.error("Could not parse --keep-time argument: %s", args.purgetime)
                 raise Exception("Could not parse --keep-time argument: {} ".format(args.purgetime))
 
-    return (name, priority)
+    return (name, priority, auto)
 
 def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
@@ -778,7 +784,6 @@ def processCommandLine():
         local_config = '/etc/tardis/tardisd.cfg'
 
     """ Do the command line thing.  Register arguments.  Parse it. """
-    defaultBackupSet = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
     # Use the custom arg parser, which handles argument files more cleanly
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter,
@@ -791,7 +796,8 @@ def processCommandLine():
     parser.add_argument('--hostname',       dest='hostname', default=socket.gethostname(),          help='Set the hostname.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,  help='Force the backup to take place, even if others are currently running')
 
-    pwgroup = parser.add_mutually_exclusive_group()
+    pwgroup = parser.add_argument_group("Password specification options")
+    pwgroup = pwgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
@@ -811,13 +817,13 @@ def processCommandLine():
     #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
     # Create a group of mutually exclusive options for naming the backup set
-    namegroup = parser.add_mutually_exclusive_group()
-    namegroup.add_argument('--name',   '-n',    dest='name', default=defaultBackupSet,      help='Set the backup name.  Default: %(default)s')
+    namegroup = parser.add_argument_group("Backup naming options.  If nothing is explicitly set, the name will be chosen automatically")
+    namegroup = namegroup.add_mutually_exclusive_group()
+    namegroup.add_argument('--name',   '-n',    dest='name', default=None,                  help='Set the backup name.')
     namegroup.add_argument('--hourly', '-H',    dest='hourly', action='store_true',         help='Run an hourly backup')
     namegroup.add_argument('--daily',  '-D',    dest='daily', action='store_true',          help='Run a daily backup')
     namegroup.add_argument('--weekly', '-W',    dest='weekly', action='store_true',         help='Run a weekly backup')
     namegroup.add_argument('--monthly','-M',    dest='monthly', action='store_true',        help='Run a monthly backup')
-    namegroup.add_argument('--auto',   '-A',    dest='auto', action='store_true',           help='Automatically name the backup, from daily, weekly, or monthly')
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
@@ -835,17 +841,18 @@ def processCommandLine():
     excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
+    comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
     comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,           help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
     comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,         help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],      help='Protocol for data transfer.  Default: %(default)s')
-    comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
 
-    parser.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=False,  help='Purge old backup sets when backup complete')
-    parser.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
-    prggroup = parser.add_mutually_exclusive_group()
+    purgegroup = parser.add_argument_group("Options for purging old backup sets:")
+    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=False,  help='Purge old backup sets when backup complete')
+    purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
+    prggroup = purgegroup.add_mutually_exclusive_group()
     prggroup.add_argument('--keep-days',        dest='purgedays', type=int, default=None,           help='Number of days to keep')
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
@@ -887,7 +894,7 @@ def main():
 
     try:
         # Figure out the name and the priority of this backupset
-        (name, priority) = setBackupName(args)
+        (name, priority, auto) = setBackupName(args)
 
         # Load the excludes
         loadExcludes(args)
@@ -896,7 +903,7 @@ def main():
         loadExcludedDirs(args)
 
         # Error check the purge parameter.  Disable it if need be
-        if args.purge and not (purgeTime is not None or args.auto):
+        if args.purge and not (purgeTime is not None or auto):
             logger.error("Must specify purge days with this option set")
             args.purge=False
 
@@ -931,10 +938,10 @@ def main():
 
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, force=args.force)
+            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=auto, token=token, force=args.force)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=args.auto, token=token, compress=args.compressmsgs, force=args.force)
+            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.hostname, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
