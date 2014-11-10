@@ -266,8 +266,12 @@ def main():
 
     baseDir = os.path.join(args.basedir, args.host)
     cache = CacheDir.CacheDir(baseDir, create=False)
-    dbPath = os.path.join(baseDir, args.dbname)
-    tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+    try:
+        dbPath = os.path.join(baseDir, args.dbname)
+        tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+    except Exception as e:
+        logger.critical("Unable to connect to database: %s", str(e))
+        sys.exit(1)
 
     r = Regenerator(cache, tardis, crypt=crypt)
 
