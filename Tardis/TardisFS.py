@@ -43,6 +43,7 @@ import sys
 import os.path
 import logging
 import tempfile
+import socket
 
 import TardisDB
 import CacheDir
@@ -84,33 +85,40 @@ class TardisFS(fuse.Fuse):
 
     def __init__(self, *args, **kw):
         super(TardisFS, self).__init__(*args, **kw)
-        self.path=None
-        self.repoint = False
-        self.password = None
-        self.pwfile = None
-        self.pwurl  = None
-        self.pwprog = None
-        self.dbname = "tardis.db"
-        self.crypt = None
+
+
+        hostname = os.environ['TARDIS_HOST']   if 'TARDIS_HOST'   in os.environ else socket.gethostname()
+        database = os.environ['TARDIS_DB']     if 'TARDIS_DB'     in os.environ else '/srv/tardis'
+        dbname   = os.environ['TARDIS_DBNAME'] if 'TARDIS_DBNAME' in os.environ else 'tardis.db'
+
+        self.database   = database
+        self.host       = hostname
+        self.repoint    = False
+        self.password   = None
+        self.pwfile     = None
+        self.pwurl      = None
+        self.pwprog     = None
+        self.dbname     = dbname
+
+        self.crypt      = None
         logging.basicConfig(level=logging.INFO)
         self.log = logging.getLogger("TardisFS")
 
+        self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
+        self.parser.add_option(mountopt="host",         help="Host to load database for")
         self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
         self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
         self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
         self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
-        self.parser.add_option(mountopt="path",         help="Path to the directory containing the database for this filesystem")
         self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
         self.parser.add_option(mountopt="dbname",       help="Database Name")
 
         res = self.parse(values=self, errex=1)
 
         self.mountpoint = res.mountpoint
-        if self.path is None:
-            self.log.error("Must specify path")
-            sys.exit(1)
 
-        self.log.info("Dir: %s", self.path)
+        self.log.info("Database: %s", self.database)
+        self.log.info("Host: %s", self.host)
         self.log.info("Repoint Links: %s", self.repoint)
         self.log.info("MountPoint: %s", self.mountpoint)
         self.log.info("DBName: %s", self.dbname)
@@ -125,12 +133,13 @@ class TardisFS(fuse.Fuse):
 
         token = None
         if self.crypt:
-            (dirname, hostname) = os.path.split(self.path)
-            token = self.crypt.encryptFilename(hostname)
+            token = self.crypt.encryptFilename(self.host)
+
+        path = os.path.join(self.database, self.host)
 
         try:
-            self.cache = CacheDir.CacheDir(self.path, create=False)
-            dbPath = os.path.join(self.path, self.dbname)
+            self.cache = CacheDir.CacheDir(path, create=False)
+            dbPath = os.path.join(path, self.dbname)
             self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
             self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)

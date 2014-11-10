@@ -41,6 +41,7 @@ import getpass
 import Messages
 import Connection
 import CompressedBuffer
+import Tardis
 from functools import partial
 
 import pycurl
@@ -77,6 +78,14 @@ def shortPath(path, width=80):
         except:
             break
     return ".../" + path
+
+def getDefault(var, defaults=Tardis.__defaults__):
+    if var in os.environ:
+        return os.environ[var]
+    elif var in defaults:
+        return defaults[var]
+    else:
+        return None
 
 def getPassword(password, pwfile, pwurl, pwprog):
     methods = 0

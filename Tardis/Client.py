@@ -1,4 +1,4 @@
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
+# vi: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
 # Copyright 2013-2014, Eric Koldinger, All Rights Reserved.
@@ -794,12 +794,12 @@ def processCommandLine():
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter,
                                   epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
-    parser.add_argument('--server', '-s',   dest='server', default='localhost',     help='Set the destination server. Default: %(default)s')
-    parser.add_argument('--port', '-p',     dest='port', type=int, default=7430,    help='Set the destination server port. Default: %(default)s')
+    parser.add_argument('--server', '-s',   dest='server', default=Util.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
+    parser.add_argument('--port', '-p',     dest='port', type=int, default=Util.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--ssl',            dest='ssl', action=Util.StoreBoolean, default=False,    help='Use SSL connection.  Default: %(default)s')
 
-    parser.add_argument('--hostname',       dest='hostname', default=socket.gethostname(),          help='Set the hostname.  Default: %(default)s')
-    parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,  help='Force the backup to take place, even if others are currently running')
+    parser.add_argument('--hostname',       dest='hostname', default=Util.getDefault('TARDIS_HOST'),    help='Set the hostname.  Default: %(default)s')
+    parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
 
     pwgroup = parser.add_argument_group("Password specification options")
     pwgroup = pwgroup.add_mutually_exclusive_group()

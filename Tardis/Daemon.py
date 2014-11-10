@@ -77,16 +77,22 @@ DELTA   = 3
 
 config = None
 args   = None
-databaseName = 'tardis.db'
-schemaName   = 'schema/tardis.sql'
-configName   = '/etc/tardis/tardisd.cfg'
-pidFileName  = '/var/run/tardisd.pid'
-baseDir      = '/srv/Tardis'
+databaseName = Util.getDefault('TARDIS_DBNAME')
+schemaName   = Util.getDefault('TARDIS_SCHEMA')
+configName   = Util.getDefault('TARDIS_DAEMON_CONFIG')
+baseDir      = Util.getDefault('TARDIS_DB')
+portNumber   = Util.getDefault('TARDIS_PORT')
+pidFileName  = Util.getDefault('TARDIS_PIDFILE')
 
-portNumber   = '7430'
-
-parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-schemaFile   = os.path.join(parentDir, schemaName)
+if  os.path.isabs(schemaName):
+    schemaFile = schemaName
+else:
+    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    schemaFile   = os.path.join(parentDir, schemaName)
+    # Hack.  Make it look shorter.
+    schemaFile = min([schemaFile, os.path.relpath(schemaFile)], key=len)
+    #if len(schemaFile) > len(os.path.relpath(schemaFile)):
+        #schemaFile = os.path.relpath(schemaFile)
 
 configDefaults = {
     'Port'              : portNumber,
@@ -409,20 +415,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             deltasize = bytesReceived
 
         if output:
-            if savefull:
-                output.seek(0)
-                # Process the delta file into the new file.
-                #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
-                basisFile = self.regenerator.recoverChecksum(basis)
-                if type(basisFile) != types.FileType:
-                    temp = basisFile
-                    basisFile = tempfile.TemporaryFile(dir=self.tempdir)
-                    shutil.copyfileobj(temp, basisFile)
-                patched = librsync.patch(basisFile, output)
-                shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                self.db.insertChecksumFile(checksum, iv, size=size)
-            else:
-                self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
+            try:
+                if savefull:
+                    output.seek(0)
+                    # Process the delta file into the new file.
+                    #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
+                    basisFile = self.regenerator.recoverChecksum(basis)
+                    if type(basisFile) != types.FileType:
+                        temp = basisFile
+                        basisFile = tempfile.TemporaryFile(dir=self.tempdir)
+                        shutil.copyfileobj(temp, basisFile)
+                    patched = librsync.patch(basisFile, output)
+                    shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
+                    self.db.insertChecksumFile(checksum, iv, size=size)
+                else:
+                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
+            except Exception as e:
+                logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
             # TODO: This has gotta be wrong.
 
@@ -503,24 +512,29 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         output.close()
 
-        if temp:
-            if self.cache.exists(checksum):
-                self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-                os.remove(temp.name)
+        try:
+            if temp:
+                if self.cache.exists(checksum):
+                    self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+                    os.remove(temp.name)
+                else:
+                    self.cache.mkdir(checksum)
+                    self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
+                    os.rename(temp.name, self.cache.path(checksum))
+                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
             else:
-                self.cache.mkdir(checksum)
-                self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
-                os.rename(temp.name, self.cache.path(checksum))
-                self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
-        else:
-            self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
+                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
 
-        (inode, dev) = message['inode']
+            (inode, dev) = message['inode']
 
-        self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
-        self.db.setChecksum(inode, checksum)
+            self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
+            self.db.setChecksum(inode, checksum)
+            self.statNewFiles += 1
 
-        self.statNewFiles += 1
+        except Exception as e:
+            logger.error("Could insert checksum %s info: %s", checksum, str(e))
+            logger.exception(e)
+
         self.statBytesReceived += bytesReceived
 
         #return {"message" : "OK", "inode": message["inode"]}
@@ -795,6 +809,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             try:
                 self.getDB(host, token)
                 self.startSession(name, force)
+                if priority is None:
+                    priority = 0
                 self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
                 if autoname:
                     (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
@@ -1014,8 +1030,8 @@ def processArgs():
     t = 'Tardis'
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
-    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name')
-    parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use')
+    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
+    parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file');
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')

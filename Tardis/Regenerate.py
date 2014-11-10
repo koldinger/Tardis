@@ -51,8 +51,6 @@ import parsedatetime
 
 import Tardis
 
-dbname  = "tardis.db"
-basedir = "/srv/Tardis"
 logger  = None
 
 class RegenerateException(Exception):
@@ -200,9 +198,9 @@ def mkOutputDir(name):
 
 
 def parseArgs():
-    global basedir
-    if 'TARDIS_DB' in os.environ:
-        basedir = os.environ['TARDIS_DB']
+    basedir = Util.getDefault('TARDIS_DB')
+    hostname = Util.getDefault('TARDIS_HOST')
+    dbname   = Util.getDefault('TARDIS_DBNAME')
 
     parser = argparse.ArgumentParser(sys.argv[0], description="Regenerate a Tardis backed file", formatter_class=Util.HelpFormatter)
 
@@ -211,7 +209,7 @@ def parseArgs():
 
     parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="basedir", default=basedir)
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
-    parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=socket.gethostname())
+    parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=hostname)
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
