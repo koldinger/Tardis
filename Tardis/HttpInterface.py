@@ -47,6 +47,13 @@ app.secret_key = os.urandom(24)
 dbs = {}
 caches= {}
 
+def getDB():
+    if not 'host' in session:
+        abort(401)
+    host = session['host']
+    db = dbs[host]
+    return db
+
 @app.route('/')
 def hello():
     return "Hello World\n"
@@ -55,7 +62,7 @@ def hello():
 def login():
     if request.method == 'POST':
         try:
-            app.logger.debug(str(request))
+            #app.logger.debug(str(request))
             host    = request.form['host']
             token   = request.form['token'] if 'token' in request.form else None
             dbPath  = os.path.join(basedir, host, dbname)
@@ -63,7 +70,7 @@ def login():
             tardis  = TardisDB.TardisDB(dbPath, backup=False, token=token)
             #session['tardis']   = tardis
             session['host']     = host
-            app.logger.debug(str(session))
+            #app.logger.debug(str(session))
             dbs[host] = tardis
             caches[host]= cache
             return "OK"
@@ -90,23 +97,20 @@ def logout():
 @app.route('/getBackupSetInfo/<backupset>')
 def getBackupSetInfo(backupset):
     app.logger.info("getBackupSetInfo Invoked: %s", backupset)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getBackupSetInfo(backupset))
 
 # lastBackupSet
 @app.route('/lastBackupSet/<int:completed>')
 def lastBackupSet(completed):
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.lastBackupSet(bool(completed)))
 
 # listBackupSets
 @app.route('/listBackupSets')
 def listBackupSets():
     app.logger.info("listBackupSets Invoked")
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     sets = []
     for backup in db.listBackupSets():
         app.logger.debug(str(backup))
@@ -123,8 +127,7 @@ def getFileInfoByPathRoot(backupset):
 @app.route('/getFileInfoByPath/<int:backupset>/<path:pathname>')
 def getFileInfoByPath(backupset, pathname):
     app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getFileInfoByPath(pathname, backupset))
 
 
@@ -132,16 +135,14 @@ def getFileInfoByPath(backupset, pathname):
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
     app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getFileInfoByName(name, (inode, device), backupset))
 
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
 def readDirectory(backupset, device, inode):
     app.logger.info("readDirectory Invoked: %d (%d,%d)", backupset, inode, device)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     directory = []
     for x in db.readDirectory((inode, device), backupset):
         directory.append(x)
@@ -152,8 +153,7 @@ def readDirectory(backupset, device, inode):
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
 def getChecksumByPath(backupset, pathname):
     app.logger.info("getChecksumByPath Invoked: %d %s", backupset, pathname)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
     app.logger.warning("Checksum: %s", cksum)
     return json.dumps(cksum)
@@ -162,15 +162,13 @@ def getChecksumByPath(backupset, pathname):
 @app.route('/getChecksumInfo/<checksum>')
 def getChecksumInfo(checksum):
     app.logger.info("getChecksumInfo Invoked: %s", checksum)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getChecksumInfo(checksum))
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
     app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getBackupSetInfoForTime(time))
 
 
@@ -178,8 +176,7 @@ def getBackupSetInfoForTime(time):
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
 def getFirstBackupSet(backupset, pathname):
     app.logger.info("getFirstBackupSet Invoked: %d %s", backupset, pathname)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     if not pathname.startswith('/'):
         pathname = '/' + pathname
     return json.dumps(db.getFirstBackupSet(pathname, backupset))
@@ -188,15 +185,13 @@ def getFirstBackupSet(backupset, pathname):
 @app.route('/getChainLength/<checksum>')
 def getChainLength(checksum):
     app.logger.info("getChainLength Invoked: d %s", checksum)
-    host = session['host']
-    db = dbs[host]
+    db = getDB()
     return json.dumps(db.getChainLength(checksum))
 
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
     app.logger.info("getFileData Invoked: %s", checksum)
-    host = session['host']
-    cache = caches[host]
+    db = getDB()
     return send_file(cache.open(checksum, "rb"))
 
 def main():
