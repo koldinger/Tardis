@@ -37,6 +37,7 @@ import socket
 import TardisDB
 import TardisCrypto
 import CacheDir
+import RemoteDB
 import Util
 import CompressedBuffer
 import logging
@@ -153,7 +154,8 @@ class Regenerator:
                 return self.recoverChecksum(cksum)
             except RegenerateException:
                 raise
-            except:
+            except Exception as e:
+                logger.exception(e)
                 raise RegenerateException("Error recovering file: {}".format(filename))
         else:
             self.logger.error("Could not locate file {}".format(filename))
@@ -211,6 +213,8 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=hostname)
 
+    parser.add_argument("--remote-url",    dest="remote", default=None, help="Remote host")
+
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
@@ -264,13 +268,18 @@ def main():
     if crypt:
         token = crypt.encryptFilename(args.host)
 
-    baseDir = os.path.join(args.basedir, args.host)
-    cache = CacheDir.CacheDir(baseDir, create=False)
     try:
-        dbPath = os.path.join(baseDir, args.dbname)
-        tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+        if args.remote:
+            tardis = RemoteDB.RemoteDB(args.remote, args.host, token=token)
+            cache = tardis
+        else:
+            baseDir = os.path.join(args.basedir, args.host)
+            cache = CacheDir.CacheDir(baseDir, create=False)
+            dbPath = os.path.join(baseDir, args.dbname)
+            tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
     except Exception as e:
         logger.critical("Unable to connect to database: %s", str(e))
+        logger.exception(e)
         sys.exit(1)
 
     r = Regenerator(cache, tardis, crypt=crypt)

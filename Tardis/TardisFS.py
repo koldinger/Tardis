@@ -46,6 +46,7 @@ import tempfile
 import socket
 
 import TardisDB
+import RemoteDB
 import CacheDir
 import Regenerate
 import TardisCrypto
@@ -99,9 +100,10 @@ class TardisFS(fuse.Fuse):
         self.pwurl      = None
         self.pwprog     = None
         self.dbname     = dbname
+        self.remoteurl  = None
 
         self.crypt      = None
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG)
         self.log = logging.getLogger("TardisFS")
 
         self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
@@ -112,12 +114,16 @@ class TardisFS(fuse.Fuse):
         self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
         self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
         self.parser.add_option(mountopt="dbname",       help="Database Name")
+        self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
 
         res = self.parse(values=self, errex=1)
 
         self.mountpoint = res.mountpoint
 
-        self.log.info("Database: %s", self.database)
+        if self.remoteurl:
+            self.log.info("URL: %s", self.remoteurl)
+        else:
+            self.log.info("Database: %s", self.database)
         self.log.info("Host: %s", self.host)
         self.log.info("Repoint Links: %s", self.repoint)
         self.log.info("MountPoint: %s", self.mountpoint)
@@ -135,12 +141,15 @@ class TardisFS(fuse.Fuse):
         if self.crypt:
             token = self.crypt.encryptFilename(self.host)
 
-        path = os.path.join(self.database, self.host)
-
         try:
-            self.cache = CacheDir.CacheDir(path, create=False)
-            dbPath = os.path.join(path, self.dbname)
-            self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+            if self.remoteurl:
+                self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.host, token=token)
+                self.cache = self.tardis
+            else:
+                path = os.path.join(self.database, self.host)
+                self.cache = CacheDir.CacheDir(path, create=False)
+                dbPath = os.path.join(path, self.dbname)
+                self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
             self.regenerator = Regenerate.Regenerator(self.cache, self.tardis, crypt=self.crypt)
             self.files = {}
@@ -166,6 +175,7 @@ class TardisFS(fuse.Fuse):
             return self.backupsets[b]
         else:
             i = self.tardis.getBackupSetInfo(b)
+            self.log.debug("New Backupset Info: %s :: %s", b, i)
             if i:
                 self.backupsets[b] = i
                 if self.cacheTime == None:
@@ -281,6 +291,7 @@ class TardisFS(fuse.Fuse):
                 return st
             else:
                 f = self.getBackupSetInfo(lead[0])
+                self.log.debug("Got backupset info for %s: %s", lead[0], str(f))
                 if f:
                     st = fuse.Stat()
                     timestamp = float(f['starttime'])
@@ -294,7 +305,8 @@ class TardisFS(fuse.Fuse):
                     st.st_atime = timestamp
                     st.st_mtime = timestamp
                     st.st_ctime = timestamp
-            return st
+                    self.log.debug("%s ======> stat info: =======> %s", lead[0], str(st))
+                    return st
         else:
             f = self.getFileInfoByPath(path)
             if f:
@@ -350,8 +362,11 @@ class TardisFS(fuse.Fuse):
         dirents.extend([y["name"] for y in entries])
         self.log.debug("Direntries: %s", str(dirents))
 
+        i = 0
         for e in dirents:
-            yield fuse.Direntry(e)
+            self.log.debug("Readdir %s yielding dir entry %d: %s", path, i, e)
+            i += 1
+            yield fuse.Direntry(str(e))
 
     def mythread ( self ):
         self.log.info('mythread')
@@ -590,7 +605,7 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     try:
         fs = TardisFS()

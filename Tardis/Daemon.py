@@ -406,7 +406,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = self.cache.open(checksum, "wb")
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
-        logger.debug("Data Received: %d %s %d %s", bytesReceived, status, deltaSize, deltaChecksum, compressed)
+        logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
             pass

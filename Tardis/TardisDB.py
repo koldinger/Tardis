@@ -239,7 +239,7 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
         self.conn.execute("PRAGMA journal_mode=truncate")
 
-    def bset(self, current):
+    def _bset(self, current):
         """ Determine the backupset we're being asked about.
             True == current, false = previous, otherwise a number is returned
         """
@@ -287,7 +287,7 @@ class TardisDB(object):
 
     def setBackupSetName(self, name, priority, current=True):
         """ Change the name of a backupset.  Return True if it can be changed, false otherwise. """
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         try:
             self.conn.execute("UPDATE Backups SET Name = :name, Priority = :priority WHERE BackupSet = :backupset",
                       {"name": name, "priority": priority, "backupset": backupset})
@@ -304,7 +304,7 @@ class TardisDB(object):
 
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         (inode, device) = parent
         #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
         c = self.cursor
@@ -321,7 +321,7 @@ class TardisDB(object):
     def getFileInfoByPath(self, path, current=False):
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = (0, 0)         # Root directory value
         info = None
@@ -340,7 +340,7 @@ class TardisDB(object):
         return info
 
     def getFileInfoByInode(self, info, current=False):
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         (inode, device) = info
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
@@ -356,7 +356,7 @@ class TardisDB(object):
 
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
         temp["backup"] = backupset
@@ -399,7 +399,7 @@ class TardisDB(object):
         return self.cursor.rowcount
 
     def getChecksumByInode(self, inode, current=True):
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
                                 "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -411,7 +411,7 @@ class TardisDB(object):
         #if row: return row[0] else: return None
 
     def getChecksumByName(self, name, parent, current=False):
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         (inode, device) = parent
         self.logger.debug("Looking up checksum for file %s (%d %d) in %d", name, inode, device, backupset)
         c = self.execute("SELECT CheckSums.CheckSum AS checksum "
@@ -426,7 +426,7 @@ class TardisDB(object):
         #if row: return row[0] else: return None
 
     def getChecksumByPath(self, name, current=False):
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         self.logger.debug("Looking up checksum for path %s %d", name, backupset)
         f = self.getFileInfoByPath(name, current)
         if f:
@@ -435,8 +435,9 @@ class TardisDB(object):
             return None
 
     def getFirstBackupSet(self, name, current=False):
-        backupset = self.bset(current)
-        f = self.getFileInfoByPath(name, current)
+        backupset = self._bset(current)
+        self.logger.debug("getFirstBackupSet (%d) %s", backupset, name)
+        f = self.getFileInfoByPath(name, backupset)
         if f:
             c = self.conn.execute("SELECT Name FROM Backups WHERE BackupSet >= :first ORDER BY BackupSet ASC LIMIT 1",
                                   {"first": f["firstset"]})
@@ -459,9 +460,9 @@ class TardisDB(object):
                      temp)
 
     def extendFile(self, parent, name, old=False, current=True):
-        old = self.bset(old)
+        old = self._bset(old)
         (parIno, parDev) = parent
-        current = self.bset(current)
+        current = self._bset(current)
         cursor = self.execute("UPDATE FILES "
                               "SET LastSet = :new "
                               "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
@@ -470,8 +471,8 @@ class TardisDB(object):
         return cursor.rowcount
 
     def cloneDir(self, parent, new=True, old=False):
-        newBSet = self.bset(new)
-        oldBSet = self.bset(old)
+        newBSet = self._bset(new)
+        oldBSet = self._bset(old)
         (parIno, parDev) = parent
         self.logger.debug("Cloning directory inode %d, %d from %d to %d", parIno, parDev, oldBSet, newBSet)
         cursor = self.execute("UPDATE FILES "
@@ -539,7 +540,7 @@ class TardisDB(object):
 
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
         c = self.execute("SELECT "
                          "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
@@ -621,7 +622,7 @@ class TardisDB(object):
 
     def purgeFiles(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
-        backupset = self.bset(current)
+        backupset = self._bset(current)
         self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
@@ -651,7 +652,7 @@ class TardisDB(object):
         c = self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files)");
 
         # Check if we've hit an interval where we want to do a vacuum
-        bset = self.bset(True)
+        bset = self._bset(True)
         interval = self.getConfigValue("VacuumInterval")
         if interval and bset % int(interval):
             self.logger.debug("Vaccuuming database")
