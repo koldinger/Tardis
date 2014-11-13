@@ -536,17 +536,13 @@ class TardisDB(object):
             return -1
         """
 
-
-
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
-        self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
-        c = self.execute("SELECT "
-                         "Name AS name, Inode AS inode, Device AS device, Dir AS dir, "
-                         "Parent AS parent, ParentDev AS ParentDev, Size AS size, "
-                         "MTime AS mtime, CTime AS ctime, Mode AS mode, UID AS uid, GID AS gid, "
-                         "Checksum AS checksum, Basis AS basis "
+        #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
+
+        c = self.execute("SELECT " + fileInfoFields + ", "
+                         "Checksum AS checksum, Basis AS basis, InitVector AS iv "
                          "FROM Files "
                          "JOIN Names ON Files.NameId = Names.NameId "
                          "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "

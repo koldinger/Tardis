@@ -191,7 +191,10 @@ def getChainLength(checksum):
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
     app.logger.info("getFileData Invoked: %s", checksum)
-    db = getDB()
+    if not 'host' in session:
+        abort(401)
+    host = session['host']
+    cache = caches[host]
     return send_file(cache.open(checksum, "rb"))
 
 def main():
