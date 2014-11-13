@@ -419,7 +419,7 @@ class TardisFS(fuse.Fuse):
         for e in dirents:
             (name, mode) = e
             #self.log.debug("readdir %s yielding dir entry for %s", path, e)
-            yield fuse.Direntry(str(name), type=stat.S_IFMT(mode))
+            yield fuse.Direntry(name.encode(encoding='utf-8'), type=stat.S_IFMT(mode))
 
     @tracer
     def mythread ( self ):
