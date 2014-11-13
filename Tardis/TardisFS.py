@@ -407,9 +407,10 @@ class TardisFS(fuse.Fuse):
 
                 # For each entry, cache it, so a later getattr() call can use it.
                 # Get attr will typically be called promptly after a call to 
+                now = time()
                 for e in entries:
                     p = os.path.join(path, e['name'])
-                    self.fileCache.insert(p, e)
+                    self.fileCache.insert(p, e, now=now)
                     dirents.append((e['name'], e['mode']))
             self.cache.insert(key, dirents)
 

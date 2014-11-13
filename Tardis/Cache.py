@@ -37,11 +37,17 @@ class Cache(object):
         self.timeout = timeout
         self.cache = collections.OrderedDict()
 
-    def insert(self, key, value, timeout=None):
+    def insert(self, key, value, now=None, timeout=None):
+        # Use the regular timeout if it's specified
         if timeout is None:
             timeout = self.timeout
+
+        # If there is a timeout, set the timeout time
         if timeout:
-            timeout += time.time()
+            if now is None:
+                now = time.time()
+            timeout += now
+
         self.cache[key] = (value, timeout)
         if self.size != 0 and len(self.cache) > self.size:
             self.cache.popitem(False)
