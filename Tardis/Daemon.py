@@ -106,8 +106,10 @@ configDefaults = {
     'RequirePassword'   : str(False),
     'Single'            : str(False),
     'Local'             : None,
-    'Verbose'           : 0,
+    'Verbose'           : '0',
     'Daemon'            : str(False),
+    'SetOwner'          : str(False),
+    'Umask'             : '2',
     'User'              : None,
     'Group'             : None,
     'SSL'               : str(False),
@@ -159,6 +161,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.client_address[0]})
         else:
             self.logger = logger
+
+        os.umask(self.server.umask)
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -939,6 +943,10 @@ def setConfig(self, args, config):
     self.dayfmt         = config.get('Tardis', 'DayFmt')
     self.dayprio        = config.getint('Tardis', 'DayPrio')
     self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
+
+    self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
+    self.user           = args.user
+    self.group          = args.group
 
     self.ssl            = args.ssl
     if self.ssl:
