@@ -365,10 +365,21 @@ def main():
                         info = tardis.getFileInfoByPath(path, bset)
                         if info:
                             if args.settime:
-                                os.utime(outname, (info['atime'], info['mtime']))
+                                try:
+                                    os.utime(outname, (info['atime'], info['mtime']))
+                                except Exception as e:
+                                    logger.warning("Unable to set times for %s", outname)
+
                             if args.setperm:
-                                os.chmod(outname, info['mode'])
-                                os.chown(outname, info['uid'], info['gid'])
+                                try:
+                                    os.chmod(outname, info['mode'])
+                                except Exception as e:
+                                    logger.warning("Unable to set permissions for %s", outname)
+                                try:
+                                    os.chown(outname, info['uid'], info['gid'])
+                                except Exception as e:
+                                    logger.warning("Unable to set owner and group of %s", outname)
+
 
 
 if __name__ == "__main__":
