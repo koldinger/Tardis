@@ -114,6 +114,7 @@ class TardisFS(fuse.Fuse):
         self.pwprog     = None
         self.dbname     = dbname
         self.remoteurl  = None
+        self.cachetime  = 60
 
         self.crypt      = None
         #logging.basicConfig(level=logging.INFO)
@@ -127,7 +128,8 @@ class TardisFS(fuse.Fuse):
         self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
         self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
         self.parser.add_option(mountopt="dbname",       help="Database Name")
-        #self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
+        self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
+        self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
 
         res = self.parse(values=self, errex=1)
 
@@ -151,8 +153,8 @@ class TardisFS(fuse.Fuse):
 
         self.password = None
 
-        self.cache = Cache.Cache(0, 60)
-        self.fileCache = Cache.Cache(0, 60)
+        self.cache      = Cache.Cache(0, float(self.cachetime))
+        self.fileCache  = Cache.Cache(0, float(self.cachetime))
 
         if password:
             self.crypt = TardisCrypto.TardisCrypto(password)
