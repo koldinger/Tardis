@@ -127,7 +127,7 @@ class TardisFS(fuse.Fuse):
         self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
         self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
         self.parser.add_option(mountopt="dbname",       help="Database Name")
-        self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
+        #self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
 
         res = self.parse(values=self, errex=1)
 

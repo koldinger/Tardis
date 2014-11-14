@@ -30,7 +30,7 @@
 
 import socket
 
-__version__ = "0.8"
+__version__ = "0.9"
 
 __defaults__ = {
                 'TARDIS_DB'             : '/srv/tardis',
