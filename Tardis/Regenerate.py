@@ -213,7 +213,7 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=hostname)
 
-    parser.add_argument("--remote-url",    dest="remote", default=None, help="Remote host")
+    #parser.add_argument("--remote-url",    dest="remote", default=None, help="Remote host")
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
