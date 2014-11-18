@@ -301,7 +301,8 @@ def sendContent(inode):
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                logger.exception(e)
+                #logger.exception(e)
+                raise e
             finally:
                 x.close()
             stats['new'] += 1
