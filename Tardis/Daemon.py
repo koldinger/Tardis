@@ -329,6 +329,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         (inode, dev) = message["inode"]
         response = None
         chksum = None
+        errmsg = None
 
         ### TODO: Remove this function.  Clean up.
         info = self.db.getFileInfoByInode((inode, dev), current=True)
@@ -336,41 +337,45 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             chksum = self.db.getChecksumByName(info["name"], (info["parent"], info["parentdev"]))      ### Assumption: Current parent is same as old
 
         if chksum:
-            sigfile = chksum + ".sig"
-            if self.cache.exists(sigfile):
-                file = self.cache.open(sigfile, "rb")
-                sig = file.read()       # TODO: Does this always read the entire file?
-                file.close()
-            else:
-                rpipe = self.regenerator.recoverChecksum(chksum)
-                #pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
-                #pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
-                #(sig, err) = pipe.communicate()
-                # Cache the signature for later use.  Just in case.
-                # TODO: Better logic on this?
-                if rpipe:
-                    try:
-                        s = librsync.signature(rpipe)
-                        sig = s.read()
+            try:
+                sigfile = chksum + ".sig"
+                if self.cache.exists(sigfile):
+                    file = self.cache.open(sigfile, "rb")
+                    sig = file.read()       # TODO: Does this always read the entire file?
+                    file.close()
+                else:
+                    rpipe = self.regenerator.recoverChecksum(chksum)
+                    #pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
+                    #pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
+                    #(sig, err) = pipe.communicate()
+                    # Cache the signature for later use.  Just in case.
+                    # TODO: Better logic on this?
+                    if rpipe:
+                        try:
+                            s = librsync.signature(rpipe)
+                            sig = s.read()
 
-                        outfile = self.cache.open(sigfile, "wb")
-                        outfile.write(sig)
-                        outfile.close()
+                            outfile = self.cache.open(sigfile, "wb")
+                            outfile.write(sig)
+                            outfile.close()
 
-                    except (librsync.LibrsyncError, Regenerate.RegenerateException) as e:
-                        self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
-            # TODO: Break the signature out of here.
-            response = {
-                "message": "SIG",
-                "inode": inode,
-                "status": "OK",
-                "encoding": self.messenger.getEncoding(),
-                "checksum": chksum,
-                "size": len(sig) }
-            self.messenger.sendMessage(response)
-            sigio = StringIO.StringIO(sig)
-            Util.sendData(self.messenger, sigio, lambda x:x, compress=False)
-            return (None, False)
+                        except (librsync.LibrsyncError, Regenerate.RegenerateException) as e:
+                            self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
+                # TODO: Break the signature out of here.
+                response = {
+                    "message": "SIG",
+                    "inode": inode,
+                    "status": "OK",
+                    "encoding": self.messenger.getEncoding(),
+                    "checksum": chksum,
+                    "size": len(sig) }
+                self.messenger.sendMessage(response)
+                sigio = StringIO.StringIO(sig)
+                Util.sendData(self.messenger, sigio, lambda x:x, compress=False)
+                return (None, False)
+            except Exception as e:
+                self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
+                errmsg = str(e)
 
         if response is None:
             response = {
@@ -378,6 +383,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "inode": inode,
                 "status": "FAIL"
             }
+            if errmsg:
+                response['errmsg'] = errmsg
         return (response, False)
 
     def processDelta(self, message):
