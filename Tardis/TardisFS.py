@@ -64,7 +64,7 @@ logger = logging.getLogger("Tracer: ")
 
 def tracer(func):
     def trace(*args, **kwargs):
-        #logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
+        logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -168,16 +168,18 @@ class TardisFS(fuse.Fuse):
             if self.remoteurl:
                 self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.host, token=token)
                 self.cacheDir = self.tardis
+                self.path = None
             else:
-                path = os.path.join(self.database, self.host)
-                self.cacheDir = CacheDir.CacheDir(path, create=False)
-                dbPath = os.path.join(path, self.dbname)
+                self.path = os.path.join(self.database, self.host)
+                self.cacheDir = CacheDir.CacheDir(self.path, create=False)
+                dbPath = os.path.join(self.path, self.dbname)
                 self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
             self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
         except Exception as e:
             self.log.critical("Could not initialize: %s", str(e))
+            self.log.exception(e)
             sys.exit(1)
 
         self.log.debug('Init complete.')
@@ -562,24 +564,26 @@ class TardisFS(fuse.Fuse):
         return -errno.EROFS
 
     @tracer
-    def statfs ( self, path ):
+    def statfs ( self ):
         """ StatFS """
         #self.log.info('CALL statfs')
-        fs = os.statvfs(self._full_path(path))
+        if self.path:
+            fs = os.statvfs(self.path)
 
-        st = fuse.Stat()
-        st.f_bsize   = fs.f_bsize
-        st.f_frsize  = fs.f_frsize
-        st.f_blocks  = fs.f_blocks
-        st.f_bfree   = fs.f_bfree
-        st.f_bavail  = fs.f_bavail
-        st.f_files   = fs.f_files
-        st.f_ffree   = fs.f_ffree
-        st.f_favail  = fs.f_favail
-        st.f_flag    = fs.f_flag
-        st.f_namemax = fs.f_namemax
-        print st
-        return st
+            st = fuse.Stat()
+            st.f_bsize   = fs.f_bsize
+            st.f_frsize  = fs.f_frsize
+            st.f_blocks  = fs.f_blocks
+            st.f_bfree   = fs.f_bfree
+            st.f_bavail  = fs.f_bavail
+            st.f_files   = fs.f_files
+            st.f_ffree   = fs.f_ffree
+            st.f_favail  = fs.f_favail
+            st.f_flag    = fs.f_flag
+            st.f_namemax = fs.f_namemax
+            return st
+        else:
+            return -errorno.EINVAL
 
     def symlink ( self, targetPath, linkPath ):
         #self.log.info('CALL symlink {} {}'.format(path, linkPath))
