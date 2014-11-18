@@ -52,6 +52,7 @@ import librsync
 
 import TardisCrypto
 import Tardis
+import CompressedBuffer
 from Connection import JsonConnection, BsonConnection
 import Util
 import parsedatetime
@@ -202,50 +203,44 @@ def processDelta(inode):
                 Util.receiveData(conn.sender, sigfile)
                 sigfile.seek(0)
 
-                delta = librsync.delta(open(pathname, "rb"), sigfile)
+                # Create a buffered reader object, which can generate the checksum and an actual filesize while
+                # reading the file.
+                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), checksum=True)
+                # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
+                reader.seek = lambda x, y: 0
+                delta = librsync.delta(reader, sigfile)
+                checksum = reader.checksum()
+                filesize = reader.size()
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 sendContent(inode)
                 return
 
-            ### BUG: If the file is being changed, this value and the above may be different.
-            m = hashlib.md5()
-            filesize = 0
+            (encrypt, iv) = makeEncryptor()
             stats['delta'] += 1
-            with open(pathname, "rb") as file:
-                for chunk in iter(partial(file.read, args.chunksize), ''):
-                    m.update(chunk)
-                    filesize += len(chunk)
-                if crypt:
-                    file.seek(0)
-                    newsig = librsync.signature(file)
-                checksum = m.hexdigest()
+            message = {
+                "message": "DEL",
+                "inode": inode,
+                "size": filesize,
+                "checksum": checksum,
+                "basis": oldchksum,
+                "encoding": encoding
+            }
+            if iv:
+                #message["iv"] = conn.encode(iv)
+                message["iv"] = base64.b64encode(iv)
 
-                (encrypt, iv) = makeEncryptor()
-
+            sendMessage(message)
+            compress = True if (args.compress and (filesize > args.mincompsize)) else False
+            (sent, ck) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+            delta.close()
+            if newsig:
                 message = {
-                    "message": "DEL",
-                    "inode": inode,
-                    "size": filesize,
-                    "checksum": checksum,
-                    "basis": oldchksum,
-                    "encoding": encoding
+                    "message" : "SIG",
+                    "checksum": checksum
                 }
-                if iv:
-                    #message["iv"] = conn.encode(iv)
-                    message["iv"] = base64.b64encode(iv)
-
                 sendMessage(message)
-                compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                (sent, ck) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
-                delta.close()
-                if newsig:
-                    message = {
-                        "message" : "SIG",
-                        "checksum": checksum
-                    }
-                    sendMessage(message)
-                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)
 
@@ -301,7 +296,8 @@ def sendContent(inode):
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                logger.exception(e)
+                #logger.exception(e)
+                raise e
             finally:
                 x.close()
             stats['new'] += 1

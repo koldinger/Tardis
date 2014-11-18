@@ -142,14 +142,12 @@ class ProtocolConnection(Connection):
         Connection.__init__(self, host, port, name, protocol, priority, use_ssl, hostname, autoname, token, compress, force=force)
 
     def send(self, message, compress=True):
-        self.stats['messagesSent'] += 1
-        #self.stats['bytesSent'] += len(message)
         self.sender.sendMessage(message, compress)
+        self.stats['messagesSent'] += 1
 
     def receive(self):
-        self.stats['messagesRecvd'] += 1
         message = self.sender.recvMessage()
-        #self.stats['bytesRecvd'] += len(message)
+        self.stats['messagesRecvd'] += 1
         return message
 
     def close(self):
