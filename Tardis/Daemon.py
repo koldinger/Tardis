@@ -191,15 +191,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #old = self.db.getFileInfoByName(f["name"], parent)
             if name in dirhash:
                 old = dirhash[name]
-                fromPartial = False
+                fromPartial = False     # For use with the upcoming result
                 #self.logger.debug('Matching against old version for file %s (%d)', name, inode)
             elif not self.lastCompleted:
                 # not in this directory, but lets look further in any incomplete sets if there are any
                 #self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
                 old = self.db.getFileFromPartialBackup(f)
                 if old:
-                    fromPartial = True
-                    #self.logger.debug("Found %s in partial backup set", name)
+                    fromPartial = old['lastset']
+                    #self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
 
             if old:
                 #self.logger.debug("Comparing versions: New: %s", str(f))
@@ -213,10 +213,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.logger.debug("Main info matches: %s", name)
                     if ("checksum") in old and not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
-                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and not fromPartial:
+                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
-                            self.db.extendFile(parent, f['name'])
+                            self.db.extendFile(parent, f['name'], old=fromPartial)
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             #self.logger.debug("Inserting new version %s", name)
