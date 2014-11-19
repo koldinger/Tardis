@@ -68,8 +68,6 @@ import Util
 
 import Tardis
 
-sessions = {}
-
 DONE    = 0
 CONTENT = 1
 CKSUM   = 2
@@ -167,7 +165,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
         self.logger.debug("Processing file: %s", str(f))
-        name = f["name"]
+        name = f["name"].encode('utf-8')
         inode = f["inode"]
         device = f["dev"]
 
@@ -179,6 +177,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             old = None
 
         if f["dir"] == 1:
+            #self.logger.debug("Is a directory: %s", name)
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
                     self.db.extendFile(parent, f['name'])
@@ -190,37 +189,73 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
-            name = f["name"].encode('utf-8')
-            inode = f["inode"]
             if name in dirhash:
                 old = dirhash[name]
-                self.logger.debug('Matching against old version for file %s (%d)', f["name"], inode)
-                #self.logger.debug("Comparing file structs: {} New: {} {} {} : Old: {} {} {}"
-                                  #.format(f["name"], f["inode"], f["size"], f["mtime"], old["inode"], old["size"], old["mtime"]))
-                #if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]):
-                if (old["inode"] == inode) and (old["size"] == f["size"]) and (old["mtime"] == f["mtime"]) and (old['mode'] == f['mode']):
+                fromPartial = False     # For use with the upcoming result
+                #self.logger.debug('Matching against old version for file %s (%d)', name, inode)
+            elif not self.lastCompleted:
+                # not in this directory, but lets look further in any incomplete sets if there are any
+                #self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
+                old = self.db.getFileFromPartialBackup(f)
+                if old:
+                    fromPartial = old['lastset']
+                    #self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
+
+            if old:
+                #self.logger.debug("Comparing versions: New: %s", str(f))
+                #self.logger.debug("Comparing version: Old: %s", str(old))
+
+                # Got something.  If the inode, size, and mtime are the same, just keep it
+                fsize = f['size']
+                osize = old['size']
+
+                if (old["inode"] == inode) and (osize == fsize) and (old["mtime"] == f["mtime"]):
+                    #self.logger.debug("Main info matches: %s", name)
                     if ("checksum") in old and not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
-                        self.db.extendFile(parent, f['name'])
-                        retVal = DONE
+                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']):
+                            # nothing has changed, just extend it
+                            #self.logger.debug("Extending %s", name)
+                            self.db.extendFile(parent, f['name'], old=fromPartial)
+                        else:
+                            # Some metadata has changed, so let's insert the new record, and set it's checksum
+                            #self.logger.debug("Inserting new version %s", name)
+                            self.db.insertFile(f, parent)
+                            self.db.setChecksum(inode, old['checksum'])
+                        retVal = DONE       # we're done either way
                     else:
+                        # Otherwise we need a whole new file
+                        #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
                         retVal = CONTENT
-                elif (old["size"] == f["size"]) and ("checksum") in old and not (old["checksum"] is None):
-                        self.db.insertFile(f, parent)
-                        retVal = CKSUM
-                elif (f["size"] < 4096) or (old["size"] is None) or ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.server.maxChain)):
-                    # Just ask for content if the size is under 4K, or the old filesize is marked as 0.
+                elif (osize == fsize) and ("checksum") in old and not (old["checksum"] is None):
+                    #self.logger.debug("Secondary match, requesting checksum: %s", name)
+                    # Size hasn't changed, but something else has.  Ask for a checksum
+                    self.db.insertFile(f, parent)
+                    retVal = CKSUM
+                elif (f["size"] < 4096) or (old["size"] is None) or \
+                     not ((old['size'] * self.server.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.server.deltaPercent))) or \
+                     ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.server.maxChain)):
+                    #self.logger.debug("Third case.  Weirdos: %s", name)
+                    # Couple conditions that can cause it to always load
+                    # File is less than 4K
+                    # Old file had now size
+                    # File has changed size by more than a certain amount (typically 50%)
+                    # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
                     retVal = CONTENT
                 else:
+                    # Otherwise, let's just get the delta
+                    #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
                     retVal = DELTA
             else:
+                # Create a new record for this file
+                #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
                 if f["nlinks"] > 1:
-                    # We're a file, and we have hard links.  Check to see if I've already been handled
-                    self.logger.debug('Looking for file with same inode %d in backupset', inode)
+                    # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
+                    #self.logger.debug('Looking for file with same inode %d in backupset', inode)
                     checksum = self.db.getChecksumByInode(inode, True)
                     if checksum:
                         self.db.setChecksum(inode, checksum)
@@ -228,11 +263,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     else:
                         retVal = CONTENT
                 else:
-                    #Check to see if it already exists
-                    self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
+                    #Check to see if it's been moved or copied
+                    #self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
-                    if old is None:
-                        old = self.db.getFileFromPartialBackup(f)
 
                     if old:
                         if old["name"] == f["name"] and old["parent"] == parent:
@@ -677,9 +710,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def startSession(self, name, force):
         self.name = name
-        sid = str(self.sessionid)
-        # TODO: Lock the sessions structure.
-        sessions[sid] = self
 
         # Check if the previous backup session completed.
         prev = self.db.lastBackupSet(completed=False)
@@ -689,15 +719,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 raise InitFailedException("Previous backup session still running: {}.  Run with --force to force starting the new backup".format(prev['name']))
 
-        self.tempdir = os.path.join(self.basedir, "tmp_" + sid)
+        # Mark if the last secssion was completed
+        self.lastCompleted = prev['completed']
+        self.tempdir = os.path.join(self.basedir, "tmp_" + str(self.sessionid))
         os.makedirs(self.tempdir)
 
     def endSession(self):
-        if self.sessionid:
-            try:
-                del sessions[str(self.sessionid)]
-            except KeyError:
-                pass
         try:
             if (self.tempdir):
                 # Clean out the temp dir
@@ -933,7 +960,7 @@ def setConfig(self, args, config):
     self.basedir        = config.get('Tardis', 'BaseDir')
     self.savefull       = config.getboolean('Tardis', 'SaveFull')
     self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
-    self.deltaPercent   = config.getint('Tardis', 'MaxChangePercent')
+    self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
 
     self.dbname         = args.dbname
     self.allowNew       = args.newhosts

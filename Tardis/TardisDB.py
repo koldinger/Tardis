@@ -130,7 +130,7 @@ CREATE VIEW IF NOT EXISTS VFiles AS
 fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, " \
                  "Parent AS parent, ParentDev AS parentdev, Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet as firstset, LastSet as lastset "
+                 "FirstSet AS firstset, LastSet AS lastset, Checksum AS checksum "
 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
