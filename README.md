@@ -80,7 +80,11 @@ Adding --purge to your command line will remove old backupsets per a schedule of
 Mounting the filesystem
 =======================
 The backup sets can be mounted as a filesystem, thus:
-   tardisfs -o path=/path/to/the/backup/directory [-o password=your_password] mountpoint
-/path/to/the/backup/directory will be the path specified in the BaseDir in the server host config, plus the hostname of the machine you've backup up.  The password option should be specified if the backups are encrypted.
+   tardisfs -o database=/path/to/database [-o host=hostname] [-o password=[your_password]] mountpoint
+/path/to/the/backup/directory will be the path specified in the BaseDir in the server host config.  The host parameter is the name of the host that you wish to mount backups for.
+
+Password should only be set if a password is specified in the backup.  If you leave it blank (ie, password=), it will prompt you for a password during mount.
+
+Other options are available via -help.  (details TBD)
 
 
