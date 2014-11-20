@@ -887,7 +887,7 @@ def main():
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
-    logging.basicConfig(format="%(levelname)s: %(message)s")
+    logging.basicConfig(format="%(message)s")
     logger = logging.getLogger('')
     args = processCommandLine()
     

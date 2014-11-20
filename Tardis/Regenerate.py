@@ -225,6 +225,8 @@ def parseArgs():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
+    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
+
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean, help='Set file times to match original file')
@@ -281,6 +283,9 @@ def main():
         logger.critical("Unable to connect to database: %s", str(e))
         logger.exception(e)
         sys.exit(1)
+
+    if not args.crypt:
+        crypt = None
 
     r = Regenerator(cache, tardis, crypt=crypt)
 

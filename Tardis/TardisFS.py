@@ -101,88 +101,98 @@ class TardisFS(fuse.Fuse):
     def __init__(self, *args, **kw):
         super(TardisFS, self).__init__(*args, **kw)
 
-        hostname = os.environ['TARDIS_HOST']   if 'TARDIS_HOST'   in os.environ else socket.gethostname()
-        database = os.environ['TARDIS_DB']     if 'TARDIS_DB'     in os.environ else '/srv/tardis'
-        dbname   = os.environ['TARDIS_DBNAME'] if 'TARDIS_DBNAME' in os.environ else 'tardis.db'
-
-        self.database   = database
-        self.host       = hostname
-        self.repoint    = False
-        self.password   = None
-        self.pwfile     = None
-        self.pwurl      = None
-        self.pwprog     = None
-        self.dbname     = dbname
-        self.remoteurl  = None
-        self.cachetime  = 60
-
-        self.crypt      = None
-        #logging.basicConfig(level=logging.INFO)
-        self.log = logging.getLogger("TardisFS")
-
-        self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
-        self.parser.add_option(mountopt="host",         help="Host to load database for")
-        self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
-        self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
-        self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
-        self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
-        self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
-        self.parser.add_option(mountopt="dbname",       help="Database Name")
-        self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
-        self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
-
-        res = self.parse(values=self, errex=1)
-
-        self.mountpoint = res.mountpoint
-
-        if self.remoteurl:
-            self.log.info("URL: %s", self.remoteurl)
-        else:
-            self.log.info("Database: %s", self.database)
-        self.log.info("Host: %s", self.host)
-        self.log.info("Repoint Links: %s", self.repoint)
-        self.log.info("MountPoint: %s", self.mountpoint)
-        self.log.info("DBName: %s", self.dbname)
-
-        if self.remoteurl:
-            self.name = "TardisFS:<{}/{}>".format(self.remoteurl, self.host)
-        else:
-            self.name = "TardisFS:<{}/{}>".format(self.database, self.host)
-
-        password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
-
-        self.password = None
-
-        self.cache      = Cache.Cache(0, float(self.cachetime))
-        self.fileCache  = Cache.Cache(0, float(self.cachetime))
-
-        if password:
-            self.crypt = TardisCrypto.TardisCrypto(password)
-        password = None
-
-        token = None
-        if self.crypt:
-            token = self.crypt.encryptFilename(self.host)
-
         try:
+            hostname = os.environ['TARDIS_HOST']   if 'TARDIS_HOST'   in os.environ else socket.gethostname()
+            database = os.environ['TARDIS_DB']     if 'TARDIS_DB'     in os.environ else '/srv/tardis'
+            dbname   = os.environ['TARDIS_DBNAME'] if 'TARDIS_DBNAME' in os.environ else 'tardis.db'
+
+            self.database   = database
+            self.host       = hostname
+            self.repoint    = False
+            self.password   = None
+            self.pwfile     = None
+            self.pwurl      = None
+            self.pwprog     = None
+            self.dbname     = dbname
+            self.remoteurl  = None
+            self.cachetime  = 60
+            self.nocrypt    = True
+
+            self.crypt      = None
+            #logging.basicConfig(level=logging.INFO)
+            self.log = logging.getLogger("TardisFS")
+
+            self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
+            self.parser.add_option(mountopt="host",         help="Host to load database for")
+            self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
+            self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
+            self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
+            self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
+            self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
+            self.parser.add_option(mountopt="dbname",       help="Database Name")
+            self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
+            self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
+            self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
+
+            res = self.parse(values=self, errex=1)
+
+            self.mountpoint = res.mountpoint
+
             if self.remoteurl:
-                self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.host, token=token)
-                self.cacheDir = self.tardis
-                self.path = None
+                self.log.info("URL: %s", self.remoteurl)
             else:
-                self.path = os.path.join(self.database, self.host)
-                self.cacheDir = CacheDir.CacheDir(self.path, create=False)
-                dbPath = os.path.join(self.path, self.dbname)
-                self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+                self.log.info("Database: %s", self.database)
+            self.log.info("Host: %s", self.host)
+            self.log.info("Repoint Links: %s", self.repoint)
+            self.log.info("MountPoint: %s", self.mountpoint)
+            self.log.info("DBName: %s", self.dbname)
 
-            self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
-            self.files = {}
+            if self.remoteurl:
+                self.name = "TardisFS:<{}/{}>".format(self.remoteurl, self.host)
+            else:
+                self.name = "TardisFS:<{}/{}>".format(self.database, self.host)
+
+            password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
+
+            self.password = None
+
+            self.cache      = Cache.Cache(0, float(self.cachetime))
+            self.fileCache  = Cache.Cache(0, float(self.cachetime))
+
+            if password:
+                self.crypt = TardisCrypto.TardisCrypto(password)
+            password = None
+
+            token = None
+            if self.crypt:
+                token = self.crypt.encryptFilename(self.host)
+
+            # Remove the crypto object if not encyrpting files.
+            if self.nocrypt is None:
+                self.crypt = None
+
+            try:
+                if self.remoteurl:
+                    self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.host, token=token)
+                    self.cacheDir = self.tardis
+                    self.path = None
+                else:
+                    self.path = os.path.join(self.database, self.host)
+                    self.cacheDir = CacheDir.CacheDir(self.path, create=False)
+                    dbPath = os.path.join(self.path, self.dbname)
+                    self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+
+                self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
+                self.files = {}
+            except Exception as e:
+                self.log.critical("Could not initialize: %s", str(e))
+                self.log.exception(e)
+                sys.exit(1)
+
+            self.log.debug('Init complete.')
         except Exception as e:
-            self.log.critical("Could not initialize: %s", str(e))
             self.log.exception(e)
-            sys.exit(1)
-
-        self.log.debug('Init complete.')
+            sys.exit(2)
 
     def __repr__(self):
         return self.name
