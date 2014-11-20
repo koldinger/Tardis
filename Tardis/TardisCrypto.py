@@ -33,6 +33,7 @@ from Crypto.Protocol.KDF import PBKDF2
 import Crypto.Random
 import socket
 import hashlib
+import os
 import os.path
 import base64
 
@@ -40,7 +41,8 @@ class TardisCrypto:
     contentKey  = None
     filenameKey = None
     random      = None
-    blocksize   = 16
+    blocksize   = AES.block_size
+    keysize     = AES.key_size[-1]                                              # last (largest) acceptable keysize
     altchars    = '#@'
 
     def __init__(self, password, hostname=None):
@@ -48,9 +50,9 @@ class TardisCrypto:
         if hostname == None:
             hostname = socket.gethostname()
         self.salt = hashlib.sha256(hostname).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=64)               # 2x256 bit keys
-        self.contentKey = keys[0:32]                                            # First 256 bit key
-        self.filenameKey = keys[32:]                                            # And the other one
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
+        self.contentKey = keys[0:self.keysize]                                     # First 256 bit key
+        self.filenameKey = keys[self.keysize:]                                     # And the other one
         self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
 
     def getContentCipher(self, iv):
@@ -74,7 +76,7 @@ class TardisCrypto:
 
     def encryptPath(self, path):
         rooted = False
-        comps = path.split('/')
+        comps = path.split(os.sep)
         encoder = self.getFilenameCipher()
         if comps[0] == '':
             rooted = True
@@ -82,12 +84,12 @@ class TardisCrypto:
         enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self.altchars) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
-            encpath = os.path.join('/', encpath)
+            encpath = os.path.join(os.sep, encpath)
         return encpath
 
     def decryptPath(self, path):
         rooted = False
-        comps = path.split('/')
+        comps = path.split(os.sep)
         encoder = self.getFilenameCipher()
         if comps[0] == '':
             rooted = True
@@ -95,7 +97,7 @@ class TardisCrypto:
         enccomps = [encoder.decrypt(base64.b64decode(x, self.altchars)).rstrip('\0') for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
-            encpath = os.path.join('/', encpath)
+            encpath = os.path.join(os.sep, encpath)
         return encpath
 
     def encryptFilename(self, name):
