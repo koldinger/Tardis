@@ -39,6 +39,7 @@ __defaults__ = {
                 'TARDIS_EXCLUDES'       : '.tardis-excludes',
                 'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
                 'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
+                'TARDIS_SKIP'           : '.tardis-skip',
                 'TARDIS_DAEMON_CONFIG'  : '/etc/tardis/tardisd.cfg',
                 'TARDIS_LOCAL_CONFIG'   : '/etc/tardis/tardisd.local.cfg',
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
