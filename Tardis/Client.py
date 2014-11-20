@@ -57,9 +57,10 @@ from Connection import JsonConnection, BsonConnection
 import Util
 import parsedatetime
 
-excludeFile         = ".tardis-excludes"
-localExcludeFile    = ".tardis-local-excludes"
-globalExcludeFile   = "/etc/tardis/excludes"
+skipFile            = Util.getDefault('TARDIS_SKIP')
+excludeFile         = Util.getDefault('TARDIS_EXCLUDES')
+localExcludeFile    = Util.getDefault('TARDIS_LOCAL_EXCLUDES')
+globalExcludeFile   = Util.getDefault('TARDIS_GLOBAL_EXCLUDES')
 excludeDirs         = []
 
 starttime           = None
@@ -380,6 +381,10 @@ def getDirContents(dir, dirstat, excludes=[]):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
 
+    if os.path.lexists(os.path.join(dir, skipFile)):
+        logger.debug("Skipping directory : %s", dir)
+        return  ([], [], excludes)
+
     #logger.debug("Processing directory : %s", dir)
     stats['dirs'] += 1;
     device = dirstat.st_dev
@@ -680,7 +685,7 @@ def loadExcludeFile(name):
 
 # Load all the excludes we might want
 def loadExcludes(args):
-    global excludeFile, localExcludeFile
+    global excludeFile, localExcludeFile, skipFile
     if not args.ignoreglobalexcludes:
         globalExcludes.extend(loadExcludeFile(globalExcludeFile))
     if args.cvs:
@@ -692,6 +697,7 @@ def loadExcludes(args):
             globalExcludes.extend(loadExcludeFile(f))
     excludeFile         = args.excludefilename
     localExcludeFile    = args.localexcludefilename
+    skipFile            = args.skipfilename
 
 def loadExcludedDirs(args):
     global excludeDirs
@@ -797,15 +803,17 @@ def processCommandLine():
     parser.add_argument('--hostname',       dest='hostname', default=Util.getDefault('TARDIS_HOST'),    help='Set the hostname.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
 
-    pwgroup = parser.add_argument_group("Password specification options")
-    pwgroup = pwgroup.add_mutually_exclusive_group()
+    passgroup = parser.add_argument_group("Password/Encryption specification options")
+    pwgroup = passgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
+    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
+
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -839,6 +847,7 @@ def processCommandLine():
     excgrp.add_argument('--exclude-file-name',  dest='excludefilename', default=excludeFile,help='Load recursive exclude files from this.  Default: %(default)s')
     excgrp.add_argument('--exclude-dir',        dest='excludedirs', action='append',        help='Exclude certain directories by path')
     excgrp.add_argument('--local-exclude-file-name',  dest='localexcludefilename', default=localExcludeFile,            help='Load local exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--skip-file-name',     dest='skipfilename', default=skipFile,      help='File to indicate to skip a directory.  Default: %(default)s')
     excgrp.add_argument('--ignore-global-excludes',   dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
@@ -951,6 +960,9 @@ def main():
 
     if verbosity or args.stats:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
+
+    if not args.crypt:
+        crypt = None
 
     # Now, do the actual work here.
     try:

@@ -1066,10 +1066,11 @@ def processArgs():
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
 
+    t = 'Tardis'
     config = ConfigParser.ConfigParser(configDefaults)
+    config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
-    t = 'Tardis'
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
