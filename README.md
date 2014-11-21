@@ -42,9 +42,9 @@ Tardis uses the librsync package, but since that is not current on pypi, it's co
 Installation
 ============
 Installing  up the server is relatively straightforward.
-  * Install librsync
-    * Fedora: yum install librsync 
-    * Ubuntu/Debian: apt-get install librsync 
+  * Install librsync, python fuse, and python development
+    * Fedora: yum install librsync  python-devel python-fuse python-setuptools
+    * Ubuntu/Debian: apt-get install librsync python-dev python-fuse python-setuptools
   * Run the python setup:
     * python setup.py install
 
@@ -87,13 +87,13 @@ Ex:
 Will backup your home directory.
 
 
-
 Environment Variables
 =====================
 
 <table>
     <tr>
         <td>Variable
+        <td>Description
         <td>Default
         <td>tardis
         <td>tardisd
@@ -101,14 +101,16 @@ Environment Variables
         <td>regenerate
     </tr>
     <tr>
-        <td> TARDIS_DB
+        <td>TARDIS_DB
+        <td>Location of the tardis database
         <td>/srv/tardis
         <td>No (Except in local case)
         <td>Yes
         <td>Yes
         <td>Yes
     <tr>
-        <td> TARDIS_PORT          
+        <td> TARDIS_PORT
+        <td>Port to use to connect to the Tardis Daemon
         <td> 7430
         <td>Yes (except in local case)
         <td>Yes
@@ -116,6 +118,7 @@ Environment Variables
         <td>No
     <tr>
         <td> TARDIS_DBNAME
+        <td> Name of the database file containing tardis information
         <td> tardis.db
         <td> No
         <td> Yes
@@ -123,21 +126,23 @@ Environment Variables
         <td> Yes
     <tr>
         <td> TARDIS_SERVER
+        <td> Name (or IP address) of the tardis server
         <td> localhost
         <td> Yes
         <td> No
         <td> No
         <td> No
-        <td> No
     <tr>
         <td> TARDIS_HOST
-        <td> Current hostname
+        <td> Name of the backup set.
+        <td> Current hostname (/usr/bin/hostname)
         <td> Yes
         <td> No
         <td> Yes
         <td> Yes
     <tr>
         <td> TARDIS_DAEMON_CONFIG
+        <td> Name of the file containing the daemon configuration
         <td> /etc/tardis/tardisd.cfg
         <td> No (except in local case)
         <td> Yes
@@ -145,6 +150,7 @@ Environment Variables
         <td> No
     <tr>
         <td> TARDIS_LOCAL_CONFIG
+        <td> Name of the file containing the configuration when running the daemon in local mode
         <td> /etc/tardis/tardisd.local.cfg
         <td> No (except in local case)
         <td> Yes (only in local case)
@@ -152,6 +158,7 @@ Environment Variables
         <td> No
     <tr> 
         <td> TARDIS_EXCLUDES
+        <td> Name of the file containing patterns to exclude below the current directory.
         <td> .tardis-excludes
         <td> Yes
         <td> No
@@ -159,6 +166,7 @@ Environment Variables
         <td> No
     <tr>
         <td> TARDIS_LOCAL_EXCLUDES
+        <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
         <td> .tardis-local-excludes
         <td> Yes
         <td> No
@@ -166,13 +174,23 @@ Environment Variables
         <td> No
     <tr>
         <td> TARDIS_GLOBAL_EXCLUDES
+        <td> Name of the file containing patterns to exclude globally
         <td> /etc/tardis/excludes
         <td> Yes
         <td> No
         <td> No
         <td> No
     <tr>
+        <td> TARDIS_SKIPFILE
+        <td> Name of a file whose presence excludes a current directory (and all directories below)
+        <td> .tardis-skip
+        <td> Yes
+        <td> No
+        <td> No
+        <td> No
+    <tr>
         <td> TARDIS_PIDFILE
+        <td> File to indicate that the daemon is running.
         <td> /var/run/tardisd.pid
         <td> No
         <td> Yes
@@ -180,6 +198,7 @@ Environment Variables
         <td> No
     <tr>
         <td> TARDIS_SCHEMA
+        <td> File containing the schema for the database.
         <td> schema/tardis.sql
         <td> No
         <td> Yes
