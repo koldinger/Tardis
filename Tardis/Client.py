@@ -288,7 +288,7 @@ def sendContent(inode):
                 else:
                     x = open(pathname, "rb")
             except IOError as e:
-                logger.error("Error: Could not open %s: %s", pathname, e)
+                logger.error("Could not open %s: %s", pathname, e)
                 return
 
             # Attempt to send the data.
@@ -314,7 +314,7 @@ def sendContent(inode):
                 x.close()
             stats['new'] += 1
     else:
-        logger.error("Error: Unknown inode {}".format(inode))
+        logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
 def handleAckDir(message):
     content = message["content"]
@@ -454,13 +454,13 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
+                logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.debug("ResyncDir: %s", Util.shortPath(path))
+                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -476,7 +476,7 @@ def handleAckClone(message):
             del cloneContents[inode]
         if inode in inodeDB:
             del inodeDB[inode]
-        
+
 def sendClones():
     message = {
         'message': 'CLN',
@@ -569,9 +569,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         #logger.info("Dir: %s", Util.shortPath(dir))
 
-        logmsg = "Dir: {}".format(Util.shortPath(dir))
-        #logger.debug("Excludes: %s", str(excludes))
-
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
         # Check the max time on all the files.  If everything is before last timestamp, just clone
@@ -588,8 +585,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            logmsg += " [Clone]"
-            logger.log(logging.DIRS, logmsg)
+            logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -603,14 +599,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 flushClones()
         else:
             if len(files) < args.batchdirs:
-                logmsg += " [Batched]"
-                logger.log(logging.DIRS, logmsg)
+                logger.log(logging.DIRS, "Dir: [B]: %s", Util.shortPath(dir))
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.log(logging.DIRS, logmsg)
+                logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -1003,7 +998,7 @@ def main():
 
         # Sanity check.
         if len(cloneContents) != 0:
-            log.warning("Warning: Some cloned directories not processed")
+            logger.warning("Warning: Some cloned directories not processed")
 
         if args.purge:
             if args.purgetime:
