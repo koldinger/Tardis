@@ -381,7 +381,8 @@ class TardisDB(object):
                                 "JOIN Names ON Files.NameId = Names.NameId "
                                 "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
                                 "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND "
-                                "Files.LastSet >= :backup",
+                                "Files.LastSet >= :backup "
+                                "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
         return makeDict(c, c.fetchone())
 
