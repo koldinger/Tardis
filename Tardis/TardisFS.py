@@ -60,11 +60,14 @@ _DirContents   = 3
 _FileDetails   = 4
 _LinkContents  = 5
 
+_infoEnabled    = True
+
 logger = logging.getLogger("Tracer: ")
 
 def tracer(func):
     def trace(*args, **kwargs):
-        logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
+        if _infoEnabled:
+            logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -288,6 +291,8 @@ class TardisFS(fuse.Fuse):
 
     @tracer
     def fsinit(self):
+        global _infoEnabled
+        _infoEnabled = logger.isEnabledFor(logging.INFO)
         pass
 
     @tracer
