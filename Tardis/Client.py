@@ -92,6 +92,17 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 
 inodeDB             = {}
 
+class MessageOnlyFormatter(logging.Formatter):
+    def __init__(self, fmt = '%(levelname)s:%(message)s', levels=[logging.INFO]):
+        logging.Formatter.__init__(self, fmt)
+        self.levels = levels
+
+    def format(self, record):
+        if record.levelno in self.levels:
+            return record.getMessage()
+        return logging.Formatter.format(self, record)
+
+
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super(CustomArgumentParser, self).__init__(*args, **kwargs)
@@ -277,7 +288,7 @@ def sendContent(inode):
                 else:
                     x = open(pathname, "rb")
             except IOError as e:
-                logger.error("Error: Could not open %s: %s", pathname, e)
+                logger.error("Could not open %s: %s", pathname, e)
                 return
 
             # Attempt to send the data.
@@ -303,7 +314,7 @@ def sendContent(inode):
                 x.close()
             stats['new'] += 1
     else:
-        logger.error("Error: Unknown inode {}".format(inode))
+        logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
 def handleAckDir(message):
     content = message["content"]
@@ -381,9 +392,6 @@ def getDirContents(dir, dirstat, excludes=[]):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
 
-    if os.path.lexists(os.path.join(dir, skipFile)):
-        logger.debug("Skipping directory : %s", dir)
-        return  ([], [], excludes)
 
     #logger.debug("Processing directory : %s", dir)
     stats['dirs'] += 1;
@@ -446,13 +454,13 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                logger.debug("ResyncDir: [Batched] %s", Util.shortPath(path))
+                logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.debug("ResyncDir: %s", Util.shortPath(path))
+                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -468,7 +476,7 @@ def handleAckClone(message):
             del cloneContents[inode]
         if inode in inodeDB:
             del inodeDB[inode]
-        
+
 def sendClones():
     message = {
         'message': 'CLN',
@@ -555,9 +563,11 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.debug("%s excluded.  Skipping", dir)
             return
 
+        if os.path.lexists(os.path.join(dir, skipFile)):
+            logger.debug("Skip file found.  Skipping %s", dir)
+            return
+
         #logger.info("Dir: %s", Util.shortPath(dir))
-        logmsg = "Dir: {}".format(Util.shortPath(dir))
-        #logger.debug("Excludes: %s", str(excludes))
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
@@ -575,8 +585,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            logmsg += " [Clone]"
-            logger.log(logging.DIRS, logmsg)
+            logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -590,14 +599,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 flushClones()
         else:
             if len(files) < args.batchdirs:
-                logmsg += " [Batched]"
-                logger.log(logging.DIRS, logmsg)
+                logger.log(logging.DIRS, "Dir: [B]: %s", Util.shortPath(dir))
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.log(logging.DIRS, logmsg)
+                logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -887,18 +895,18 @@ def main():
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
-    logging.basicConfig(format="%(message)s")
+    #logging.basicConfig(format="%(message)s")
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
+    handler.setFormatter(formatter)
+    logging.root.addHandler(handler)
     logger = logging.getLogger('')
+
     args = processCommandLine()
     
-
     verbosity=args.verbose if args.verbose else 0
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logger.setLevel(loglevel)
-
-    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
-    logger.setLevel(loglevel)
-    logging.getLogger("parsedatetime").setLevel(logging.WARNING)
 
     starttime = datetime.datetime.now()
 
@@ -990,7 +998,7 @@ def main():
 
         # Sanity check.
         if len(cloneContents) != 0:
-            log.warning("Warning: Some cloned directories not processed")
+            logger.warning("Warning: Some cloned directories not processed")
 
         if args.purge:
             if args.purgetime:
