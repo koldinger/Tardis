@@ -92,6 +92,17 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 
 inodeDB             = {}
 
+class MessageOnlyFormatter(logging.Formatter):
+    def __init__(self, fmt = '%(levelname)s:%(message)s', levels=[logging.INFO]):
+        logging.Formatter.__init__(self, fmt)
+        self.levels = levels
+
+    def format(self, record):
+        if record.levelno in self.levels:
+            return record.getMessage()
+        return logging.Formatter.format(self, record)
+
+
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super(CustomArgumentParser, self).__init__(*args, **kwargs)
@@ -381,9 +392,6 @@ def getDirContents(dir, dirstat, excludes=[]):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
 
-    if os.path.lexists(os.path.join(dir, skipFile)):
-        logger.debug("Skipping directory : %s", dir)
-        return  ([], [], excludes)
 
     #logger.debug("Processing directory : %s", dir)
     stats['dirs'] += 1;
@@ -555,7 +563,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.debug("%s excluded.  Skipping", dir)
             return
 
+        if os.path.lexists(os.path.join(dir, skipFile)):
+            logger.debug("Skip file found.  Skipping %s", dir)
+            return
+
         #logger.info("Dir: %s", Util.shortPath(dir))
+
         logmsg = "Dir: {}".format(Util.shortPath(dir))
         #logger.debug("Excludes: %s", str(excludes))
 
@@ -887,18 +900,18 @@ def main():
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
-    logging.basicConfig(format="%(message)s")
+    #logging.basicConfig(format="%(message)s")
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
+    handler.setFormatter(formatter)
+    logging.root.addHandler(handler)
     logger = logging.getLogger('')
+
     args = processCommandLine()
     
-
     verbosity=args.verbose if args.verbose else 0
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logger.setLevel(loglevel)
-
-    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
-    logger.setLevel(loglevel)
-    logging.getLogger("parsedatetime").setLevel(logging.WARNING)
 
     starttime = datetime.datetime.now()
 
