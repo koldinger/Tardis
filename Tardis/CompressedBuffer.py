@@ -33,16 +33,18 @@ import base64
 import sys
 import StringIO
 import hashlib
+import librsync
 
 _defaultChunksize = 128 * 1024
 
 class BufferedReader(object):
-    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False):
+    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, signature=False):
         self.stream = stream
         self.chunksize = chunksize
         self.numbytes = 0
         self.buffer = ""
         self.md5 = hashlib.md5() if checksum else None
+        self.sig = librsync.SignatureJob() if signature else None
 
     def _get(self):
         #print "_get called"
@@ -52,6 +54,8 @@ class BufferedReader(object):
             self.numbytes += len(buf)
             if self.md5:
                 self.md5.update(buf)
+        if self.sig:
+            self.sig.step(buf)
         return buf
 
     def read(self, size=0x7fffffff):
@@ -83,6 +87,9 @@ class BufferedReader(object):
     def checksum(self):
         return self.md5.hexdigest() if self.md5 else None
 
+    def signatureFile(self):
+        return self.sig.sigfile() if self.sig else None
+
     def size(self):
         return self.numbytes
 
@@ -90,8 +97,8 @@ class BufferedReader(object):
         return False
 
 class CompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, threshold=0.80):
-        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, checksum=checksum)
+    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, threshold=0.80, signature=False):
+        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, checksum=checksum, signature=signature)
         self.compressor = None
         self.compressed = 0
         self.uncompressed = 0
@@ -107,6 +114,8 @@ class CompressedBufferedReader(BufferedReader):
                 self.uncompressed += len(buffer)
                 if self.md5:
                     self.md5.update(buffer)
+                if self.sig:
+                    self.sig.step(buffer)
                 # First time around, create a compressor and check the compression ratio
                 if self.first:
                     self.first = False
