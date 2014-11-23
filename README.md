@@ -92,13 +92,13 @@ Environment Variables
 
 <table>
     <tr>
-        <td>Variable
-        <td>Description
-        <td>Default
-        <td>tardis
-        <td>tardisd
-        <td>tardisfs
-        <td>regenerate
+        <th>Variable
+        <th>Description
+        <th>Default
+        <th>tardis
+        <th>tardisd
+        <th>tardisfs
+        <th>regenerate
     </tr>
     <tr>
         <td>TARDIS_DB
@@ -173,9 +173,9 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 
 <table>
   <tr>
-   <td> Name
-   <td> Default Value
-   <td> Definition
+   <th> Name
+   <th> Default Value
+   <th> Definition
   <tr> <td> Port
    <td> 7420
    <td> Port to listen on
@@ -262,4 +262,8 @@ The backup sets can be mounted as a filesystem, thus:
 Password should only be set if a password is specified in the backup.  If you leave it blank (ie, password=), it will prompt you for a password during mount.
 
 Other options are available via -help.  (details TBD)
+
+Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
+
+
 
