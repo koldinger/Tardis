@@ -52,7 +52,7 @@ Server Setup
 ============
   * Edit the config file, /etc/tardis/tardisd.cfg
       * Set the BaseDir variable to point at a location to store all your databases.
-      * Set the Port to be the port you want to use.  Default is currently 7430.
+      * Set the Port to be the port you want to use.  Default is currently 7420.
   * If you want to use SSL, create a certificate and a key file (plenty of directions on the web).
   * Edit other parameters as necessary.
   * Copy the appropriate startup script as desired
@@ -104,106 +104,67 @@ Environment Variables
         <td>TARDIS_DB
         <td>Location of the tardis database
         <td>/srv/tardis
-        <td>No (Except in local case)
-        <td>Yes
-        <td>Yes
-        <td>Yes
+        <td>No (Except in local case) <td>Yes <td>Yes <td>Yes
     <tr>
         <td> TARDIS_PORT
         <td>Port to use to connect to the Tardis Daemon
-        <td> 7430
-        <td>Yes (except in local case)
-        <td>Yes
-        <td>No
-        <td>No
+        <td> 7420
+        <td>Yes (except in local case) <td>Yes <td>No <td>No
     <tr>
         <td> TARDIS_DBNAME
         <td> Name of the database file containing tardis information
         <td> tardis.db
-        <td> No
-        <td> Yes
-        <td> Yes
-        <td> Yes
+        <td> No <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_SERVER
         <td> Name (or IP address) of the tardis server
         <td> localhost
-        <td> Yes
-        <td> No
-        <td> No
-        <td> No
+        <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_HOST
         <td> Name of the backup set.
         <td> Current hostname (/usr/bin/hostname)
-        <td> Yes
-        <td> No
-        <td> Yes
-        <td> Yes
+        <td> Yes <td> No <td> Yes <td> Yes
     <tr>
         <td> TARDIS_DAEMON_CONFIG
         <td> Name of the file containing the daemon configuration
         <td> /etc/tardis/tardisd.cfg
-        <td> No (except in local case)
-        <td> Yes
-        <td> No
-        <td> No
+        <td> No (except in local case) <td> Yes <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_CONFIG
         <td> Name of the file containing the configuration when running the daemon in local mode
         <td> /etc/tardis/tardisd.local.cfg
-        <td> No (except in local case)
-        <td> Yes (only in local case)
-        <td> No
-        <td> No
+        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No
     <tr> 
         <td> TARDIS_EXCLUDES
         <td> Name of the file containing patterns to exclude below the current directory.
         <td> .tardis-excludes
-        <td> Yes
-        <td> No
-        <td> No
-        <td> No
+        <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_EXCLUDES
         <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
         <td> .tardis-local-excludes
-        <td> Yes
-        <td> No
-        <td> No
-        <td> No
+        <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_GLOBAL_EXCLUDES
         <td> Name of the file containing patterns to exclude globally
         <td> /etc/tardis/excludes
-        <td> Yes
-        <td> No
-        <td> No
-        <td> No
+        <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SKIPFILE
         <td> Name of a file whose presence excludes a current directory (and all directories below)
         <td> .tardis-skip
-        <td> Yes
-        <td> No
-        <td> No
-        <td> No
+        <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_PIDFILE
         <td> File to indicate that the daemon is running.
         <td> /var/run/tardisd.pid
-        <td> No
-        <td> Yes
-        <td> No
-        <td> No
+        <td> No <td> Yes <td> No <td> No
     <tr>
         <td> TARDIS_SCHEMA
         <td> File containing the schema for the database.
         <td> schema/tardis.sql
-        <td> No
-        <td> Yes
-        <td> No
-        <td> No
+        <td> No <td> Yes <td> No <td> No
 </table>
 
 Server Configuration File
@@ -222,7 +183,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
    <td> /srv/tardis
    <td> Directory containing all databases handled by this server
   <tr> <td> DBName
-   <td> tardisd.b
+   <td> tardis.db
    <td> Name of the database containing all metadata
   <tr> <td> Schema
    <td> schema/tardis.sql
