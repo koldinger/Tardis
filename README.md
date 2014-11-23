@@ -206,6 +206,92 @@ Environment Variables
         <td> No
 </table>
 
+Server Configuration File
+=========================
+The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the standard .ini file format.  There is a single section, "[Tardis]", containing all the variables.  The following configuration variables are defined:
+
+<table>
+  <tr>
+   <td> Name
+   <td> Default Value
+   <td> Definition
+  <tr> <td> Port
+   <td> 7420
+   <td> Port to listen on
+  <tr> <td> BaseDir
+   <td> /srv/tardis
+   <td> Directory containing all databases handled by this server
+  <tr> <td> DBName
+   <td> tardisd.b
+   <td> Name of the database containing all metadata
+  <tr> <td> Schema
+   <td> schema/tardis.sql
+   <td> Path to the file containing the database schema.
+  <tr> <td> LogFile
+   <td> None
+   <td> Filename for logging.  stderr if not specified.
+  <tr> <td> Profile
+   <td> False
+   <td> If true, a profile of each session will be generated and printed to stdout
+  <tr> <td> AllowNewHosts
+   <td> False
+   <td> If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup.
+  <tr> <td> RequirePassword
+   <td> False
+   <td> Require all backups to have a password.
+  <tr> <td> MaxDeltaChain
+   <td> 5
+   <td> Maximum number of delta's to request before requesting an entire new copy of a file.
+  <tr> <td> MaxChangePercent
+   <td> 50
+   <td> Maximum percentage change in file size allowed before requesting an entire new copy of a file.
+  <tr> <td> SaveFull
+   <td> False
+   <td> Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data.
+  <tr> <td> Single
+   <td> False
+   <td> Run a single client backup session, and exit.
+  <tr> <td> Local
+   <td> None
+   <td> Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
+  <tr> <td> Verbose
+   <td> 0
+   <td> Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy.
+  <tr> <td> Daemon
+   <td> False
+   <td> Run as a daemon process, detaching from the initial process, and running in the background.
+  <tr> <td> Umask
+   <td> 2 (002)
+   <td> Mode mask used when creating files in the database.
+  <tr> <td> User
+   <td> None
+   <td> Name of the user to run as when run in daemon mode.
+  <tr> <td> Group
+   <td> None
+   <td> Name of the group to run as when run in daemon mode.
+  <tr> <td> PidFile
+   <td> None
+   <td> Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true.
+  <tr> <td> SSL
+   <td> False
+   <td> Use SSL over the socket.
+  <tr> <td> CertFile
+   <td> None
+   <td> Path to the certificate file for SSL communications.  Must be set if SSL is true.
+  <tr> <td> KeyFile
+   <td> None
+   <td> Path to the key file for SSL communications.  Must be set if SSL is true
+  <tr> <td> MonthFmt, WeekFmt, DayFmt
+   <td> Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d
+   <td> Formats for the names of backup sets for Monthly, Weekly and Daily backups, when the client doesn't set a backup set name.  In a format accepted by Python's datetime.strftime() function
+  <tr> <td> MonthPrio, WeekPrio, DayPrio
+   <td> 40, 20, 10
+   <td> Priority value for Monthly, Weekly, and Daily backups, when the client doesn't provide one.
+  <tr> <td> MonthKeep, WeekKeep, DayKeep
+   <td> 0, 180, 30
+   <td> Number of days to keep for Monthly, Weekly, and Daily backups.  0 indicates keep forever.
+  
+</table>
 Mounting the filesystem
 =======================
 The backup sets can be mounted as a filesystem, thus:
