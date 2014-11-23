@@ -151,11 +151,9 @@ def _execute(job, f, o=None):
         o.seek(0)
     return o
 
-
 def debug(level=syslog.LOG_DEBUG):
     assert level in TRACE_LEVELS, "Invalid log level %i" % level
     _librsync.rs_trace_set_level(level)
-
 
 @seekable
 def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
@@ -173,7 +171,6 @@ def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
     finally:
         _librsync.rs_job_free(job)
     return s
-
 
 @seekable
 def delta(f, s, d=None):
@@ -233,3 +230,52 @@ def patch(f, d, o=None):
     finally:
         _librsync.rs_job_free(job)
     return o
+
+
+class SignatureJob(object):
+    def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
+        if s is None:
+            s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
+        job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN)
+        self.output = s
+        self.job = job
+        self.buff = Buffer()
+        self.out = ctypes.create_string_buffer(RS_JOB_BLOCKSIZE)
+
+
+    def step(self, data):
+        # Make sure we have something
+        if data is None:
+            data = ''
+
+        buff = self.buff
+        out = self.out
+
+        # provide the data block via input buffer.
+        buff.eof_in = ctypes.c_int(not data)
+        buff.next_in = ctypes.c_char_p(data)
+        buff.avail_in = ctypes.c_size_t(len(data))
+
+        # Loop over sending the data.
+        # Frankly, this should never loop, as the output will always be smaller
+        # than the input.  But just for correctness.....
+        while True:
+            # Set up our buffer for output.
+            buff.next_out = ctypes.cast(out, ctypes.c_char_p)
+            buff.avail_out = ctypes.c_size_t(RS_JOB_BLOCKSIZE)
+            r = _librsync.rs_job_iter(self.job, ctypes.byref(buff))
+            if self.output:
+                self.output.write(out.raw[:RS_JOB_BLOCKSIZE - buff.avail_out])
+            if r == RS_DONE:
+                return True
+            elif r != RS_BLOCKED:
+                raise LibrsyncError(r)
+            if buff.avail_in == 0:
+                # break out if nothing left in the input buffer
+                break
+
+    def sigfile(self):
+        if self.output and callable(getattr(self.output, 'seek', None)):
+            # As a matter of convenience, rewind the output file.
+            self.output.seek(0)
+        return self.output
