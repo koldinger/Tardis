@@ -213,6 +213,7 @@ def processDelta(inode):
                 sigfile = cStringIO.StringIO()
                 #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
                 Util.receiveData(conn.sender, sigfile)
+                logger.debug("Received sig file: %d", sigfile.tell())
                 sigfile.seek(0)
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
@@ -244,7 +245,7 @@ def processDelta(inode):
 
             sendMessage(message)
             compress = True if (args.compress and (filesize > args.mincompsize)) else False
-            (sent, ck) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+            (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
             delta.close()
             if newsig:
                 message = {
@@ -260,6 +261,7 @@ def sendSignature(f):
     pass
 
 def sendContent(inode):
+    """ Send the content of a file.  Compress and encrypt, as specified by the options. """
     if inode in inodeDB:
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
@@ -276,7 +278,6 @@ def sendContent(inode):
                 "pathname" : pathname
                 }
             if iv:
-                #message["iv"] = conn.encode(iv)
                 message["iv"] = base64.b64encode(iv)
             # Attempt to open the data source
             # Punt out if unsuccessful
@@ -294,12 +295,12 @@ def sendContent(inode):
             # Attempt to send the data.
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                makeSig = True if crypt else False
                 sendMessage(message)
-                (size, checksum) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
                     x.seek(0)
-                    sig = librsync.signature(x)
                     message = {
                         "message" : "SIG",
                         "checksum": checksum
@@ -308,7 +309,7 @@ def sendContent(inode):
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                #logger.exception(e)
+                logger.exception(e)
                 raise e
             finally:
                 x.close()
