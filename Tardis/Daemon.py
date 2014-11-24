@@ -456,34 +456,45 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             pass
 
         if deltasize is None:
+            # BUG: should actually be the uncompressed size, but hopefully we won't get here.
             deltasize = bytesReceived
+
+        self.statBytesReceived += bytesReceived
 
         if output:
             try:
                 if savefull:
                     output.seek(0)
+                    if compressed:
+                        delta = CompressedBuffer.UncompressedBufferedReader(output)
+                        # HACK: Monkeypatch the buffer reader object to have a seek function to keep librsync happy.  Never gets called
+                        delta.seek = lambda x, y: 0
+                    else:
+                        delta = output
+
                     # Process the delta file into the new file.
                     #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
                     if type(basisFile) != types.FileType:
+                        # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
                         basisFile = tempfile.TemporaryFile(dir=self.tempdir)
                         shutil.copyfileobj(temp, basisFile)
-                    patched = librsync.patch(basisFile, output)
+                    patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                     self.db.insertChecksumFile(checksum, iv, size=size)
                 else:
                     self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
+
+                self.statUpdFiles += 1
+
+                self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
+                self.db.setChecksum(inode, checksum)
             except Exception as e:
                 logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
             # TODO: This has gotta be wrong.
 
-        self.statUpdFiles += 1
-        self.statBytesReceived += bytesReceived
-
-        self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
-        self.db.setChecksum(inode, checksum)
         flush = True if size > 1000000 else False;
         return (None, flush)
 
