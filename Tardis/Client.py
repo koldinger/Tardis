@@ -86,7 +86,7 @@ cloneContents       = {}
 batchDirs           = []
 
 crypt               = None
-logger              = logging.getLogger('')
+logger              = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
 
@@ -125,8 +125,14 @@ def setEncoder(format):
         encoder = lambda x: x
         decoder = lambda x: x
 
+def fs_encode(val):
+    if not isinstance(val, bytes):
+        return val.encode(sys.getfilesystemencoding())
+    else:
+        return val
+
 def filelist(dir, excludes):
-    files = os.listdir(dir)
+    files = map(fs_encode, os.listdir(dir))
     for p in excludes:
         remove = [x for x in fnmatch.filter(files, p)]
         if len(remove):
@@ -388,7 +394,7 @@ def mkFileInfo(dir, name):
             logger.info("Skipping special file: %s", pathname)
         finfo = None
     return finfo
-    
+
 def getDirContents(dir, dirstat, excludes=[]):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
@@ -591,7 +597,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
             for f in filenames:
-                m.update(f.encode('utf8', 'ignore'))
+                m.update(f)
 
             cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
             cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
@@ -627,7 +633,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         # TODO: Clean this up
         #logger.exception(e)
         raise
-        
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
@@ -807,6 +812,7 @@ def processCommandLine():
 
     parser.add_argument('--server', '-s',   dest='server', default=Util.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',     dest='port', type=int, default=Util.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
+    parser.add_argument('--log', '-l',      dest='logfile', default=None,                           help='Send logging output to specified file.  Default: stderr')
     parser.add_argument('--ssl',            dest='ssl', action=Util.StoreBoolean, default=False,    help='Use SSL connection.  Default: %(default)s')
 
     parser.add_argument('--hostname',       dest='hostname', default=Util.getDefault('TARDIS_HOST'),    help='Set the hostname.  Default: %(default)s')
@@ -822,7 +828,6 @@ def processCommandLine():
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
-
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -884,9 +889,10 @@ def processCommandLine():
 
     return parser.parse_args()
 
-def main():
-    global starttime, args, config, conn, verbosity, crypt
-    # Create some new special intermediate logging levels
+def setupLogging(logfile, verbosity):
+    global logger
+
+    # Define a couple custom logging levels
     logging.STATS = logging.INFO + 1
     logging.DIRS  = logging.INFO - 1
     logging.FILES = logging.INFO - 2
@@ -896,18 +902,34 @@ def main():
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
 
-    #logging.basicConfig(format="%(message)s")
-    handler = logging.StreamHandler(sys.stderr)
     formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
+
+    if logfile:
+        handler = logging.handlers.WatchedFileHandler(logfile)
+    else:
+        handler = logging.StreamHandler(sys.stderr)
+
     handler.setFormatter(formatter)
     logging.root.addHandler(handler)
     logger = logging.getLogger('')
 
-    args = processCommandLine()
-    
-    verbosity=args.verbose if args.verbose else 0
-    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    # Pick a level.  Lowest specified level if verbosity is too large.
+    loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
     logger.setLevel(loglevel)
+
+    return logger
+
+def main():
+    global starttime, args, config, conn, verbosity, crypt
+    # Create some new special intermediate logging levels
+
+
+    # Read the command line arguments.
+    args = processCommandLine()
+
+    # Set up logging
+    verbosity=args.verbose if args.verbose else 0
+    setupLogging(args.logfile, verbosity)
 
     starttime = datetime.datetime.now()
 
