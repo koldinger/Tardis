@@ -60,7 +60,8 @@ def fmtSize(num, base=1024):
 
 def getIntOrNone(config, section, name):
     try:
-        return config.getint(section, name)
+        x = config.get(section, name)
+        return int(x, 0)
     except:
         return None
 
