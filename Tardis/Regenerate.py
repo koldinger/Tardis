@@ -30,6 +30,7 @@
 
 import os
 import os.path
+import stat
 import types
 import sys
 import argparse
@@ -98,6 +99,7 @@ class Regenerator:
                 basis = self.recoverChecksum(cksInfo['basis'])
                 # UGLY.  Put the basis into an actual file for librsync
                 if type(basis) is not types.FileType:
+                    self.logger.debug("Checksum %s is not a file.  Creating a tempfile", cksum)
                     temp = tempfile.TemporaryFile()
                     shutil.copyfileobj(basis, temp)
                     basis = temp
@@ -143,24 +145,51 @@ class Regenerator:
             self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
-    def recoverFile(self, filename, bset=False, nameEncrypted=False):
+    def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None):
         self.logger.info("Recovering file: {}".format(filename))
         name = filename
         if self.crypt and not nameEncrypted:
             name = self.crypt.encryptPath(filename)
-        cksum = self.db.getChecksumByPath(name, bset)
-        if cksum:
-            try:
+        try:
+            cksum = self.db.getChecksumByPath(name, bset, permchecker=permchecker)
+            if cksum:
                 return self.recoverChecksum(cksum)
-            except RegenerateException:
-                raise
-            except Exception as e:
-                logger.exception(e)
-                raise RegenerateException("Error recovering file: {}".format(filename))
-        else:
-            self.logger.error("Could not locate file {}".format(filename))
+            else:
+                self.logger.error("Could not locate file ", filename)
+                return None
+        except RegenerateException as e:
+            self.logger.error("Could not regenerate file: %s: %s", filename, str(e))
             return None
+        except Exception as e:
+            #logger.exception(e)
+            self.logger.error("Error recovering file: %s: %s", filename, str(e))
+            return None
+            #raise RegenerateException("Error recovering file: {}".format(filename))
 
+def setupPermissionChecks():
+    uid = os.getuid()
+    gid = os.getgid()
+    groups = os.getgroups()
+
+    def checkPermission(pUid, pGid, mode):
+        if (uid == 0):
+            return True
+        if stat.S_ISDIR(mode):
+            if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
+                return True
+            elif (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
+                return True
+            elif (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
+                return True
+        else:
+            if (uid == pUid) and (stat.S_IRUSR & mode):
+                return True
+            elif (pGid in groups) and (stat.S_IRGRP & mode):
+                return True
+            elif (stat.S_IROTH & mode):
+                return True
+        return False
+    return checkPermission
 
 def findDirInRoot(tardis, bset, path):
     comps = path.split(os.sep)
@@ -198,7 +227,6 @@ def mkOutputDir(name):
         os.mkdir(name)
         return name
 
-
 def parseArgs():
     basedir = Util.getDefault('TARDIS_DB')
     hostname = Util.getDefault('TARDIS_HOST')
@@ -213,7 +241,7 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=hostname)
 
-    #parser.add_argument("--remote-url",    dest="remote", default=None, help="Remote host")
+    parser.add_argument("--remote-url",    dest="remote", default=None, help=argparse.SUPPRESS) # help="Remote host")
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
@@ -331,6 +359,8 @@ def main():
     #if args.cksum and (args.settime or args.setperm):
         #logger.warning("Unable to set time or permissions on files specified by checksum.")
 
+    permChecker = setupPermissionChecks()
+
     # do the work here
     for i in args.files:
         path = None
@@ -342,7 +372,7 @@ def main():
             path = computePath(tardis, bset, i, args.reduce)
             if not path:
                 continue
-            f = r.recoverFile(path, bset)
+            f = r.recoverFile(path, bset, permchecker=permChecker)
 
         if f != None:
             # Generate an output name

@@ -31,7 +31,7 @@
 import sqlite3
 import shutil
 import logging
-import os.path
+import os, os.path
 import functools
 import time
 import hashlib
@@ -318,13 +318,14 @@ class TardisDB(object):
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return makeDict(c, c.fetchone())
 
-    def getFileInfoByPath(self, path, current=False):
+    def getFileInfoByPath(self, path, current=False, permchecker=None):
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self._bset(current)
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = (0, 0)         # Root directory value
         info = None
+
 
         #(dirname, name) = os.path.split(path)
         # Walk the path
@@ -335,6 +336,9 @@ class TardisDB(object):
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
                 parent = (info["inode"], info["device"])
+                if permchecker:
+                    if not permchecker(info['uid'], info['gid'], info['mode']):
+                        raise Exception("File permission denied: " + name)
             else:
                 break
         return info
@@ -426,10 +430,10 @@ class TardisDB(object):
         return row[0] if row else None
         #if row: return row[0] else: return None
 
-    def getChecksumByPath(self, name, current=False):
+    def getChecksumByPath(self, name, current=False, permchecker=None):
         backupset = self._bset(current)
         self.logger.debug("Looking up checksum for path %s %d", name, backupset)
-        f = self.getFileInfoByPath(name, current)
+        f = self.getFileInfoByPath(name, current, permchecker=permchecker)
         if f:
             return self.getChecksumByName(f["name"], (f["parent"], f["parentdev"]), current)
         else:
