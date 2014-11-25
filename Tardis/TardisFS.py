@@ -100,6 +100,7 @@ class TardisFS(fuse.Fuse):
     """
     backupsets = {}
     dirInfo = {}
+    fsencoding = sys.getfilesystemencoding()
 
     def __init__(self, *args, **kw):
         super(TardisFS, self).__init__(*args, **kw)
@@ -109,6 +110,7 @@ class TardisFS(fuse.Fuse):
             database = os.environ['TARDIS_DB']     if 'TARDIS_DB'     in os.environ else '/srv/tardis'
             dbname   = os.environ['TARDIS_DBNAME'] if 'TARDIS_DBNAME' in os.environ else 'tardis.db'
 
+            # Parameters
             self.database   = database
             self.host       = hostname
             self.repoint    = False
@@ -199,6 +201,12 @@ class TardisFS(fuse.Fuse):
 
     def __repr__(self):
         return self.name
+
+    def fsEncodeName(self, name):
+        if not isinstance(name, bytes):
+            return name.encode(self.fsencoding)
+        else:
+            return name
 
     def getBackupSetInfo(self, b, requestTime = None):
         key = (_BackupSetInfo, b)
@@ -312,7 +320,7 @@ class TardisFS(fuse.Fuse):
         """
 
         #self.log.info("CALL getattr: %s",  path)
-        path = unicode(path.decode('utf-8'))
+        path = self.fsEncodeName(path)
 
         depth = getDepth(path) # depth of path, zero-based from root
         if depth == 0:
@@ -403,6 +411,7 @@ class TardisFS(fuse.Fuse):
         inodes = {}
         parent = None
 
+        path = self.fsEncodeName(path)
 
         key = (_DirContents, path)
         dirents = self.cache.retrieve(key)
@@ -428,9 +437,10 @@ class TardisFS(fuse.Fuse):
                 # Get attr will typically be called promptly after a call to 
                 now = time()
                 for e in entries:
-                    p = os.path.join(path, e['name'])
+                    name = self.fsEncodeName(e['name'])
+                    p = os.path.join(path, name)
                     self.fileCache.insert(p, e, now=now)
-                    dirents.append((e['name'], e['mode']))
+                    dirents.append((name, e['mode']))
             self.cache.insert(key, dirents)
 
         #self.log.debug("Direntries: %s", str(dirents))
@@ -479,6 +489,8 @@ class TardisFS(fuse.Fuse):
     @tracer
     def open ( self, path, flags ):
         #self.log.info('CALL open {} {})'.format(path, flags))
+        path = self.fsEncodeName(path)
+
         depth = getDepth(path) # depth of path, zero-based from root
 
         if (depth < 2):
@@ -533,6 +545,8 @@ class TardisFS(fuse.Fuse):
     @tracer
     def readlink ( self, path ):
         #self.log.info('CALL readlink {}'.format(path))
+        path = self.fsEncodeName(path)
+
         key = (_LinkContents, path)
         link = self.cache.retrieve(key)
         if link:
@@ -560,6 +574,8 @@ class TardisFS(fuse.Fuse):
 
     @tracer
     def release ( self, path, flags ):
+        path = self.fsEncodeName(path)
+
         if self.files[path]:
             self.files[path]["opens"] -= 1;
             if self.files[path]["opens"] == 0:
@@ -630,6 +646,7 @@ class TardisFS(fuse.Fuse):
 
     @tracer
     def listxattr ( self, path, size ):
+        path = self.fsEncodeName(path)
         #self.log.info('CALL listxattr {} {}'.format(path, size))
         if size == 0:
             retFunc = lambda x: len("".join(x)) + len(str(x))
@@ -657,6 +674,7 @@ class TardisFS(fuse.Fuse):
 
     @tracer
     def getxattr (self, path, attr, size):
+        path = self.fsEncodeName(path)
         #self.log.info('CALL getxattr: %s %s %s', path, attr, size)
         if size == 0:
             retFunc = lambda x: len(str(x))
