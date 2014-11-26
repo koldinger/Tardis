@@ -92,6 +92,9 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 
 inodeDB             = {}
 
+
+# Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
+# will only have a message
 class MessageOnlyFormatter(logging.Formatter):
     def __init__(self, fmt = '%(levelname)s: %(message)s', levels=[logging.INFO]):
         logging.Formatter.__init__(self, fmt)
@@ -102,7 +105,8 @@ class MessageOnlyFormatter(logging.Formatter):
             return record.getMessage()
         return logging.Formatter.format(self, record)
 
-
+# A custom argument parser to nicely handle argument files, and strip out any blank lines
+# or commented lines
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super(CustomArgumentParser, self).__init__(*args, **kwargs)
@@ -128,18 +132,24 @@ def setEncoder(format):
         encoder = lambda x: x
         decoder = lambda x: x
 
+systemencoding      = sys.getfilesystemencoding()
+
 def fs_encode(val):
+    """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
     if not isinstance(val, bytes):
-        return val.encode(sys.getfilesystemencoding())
+        #return val.encode(sys.getfilesystemencoding())
+        return val.encode(systemencoding)
     else:
         return val
 
 def checkMessage(message, expected):
+    """ Check that a message is of the expected type.  Throw an exception if not """
     if not (message['message'] == expected):
         logger.critical("Expected {} message, received {}".format(expected, message['message']))
         raise ProtocolException("Expected {} message, received {}".format(expected, message['message']))
 
 def filelist(dir, excludes):
+    """ List the files in a directory, except those that match something in a set of patterns """
     files = map(fs_encode, os.listdir(dir))
     for p in excludes:
         remove = [x for x in fnmatch.filter(files, p)]
@@ -149,7 +159,7 @@ def filelist(dir, excludes):
         yield f
 
 def processChecksums(inodes):
-    """ Generate a delta and send it """
+    """ Generate checksums for requested checksum files """
     files = []
     for inode in inodes:
         if inode in inodeDB:
@@ -243,7 +253,7 @@ def processDelta(inode):
                 newsig = reader.signatureFile()
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-                logger.exception(e)
+                #logger.exception(e)
                 sendContent(inode)
                 return
 
@@ -300,6 +310,7 @@ def sendContent(inode):
                 }
             if iv:
                 message["iv"] = base64.b64encode(iv)
+
             # Attempt to open the data source
             # Punt out if unsuccessful
             try:
@@ -330,7 +341,7 @@ def sendContent(inode):
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                logger.exception(e)
+                #logger.exception(e)
                 raise e
             finally:
                 x.close()

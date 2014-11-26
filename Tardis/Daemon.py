@@ -429,7 +429,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         basis    = message["basis"]
         size     = message["size"]          # size of the original file, not the content
         (inode, dev)    = message["inode"]
-        iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        iv = message['iv'] if 'iv' in message else None
         deltasize = message['deltasize'] if 'deltasize' in message else None
 
         savefull = self.server.savefull and iv is None
@@ -560,7 +561,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
 
-        iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
+        # Would be more compact to store the blob, but we're not doing that now
+        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        iv = message['iv'] if 'iv' in message else None
 
         (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
