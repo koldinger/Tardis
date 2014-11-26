@@ -165,7 +165,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
         self.logger.debug("Processing file: %s", str(f))
-        name = f["name"].encode('utf-8')
+        name = f["name"]
         inode = f["inode"]
         device = f["dev"]
 
@@ -620,9 +620,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.info("Purged %d files in %d backup sets", files, sets)
             if files:
                 self.purged = True
-            return ({"message" : "OK"}, True)
+            return ({"message": "ACKPRG", "status": "OK"}, True)
         else:
-            return ({"message": "FAIL"}, True)
+            return ({"message": "ACKPRG", "status": "FAIL"}, True)
 
     def checksumDir(self, dirNode):
         """ Generate a checksum of the file names in a directory"""

@@ -93,7 +93,7 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 inodeDB             = {}
 
 class MessageOnlyFormatter(logging.Formatter):
-    def __init__(self, fmt = '%(levelname)s:%(message)s', levels=[logging.INFO]):
+    def __init__(self, fmt = '%(levelname)s: %(message)s', levels=[logging.INFO]):
         logging.Formatter.__init__(self, fmt)
         self.levels = levels
 
@@ -115,6 +115,9 @@ class CustomArgumentParser(argparse.ArgumentParser):
                 break
             yield arg
 
+class ProtocolError(Exception):
+    pass
+
 def setEncoder(format):
     if format == 'base64':
         encoding = "base64"
@@ -130,6 +133,11 @@ def fs_encode(val):
         return val.encode(sys.getfilesystemencoding())
     else:
         return val
+
+def checkMessage(message, expected):
+    if not (message['message'] == expected):
+        logger.critical("Expected {} message, received {}".format(expected, message['message']))
+        raise ProtocolException("Expected {} message, received {}".format(expected, message['message']))
 
 def filelist(dir, excludes):
     files = map(fs_encode, os.listdir(dir))
@@ -163,9 +171,8 @@ def processChecksums(inodes):
     }
 
     response = sendAndReceive(message)
+    checkMessage(response, 'ACKSUM')
 
-    if not response["message"] == "ACKSUM":
-        raise Exception
     # First, delete all the files which are "done", ie, matched
     for i in [tuple(x) for x in response['done']]:
         if verbosity > 1:
@@ -329,6 +336,8 @@ def handleAckDir(message):
     delta   = message["delta"]
     cksum   = message["cksum"]
 
+    checkMessage(message, 'ACKDIR')
+
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
 
@@ -370,8 +379,6 @@ def mkFileInfo(dir, name):
     if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
         if crypt:
             name = crypt.encryptFilename(name)
-        else:
-            name = unicode(name.decode('utf8', 'ignore'))
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
@@ -398,7 +405,6 @@ def mkFileInfo(dir, name):
 def getDirContents(dir, dirstat, excludes=[]):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
-
 
     #logger.debug("Processing directory : %s", dir)
     stats['dirs'] += 1;
@@ -450,8 +456,7 @@ def getDirContents(dir, dirstat, excludes=[]):
     return (files, subdirs, excludes)
 
 def handleAckClone(message):
-    if message["message"] != "ACKCLN":
-        raise Exception("Expected ACKCLN.  Got {}".format(message["message"]))
+    checkMessage(message, 'ACKCLN')
     if verbosity > 2:
         logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
@@ -484,33 +489,55 @@ def handleAckClone(message):
         if inode in inodeDB:
             del inodeDB[inode]
 
-def sendClones():
+def makeCloneMessage():
+    global cloneDirs
     message = {
         'message': 'CLN',
         'clones': cloneDirs
     }
+    cloneDirs = []
+    return message
+
+def sendClones():
+    message = makeCloneMessage()
     response = sendAndReceive(message)
+    checkMessage(response, 'ACKCLN')
     handleAckClone(response)
-    del cloneDirs[:]
 
 def flushClones():
-    if len(cloneDirs):
-        sendClones()
+    if cloneDirs:
+        if args.batchdirs:
+            message = makeCloneMessage()
+            batchDirs.append(message)
+            if len(batchDirs) >= args.batchsize:
+                sendBatchDirs()
+        else:
+            sendClones()
 
 def sendBatchDirs():
+    global batchDirs
     message = {
         'message' : 'BATCH',
         'batch': batchDirs
     }
     logger.debug("BATCH Starting. %s commands", len(batchDirs))
 
+    batchDirs = []
+
     response = sendAndReceive(message)
+    checkMessage(response, 'ACKBTCH')
+    # Process the response messages
+    logger.debug("Got response.  %d responses", len(response['responses']))
     for ack in response['responses']:
-        handleAckDir(ack)
+        logger.debug("Response: %s", ack['message'])
+        if ack['message'] == 'ACKDIR':
+            handleAckDir(ack)
+        elif ack['message'] == 'ACKCLN':
+            handleAckClone(ack)
+        else:
+            logger.error("Unexpected message type: %s", ack['message'])
 
     logger.debug("BATCH Ending.")
-
-    del batchDirs[:]
 
 def flushBatchDirs():
     if len(batchDirs):
@@ -525,6 +552,7 @@ def sendPurge(relative):
         message.update( { 'time': purgeTime, 'relative': relative })
 
     response = sendAndReceive(message)
+    checkMessage(response, 'ACKPRG')
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
@@ -544,6 +572,7 @@ def sendDirChunks(path, inode, files):
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         response = sendAndReceive(message)
+        checkMessage(response, 'ACKDIR')
         handleAckDir(response)
 
 def makeDirMessage(path, inode, dev, files):
@@ -601,7 +630,6 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
             cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
-            flushBatchDirs()
             if len(cloneDirs) >= args.clones:
                 flushClones()
         else:
@@ -1032,8 +1060,8 @@ def main():
     except KeyboardInterrupt:
         logger.warning("Backup Interupted")
     except Exception as e:
-        logger.error("Caught exeception: %s", e)
-        #logger.exception(e)
+        logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
+        logger.exception(e)
 
     endtime = datetime.datetime.now()
 
