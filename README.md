@@ -86,19 +86,30 @@ Ex:
     tardis --local ~
 Will backup your home directory.
 
+Recovering Files
+================
+Files can be recovered in two different ways: via the regenerate application, and via a tardisfs filesystem.
+
+The filesystem approach is often the easiest method.  In this technique, a filesystem is mounted which contains the results of all the backupsets.  At the top level, there is a directory for each backup set.  Underneath these directories, are the full image of the backuped directories in a standard directory tree, as they appeared at the time of the backup.  Files can easily be copied out of this tree to their desired locations.
+
+Files can also be recovered via the regenerate application. The regenerate application takes the name of the file to be recovered, and can also be given a date for which to regenerate the file.  Dates can be via the --date (-D) option, and can be specified via a large variety of forms.  For instance "regenerate -D '3 days ago' filename" will regenerate a version from 3 days earlier.  Dates can also be specified expclitly in a wide variety of formats, such as "03/15/2014" to specify March 15, 2014 (obviously).
+
+See regenerate -h for details.
+
+At present, the regenerate application does NO permission checking to determine if a user has permission to read a file.  Thus, any file in the database set can be accessed by anybody with access to the backup database.  If this is a problem in your environment, it is recommended to disable the regenerate application (or at least protect the database with a password that you don't share with all users), and allow access primarily through a tardisfs filesystem controlled by the super-user.  See Mounting the Filesystem below.
 
 Environment Variables
 =====================
 
 <table>
     <tr>
-        <td>Variable
-        <td>Description
-        <td>Default
-        <td>tardis
-        <td>tardisd
-        <td>tardisfs
-        <td>regenerate
+        <th>Variable
+        <th>Description
+        <th>Default
+        <th>tardis
+        <th>tardisd
+        <th>tardisfs
+        <th>regenerate
     </tr>
     <tr>
         <td>TARDIS_DB
@@ -173,9 +184,9 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 
 <table>
   <tr>
-   <td> Name
-   <td> Default Value
-   <td> Definition
+   <th> Name
+   <th> Default Value
+   <th> Definition
   <tr> <td> Port
    <td> 7420
    <td> Port to listen on
@@ -262,4 +273,8 @@ The backup sets can be mounted as a filesystem, thus:
 Password should only be set if a password is specified in the backup.  If you leave it blank (ie, password=), it will prompt you for a password during mount.
 
 Other options are available via -help.  (details TBD)
+
+Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
+
+
 
