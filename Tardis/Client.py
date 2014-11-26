@@ -30,7 +30,7 @@
 
 import os, sys
 import os.path
-import logging
+import logging, logging.handlers
 import socket
 import fnmatch
 from stat import *
@@ -229,16 +229,21 @@ def processDelta(inode):
                 logger.debug("Received sig file: %d", sigfile.tell())
                 sigfile.seek(0)
 
+                # If we're encrypted, we need to generate a new signature, and send it along
+                makeSig = True if crypt else False
+
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
-                # reading the file.
-                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), checksum=True)
+                # reading the file.  And, if we need it, the signature
+                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), checksum=True, signature=makeSig)
                 # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
                 reader.seek = lambda x, y: 0
                 delta = librsync.delta(reader, sigfile)
                 checksum = reader.checksum()
                 filesize = reader.size()
+                newsig = reader.signatureFile()
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
+                logger.exception(e)
                 sendContent(inode)
                 return
 
@@ -260,12 +265,15 @@ def processDelta(inode):
             compress = True if (args.compress and (filesize > args.mincompsize)) else False
             (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
             delta.close()
+
+            # If we have a signature, send it.
             if newsig:
                 message = {
                     "message" : "SIG",
                     "checksum": checksum
                 }
                 sendMessage(message)
+                # Send the signature, generated above
                 Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
         else:
             sendContent(inode)

@@ -54,6 +54,7 @@ class BufferedReader(object):
             self.numbytes += len(buf)
             if self.md5:
                 self.md5.update(buf)
+        # Always send the buffer, even if it's null at eof.  Will cause the signature job to clean up.
         if self.sig:
             self.sig.step(buf)
         return buf
