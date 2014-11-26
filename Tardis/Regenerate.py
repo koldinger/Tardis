@@ -171,9 +171,11 @@ def setupPermissionChecks():
     gid = os.getgid()
     groups = os.getgroups()
 
+    if (uid == 0):
+        return None     # If super-user, return None.  Causes no checking to happen.
+
+    # Otherwise, create a closure function which can be used to do checking for each file.
     def checkPermission(pUid, pGid, mode):
-        if (uid == 0):
-            return True
         if stat.S_ISDIR(mode):
             if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
                 return True
@@ -189,6 +191,8 @@ def setupPermissionChecks():
             elif (stat.S_IROTH & mode):
                 return True
         return False
+
+    # And return the function.
     return checkPermission
 
 def findDirInRoot(tardis, bset, path):
@@ -344,8 +348,9 @@ def main():
             sys.exit(1)
 
     outputdir = None
-    output = sys.stdout
-    outname = None
+    output    = sys.stdout
+    outname   = None
+
     if args.output:
         if len(args.files) > 1:
             outputdir = mkOutputDir(args.output)
