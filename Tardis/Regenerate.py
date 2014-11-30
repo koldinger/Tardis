@@ -155,7 +155,7 @@ class Regenerator:
             if cksum:
                 return self.recoverChecksum(cksum)
             else:
-                self.logger.error("Could not locate file ", filename)
+                self.logger.error("Could not locate file: %s ", filename)
                 return None
         except RegenerateException as e:
             self.logger.error("Could not regenerate file: %s: %s", filename, str(e))
