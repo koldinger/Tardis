@@ -169,8 +169,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         inode = f["inode"]
         device = f["dev"]
 
-        self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
-        self.logger.debug("DirHash: %s", str(dirhash))
+        #self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
+        #self.logger.debug("DirHash: %s", str(dirhash))
         
         if name in dirhash:
             old = dirhash[name]
@@ -192,51 +192,53 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #old = self.db.getFileInfoByName(f["name"], parent)
             if old:
                 fromPartial = False     # For use with the upcoming result
-                self.logger.debug('Matching against old version for file %s (%d)', name, inode)
+                #self.logger.debug('Matching against old version for file %s (%d)', name, inode)
             elif not self.lastCompleted:
                 # not in this directory, but lets look further in any incomplete sets if there are any
-                self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
+                #self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
                 old = self.db.getFileFromPartialBackup(f)
                 if old:
                     fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
 
             if old:
-                self.logger.debug("Comparing versions: New: %s", str(f))
-                self.logger.debug("Comparing version: Old: %s", str(old))
+                #self.logger.debug("Comparing versions: New: %s", str(f))
+                #self.logger.debug("Comparing version: Old: %s", str(old))
 
                 # Got something.  If the inode, size, and mtime are the same, just keep it
                 fsize = f['size']
                 osize = old['size']
 
                 if (old["inode"] == inode) and (osize == fsize) and (old["mtime"] == f["mtime"]):
-                    self.logger.debug("Main info matches: %s", name)
-                    if ("checksum" in old.keys()) and not (old["checksum"] is None):
+                    #self.logger.debug("Main info matches: %s", name)
+                    #if ("checksum" in old.keys()) and not (old["checksum"] is None):
+                    if not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']):
                             # nothing has changed, just extend it
-                            self.logger.debug("Extending %s", name)
+                            #self.logger.debug("Extending %s", name)
                             self.db.extendFile(parent, f['name'], old=fromPartial)
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
-                            self.logger.debug("Inserting new version %s", name)
+                            #self.logger.debug("Inserting new version %s", name)
                             self.db.insertFile(f, parent)
                             self.db.setChecksum(inode, old['checksum'])
                         retVal = DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
-                        self.logger.debug("No checksum: Get new file %s", name)
+                        #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
                         retVal = CONTENT
-                elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
-                    self.logger.debug("Secondary match, requesting checksum: %s", name)
+                #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
+                elif (osize == fsize) and not (old["checksum"] is None):
+                    #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
                     retVal = CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.server.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.server.deltaPercent))) or \
                      ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.server.maxChain)):
-                    self.logger.debug("Third case.  Weirdos: %s", name)
+                    #self.logger.debug("Third case.  Weirdos: %s", name)
                     # Couple conditions that can cause it to always load
                     # File is less than 4K
                     # Old file had now size
@@ -246,16 +248,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     retVal = CONTENT
                 else:
                     # Otherwise, let's just get the delta
-                    self.logger.debug("Fourth case.  Should be a delta: %s", name)
+                    #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
                     retVal = DELTA
             else:
                 # Create a new record for this file
-                self.logger.debug("No file found: %s", name)
+                #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
-                    self.logger.debug('Looking for file with same inode %d in backupset', inode)
+                    #self.logger.debug('Looking for file with same inode %d in backupset', inode)
                     checksum = self.db.getChecksumByInode(inode, True)
                     if checksum:
                         self.db.setChecksum(inode, checksum)
@@ -264,13 +266,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         retVal = CONTENT
                 else:
                     #Check to see if it's been moved or copied
-                    self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
+                    #self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
                     old = self.db.getFileInfoBySimilar(f)
 
                     if old:
                         if old["name"] == f["name"] and old["parent"] == parent:
                             # If the name and parent ID are the same, assume it's the same
-                            if ("checksum" in old.keys()) and not (old["checksum"] is None):
+                            #if ("checksum" in old.keys()) and not (old["checksum"] is None):
+                            if not (old["checksum"] is None):
                                 self.db.setChecksum(inode, old['checksum'])
                                 retVal = DONE
                             else:
@@ -930,6 +933,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if started:
                 self.endSession()
             endtime = datetime.now()
+
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
                 self.server.profiler.disable()
@@ -953,7 +957,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.info("Session from %s Ending: %s: %s", host, str(completed), str(datetime.now() - starttime))
 
 #class TardisSocketServer(SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
+#class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
+class TardisSocketServer(SocketServer.TCPServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args
