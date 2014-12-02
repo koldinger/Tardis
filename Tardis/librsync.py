@@ -256,6 +256,10 @@ def patch(f, d, o=None):
         _librsync.rs_job_free(job)
     return o
 
+"""
+New code by Eric Koldinger, (c) 2014, derived from above code.
+Licensing terms as above
+"""
 
 class SignatureJob(object):
     def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
