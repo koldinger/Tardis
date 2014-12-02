@@ -45,5 +45,6 @@ __defaults__ = {
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
                 'TARDIS_SERVER'         : 'localhost',
-                'TARDIS_HOST'           : socket.gethostname()
+		'TARDIS_REMOTEPORT'	: '5000',
+                'TARDIS_HOST'           : socket.gethostname(),
                }

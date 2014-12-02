@@ -44,6 +44,7 @@ import CacheDir
 
 basedir = Util.getDefault('TARDIS_DB')
 dbname  = Util.getDefault('TARDIS_DBNAME')
+port    = Util.getDefault('TARDIS_REMOTEPORT')
 
 app = Flask(__name__)
 print __name__
@@ -216,8 +217,8 @@ def main():
 
 def tornado():
     logging.basicConfig(level=logging.DEBUG)
-    http_server = HTTPServer(WSGIContainer(HttpInterface.app))
-    http_server.listen(5000)
+    http_server = HTTPServer(WSGIContainer(app))
+    http_server.listen(int(port))
     IOLoop.instance().start()
 
 if __name__ == "__main__":
