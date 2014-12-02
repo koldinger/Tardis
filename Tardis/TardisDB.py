@@ -135,16 +135,6 @@ fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, " 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
 
-def makeDict(cursor, row):
-    """ Convert a row from the db into a dict """
-    if row != None and cursor != None and len(row) != 0:
-        d = {}
-        for idx, col in enumerate(cursor.description):
-            d[col[0]] = row[idx]
-        return d
-    else:
-        return None
-
 def addFields(x, y):
     """ Add fields to the end of a dict """
     return dict(y.items() + x)
@@ -184,6 +174,7 @@ class TardisDB(object):
 
         self.conn = sqlite3.connect(self.dbName)
         self.conn.text_factory = str
+        self.conn.row_factory= sqlite3.Row
         self.cursor = self.conn.cursor()
 
         if (initialize):
@@ -259,7 +250,7 @@ class TardisDB(object):
                                      backupSetInfoFields +
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
-        return makeDict(c, row)
+        return row
 
     def execute(self, query, data):
         try:
@@ -316,7 +307,7 @@ class TardisDB(object):
                   "WHERE Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
-        return makeDict(c, c.fetchone())
+        return c.fetchone()
 
     def getFileInfoByPath(self, path, current=False, permchecker=None):
         """ Lookup a file by a full path. """
@@ -356,7 +347,7 @@ class TardisDB(object):
                   "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "device": device, "backup": backupset})
-        return makeDict(c, c.fetchone())
+        return c.fetchone()
 
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
@@ -372,7 +363,7 @@ class TardisDB(object):
                                 "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 temp)
-        return makeDict(c, c.fetchone())
+        return c.fetchone()
 
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
@@ -388,7 +379,7 @@ class TardisDB(object):
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
-        return makeDict(c, c.fetchone())
+        return c.fetchone()
 
     def copyChecksum(self, old_inode, new_inode):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT CheckSumID FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
@@ -515,7 +506,7 @@ class TardisDB(object):
                          {"checksum": checksum})
         row = c.fetchone()
         if row:
-            return makeDict(c, row)
+            return row
         else:
             self.logger.debug("No checksum found for %s", checksum)
             return None
@@ -555,7 +546,7 @@ class TardisDB(object):
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          {"parent": inode, "parentDev": device, "backup": backupset})
         for row in c.fetchall():
-            yield makeDict(c, row)
+            yield row
 
     def listBackupSets(self):
         self.logger.debug("list backup sets")
@@ -563,7 +554,7 @@ class TardisDB(object):
                          "Name AS name, BackupSet AS backupset "
                          "FROM Backups", {})
         for row in c.fetchall():
-            yield makeDict(c, row)
+            yield row
 
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT " + 
@@ -571,10 +562,7 @@ class TardisDB(object):
                          "FROM Backups WHERE Name = :name",
                          { "name": name })
         row = c.fetchone()
-        if row:
-            return makeDict(c, row)
-        else:
-            return None
+        return row
 
     def getBackupSetInfoForTime(self, time):
         c = self.execute("SELECT " + 
@@ -582,10 +570,7 @@ class TardisDB(object):
                          "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
                          { "time": time })
         row = c.fetchone()
-        if row:
-            return makeDict(c, row)
-        else:
-            return None
+        return row
 
     def getConfigValue(self, key):
         c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })

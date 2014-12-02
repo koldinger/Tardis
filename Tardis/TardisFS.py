@@ -687,7 +687,7 @@ class TardisFS(fuse.Fuse):
             if attr in self.attrMap:
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
-                if self.attrMap[attr] in b:
+                if self.attrMap[attr] in b.keys():
                     return retFunc(b[self.attrMap[attr]])
 
         if depth > 1:
