@@ -320,7 +320,6 @@ class TardisDB(object):
 
         #(dirname, name) = os.path.split(path)
         # Walk the path
-        c = self.cursor
         for name in splitpath(path):
             if name == '/':
                 continue
@@ -333,6 +332,22 @@ class TardisDB(object):
             else:
                 break
         return info
+
+    def getFileInfoForPath(self, path, current=False):
+        """ Return the FileInfo structures for each file along a path """
+        backupset = self._bset(current)
+        #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
+        parent = (0, 0)         # Root directory value
+        info = None
+        for name in splitpath(path):
+            if name == '/':
+                continue
+            info = self.getFileInfoByName(name, parent, backupset)
+            if info:
+                yield info
+                parent = (info["inode"], info["device"])
+            else:
+                break
 
     def getFileInfoByInode(self, info, current=False):
         backupset = self._bset(current)

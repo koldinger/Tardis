@@ -47,7 +47,6 @@ dbname  = Util.getDefault('TARDIS_DBNAME')
 port    = Util.getDefault('TARDIS_REMOTEPORT')
 
 app = Flask(__name__)
-print __name__
 app.secret_key = os.urandom(24)
 
 dbs = {}
@@ -144,6 +143,13 @@ def getFileInfoByPath(backupset, pathname):
     db = getDB()
     return json.dumps(makeDict(db.getFileInfoByPath(pathname, backupset)))
 
+@app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
+def getFileInfoForPath(backupset, pathname):
+    db = getDB()
+    pathinfo = []
+    for i in db.getFileInfoForPath(pathname, backupset):
+        pathinfo.append(makeDict(i))
+    return json.dumps(pathinfo)
 
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
@@ -213,7 +219,7 @@ def getFileData(checksum):
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=int(port))
 
 def tornado():
     logging.basicConfig(level=logging.DEBUG)
