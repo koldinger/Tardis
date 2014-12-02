@@ -29,6 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from flask import Flask, session, request, url_for, escape, abort, redirect, send_file
+from tornado.wsgi import WSGIContainer
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
+
 import os, os.path
 import logging
 import json
@@ -42,6 +46,7 @@ basedir = Util.getDefault('TARDIS_DB')
 dbname  = Util.getDefault('TARDIS_DBNAME')
 
 app = Flask(__name__)
+print __name__
 app.secret_key = os.urandom(24)
 
 dbs = {}
@@ -53,6 +58,14 @@ def getDB():
     host = session['host']
     db = dbs[host]
     return db
+
+def makeDict(row):
+    if row:
+        d = {}
+        for i in row.keys():
+            d[i] = row[i]
+        return d
+    return None
 
 @app.route('/')
 def hello():
@@ -96,25 +109,25 @@ def logout():
 # getBackupSetInfo
 @app.route('/getBackupSetInfo/<backupset>')
 def getBackupSetInfo(backupset):
-    app.logger.info("getBackupSetInfo Invoked: %s", backupset)
+    #app.logger.info("getBackupSetInfo Invoked: %s", backupset)
     db = getDB()
-    return json.dumps(db.getBackupSetInfo(backupset))
+    return json.dumps(makeDict(db.getBackupSetInfo(backupset)))
 
 # lastBackupSet
 @app.route('/lastBackupSet/<int:completed>')
 def lastBackupSet(completed):
     db = getDB()
-    return json.dumps(db.lastBackupSet(bool(completed)))
+    return json.dumps(makeDict(db.lastBackupSet(bool(completed))))
 
 # listBackupSets
 @app.route('/listBackupSets')
 def listBackupSets():
-    app.logger.info("listBackupSets Invoked")
+    #app.logger.info("listBackupSets Invoked")
     db = getDB()
     sets = []
     for backup in db.listBackupSets():
         app.logger.debug(str(backup))
-        sets.append(backup)
+        sets.append(makeDict(backup))
 
     app.logger.debug(str(sets))
     return json.dumps(sets)
@@ -126,56 +139,56 @@ def getFileInfoByPathRoot(backupset):
 # getFileInfoByPath
 @app.route('/getFileInfoByPath/<int:backupset>/<path:pathname>')
 def getFileInfoByPath(backupset, pathname):
-    app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
+    #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
-    return json.dumps(db.getFileInfoByPath(pathname, backupset))
+    return json.dumps(makeDict(db.getFileInfoByPath(pathname, backupset)))
 
 
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
-    app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
+    #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
-    return json.dumps(db.getFileInfoByName(name, (inode, device), backupset))
+    return json.dumps(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
 def readDirectory(backupset, device, inode):
-    app.logger.info("readDirectory Invoked: %d (%d,%d)", backupset, inode, device)
+    #app.logger.info("readDirectory Invoked: %d (%d,%d)", backupset, inode, device)
     db = getDB()
     directory = []
     for x in db.readDirectory((inode, device), backupset):
-        directory.append(x)
+        directory.append(makeDict(x))
     return json.dumps(directory)
 
 
 # getChecksumByPath
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
 def getChecksumByPath(backupset, pathname):
-    app.logger.info("getChecksumByPath Invoked: %d %s", backupset, pathname)
+    #app.logger.info("getChecksumByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
-    app.logger.warning("Checksum: %s", cksum)
+    app.logger.info("Checksum: %s", cksum)
     return json.dumps(cksum)
 
 # getChecksumInfo
 @app.route('/getChecksumInfo/<checksum>')
 def getChecksumInfo(checksum):
-    app.logger.info("getChecksumInfo Invoked: %s", checksum)
+    #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
-    return json.dumps(db.getChecksumInfo(checksum))
+    return json.dumps(makeDict(db.getChecksumInfo(checksum)))
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
-    app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
+    #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
     db = getDB()
-    return json.dumps(db.getBackupSetInfoForTime(time))
+    return json.dumps(makeDict(db.getBackupSetInfoForTime(time)))
 
 
 # getFirstBackkupSet
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
 def getFirstBackupSet(backupset, pathname):
-    app.logger.info("getFirstBackupSet Invoked: %d %s", backupset, pathname)
+    #app.logger.info("getFirstBackupSet Invoked: %d %s", backupset, pathname)
     db = getDB()
     if not pathname.startswith('/'):
         pathname = '/' + pathname
@@ -184,13 +197,13 @@ def getFirstBackupSet(backupset, pathname):
 # getChainLength
 @app.route('/getChainLength/<checksum>')
 def getChainLength(checksum):
-    app.logger.info("getChainLength Invoked: d %s", checksum)
+    #app.logger.info("getChainLength Invoked: d %s", checksum)
     db = getDB()
     return json.dumps(db.getChainLength(checksum))
 
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
-    app.logger.info("getFileData Invoked: %s", checksum)
+    #app.logger.info("getFileData Invoked: %s", checksum)
     if not 'host' in session:
         abort(401)
     host = session['host']
@@ -200,6 +213,12 @@ def getFileData(checksum):
 def main():
     logging.basicConfig(level=logging.DEBUG)
     app.run(debug=True, port=5000)
+
+def tornado():
+    logging.basicConfig(level=logging.DEBUG)
+    http_server = HTTPServer(WSGIContainer(HttpInterface.app))
+    http_server.listen(5000)
+    IOLoop.instance().start()
 
 if __name__ == "__main__":
     main()

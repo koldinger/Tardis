@@ -31,8 +31,19 @@
 import requests
 import logging
 import tempfile
+import sys
 
 import ConnIdLogAdapter
+
+
+def fs_encode(val):
+    """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
+    if not isinstance(val, bytes):
+        #return val.encode(sys.getfilesystemencoding())
+        return val.encode(sys.getfilesystemencoding())
+    else:
+        return val
+
 
 class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
@@ -82,7 +93,10 @@ class RemoteDB(object):
     def listBackupSets(self):
         r = self.session.get(self.baseURL + "listBackupSets")
         r.raise_for_status()
-        return r.json()
+        for i in r.json():
+            self.logger.debug("Returning %s", str(i))
+            i['name'] = fs_encode(i['name'])
+            yield i
 
     def lastBackupSet(self, completed=True):
         r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)))
@@ -119,9 +133,11 @@ class RemoteDB(object):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "readDirectory/" + bset + "/" + str(device) + "/" + str(inode))
         r.raise_for_status()
-        return r.json()
+        for i in r.json():
+            i['name'] = fs_encode(i['name'])
+            yield i
 
-    def getChecksumByPath(self, path, current=False):
+    def getChecksumByPath(self, path, current=False, permchecker=None):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
