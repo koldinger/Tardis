@@ -154,6 +154,7 @@ class TardisDB(object):
     db      = None
     currBackupSet = None
     dirinodes = {}
+    backup = False
 
     def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None):
         """ Initialize the connection to a per-machine Tardis Database"""
@@ -164,13 +165,8 @@ class TardisDB(object):
         if extra:
             self.logger = ConnIdLogAdapter.ConnIdLogAdapter(self.logger, extra)
 
-        if backup:
-            backup = dbname + ".bak"
-            try:
-                self.logger.debug("Backing up {}".format(dbname))
-                shutil.copyfile(dbname, backup)
-            except IOError:
-                pass
+        self.backup = backup
+
 
         self.conn = sqlite3.connect(self.dbName)
         self.conn.text_factory = str
@@ -668,14 +664,26 @@ class TardisDB(object):
     def commit(self):
         self.conn.commit()
 
-    def __del__(self):
+    def close(self):
         self.logger.debug("Closing DB: {}".format(self.dbName))
+        if self.currBackupSet:
+            self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
+                                { "now": time.time(), "backup": self.currBackupSet })
+        self.conn.commit()
+        self.conn.close()
+        self.conn = None
+
+        if self.backup:
+            backup = dbname + ".bak"
+            try:
+                self.logger.debug("Backing up {}".format(dbname))
+                shutil.copyfile(dbname, backup)
+            except IOError:
+                self.logger.error("Error detected creating database backup: %s", e)
+
+    def __del__(self):
         if self.conn:
-            if self.currBackupSet:
-                self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
-                                    { "now": time.time(), "backup": self.currBackupSet })
-            self.conn.commit()
-            self.conn.close()
+            self.close()
 
 if __name__ == "__main__":
     import sys

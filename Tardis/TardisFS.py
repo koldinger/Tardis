@@ -203,10 +203,10 @@ class TardisFS(fuse.Fuse):
         return self.name
 
     def fsEncodeName(self, name):
-        if not isinstance(name, bytes):
-            return name.encode(self.fsencoding)
-        else:
+        if isinstance(name, bytes):
             return name
+        else:
+            return name.encode(self.fsencoding)
 
     def getBackupSetInfo(self, b, requestTime = None):
         key = (_BackupSetInfo, b)

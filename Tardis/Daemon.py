@@ -917,6 +917,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.commit()
 
             self.db.completeBackup()
+
             if autoname and serverName is not None:
                 self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
@@ -954,11 +955,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 self.logger.debug("Removing orphans")
                 self.db.compact()
+
+            self.db.close()
+
         self.logger.info("Session from %s Ending: %s: %s", host, str(completed), str(datetime.now() - starttime))
 
 #class TardisSocketServer(SocketServer.TCPServer):
-#class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.TCPServer):
+class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args
@@ -966,7 +969,7 @@ class TardisSocketServer(SocketServer.TCPServer):
         setConfig(self, args, config)
         logger.info("TCP Server %s Running: %s", Tardis.__version__, self.dbname)
 
-class TardisDomainSocketServer(SocketServer.ForkingMixIn, SocketServer.UnixStreamServer):
+class TardisDomainSocketServer(SocketServer.UnixStreamServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args

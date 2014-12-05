@@ -183,9 +183,11 @@ def processChecksums(inodes):
     response = sendAndReceive(message)
     checkMessage(response, 'ACKSUM')
 
+    logfiles = logger.isEnabledFor(logging.FILES)
+
     # First, delete all the files which are "done", ie, matched
     for i in [tuple(x) for x in response['done']]:
-        if verbosity > 1:
+        if logfiles:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
@@ -195,7 +197,7 @@ def processChecksums(inodes):
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
     for i in [tuple(x) for x in response['content']]:
-        if verbosity > 1:
+        if logfiles:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 if "size" in x:
@@ -247,44 +249,59 @@ def processDelta(inode):
                 reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), checksum=True, signature=makeSig)
                 # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
                 reader.seek = lambda x, y: 0
+
+                # Generate the delta file
                 delta = librsync.delta(reader, sigfile)
+
+                # get the auxiliary info
                 checksum = reader.checksum()
                 filesize = reader.size()
                 newsig = reader.signatureFile()
+
+                # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
+                # Ugly.
+                delta.seek(0, 2)
+                deltasize = delta.tell()
+                delta.seek(0)
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 #logger.exception(e)
                 sendContent(inode)
                 return
 
-            (encrypt, iv) = makeEncryptor()
-            stats['delta'] += 1
-            message = {
-                "message": "DEL",
-                "inode": inode,
-                "size": filesize,
-                "checksum": checksum,
-                "basis": oldchksum,
-                "encoding": encoding
-            }
-            if iv:
-                #message["iv"] = conn.encode(iv)
-                message["iv"] = base64.b64encode(iv)
-
-            sendMessage(message)
-            compress = True if (args.compress and (filesize > args.mincompsize)) else False
-            (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
-            delta.close()
-
-            # If we have a signature, send it.
-            if newsig:
+            if deltasize < (filesize * float(args.deltathreshold) / 100.0):
+                (encrypt, iv) = makeEncryptor()
+                stats['delta'] += 1
                 message = {
-                    "message" : "SIG",
-                    "checksum": checksum
+                    "message": "DEL",
+                    "inode": inode,
+                    "size": filesize,
+                    "checksum": checksum,
+                    "basis": oldchksum,
+                    "encoding": encoding
                 }
+                if iv:
+                    #message["iv"] = conn.encode(iv)
+                    message["iv"] = base64.b64encode(iv)
+
                 sendMessage(message)
-                # Send the signature, generated above
-                Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+                delta.close()
+
+                # If we have a signature, send it.
+                if newsig:
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                    sendMessage(message)
+                    # Send the signature, generated above
+                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+            else:
+                if logger.isEnabledFor(info):
+                    logger.info("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
+                sendContent(inode)
         else:
             sendContent(inode)
 
@@ -365,7 +382,7 @@ def handleAckDir(message):
             del inodeDB[i]
 
     for i in [tuple(x) for x in content]:
-        if verbosity > 1:
+        if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 if "size" in x:
@@ -378,7 +395,7 @@ def handleAckDir(message):
             del inodeDB[i]
 
     for i in [tuple(x) for x in delta]:
-        if verbosity > 1:
+        if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
@@ -479,19 +496,23 @@ def handleAckClone(message):
     if verbosity > 2:
         logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
+    logdirs = logger.isEnabledFor(logging.DIRS)
+
     # Process the directories that have changed
     for i in message["content"]:
         finfo = tuple(i)
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if len(files) < args.batchdirs:
-                logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
+                if logdirs:
+                    logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
                 (inode, device) = finfo
                 batchDirs.append(makeDirMessage(path, inode, device, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
+                if logdirs:
+                    logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
                 flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
@@ -640,7 +661,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneable = True
 
         if cloneable:
-            logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
+            if logger.isEnabledFor(logging.DIRS):
+                logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
 
             filenames = sorted([x["name"] for x in files])
             m = hashlib.md5()
@@ -653,13 +675,15 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 flushClones()
         else:
             if len(files) < args.batchdirs:
-                logger.log(logging.DIRS, "Dir: [B]: %s", Util.shortPath(dir))
+                if logger.isEnabledFor(logging.DIRS):
+                    logger.log(logging.DIRS, "Dir: [b]: %s", Util.shortPath(dir))
                 flushClones()
                 batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
                 if len(batchDirs) >= args.batchsize:
                     flushBatchDirs()
             else:
-                logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
+                if logger.isEnabledFor(logging.DIRS):
+                    logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
                 flushClones()
                 flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
@@ -840,7 +864,7 @@ def run_server(args, tempfile):
         #server_cmd = server_cmd + args.serverargs
     logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
-    time.sleep(.5)
+    time.sleep(1.0)
     if subp.poll():
         raise Exception("Subprocess died:" + subp.returncode)
     return subp
@@ -920,6 +944,8 @@ def processCommandLine():
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],      help='Protocol for data transfer.  Default: %(default)s')
 
+    parser.add_argument('--deltathreshold',     dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
+
     purgegroup = parser.add_argument_group("Options for purging old backup sets:")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=False,  help='Purge old backup sets when backup complete')
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
@@ -968,9 +994,6 @@ def setupLogging(logfile, verbosity):
 
 def main():
     global starttime, args, config, conn, verbosity, crypt
-    # Create some new special intermediate logging levels
-
-
     # Read the command line arguments.
     args = processCommandLine()
 
@@ -979,6 +1002,7 @@ def main():
     setupLogging(args.logfile, verbosity)
 
     starttime = datetime.datetime.now()
+    subserver = None
 
     try:
         # Figure out the name and the priority of this backupset
@@ -1022,7 +1046,7 @@ def main():
         tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
         args.port = tempsocket
         args.server = None
-        run_server(args, tempsocket)
+        subserver = run_server(args, tempsocket)
 
     try:
         if args.protocol == 'json':
@@ -1080,7 +1104,11 @@ def main():
         logger.warning("Backup Interupted")
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
-        logger.exception(e)
+        #logger.exception(e)
+
+    if args.local:
+        logger.info("Waiting for server to complete")
+        subserver.wait()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
 
