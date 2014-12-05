@@ -863,7 +863,7 @@ def run_server(args, tempfile):
         #server_cmd = server_cmd + args.serverargs
     logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
-    time.sleep(.5)
+    time.sleep(1.0)
     if subp.poll():
         raise Exception("Subprocess died:" + subp.returncode)
     return subp
@@ -993,9 +993,6 @@ def setupLogging(logfile, verbosity):
 
 def main():
     global starttime, args, config, conn, verbosity, crypt
-    # Create some new special intermediate logging levels
-
-
     # Read the command line arguments.
     args = processCommandLine()
 
@@ -1004,6 +1001,7 @@ def main():
     setupLogging(args.logfile, verbosity)
 
     starttime = datetime.datetime.now()
+    subserver = None
 
     try:
         # Figure out the name and the priority of this backupset
@@ -1047,7 +1045,7 @@ def main():
         tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
         args.port = tempsocket
         args.server = None
-        run_server(args, tempsocket)
+        subserver = run_server(args, tempsocket)
 
     try:
         if args.protocol == 'json':
@@ -1105,7 +1103,11 @@ def main():
         logger.warning("Backup Interupted")
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
-        logger.exception(e)
+        #logger.exception(e)
+
+    if args.local:
+        logger.info("Waiting for server to complete")
+        subserver.wait()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
 
