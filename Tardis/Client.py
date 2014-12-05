@@ -299,7 +299,8 @@ def processDelta(inode):
                     # Send the signature, generated above
                     Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
             else:
-                logger.info("Delta size is too large.  Sending full content: Delta: %d File: %d", deltasize, filesize)
+                if logger.isEnabledFor(info):
+                    logger.info("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
                 sendContent(inode)
         else:
             sendContent(inode)
