@@ -298,9 +298,10 @@ def processDelta(inode):
                     sendMessage(message)
                     # Send the signature, generated above
                     Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    newsig.close()
             else:
-                if logger.isEnabledFor(info):
-                    logger.info("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
                 sendContent(inode)
         else:
             sendContent(inode)
@@ -361,7 +362,10 @@ def sendContent(inode):
                 #logger.exception(e)
                 raise e
             finally:
-                x.close()
+                if x is not None:
+                    x.close()
+                if sig is not None:
+                    sig.close()
             stats['new'] += 1
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
@@ -523,8 +527,9 @@ def handleAckClone(message):
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
             for f in files:
-                if f['inode'] in inodeDB:
-                    del inodeDB[f['inode']]
+                key = (f['inode'], f['dev'])
+                if key in inodeDB:
+                    del inodeDB[key]
             del cloneContents[inode]
         if inode in inodeDB:
             del inodeDB[inode]
@@ -690,6 +695,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         # Make sure we're not at maximum depth
         if depth != 1:
+            files = None
             for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
@@ -997,6 +1003,11 @@ def main():
     # Read the command line arguments.
     args = processCommandLine()
 
+    # Memory debugging.
+    # Enable only if you really need it.
+    #from dowser import launch_memory_usage_server
+    #launch_memory_usage_server()
+
     # Set up logging
     verbosity=args.verbose if args.verbose else 0
     setupLogging(args.logfile, verbosity)
@@ -1092,7 +1103,13 @@ def main():
 
         # Sanity check.
         if len(cloneContents) != 0:
-            logger.warning("Warning: Some cloned directories not processed")
+            logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+        # This next one is usually non-zero, for some reason.  Enable to debug.
+        #if len(inodeDB) != 0:
+            #logger.warning("Warning: Some InodeDB none zero: %d", len(inodeDB))
+            #for key in inodeDB.keys():
+                #(info, path) = inodeDB[key]
+                #print "{}:: {}".format(key, path)
 
         if args.purge:
             if args.purgetime:

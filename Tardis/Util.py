@@ -122,7 +122,7 @@ def getPassword(password, pwfile, pwurl, pwprog):
 
     return password
 
-def sendData(sender, file, encrypt, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
+def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -134,9 +134,9 @@ def sendData(sender, file, encrypt, chunksize=(16 * 1024), checksum=False, compr
     sig = None
 
     if compress:
-        stream = CompressedBuffer.CompressedBufferedReader(file, checksum=checksum, signature=signature)
+        stream = CompressedBuffer.CompressedBufferedReader(data, checksum=checksum, signature=signature)
     else:
-        stream = CompressedBuffer.BufferedReader(file, checksum=checksum, signature=signature)
+        stream = CompressedBuffer.BufferedReader(data, checksum=checksum, signature=signature)
 
     try:
         for chunk in iter(partial(stream.read, chunksize), ''):
@@ -164,6 +164,7 @@ def sendData(sender, file, encrypt, chunksize=(16 * 1024), checksum=False, compr
             sig = stream.signatureFile()
         #print message
         sender.sendMessage(message)
+        stream = None
     return size, ck, sig
 
 def receiveData(receiver, output):
