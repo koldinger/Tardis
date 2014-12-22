@@ -167,7 +167,6 @@ class TardisDB(object):
 
         self.backup = backup
 
-
         self.conn = sqlite3.connect(self.dbName)
         self.conn.text_factory = str
         self.conn.row_factory= sqlite3.Row
@@ -674,10 +673,10 @@ class TardisDB(object):
         self.conn = None
 
         if self.backup:
-            backup = dbname + ".bak"
+            backupName = self.dbName + ".bak"
             try:
                 self.logger.debug("Backing up {}".format(dbname))
-                shutil.copyfile(dbname, backup)
+                shutil.copyfile(self.dbName, backupName)
             except IOError:
                 self.logger.error("Error detected creating database backup: %s", e)
 
