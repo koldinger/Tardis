@@ -158,6 +158,10 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
+def delInode(inode):
+    if inode in inodeDB:
+        del inodeDB[inode]
+
 def processChecksums(inodes):
     """ Generate checksums for requested checksum files """
     files = []
@@ -191,8 +195,7 @@ def processChecksums(inodes):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
                 logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
-        if i in inodeDB:
-            del inodeDB[i]
+        delInode(i)
 
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
@@ -206,8 +209,7 @@ def processChecksums(inodes):
                     size = 0;
                 logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
-        if i in inodeDB:
-            del inodeDB[i]
+        delInode(i)
 
 def makeEncryptor():
     if crypt:
@@ -382,8 +384,7 @@ def handleAckDir(message):
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
 
     for i in [tuple(x) for x in done]:
-        if i in inodeDB:
-            del inodeDB[i]
+        delInode(i)
 
     for i in [tuple(x) for x in content]:
         if logger.isEnabledFor(logging.FILES):
@@ -395,8 +396,7 @@ def handleAckDir(message):
                     size = 0;
                 logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
         sendContent(i)
-        if i in inodeDB:
-            del inodeDB[i]
+        delInode(i)
 
     for i in [tuple(x) for x in delta]:
         if logger.isEnabledFor(logging.FILES):
@@ -404,8 +404,7 @@ def handleAckDir(message):
                 (x, name) = inodeDB[i]
                 logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
         processDelta(i)
-        if i in inodeDB:
-            del inodeDB[i]
+        delInode(i)
 
     # Collect the ACK messages
     if len(cksum) > 0:
@@ -528,11 +527,10 @@ def handleAckClone(message):
             (path, files) = cloneContents[inode]
             for f in files:
                 key = (f['inode'], f['dev'])
-                if key in inodeDB:
-                    del inodeDB[key]
+                delInode(key)
             del cloneContents[inode]
-        if inode in inodeDB:
-            del inodeDB[inode]
+        # And the directory.
+        delInode(inode)
 
 def makeCloneMessage():
     global cloneDirs
