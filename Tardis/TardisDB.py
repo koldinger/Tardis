@@ -675,7 +675,7 @@ class TardisDB(object):
         if self.backup:
             backupName = self.dbName + ".bak"
             try:
-                self.logger.debug("Backing up {}".format(dbname))
+                self.logger.debug("Backing up {}".format(self.dbName))
                 shutil.copyfile(self.dbName, backupName)
             except IOError:
                 self.logger.error("Error detected creating database backup: %s", e)
