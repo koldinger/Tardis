@@ -12,10 +12,11 @@ relatively platform independent, although it's only been tested on linux so far.
 easy ported to Windows.
 
 Tardis consists of several components:
-* tardisd (TardisDaemon): The tardis daemon process which maintains the backups
-* tardis  (TardisClient): The tardis client process, which creates backup data and pushes it to the server
-* TardisFS: A FUSE based file system which provides views of the various backup sets.
+* tardisd (Daemon): The tardis daemon process which maintains the backups
+* tardis  (Client): The tardis client process, which creates backup data and pushes it to the server
+* tardisfs (TardisFS): A FUSE based file system which provides views of the various backup sets.
 * regenerate (Regenerate): A program to retrieve an individual verson of the file without using the TardisFS
+* tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate and tardisfs.  Simplifies the 
 
 Tardis is currently under development, but is at beta level.
 Features currently planned to be implemented:
@@ -55,28 +56,41 @@ Server Setup
       * Set the Port to be the port you want to use.  Default is currently 7420.
   * If you want to use SSL, create a certificate and a key file (plenty of directions on the web).
   * Edit other parameters as necessary.
+  * Create your backup directory, if need by (mkdir */path/to/your/backup/directory*)
+  * Add a tardis user (adduser tardis)
+  * Create a log directory (mkdir */var/log/tardisd*)
   * Copy the appropriate startup script as desired
-      * Systemd/systemctl based systems (such as Fedora 20
+      * Systemd/systemctl based systems (such as Fedora 20)
          * cp init/tardisd.service /usr/lib/systemd/system
          * systemctl enable tardisd.service
+         * start the service
+          * systemctl start tardisd.service
       * SysV init
          * cp init/tardisd /etc/init.d
          * chkconfig --add tardisd
          * chkconfig tardisd on
-         * service tardisd start
+         * start the service
+          * service tardisd start
 
 Running the Client
 ==================
 Should probably run as root.  Basic operation is thus:
   tardis [--port <targetPort>] [--server <host>] [--ssl] /path/to/directory-to-backup <more paths here>
 Use the --ssl if your connection is SSL enabled.
-If you wish encrypted backups, add the --password or --password-file options to specify a password.  Note, if you use encrypted backups, you must always specify the same password.  Tardis doesn't currently check, but you're in a heap of pain of you get it wrong.  Or at least a LOT of wasted disk space, and unreadable files.
+If you wish encrypted backups, add the --password or --password-file options to specify a password.  ~~Note, if you use encrypted backups, you must always specify the same password.  Tardis doesn't currently check, but you're in a heap of pain of you get it wrong.  Or at least a LOT of wasted disk space, and unreadable files.~~
 
 Your first backup will take quite a while.  Subsequent backups will be significantly faster.
 
 Once you have an initial backup in place, put this in your cron job to run daily.
 You can also run hourly incremental backups with a -H option instead of the -A above.
 Adding --purge to your command line will remove old backupsets per a schedule of hourly's after a day, daily's after 30 days, weekly's after 6 months, and monthly's never.
+
+Note on Passwords
+=================
+There is no mechanism for recovering a lost password.  If you lose it, you're done.
+
+There is currently no mechanism for changing passwords; make sure your initial password is secure.
+This will probably change in a later release, but has not yet been implemented.
 
 Running the Client without a Server locally
 ===========================================
