@@ -529,21 +529,28 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Process a list of checksums """
         self.logger.debug("Processing checksum message: %s", message)
         done = []
+        delta = []
         content = []
         for f in message["files"]:
             (inode, dev) = f["inode"]
             cksum = f["checksum"]
-            if self.cache.exists(cksum):
+            # Check to see if the checksum exists
+            # TODO: Is this faster than checking if the file exists?  Probably, but should test.
+            info = self.db.getChecksumInfo(cksum)
+            if info is not None:
                 self.db.setChecksum(inode, cksum)
                 done.append(f['inode'])
             else:
                 # FIXME: TODO: If no checksum, should we request a delta???
+                #old = self.db.getFileInfoByInode(inode)
+                #if old:
                 content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",
             "done"   : done,
-            "content": content
+            "content": content,
+            "delta"  : delta
             }
         return (message, False)
 

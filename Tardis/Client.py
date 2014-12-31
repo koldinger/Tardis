@@ -207,8 +207,21 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
+                logger.log(logging.FILES, "File: [n]: %s %d", Util.shortPath(name), size)
         sendContent(i)
+        delInode(i)
+
+
+    for i in [tuple(x) for x in response['delta']]:
+        if logfiles:
+            if i in inodeDB:
+                (x, name) = inodeDB[i]
+                if "size" in x:
+                    size = x["size"]
+                else:
+                    size = 0;
+                logger.log(logging.FILES, "File: [d]: %s %d", Util.shortPath(name), size)
+        processDelta(i)
         delInode(i)
 
 def makeEncryptor():
@@ -386,17 +399,19 @@ def handleAckDir(message):
     for i in [tuple(x) for x in done]:
         delInode(i)
 
-    for i in [tuple(x) for x in content]:
-        if logger.isEnabledFor(logging.FILES):
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                if "size" in x:
-                    size = x["size"]
-                else:
-                    size = 0;
-                logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
-        sendContent(i)
-        delInode(i)
+    # If checksum content in NOT specified, send the data for each file
+    if not args.ckscontent:
+        for i in [tuple(x) for x in content]:
+            if logger.isEnabledFor(logging.FILES):
+                if i in inodeDB:
+                    (x, name) = inodeDB[i]
+                    if "size" in x:
+                        size = x["size"]
+                    else:
+                        size = 0;
+                    logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
+            sendContent(i)
+            delInode(i)
 
     for i in [tuple(x) for x in delta]:
         if logger.isEnabledFor(logging.FILES):
@@ -406,7 +421,10 @@ def handleAckDir(message):
         processDelta(i)
         delInode(i)
 
-    # Collect the ACK messages
+    # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
+    # for all of them.
+    if args.ckscontent:
+        cksum.extend(content)
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
@@ -941,6 +959,7 @@ def processCommandLine():
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
     comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
+    comgrp.add_argument('--cks-content',        dest='ckscontent', default=False, action=Util.StoreBoolean, help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
     comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,           help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
     comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,         help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
