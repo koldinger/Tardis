@@ -229,8 +229,9 @@ class TardisFS(fuse.Fuse):
     def decryptNames(self, files):
         outfiles = []
         for x in files:
-            x['name'] = self.crypt.decryptFilename(x['name'])
-            outfiles.append(x)
+            y = dict(zip(x.keys(), x))
+            y['name'] = self.crypt.decryptFilename(x['name'])
+            outfiles.append(y)
 
         return outfiles
 
