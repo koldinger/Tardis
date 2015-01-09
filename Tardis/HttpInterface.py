@@ -191,7 +191,6 @@ def getBackupSetInfoForTime(time):
     db = getDB()
     return json.dumps(makeDict(db.getBackupSetInfoForTime(time)))
 
-
 # getFirstBackkupSet
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
 def getFirstBackupSet(backupset, pathname):
@@ -215,9 +214,13 @@ def getFileData(checksum):
         abort(401)
     host = session['host']
     cache = caches[host]
-    return send_file(cache.open(checksum, "rb"))
+    try:
+        ckfile = cache.open(checksum, "rb")
+        return send_file(ckfile)
+    except:
+        abort(404)
 
-def main():
+def main_flask():
     logging.basicConfig(level=logging.DEBUG)
     app.run(debug=True, port=int(port))
 
@@ -228,4 +231,4 @@ def tornado():
     IOLoop.instance().start()
 
 if __name__ == "__main__":
-    main()
+    main_flask()
