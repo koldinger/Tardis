@@ -142,7 +142,7 @@ class Regenerator:
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            self.logger.exception(e)
+            #self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None):
@@ -366,60 +366,65 @@ def main():
 
     permChecker = setupPermissionChecks()
 
+    retcode = 0
     # do the work here
     for i in args.files:
-        path = None
-        f = None
-        # Recover the file
-        if args.cksum:
-            f = r.recoverChecksumFile(i)
-        else:
-            path = computePath(tardis, bset, i, args.reduce)
-            if not path:
-                continue
-            f = r.recoverFile(path, bset, permchecker=permChecker)
+        try:
+            path = None
+            f = None
+            # Recover the file
+            if args.cksum:
+                f = r.recoverChecksumFile(i)
+            else:
+                path = computePath(tardis, bset, i, args.reduce)
+                if not path:
+                    continue
+                f = r.recoverFile(path, bset, permchecker=permChecker)
 
-        if f != None:
-            # Generate an output name
-            if outputdir:
-                (d, n) = os.path.split(i)
-                outname = os.path.join(outputdir, n)
-                if args.cksum:
-                    path = i
-                logger.debug("Writing output from %s to %s", path, outname)
-                output = file(outname,  "wb")
-            try:
-                x = f.read(16 * 1024)
-                while x:
-                    output.write(x)
+            if f != None:
+                # Generate an output name
+                if outputdir:
+                    (d, n) = os.path.split(i)
+                    outname = os.path.join(outputdir, n)
+                    if args.cksum:
+                        path = i
+                    logger.debug("Writing output from %s to %s", path, outname)
+                    output = file(outname,  "wb")
+                try:
                     x = f.read(16 * 1024)
-            except Exception as e:
-                logger.error("Unable to read file: {}: {}".format(i, repr(e)))
-            finally:
-                f.close()
-                if output is not sys.stdout:
-                    output.close()
-                if output is not None:
-                    # TODO: Figure out a correct timestamp and/or permissions for this file?
-                    if not args.cksum and (args.settime or args.setperm) and (not output is sys.stdout):
-                        info = tardis.getFileInfoByPath(path, bset)
-                        if info:
-                            if args.settime:
-                                try:
-                                    os.utime(outname, (info['atime'], info['mtime']))
-                                except Exception as e:
-                                    logger.warning("Unable to set times for %s", outname)
+                    while x:
+                        output.write(x)
+                        x = f.read(16 * 1024)
+                except Exception as e:
+                    logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                finally:
+                    f.close()
+                    if output is not sys.stdout:
+                        output.close()
+                    if output is not None:
+                        # TODO: Figure out a correct timestamp and/or permissions for this file?
+                        if not args.cksum and (args.settime or args.setperm) and (not output is sys.stdout):
+                            info = tardis.getFileInfoByPath(path, bset)
+                            if info:
+                                if args.settime:
+                                    try:
+                                        os.utime(outname, (info['atime'], info['mtime']))
+                                    except Exception as e:
+                                        logger.warning("Unable to set times for %s", outname)
 
-                            if args.setperm:
-                                try:
-                                    os.chmod(outname, info['mode'])
-                                except Exception as e:
-                                    logger.warning("Unable to set permissions for %s", outname)
-                                try:
-                                    os.chown(outname, info['uid'], info['gid'])
-                                except Exception as e:
-                                    logger.warning("Unable to set owner and group of %s", outname)
+                                if args.setperm:
+                                    try:
+                                        os.chmod(outname, info['mode'])
+                                    except Exception as e:
+                                        logger.warning("Unable to set permissions for %s", outname)
+                                    try:
+                                        os.chown(outname, info['uid'], info['gid'])
+                                    except Exception as e:
+                                        logger.warning("Unable to set owner and group of %s", outname)
+        except:
+            retcode += 1
 
+    return retcode
 
 
 if __name__ == "__main__":
