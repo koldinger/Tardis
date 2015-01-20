@@ -8,3 +8,4 @@ cache
 test.cfg
 test
 mnt
+nohup.out*
