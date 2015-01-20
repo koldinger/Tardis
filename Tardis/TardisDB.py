@@ -236,7 +236,7 @@ class TardisDB(object):
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
-            True == current, false = previous, otherwise a number is returned
+            True == current, False = previous, otherwise a number is returned
         """
         if type(current) is bool:
             return self.currBackupSet if current else self.prevBackupSet
@@ -320,7 +320,6 @@ class TardisDB(object):
         #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = (0, 0)         # Root directory value
         info = None
-
 
         #(dirname, name) = os.path.split(path)
         # Walk the path
@@ -568,10 +567,11 @@ class TardisDB(object):
             yield row
 
     def listBackupSets(self):
-        self.logger.debug("list backup sets")
+        #self.logger.debug("list backup sets")
         c = self.execute("SELECT "
                          "Name AS name, BackupSet AS backupset "
-                         "FROM Backups", {})
+                         "FROM Backups "
+                         "ORDER BY backupset ASC", {})
         for row in c.fetchall():
             yield row
 
