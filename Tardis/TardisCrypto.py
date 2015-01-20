@@ -114,6 +114,7 @@ class TardisCrypto:
         if hostname is None:
             hostname = self.hostname  
         token = self.encryptFilename(hostname)
+        return token
 
 if __name__ == "__main__":
     tc = TardisCrypto("I've got a password, do you?")
