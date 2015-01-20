@@ -31,6 +31,7 @@
 import os
 import types
 import sys
+import pwd, grp
 import argparse
 import uuid
 import logging
@@ -106,8 +107,7 @@ configDefaults = {
     'Local'             : None,
     'Verbose'           : '0',
     'Daemon'            : str(False),
-    'SetOwner'          : str(False),
-    'Umask'             : '2',
+    'Umask'             : '027',
     'User'              : None,
     'Group'             : None,
     'SSL'               : str(False),
@@ -587,9 +587,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
                     os.remove(temp.name)
                 else:
-                    self.cache.mkdir(checksum)
-                    self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
-                    os.rename(temp.name, self.cache.path(checksum))
+                    #self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
+                    #self.cache.mkdir(checksum)
+                    #os.rename(temp.name, self.cache.path(checksum))
+                    self.cache.insert(checksum, temp.name)
                     self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
             else:
                 self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
@@ -716,7 +717,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         script = None
         extra = None
         self.basedir = os.path.join(self.server.basedir, host)
-        self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew)
+        self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
 
         if not os.path.exists(self.dbfile):
@@ -729,7 +730,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if self.client_address:
             extra = {'connid': self.client_address[0]}
 
-        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra, token=token)
+        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra, token=token, user=self.server.user, group=self.server.group)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -1009,9 +1010,19 @@ def setConfig(self, args, config):
     self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
 
     self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
-    self.user           = args.user
-    self.group          = args.group
 
+    self.user = None
+    self.group = None
+
+    # If the User or Group is set, attempt to determine the users
+    # Note, these will throw exeptions if the User or Group is unknown.  Will get
+    # passed up.
+    if args.user:
+        self.user = pwd.getpwnam(args.user).pw_uid
+    if args.group:
+        self.group = grp.getgrnam(args.group).gr_gid
+
+    # Get SSL set up, if it's been requested.
     self.ssl            = args.ssl
     if self.ssl:
         self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=args.certfile, keyfile=args.keyfile, ssl_version=ssl.PROTOCOL_TLSv1)

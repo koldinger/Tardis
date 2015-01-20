@@ -32,18 +32,23 @@ import os
 import os.path
 import socket
 import logging
+import pwd, grp
+import shutil
 
 class CacheDir:
-    def __init__(self, root, parts=2, partsize=2, create=True):
+    def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None):
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
+        self.user  = user if user else -1
+        self.group = group if group else -1
+        self.chown = True if user or group else False
+
         if not os.path.isdir(self.root):
             if create:
-                #try:
                 os.makedirs(self.root)
-                #except OSError, error:
-                    #pass
+                if self.chown:
+                  os.chown(self.root, self.user, self.group)
             else:
                 raise Exception("CacheDir does not exist: " + root)
 
@@ -63,13 +68,28 @@ class CacheDir:
         dir = self.dir(name)
         if not os.path.isdir(dir):
             os.makedirs(dir)
+            if self.chown:
+                path = self.root
+                for i in self.comps(name):
+                    path = os.path.join(path, i)
+                    os.chown(path, self.user, self.group)
 
     def open(self, name, mode):
-        if mode.startswith("w"):
-            dir = self.dir(name)
-            if not os.path.isdir(dir):
-                os.makedirs(dir)
-        return open(self.path(name), mode)
+        iswrite = mode.startswith("w")
+        if iswrite:
+            self.mkdir(name)
+        path = self.path(name)
+        f = open(path, mode)
+        if iswrite and self.chown:
+            os.fchown(f.fileno(), self.user, self.group)
+        return f
+
+    def insert(self, name, source):
+        self.mkdir(name)
+        path = self.path(name)
+        shutil.move(source, path)
+        if self.chown:
+            os.chown(path, self.user, self.group)
 
     def remove(self, name):
         try:

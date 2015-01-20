@@ -156,11 +156,14 @@ class TardisDB(object):
     dirinodes = {}
     backup = False
 
-    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None):
+    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None, user=-1, group=-1):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
+
+        if user  is None: user = -1
+        if group is None: group = -1
 
         if extra:
             self.logger = ConnIdLogAdapter.ConnIdLogAdapter(self.logger, extra)
@@ -171,6 +174,7 @@ class TardisDB(object):
         self.conn.text_factory = str
         self.conn.row_factory= sqlite3.Row
         self.cursor = self.conn.cursor()
+
 
         if (initialize):
             self.logger.info("Creating database from schema: {}".format(initialize))
@@ -198,6 +202,7 @@ class TardisDB(object):
                 self.logger.error("No token/password specified")
                 raise Exception("No password specified")
 
+
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
@@ -224,6 +229,10 @@ class TardisDB(object):
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
         self.conn.execute("PRAGMA journal_mode=truncate")
+
+        # Make sure the permissions are set the way we want, if that's specified.
+        if user != -1 or group != -1:
+            os.chown(self.dbName, user, group)
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
