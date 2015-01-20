@@ -53,7 +53,9 @@ import parsedatetime
 
 import Tardis
 
+
 logger  = None
+crypt = None
 
 class RegenerateException(Exception):
     def __init__(self, value):
@@ -201,13 +203,15 @@ def findDirInRoot(tardis, bset, path):
     for i in range(0, len(comps)):
         name = comps[i]
         logger.debug("Looking for root directory %s (%d)", name, i)
+        if crypt:
+            name = crypt.encryptFilename(name)
         info = tardis.getFileInfoByName(name, (0, 0), bset)
         if info and info['dir'] == 1:
             return i
     return None
 
 def computePath(tardis, bset, path, reduce):
-    logger.debug("Computing path for %s (%d)", path, reduce)
+    logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
     path = os.path.abspath(path)
     if reduce == sys.maxint:
         reduce = findDirInRoot(tardis, bset, path)
@@ -218,9 +222,25 @@ def computePath(tardis, bset, path, reduce):
             logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduce, len(comps), path)
             return None
         tmp = os.path.join(os.sep, *comps[reduce + 1:])
-        logger.info("Reduced path %s to %s", path, tmp)
+        #logger.info("Reduced path %s to %s", path, tmp)
         path = tmp
     return path
+
+def findLastPath(tardis, path, reduce):
+    logger.debug("findLastPath: %s", path)
+    # Search all the sets in backwards order
+    bsets = list(tardis.listBackupSets())
+    for bset in reversed(bsets):
+        logger.debug("Checking for path %s in %s (%d)", path, bset['name'], bset['backupset'])
+        tmp = computePath(tardis, bset['backupset'], path, reduce)
+        tmp2 = tmp
+        if crypt:
+            tmp2 = crypt.encryptPath(tmp)
+        info = tardis.getFileInfoByPath(tmp2, bset['backupset'])
+        if info:
+            logger.debug("Found %s in backupset %s: %s", path, bset['name'], tmp)
+            return bset['backupset'], tmp, bset['name']
+    return (None, None, None)
 
 def mkOutputDir(name):
     if os.path.isdir(name):
@@ -248,8 +268,9 @@ def parseArgs():
     parser.add_argument("--remote-url",    dest="remote", default=None, help=argparse.SUPPRESS) # help="Remote host")
 
     bsetgroup = parser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--backup", "-b", help="backup set to use", dest='backup', default=None)
+    bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
+    bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"), 
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
@@ -286,11 +307,9 @@ def setupLogging(args):
     return logger
 
 def main():
-    global logger
+    global logger, crypt
     args = parseArgs()
     logger = setupLogging(args)
-
-    crypt = None
 
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
     args.password = None
@@ -300,7 +319,7 @@ def main():
 
     token = None
     if crypt:
-        token = crypt.encryptFilename(args.host)
+        token = crypt.createToken()
 
     try:
         if args.remote:
@@ -376,9 +395,18 @@ def main():
             if args.cksum:
                 f = r.recoverChecksumFile(i)
             else:
-                path = computePath(tardis, bset, i, args.reduce)
-                if not path:
-                    continue
+                if args.last:
+                    (bset, path, name) = findLastPath(tardis, i, args.reduce)
+                    if bset is None:
+                        logger.error("Unable to find a latest version of %s", i)
+                        raise Exception("Unable to find a latest version of " + i)
+                    logger.info("Found %s in backup set %s", i, name)
+                else:
+                    path = computePath(tardis, bset, i, args.reduce)
+                    #logger.info("Reduced path %s to %s", path, tmp)
+                    if not path:
+                        logger.error("Unable to find a compute path for %s", i)
+                        raise Exception("Unable to compute path for " + i)
                 f = r.recoverFile(path, bset, permchecker=permChecker)
 
             if f != None:
@@ -397,6 +425,7 @@ def main():
                         x = f.read(16 * 1024)
                 except Exception as e:
                     logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                    raise
                 finally:
                     f.close()
                     if output is not sys.stdout:
@@ -421,7 +450,8 @@ def main():
                                         os.chown(outname, info['uid'], info['gid'])
                                     except Exception as e:
                                         logger.warning("Unable to set owner and group of %s", outname)
-        except:
+        except Exception as e:
+            #logger.exception(e)
             retcode += 1
 
     return retcode
