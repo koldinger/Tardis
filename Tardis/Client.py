@@ -1061,7 +1061,7 @@ def main():
         token = None
         if password:
             crypt = TardisCrypto.TardisCrypto(password)
-            token = crypt.encryptFilename(args.hostname)
+            token = crypt.createToken()
         password = None
 
     except Exception as e:

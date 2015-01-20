@@ -170,7 +170,7 @@ class TardisFS(fuse.Fuse):
 
             token = None
             if self.crypt:
-                token = self.crypt.encryptFilename(self.host)
+                token = self.crypt.createToken()
 
             # Remove the crypto object if not encyrpting files.
             if self.nocrypt is None:
