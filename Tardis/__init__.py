@@ -46,5 +46,5 @@ __defaults__ = {
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
                 'TARDIS_SERVER'         : 'localhost',
                 'TARDIS_REMOTEPORT'	    : '5000',
-                'TARDIS_HOST'           : socket.gethostname(),
+                'TARDIS_CLIENT'         : socket.gethostname(),
                }

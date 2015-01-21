@@ -106,13 +106,13 @@ class TardisFS(fuse.Fuse):
         super(TardisFS, self).__init__(*args, **kw)
 
         try:
-            hostname = os.environ['TARDIS_HOST']   if 'TARDIS_HOST'   in os.environ else socket.gethostname()
-            database = os.environ['TARDIS_DB']     if 'TARDIS_DB'     in os.environ else '/srv/tardis'
-            dbname   = os.environ['TARDIS_DBNAME'] if 'TARDIS_DBNAME' in os.environ else 'tardis.db'
+            client   = Util.getDefault('TARDIS_CLIENT')
+            database = Util.getDefault('TARDIS_DB')
+            dbname   = Util.getDefault('TARDIS_DBNAME')
 
             # Parameters
             self.database   = database
-            self.host       = hostname
+            self.client     = client
             self.repoint    = False
             self.password   = None
             self.pwfile     = None
@@ -128,7 +128,7 @@ class TardisFS(fuse.Fuse):
             self.log = logging.getLogger("TardisFS")
 
             self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
-            self.parser.add_option(mountopt="host",         help="Host to load database for")
+            self.parser.add_option(mountopt="client",       help="Client to load database for")
             self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
             self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
             self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
@@ -147,15 +147,15 @@ class TardisFS(fuse.Fuse):
                 self.log.info("URL: %s", self.remoteurl)
             else:
                 self.log.info("Database: %s", self.database)
-            self.log.info("Host: %s", self.host)
+            self.log.info("Client: %s", self.client)
             self.log.info("Repoint Links: %s", self.repoint)
             self.log.info("MountPoint: %s", self.mountpoint)
             self.log.info("DBName: %s", self.dbname)
 
             if self.remoteurl:
-                self.name = "TardisFS:<{}/{}>".format(self.remoteurl, self.host)
+                self.name = "TardisFS:<{}/{}>".format(self.remoteurl, self.client)
             else:
-                self.name = "TardisFS:<{}/{}>".format(self.database, self.host)
+                self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
             password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
 
@@ -178,11 +178,11 @@ class TardisFS(fuse.Fuse):
 
             try:
                 if self.remoteurl:
-                    self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.host, token=token)
+                    self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.client, token=token)
                     self.cacheDir = self.tardis
                     self.path = None
                 else:
-                    self.path = os.path.join(self.database, self.host)
+                    self.path = os.path.join(self.database, self.client)
                     self.cacheDir = CacheDir.CacheDir(self.path, create=False)
                     dbPath = os.path.join(self.path, self.dbname)
                     self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
