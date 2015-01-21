@@ -263,7 +263,7 @@ def parseArgs():
 
     parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="basedir", default=basedir)
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
-    parser.add_argument("--host", "-H", help="Host to process for (Default: %(default)s)", dest='host', default=hostname)
+    parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
     parser.add_argument("--remote-url",    dest="remote", default=None, help=argparse.SUPPRESS) # help="Remote host")
 
@@ -323,10 +323,10 @@ def main():
 
     try:
         if args.remote:
-            tardis = RemoteDB.RemoteDB(args.remote, args.host, token=token)
+            tardis = RemoteDB.RemoteDB(args.remote, args.client, token=token)
             cache = tardis
         else:
-            baseDir = os.path.join(args.basedir, args.host)
+            baseDir = os.path.join(args.basedir, args.client)
             cache = CacheDir.CacheDir(baseDir, create=False)
             dbPath = os.path.join(baseDir, args.dbname)
             tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
