@@ -7,6 +7,9 @@ import stat
 import termcolor
 import argparse
 import fnmatch
+import pwd
+import grp
+import time
 
 import TardisDB
 import TardisCrypto
@@ -47,6 +50,36 @@ def collectDirContents(tardis, dirlist, crypt):
             contents = contents.union(dir)
     #print contents
     return contents
+
+_groups = {}
+_users = {}
+
+def getGroupName(gid):
+    if gid in _groups:
+        return _groups[gid]
+    else:
+        group = grp.getgrgid(gid)
+        if group:
+            name = group.gr_name
+            _groups[gid] = name
+            return name
+        else:
+            return None
+
+def getUserId(uid):
+    if uid in _users:
+        return _users[uid]
+    else:
+        user = pwd.getpwuid(uid)
+        if user:
+            name = user.pw_name
+            _users[uid] = name
+            return name
+        else:
+            return None
+
+def formatTime(then):
+    return time.strftime('%b %d, %Y', time.localtime(then))
 
 def printVersions(fInfos):
     pInfo = None        # Previous version's info
@@ -117,6 +150,9 @@ def printVersions(fInfos):
                 doprint('  %s' % (name), color, eol=True)
             else:
                 mode = Util.filemode(info['mode'])
+                group = getGroupName(info['gid'])
+                owner = getUserId(info['uid'])
+                mtime = formatTime(info['mtime'])
                 if info['size'] is not None:
                     if args.human:
                         size = Util.fmtSize(info['size'])
@@ -124,7 +160,7 @@ def printVersions(fInfos):
                         size = "%8d" % info['size']
                 else:
                     size = ''
-                doprint('  %9s %8s ' % (mode, size))
+                doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime))
                 if args.cksums:
                     doprint(' %32s ' % (cksum))
                 doprint('%s' % (name), color, eol=True)
@@ -144,21 +180,24 @@ def printVersions(fInfos):
         doprint(eol=True)
 
 def processFile(filename, tardis, crypt, depth=0, first=False):
-    if args.headers or args.full or args.recent:
-        doprint('%-48s' % filename, 'green')
-        doprint('', eol=True)
-
     lookup = crypt.encryptPath(filename) if crypt else filename
 
     fInfos = {}
     lInfo = None
     for bset in backupSets:
-        if lInfo and bset['backupset'] <= lInfo['lastset']:
+        if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
             fInfos[bset] = lInfo
         else:
             lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
             fInfos[bset] = lInfo
         #print bset, ": ", fInfos[bset]
+
+    numFound = sum([1 for i in fInfos if fInfos[i] is not None])
+    if args.headers or (numFound == 0):
+        doprint('%s' % filename, 'green')
+        if numFound == 0:
+            doprint(' Not found', 'red')
+        doprint('', eol=True)
 
     # List of backupsets which contain either 
     #dirs  = [x for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
