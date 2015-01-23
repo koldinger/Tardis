@@ -11,8 +11,10 @@ import pwd
 import grp
 import time
 import parsedatetime
+import urlparse
 
 import TardisDB
+import RemoteDB
 import TardisCrypto
 import Util
 
@@ -453,8 +455,12 @@ def main():
         token = crypt.createToken()
     password = None
 
-    dbfile = os.path.join(args.database, args.client, args.dbname)
-    tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
+    loc = urlparse.urlparse(args.database)
+    if (loc.scheme == 'http') or (loc.scheme == 'https'):
+        tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
+    else:
+        dbfile = os.path.join(loc.path, args.client, args.dbname)
+        tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
 
     setupDisplay(tardis, crypt)
 
