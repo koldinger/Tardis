@@ -32,39 +32,29 @@ def doprint(string='', color=None, eol=False):
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
-def processFile(filename, tardis, crypt, depth=0, first=False):
-    if args.headers or args.full or args.recent:
-        doprint('%-48s' % filename, 'green')
-        doprint('', eol=True)
+def collectDirContents(tardis, dirlist, crypt):
+    contents = set()
+    for (bset, finfo) in dirlist:
+        x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
+        if x:
+            dir = set([y['name'] for y in x])
+            if crypt:
+                dir = set(map(crypt.decryptFilename, dir))
+            #print dir
+            contents = contents.union(dir)
+    #print contents
+    return contents
 
-    lookup = crypt.encryptPath(filename) if crypt else filename
-
-    fInfos = {}
-    for bset in backupSets:
-        fInfos[bset] = tardis.getFileInfoByPath(lookup, bset['backupset'])
-        #print bset, ": ", fInfos[bset]
-
-    # List of backupsets which contain either 
-    #dirs  = [x for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
-    #files = [x for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 0]
-
-    #print "Dirs: ", dirs
-    #print "Files: ", files
-
+def printVersions(fInfos):
     pInfo = None        # Previous version's info
     lInfo = None        # all versions info
     column = 0
-    isDir = False
-    onlyDir = True
+
     for bset in backupSets:
         info = fInfos[bset]
         color = None
         new = False
         gone = False
-
-        if info:
-            if info['dir']:
-                isDir = True
 
         # If there was no previous version, or the checksum has changed, we're new
         if (info is None) and (pInfo is None):
@@ -106,12 +96,22 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
             elif info['mode'] & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
                 annotation = '*'
 
+        if column == 0:
+            doprint('  ')
+
         name = bset['name'] + annotation
         if gone:
             name = '(' + name + ')'
+
+        if args.cksums:
+            if info and info['checksum']:
+                cksum = info['checksum']
+            else:
+                cksum = ''
+
         if args.long:
             if gone:
-                doprint('    %s' % (name), color, eol=True)
+                doprint('  %s' % (name), color, eol=True)
             else:
                 mode = Util.filemode(info['mode'])
                 if info['size'] is not None:
@@ -121,8 +121,13 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
                         size = "%8d" % info['size']
                 else:
                     size = ''
-                doprint('    %9s %8s ' % (mode, size))
+                doprint('  %9s %8s ' % (mode, size))
+                if args.cksums:
+                    doprint(' %32s ' % (cksum))
                 doprint('%s' % (name), color, eol=True)
+        elif args.cksums:
+            doprint(columnfmt % name, color)
+            doprint(cksum, eol=True)
         else:
             column += 1
             if column == columns:
@@ -134,6 +139,36 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
 
     if column != 0:
         doprint(eol=True)
+
+def processFile(filename, tardis, crypt, depth=0, first=False):
+    if args.headers or args.full or args.recent:
+        doprint('%-48s' % filename, 'green')
+        doprint('', eol=True)
+
+    lookup = crypt.encryptPath(filename) if crypt else filename
+
+    fInfos = {}
+    for bset in backupSets:
+        fInfos[bset] = tardis.getFileInfoByPath(lookup, bset['backupset'])
+        #print bset, ": ", fInfos[bset]
+
+    # List of backupsets which contain either 
+    #dirs  = [x for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
+    #files = [x for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 0]
+
+    #print "Dirs: ", dirs
+    #print "Files: ", files
+
+    if args.versions:
+        printVersions(fInfos)
+
+    dirs = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
+    if len(dirs) and depth <= args.maxdepth:
+        dirs  = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
+        contents = sorted(collectDirContents(tardis, dirs, crypt))
+        for i in contents:
+            processFile(os.path.join(filename, i), tardis, crypt, depth + 1, False)
+        #print contents
 
 def doList(tardis, crypt):
     global columns, columnfmt
@@ -176,6 +211,7 @@ def processArgs():
 
     parser.add_argument('--colors',     dest='colors',   default=isatty, action=Util.StoreBoolean,      help='Use colors. Default: %(default)s')
     parser.add_argument('--glob',       dest='glob',     default=True,  action=Util.StoreBoolean,       help='Glob filenames.  Default: %(default)s')
+    parser.add_argument('--checksums',  dest='cksums',   default=False, action=Util.StoreBoolean,       help='Print checksums. Default: %(default)s')
     parser.add_argument('--full',       dest='full',     default=False, action=Util.StoreBoolean,       help='Use full pathnames in listing. Default: %(default)s')
     parser.add_argument('--long',       dest='long',     default=False, action=Util.StoreBoolean,       help='Use long listing format. Default: %(default)s')
     parser.add_argument('--deletions',  dest='deletions',default=True,  action=Util.StoreBoolean,       help='Show deletions. Default: %(default)s')
@@ -207,7 +243,7 @@ def main():
     args = processArgs()
 
     FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
     logger = logging.getLogger("")
 
     # Load any password info

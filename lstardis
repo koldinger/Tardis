@@ -1,0 +1,7 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+from Tardis import List
+import sys
+
+sys.exit(List.main())
