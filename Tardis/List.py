@@ -35,21 +35,53 @@ def doprint(string='', color=None, eol=False):
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
+def collectFileInfo(filename, tardis, crypt):
+    lookup = crypt.encryptPath(filename) if crypt else filename
+
+    fInfos = {}
+    lInfo = None
+    for bset in backupSets:
+        if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
+            fInfos[bset] = lInfo
+        else:
+            lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
+            fInfos[bset] = lInfo
+        #print bset, ": ", fInfos[bset]
+    return fInfos
+
+"""
+Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
+"""
 def collectDirContents(tardis, dirlist, crypt):
-    contents = set()
+    contents = {}
     for (bset, finfo) in dirlist:
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
-        if x:
-            if args.hidden:
-                dir = set([y['name'] for y in x])
-            else:
-                dir = set([y['name'] for y in x if not y['name'].startswith('.')])
-            if crypt:
-                dir = set(map(crypt.decryptFilename, dir))
-            #print dir
-            contents = contents.union(dir)
-    #print contents
+        dirInfo = {}
+        for y in x:
+            name = crypt.decryptFilename(y['name']) if crypt else y['name']
+            dirInfo[name] = y
+        contents[bset] = dirInfo
     return contents
+
+def getFileNames(contents):
+    names = set()
+    for bset in backupSets:
+        if bset in contents:
+            lnames = set(contents[bset].keys())
+            names = names.union(lnames)
+    return names
+
+def getInfoByName(contents, name):
+    fInfo = {}
+    for bset in backupSets:
+        if bset in contents:
+            d = contents[bset]
+            f = d.setdefault(name, None)
+            fInfo[bset] = f
+        else:
+            fInfo[bset] = None
+
+    return fInfo
 
 _groups = {}
 _users = {}
@@ -179,19 +211,8 @@ def printVersions(fInfos):
     if column != 0:
         doprint(eol=True)
 
-def processFile(filename, tardis, crypt, depth=0, first=False):
-    lookup = crypt.encryptPath(filename) if crypt else filename
 
-    fInfos = {}
-    lInfo = None
-    for bset in backupSets:
-        if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
-            fInfos[bset] = lInfo
-        else:
-            lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
-            fInfos[bset] = lInfo
-        #print bset, ": ", fInfos[bset]
-
+def processFile(filename, fInfos, tardis, crypt, depth=0, first=False):
     numFound = sum([1 for i in fInfos if fInfos[i] is not None])
     if args.headers or (numFound == 0):
         doprint('%s' % filename, 'green')
@@ -211,11 +232,15 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
 
     dirs = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
     if len(dirs) and depth < args.maxdepth:
-        dirs  = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
-        contents = sorted(collectDirContents(tardis, dirs, crypt))
-        for i in contents:
-            processFile(os.path.join(filename, i), tardis, crypt, depth + 1, False)
+        contents = collectDirContents(tardis, dirs, crypt)
         #print contents
+        names = getFileNames(contents)
+        for name in sorted(names):
+            if not args.hidden and name.startswith('.'):
+                # skip hidden files, ie, starts with .
+                continue
+            fInfo = getInfoByName(contents, name)
+            processFile(name, fInfo, tardis, crypt, depth+1)
 
 def doList(tardis, crypt):
     global columns, columnfmt
@@ -246,7 +271,8 @@ def doList(tardis, crypt):
         #        processFile(j, tardis, crypt)
         #else:
         d = os.path.abspath(d)
-        processFile(d, tardis, crypt)
+        fInfo = collectFileInfo(d, tardis, crypt)
+        processFile(d, fInfo, tardis, crypt)
 
 
 def processArgs():
