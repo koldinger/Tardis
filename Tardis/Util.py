@@ -37,15 +37,15 @@ import hashlib
 import shlex
 import StringIO
 import getpass
+import stat
+from functools import partial
 
 import Messages
 import Connection
 import CompressedBuffer
 import Tardis
-from functools import partial
 
 import pycurl
-
 
 def fmtSize(num, base=1024):
     fmt = "%d %s"
@@ -80,6 +80,9 @@ def shortPath(path, width=80):
             break
     return ".../" + path
 
+"""
+Get a default value
+"""
 def getDefault(var, defaults=Tardis.__defaults__):
     if var in os.environ:
         return os.environ[var]
@@ -88,6 +91,49 @@ def getDefault(var, defaults=Tardis.__defaults__):
     else:
         return None
 
+"""
+Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)
+Not necessary in Python 3, but stat.filemode() doesn't exist in Python 2
+"""
+_fmtypes = { stat.S_IFDIR: 'd', stat.S_IFCHR: 'c', stat.S_IFBLK: 'b', stat.S_IFREG: '-', stat.S_IFLNK: 'l', stat.S_IFSOCK: 's', stat.S_IFIFO: 'p' }
+
+def filemode(mode):
+    str = _fmtypes.setdefault(stat.S_IFMT(mode), '?')
+    str += 'r' if mode & stat.S_IRUSR else '-'
+    str += 'w' if mode & stat.S_IWUSR else '-'
+    if mode & stat.S_IXUSR:
+        str += 's' if mode & stat.S_ISUID else 'x'
+    else:
+        str += 's' if mode & stat.S_ISUID else 'x'
+
+    str += 'r' if mode & stat.S_IRGRP else '-'
+    str += 'w' if mode & stat.S_IWGRP else '-'
+    if mode & stat.S_IXGRP:
+        str += 's' if mode & stat.S_ISGID else 'x'
+    else:
+        str += 's' if mode & stat.S_ISGID else 'x'
+
+    str += 'r' if mode & stat.S_IROTH else '-'
+    str += 'w' if mode & stat.S_IWOTH else '-'
+    if mode & stat.S_IXOTH:
+        str += 't' if mode & stat.S_ISVTX else 'x'
+    else:
+        str += 'T' if mode & stat.S_ISVTX else 'x'
+    return str
+
+def getTerminalSize():
+    rows, columns = os.popen('stty size', 'r').read().split()
+    return int(rows), int(columns)
+
+"""
+Retrieve a password.
+Either takes a URL, a program name, a file, or a plain password string.
+Only one can be valid.
+Retrieves from the URL, program, or file if so specified.
+If a string is passed in, returns it.
+If the string is True or empty (''), it will use the getpass function to prompt on the
+terminal.
+"""
 def getPassword(password, pwfile, pwurl, pwprog):
     methods = 0
     if password: methods += 1
@@ -255,6 +301,7 @@ class HelpFormatter(argparse.HelpFormatter):
             ret = super(HelpFormatter, self)._format_action_invocation(action)
         #print "Got ", ret
         return ret
+
 
 """
 'Test' code
