@@ -163,7 +163,7 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
         printVersions(fInfos)
 
     dirs = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
-    if len(dirs) and depth <= args.maxdepth:
+    if len(dirs) and depth < args.maxdepth:
         dirs  = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
         contents = sorted(collectDirContents(tardis, dirs, crypt))
         for i in contents:
@@ -243,7 +243,7 @@ def main():
     args = processArgs()
 
     FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
     logger = logging.getLogger("")
 
     # Load any password info
