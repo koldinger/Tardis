@@ -45,6 +45,7 @@ import logging
 import subprocess
 import time
 import base64
+import urlparse
 
 import librsync
 import tempfile
@@ -252,8 +253,8 @@ def mkOutputDir(name):
         return name
 
 def parseArgs():
-    basedir = Util.getDefault('TARDIS_DB')
-    hostname = Util.getDefault('TARDIS_HOST')
+    database = Util.getDefault('TARDIS_DB')
+    hostname = Util.getDefault('TARDIS_CLIENT')
     dbname   = Util.getDefault('TARDIS_DBNAME')
 
     parser = argparse.ArgumentParser(description="Regenerate a Tardis backed file", formatter_class=Util.HelpFormatter)
@@ -261,11 +262,9 @@ def parseArgs():
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
 
-    parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="basedir", default=basedir)
+    parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
-
-    parser.add_argument("--remote-url",    dest="remote", default=None, help=argparse.SUPPRESS) # help="Remote host")
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
@@ -322,11 +321,13 @@ def main():
         token = crypt.createToken()
 
     try:
-        if args.remote:
-            tardis = RemoteDB.RemoteDB(args.remote, args.client, token=token)
+        loc = urlparse.urlparse(args.database)
+        if (loc.scheme == 'http') or (loc.scheme == 'https'):
+            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
             cache = tardis
         else:
-            baseDir = os.path.join(args.basedir, args.client)
+            print args.database, loc.path, args.client
+            baseDir = os.path.join(loc.path, args.client)
             cache = CacheDir.CacheDir(baseDir, create=False)
             dbPath = os.path.join(baseDir, args.dbname)
             tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
