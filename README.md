@@ -16,7 +16,8 @@ Tardis consists of several components:
 * tardis  (Client): The tardis client process, which creates backup data and pushes it to the server
 * tardisfs (TardisFS): A FUSE based file system which provides views of the various backup sets.
 * regenerate (Regenerate): A program to retrieve an individual verson of the file without using the TardisFS
-* tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate and tardisfs.  Simplifies the 
+* lstardis (List): List versions of files and directories in the database.
+* tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
 Features currently planned to be implemented:
@@ -36,9 +37,10 @@ Features currently planned to be implemented:
 12. Remote access to data and files.
 13. ~~Read password without echo.~~
 
-Tardis relies on the bson, xattrs, pycrypto, and daemonize packages.
-~~Tardis currently uses the librsync from rdiff-backup, but I hope to remove that soon.~~
+Tardis relies on the bson, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, pycurl, requests, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
+
+Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
 
 Installation
 ============
@@ -100,6 +102,14 @@ Ex:
     tardis --local ~
 Will backup your home directory.
 
+Listing Versions of Files Available
+===================================
+Files can be listed in the tardisfs, or via the lstardis application.
+
+lstardis can list all versions of a file available.  See lstardis -h for details.
+
+lstardis is new in version 0.15.
+
 Recovering Files
 ================
 Files can be recovered in two different ways: via the regenerate application, and via a tardisfs filesystem.
@@ -124,72 +134,73 @@ Environment Variables
         <th>tardisd
         <th>tardisfs
         <th>regenerate
+        <th>lstardis
     </tr>
     <tr>
         <td>TARDIS_DB
         <td>Location of the tardis database
         <td>/srv/tardis
-        <td>No (Except in local case) <td>Yes <td>Yes <td>Yes
+        <td>No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes
     <tr>
         <td> TARDIS_PORT
         <td>Port to use to connect to the Tardis Daemon
         <td> 7420
-        <td>Yes (except in local case) <td>Yes <td>No <td>No
+        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No
     <tr>
         <td> TARDIS_DBNAME
         <td> Name of the database file containing tardis information
         <td> tardis.db
-        <td> No <td> Yes <td> Yes <td> Yes
+        <td> No <td> Yes <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_SERVER
         <td> Name (or IP address) of the tardis server
         <td> localhost
-        <td> Yes <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No
     <tr>
-        <td> TARDIS_HOST
-        <td> Name of the backup set.
-        <td> Current hostname (/usr/bin/hostname)
-        <td> Yes <td> No <td> Yes <td> Yes
+        <td> TARDIS_CLIENT
+        <td> Name of the backup client.
+        <td> Current hostname (essentialy output of /usr/bin/hostname)
+        <td> Yes <td> No <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_DAEMON_CONFIG
         <td> Name of the file containing the daemon configuration
         <td> /etc/tardis/tardisd.cfg
-        <td> No (except in local case) <td> Yes <td> No <td> No
+        <td> No (except in local case) <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_CONFIG
         <td> Name of the file containing the configuration when running the daemon in local mode
         <td> /etc/tardis/tardisd.local.cfg
-        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No
+        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No
     <tr> 
         <td> TARDIS_EXCLUDES
         <td> Name of the file containing patterns to exclude below the current directory.
         <td> .tardis-excludes
-        <td> Yes <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_EXCLUDES
         <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
         <td> .tardis-local-excludes
-        <td> Yes <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_GLOBAL_EXCLUDES
         <td> Name of the file containing patterns to exclude globally
         <td> /etc/tardis/excludes
-        <td> Yes <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SKIPFILE
         <td> Name of a file whose presence excludes a current directory (and all directories below)
         <td> .tardis-skip
-        <td> Yes <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_PIDFILE
         <td> File to indicate that the daemon is running.
         <td> /var/run/tardisd.pid
-        <td> No <td> Yes <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SCHEMA
         <td> File containing the schema for the database.
         <td> schema/tardis.sql
-        <td> No <td> Yes <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No
 </table>
 
 Server Configuration File
