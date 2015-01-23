@@ -37,7 +37,10 @@ def collectDirContents(tardis, dirlist, crypt):
     for (bset, finfo) in dirlist:
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
         if x:
-            dir = set([y['name'] for y in x])
+            if args.hidden:
+                dir = set([y['name'] for y in x])
+            else:
+                dir = set([y['name'] for y in x if not y['name'].startswith('.')])
             if crypt:
                 dir = set(map(crypt.decryptFilename, dir))
             #print dir
@@ -148,8 +151,13 @@ def processFile(filename, tardis, crypt, depth=0, first=False):
     lookup = crypt.encryptPath(filename) if crypt else filename
 
     fInfos = {}
+    lInfo = None
     for bset in backupSets:
-        fInfos[bset] = tardis.getFileInfoByPath(lookup, bset['backupset'])
+        if lInfo and bset['backupset'] <= lInfo['lastset']:
+            fInfos[bset] = lInfo
+        else:
+            lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
+            fInfos[bset] = lInfo
         #print bset, ": ", fInfos[bset]
 
     # List of backupsets which contain either 
