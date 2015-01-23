@@ -52,10 +52,10 @@ def collectFileInfo(filename, tardis, crypt):
     lInfo = None
     for bset in backupSets:
         if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
-            fInfos[bset] = lInfo
+            fInfos[bset['backupset']] = lInfo
         else:
             lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
-            fInfos[bset] = lInfo
+            fInfos[bset['backupset']] = lInfo
     return fInfos
 
 """
@@ -69,7 +69,7 @@ def collectDirContents(tardis, dirlist, crypt):
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
             dirInfo[name] = y
-        contents[bset] = dirInfo
+        contents[bset['backupset']] = dirInfo
     return contents
 
 """
@@ -79,8 +79,8 @@ for each name encountered.
 def getFileNames(contents):
     names = set()
     for bset in backupSets:
-        if bset in contents:
-            lnames = set(contents[bset].keys())
+        if bset['backupset'] in contents:
+            lnames = set(contents[bset['backupset']].keys())
             names = names.union(lnames)
     return names
 
@@ -90,12 +90,12 @@ Extract a list of fInfos corresponding to each backupset, based on the name list
 def getInfoByName(contents, name):
     fInfo = {}
     for bset in backupSets:
-        if bset in contents:
-            d = contents[bset]
+        if bset['backupset'] in contents:
+            d = contents[bset['backupset']]
             f = d.setdefault(name, None)
-            fInfo[bset] = f
+            fInfo[bset['backupset']] = f
         else:
-            fInfo[bset] = None
+            fInfo[bset['backupset']] = None
 
     return fInfo
 
@@ -200,7 +200,7 @@ def printVersions(fInfos):
     column = 0
 
     for bset in backupSets:
-        info = fInfos[bset]
+        info = fInfos[bset['backupset']]
         color = None
         new = False
         gone = False
@@ -237,7 +237,7 @@ def printVersions(fInfos):
         printit(info, name, color, gone)
 
     if args.recent:
-        printit(fInfos[lSet], lSet['name'], 'blue', False)
+        printit(fInfos[lSet['backupset']], lSet['name'], 'blue', False)
 
     if column != 0:
         doprint(eol=True)
@@ -253,7 +253,7 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=False):
     if args.versions:
         printVersions(fInfos)
 
-    dirs = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
+    dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
     if len(dirs) and depth < args.maxdepth:
         contents = collectDirContents(tardis, dirs, crypt)
         #print contents
