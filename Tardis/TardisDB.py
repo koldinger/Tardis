@@ -127,7 +127,7 @@ CREATE VIEW IF NOT EXISTS VFiles AS
 
 # Utility functions
 
-fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, " \
+fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                  "Parent AS parent, ParentDev AS parentdev, Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
                  "FirstSet AS firstset, LastSet AS lastset, Checksum AS checksum "
