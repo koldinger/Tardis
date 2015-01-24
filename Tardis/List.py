@@ -52,25 +52,81 @@ def collectFileInfo(filename, tardis, crypt):
     lInfo = None
     for bset in backupSets:
         if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
-            fInfos[bset] = lInfo
+            fInfos[bset['backupset']] = lInfo
         else:
             lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
-            fInfos[bset] = lInfo
+            fInfos[bset['backupset']] = lInfo
     return fInfos
 
 """
 Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
+Note: This is very inefficient.  You basically query for the same information over and over.
+Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
+all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
+3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
+any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
+each range.  Will cause you to go to the database a LOT fewer times, and use a lot less memory.
 """
 def collectDirContents(tardis, dirlist, crypt):
     contents = {}
+    names = set()
     for (bset, finfo) in dirlist:
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
         dirInfo = {}
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
             dirInfo[name] = y
-        contents[bset] = dirInfo
-    return contents
+            names.add(name)
+        contents[bset['backupset']] = dirInfo
+    return contents, names
+
+"""
+Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
+all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
+3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
+any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
+each range.
+"""
+def collectDirContents2(tardis, dirList, crypt):
+    contents = {}
+    for (x, y) in dirList:
+        contents[x['backupset']] = {}
+    names = set()
+    ranges = []
+    dirRange = []
+    prev = None
+    dirHash = dict([(x['backupset'], y) for (x,y) in dirList])
+    # Detect the ranges
+    for bset in backupSets:
+        d = dirHash.setdefault(bset['backupset'])
+        # If we don't have an entry here, the range ends.
+        # OR if the inode is different from the previous 
+        if prev and ((not d) or (prev['inode'] != d['inode'])):
+            if len(dirRange):
+                ranges.append(dirRange)
+                dirRange = []
+        if d:
+            dirRange.append(bset)
+        prev = d
+    if len(dirRange):
+        ranges.append(dirRange)
+
+    # Now, for each range, populate 
+    for r in ranges:
+        first = r[0]['backupset']
+        last  = r[-1]['backupset']
+        dinfo = dirHash[first]
+        x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
+        for y in x:
+            name = crypt.decryptFilename(y['name']) if crypt else y['name']
+            names.add(name)
+            for bset in r:
+                if (y['firstset'] <= bset['backupset'] <= y['lastset']):
+                    contents[bset['backupset']][name] = y
+
+    # and return what we've discovered
+    return (contents, names)
+
 
 """
 Extract a list of file names from file contents.  Names will contain a single entry
@@ -79,8 +135,8 @@ for each name encountered.
 def getFileNames(contents):
     names = set()
     for bset in backupSets:
-        if bset in contents:
-            lnames = set(contents[bset].keys())
+        if bset['backupset'] in contents:
+            lnames = set(contents[bset['backupset']].keys())
             names = names.union(lnames)
     return names
 
@@ -90,15 +146,18 @@ Extract a list of fInfos corresponding to each backupset, based on the name list
 def getInfoByName(contents, name):
     fInfo = {}
     for bset in backupSets:
-        if bset in contents:
-            d = contents[bset]
+        if bset['backupset'] in contents:
+            d = contents[bset['backupset']]
             f = d.setdefault(name, None)
-            fInfo[bset] = f
+            fInfo[bset['backupset']] = f
         else:
-            fInfo[bset] = None
+            fInfo[bset['backupset']] = None
 
     return fInfo
 
+""" 
+Get group and user names.  Very unixy
+"""
 _groups = {}
 _users = {}
 
@@ -126,9 +185,12 @@ def getUserId(uid):
         else:
             return None
 
+"""
+Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
+then Jan 12, 2014.  Same as ls.
+"""
 _now = time.time()
 _yearago = _now - (365 * 24 * 3600)
-
 def formatTime(then):
     if then > _yearago:
         fmt = '%b %d %H:%M'
@@ -139,6 +201,9 @@ def formatTime(then):
 
 column = 0
 
+"""
+The actual work of printing the data.
+"""
 def printit(info, name, color, gone):
     global column
     annotation = ''
@@ -200,7 +265,7 @@ def printVersions(fInfos):
     column = 0
 
     for bset in backupSets:
-        info = fInfos[bset]
+        info = fInfos[bset['backupset']]
         color = None
         new = False
         gone = False
@@ -237,7 +302,7 @@ def printVersions(fInfos):
         printit(info, name, color, gone)
 
     if args.recent:
-        printit(fInfos[lSet], lSet['name'], 'blue', False)
+        printit(fInfos[lSet['backupset']], lSet['name'], 'blue', False)
 
     if column != 0:
         doprint(eol=True)
@@ -253,11 +318,11 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=False):
     if args.versions:
         printVersions(fInfos)
 
-    dirs = [(x, fInfos[x]) for x in backupSets if fInfos[x] and fInfos[x]['dir'] == 1]
+    dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
     if len(dirs) and depth < args.maxdepth:
-        contents = collectDirContents(tardis, dirs, crypt)
-        #print contents
-        names = getFileNames(contents)
+        (contents, names) = collectDirContents2(tardis, dirs, crypt)
+        #(contents, names) = collectDirContents(tardis, dirs, crypt)
+        #names = getFileNames(contents)
         for name in sorted(names):
             if not args.hidden and name.startswith('.'):
                 # skip hidden files, ie, starts with .

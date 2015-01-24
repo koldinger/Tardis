@@ -155,12 +155,14 @@ class TardisDB(object):
     currBackupSet = None
     dirinodes = {}
     backup = False
+    chunksize = 1000
 
-    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None, user=-1, group=-1):
+    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None, user=-1, group=-1, chunksize=1000):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
         self.dbName = dbname
+        self.chunksize = chunksize
 
         if user  is None: user = -1
         if group is None: group = -1
@@ -174,7 +176,6 @@ class TardisDB(object):
         self.conn.text_factory = str
         self.conn.row_factory= sqlite3.Row
         self.cursor = self.conn.cursor()
-
 
         if (initialize):
             self.logger.info("Creating database from schema: {}".format(initialize))
@@ -201,7 +202,6 @@ class TardisDB(object):
             if self.getToken() is not None:
                 self.logger.error("No token/password specified")
                 raise Exception("No password specified")
-
 
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
@@ -563,8 +563,30 @@ class TardisDB(object):
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          {"parent": inode, "parentDev": device, "backup": backupset})
-        for row in c.fetchall():
-            yield row
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row
+
+    def readDirectoryForRange(self, dirNode, first, last):
+        (inode, device) = dirNode
+        #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
+        c = self.execute("SELECT " + fileInfoFields + ", "
+                         "Checksum AS checksum, Basis AS basis, InitVector AS iv "
+                         "FROM Files "
+                         "JOIN Names ON Files.NameId = Names.NameId "
+                         "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                         "WHERE Parent = :parent AND ParentDev = :parentDev AND "
+                         "Files.LastSet >= :first AND Files.FirstSet <= :last",
+                         {"parent": inode, "parentDev": device, "first": first, "last": last})
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row
 
     def listBackupSets(self):
         #self.logger.debug("list backup sets")
@@ -572,9 +594,12 @@ class TardisDB(object):
                          "Name AS name, BackupSet AS backupset "
                          "FROM Backups "
                          "ORDER BY backupset ASC", {})
-        for row in c.fetchall():
-            yield row
-
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT " + 
                          backupSetInfoFields +
@@ -648,8 +673,12 @@ class TardisDB(object):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
                               "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL)")
-        for row in c.fetchall():
-            yield row[0]
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row[0]
 
     def compact(self):
         self.logger.debug("Removing unused names")

@@ -42,7 +42,7 @@ class ConnectionException(Exception):
 class Connection(object):
     lastTimestamp = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, use_ssl, client, autoname, token, compress, force=False, version=0, validate=True):
+    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         if client is None:
@@ -52,22 +52,23 @@ class Connection(object):
         if host:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((host, int(port)))
-            if use_ssl:
-                self.sock = ssl.wrap_socket(sock) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
-                if validate:
-                    pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
-            else:
-                self.sock = sock
+            self.sock = sock
         else:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sock.connect(port)
 
         try:
             # Receive a string.  TARDIS proto=1.0
-            message = self.get(10)
-            if message != "TARDIS 1.0":
-                raise Exception
-            #message = "BACKUP {} {} {} {} {}".format(hostname, name, encoding, priority, time.time())
+            message = self.sock.recv(32).strip()
+            if message == "TARDIS 1.0/SSL":
+                # Overwrite self.sock
+                self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
+                if validate:
+                    pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
+            elif message != "TARDIS 1.0":
+                raise Exception("Unknown protocol: {}".format(message))
+
+            # Create a BACKUP message
             data = {
                 'message'   : 'BACKUP',
                 'host'      : client,
@@ -138,8 +139,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, use_ssl, client, autoname, token, compress, force):
-        Connection.__init__(self, host, port, name, protocol, priority, use_ssl, client, autoname, token, compress, force=force)
+    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force):
+        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -162,14 +163,14 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, use_ssl=False, client=None, autoname=False, token=None, force=False):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, use_ssl, client, autoname, token, False, force)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, use_ssl=False, client=None, autoname=False, token=None, compress=True, force=False):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, use_ssl, client, autoname,  token, compress, force)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname,  token, compress, force)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 

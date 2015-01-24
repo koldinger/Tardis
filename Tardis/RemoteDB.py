@@ -137,6 +137,25 @@ class RemoteDB(object):
             i['name'] = fs_encode(i['name'])
             yield i
 
+    def readDirectoryForRange(self, dirNode, first, last):
+        (inode, device) = dirNode
+        r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last))
+        r.raise_for_status()
+        for i in r.json():
+            i['name'] = fs_encode(i['name'])
+            yield i
+
+    def checkPermissions(self, path, checker, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path)
+        r.raise_for_status()
+        for i in r.json():
+            ret = checker(i['uid'], i['gid'], i['mode'])
+            if not ret:
+                return False
+        return True
+
+
     def getChecksumByPath(self, path, current=False, permchecker=None):
         bset = self._bset(current)
         if not path.startswith('/'):
