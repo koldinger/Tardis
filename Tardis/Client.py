@@ -906,7 +906,6 @@ def processCommandLine():
     parser.add_argument('--server', '-s',   dest='server', default=Util.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',     dest='port', type=int, default=Util.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--log', '-l',      dest='logfile', default=None,                           help='Send logging output to specified file.  Default: stderr')
-    parser.add_argument('--ssl',            dest='ssl', action=Util.StoreBoolean, default=False,    help='Use SSL connection.  Default: %(default)s')
 
     parser.add_argument('--client',         dest='client', default=Util.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
@@ -1078,10 +1077,10 @@ def main():
 
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.ssl, args.client, autoname=auto, token=token, force=args.force)
+            conn = JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.ssl, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+            conn = BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))

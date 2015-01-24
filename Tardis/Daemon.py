@@ -840,9 +840,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.server.profiler.enable()
 
         try:
-            self.request.sendall("TARDIS 1.0")
-            message = self.request.recv(1024).strip()
+            sock = self.request
+            if self.server.ssl:
+                sock.sendall("TARDIS 1.0/SSL")
+                sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
+            else:
+                sock.sendall("TARDIS 1.0")
+
+            message = sock.recv(1024)
             self.logger.debug(message)
+            message = message.strip()
 
             fields = json.loads(message)
             try:
@@ -887,25 +894,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.serverPriority = None
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
-                self.request.sendall(json.dumps(message))
+                sock.sendall(json.dumps(message))
                 self.logger.exception(e)
                 raise InitFailedException(str(e))
 
             if encoding == "JSON":
-                self.messenger = Messages.JsonMessages(self.request, compress=compress)
+                self.messenger = Messages.JsonMessages(sock, compress=compress)
             elif encoding == "BSON":
-                self.messenger = Messages.BsonMessages(self.request, compress=compress)
+                self.messenger = Messages.BsonMessages(sock, compress=compress)
             else:
                 message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
-                self.request.sendall(json.dumps(mesage))
+                sock.sendall(json.dumps(mesage))
                 raise InitFailedException("Unknown encoding: ", encoding)
 
             response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "name": serverName if serverName else name}
-            self.request.sendall(json.dumps(response))
+            sock.sendall(json.dumps(response))
 
             started = True
 
-            #self.request.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
+            #sock.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
             done = False;
 
             while not done:
@@ -938,7 +945,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.error("Caught exception: %s", e)
             self.logger.exception(e)
         finally:
-            self.request.close()
+            sock.close()
             if started:
                 self.endSession()
             endtime = datetime.now()
@@ -1024,8 +1031,8 @@ def setConfig(self, args, config):
 
     # Get SSL set up, if it's been requested.
     self.ssl            = args.ssl
-    if self.ssl:
-        self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=args.certfile, keyfile=args.keyfile, ssl_version=ssl.PROTOCOL_TLSv1)
+    self.certfile       = args.certfile
+    self.keyfile        = args.keyfile
 
     if args.profile:
         self.profiler = cProfile.Profile()
