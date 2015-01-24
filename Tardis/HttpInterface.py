@@ -169,6 +169,15 @@ def readDirectory(backupset, device, inode):
     return json.dumps(directory)
 
 
+@app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
+def readDirectory(backupset, device, inode, first, last):
+    #app.logger.info("readDirectoryForRange Invoked: %d (%d,%d) %d %d", inode, device, first, last)
+    db = getDB()
+    directory = []
+    for x in db.readDirectoryForRange((inode, device), first, last):
+        directory.append(makeDict(x))
+    return json.dumps(directory)
+
 # getChecksumByPath
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
 def getChecksumByPath(backupset, pathname):
