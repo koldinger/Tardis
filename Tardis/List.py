@@ -101,7 +101,7 @@ def collectDirContents2(tardis, dirList, crypt):
         d = dirHash.setdefault(bset['backupset'])
         # If we don't have an entry here, the range ends.
         # OR if the inode is different from the previous 
-        if prev and ((not d) or (prev['inode'] != d['inode'])):
+        if prev and ((not d) or (prev['inode'] != d['inode']) or (prev['device'] != d['device'])):
             if len(dirRange):
                 ranges.append(dirRange)
                 dirRange = []
@@ -116,6 +116,7 @@ def collectDirContents2(tardis, dirList, crypt):
         first = r[0]['backupset']
         last  = r[-1]['backupset']
         dinfo = dirHash[first]
+        #print "Reading for (%d, %d) : %d => %d" %(dinfo['inode'], dinfo['device'], first, last)
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
@@ -506,7 +507,7 @@ def main():
     args = processArgs()
 
     FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
     logger = logging.getLogger("")
 
     # Load any password info
