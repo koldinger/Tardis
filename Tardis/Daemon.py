@@ -101,6 +101,7 @@ configDefaults = {
     'LogCfg'            : None,
     'Profile'           : str(False),
     'LogFile'           : None,
+    'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
     'Single'            : str(False),
@@ -153,14 +154,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     statCommands = {}
 
     def setup(self):
-        self.sessionid = uuid.uuid1()
+        self.sessionid = str(uuid.uuid1())
         logger = logging.getLogger('Tardis')
-        if self.client_address:
-            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.client_address[0]})
-        else:
-            self.logger = logger
-
+        self.idstr= self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
+        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.idstr})
+        self.logger.info("Request received from: %s Session: %s", self.client_address[0], self.sessionid)
+        # Not quite sure why I do this here.  But just in case.
         os.umask(self.server.umask)
+
+    def finish(self):
+        self.logger.info("Ending session %s from %s", self.sessionid, self.client_address[0])
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
@@ -603,7 +606,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         except Exception as e:
             logger.error("Could insert checksum %s info: %s", checksum, str(e))
-            logger.exception(e)
+            if self.server.logexceptions:
+                logger.exception(e)
 
         self.statBytesReceived += bytesReceived
 
@@ -715,10 +719,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getDB(self, host, token):
         script = None
-        extra = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
+
+        extra = {'connid': self.idstr }
 
         if not os.path.exists(self.dbfile):
             if self.server.requirePW and token is None:
@@ -726,9 +731,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 raise InitFailedException("Password required for creation")
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
-
-        if self.client_address:
-            extra = {'connid': self.client_address[0]}
 
         self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra, token=token, user=self.server.user, group=self.server.group)
 
@@ -784,9 +786,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.cache.remove(sig)
                 except OSError:
                     self.logger.warning("No checksum file for checksum %s", c)
-                except:
-                    e = sys.exc_info()[0]
-                    self.logger.exception(e)
+                except Exception as e:
+                    if self.server.logexceptions:
+                        self.logger.exception(e)
                 self.db.deleteChecksum(c)
             if count:
                 self.purged = True
@@ -895,7 +897,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 sock.sendall(json.dumps(message))
-                self.logger.exception(e)
+                if self.server.logexceptions:
+                    self.logger.exception(e)
                 raise InitFailedException(str(e))
 
             if encoding == "JSON":
@@ -940,10 +943,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             completed = True
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
-            self.logger.exception(e)
+            if self.server.logexceptions:
+                self.logger.exception(e)
         except Exception as e:
-            self.logger.error("Caught exception: %s", e)
-            self.logger.exception(e)
+            self.logger.error("Caught exception %s: %s", type(e), e)
+            if self.server.logexceptions:
+                self.logger.exception(e)
         finally:
             sock.close()
             if started:
@@ -971,9 +976,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.debug("Removing orphans")
                 self.db.compact()
 
-            self.db.close()
+            if self.db:
+                self.db.close()
 
-        self.logger.info("Session from %s Ending: %s: %s", host, str(completed), str(datetime.now() - starttime))
+        self.logger.info("Session from %s {%s} Ending: %s: %s", host, self.sessionid, str(completed), str(datetime.now() - starttime))
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -1015,6 +1021,8 @@ def setConfig(self, args, config):
     self.dayfmt         = config.get('Tardis', 'DayFmt')
     self.dayprio        = config.getint('Tardis', 'DayPrio')
     self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
+
+    self.exceptions     = args.exceptions
 
     self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
 
@@ -1091,9 +1099,10 @@ def run_server():
             except:
                 logger.info("Socket server completed")
         logger.info("Ending")
-    except Exception:
-        logger.critical("Unable to run server: {}".format(sys.exc_info()[1]))
-        logger.exception(sys.exc_info()[1])
+    except Exception as e:
+        logger.critical("Unable to run server: {}".format(e))
+        if self.server.logexceptions:
+            logger.exception(e)
 
 def stop_server():
     logger.info("Stopping server")
@@ -1126,6 +1135,7 @@ def processArgs():
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file');
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
+    parser.add_argument('--log-exceptions',     dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
     parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=Util.StoreBoolean, default=config.getboolean(t, 'AllowNewHosts'),
                                                                         help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
@@ -1161,7 +1171,8 @@ def main():
         logger = setupLogging()
     except Exception as e:
         print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
-        traceback.print_exc()
+        if args.exceptions:
+            traceback.print_exc()
         sys.exit(1)
 
     if args.daemon and not args.local:
@@ -1183,7 +1194,8 @@ def main():
             pass
         except Exception as e:
             print "Unable to run server: {}".format(e)
-            traceback.print_exc()
+            if args.exceptions:
+                traceback.print_exc()
 
 if __name__ == "__main__":
     try:
