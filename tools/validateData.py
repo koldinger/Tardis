@@ -9,7 +9,7 @@ import sqlite3
 import time
 import logging
 
-from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto
+from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Util
 
 import progressbar as pb
 
@@ -33,7 +33,7 @@ def validate(root, client, dbname, password):
     base = os.path.join(root, client)
     cache = CacheDir.CacheDir(base)
     if password:
-        crypto = TardisCrypto.TardisCrypto(password, hostname=client)
+        crypto = TardisCrypto.TardisCrypto(password, client)
         token = crypto.encryptFilename(client)
     db = TardisDB.TardisDB(os.path.join(base, dbname), token=token, backup=False)
     regen = Regenerate.Regenerator(cache, db, crypto)
@@ -86,9 +86,9 @@ def validate(root, client, dbname, password):
     pbar.finish()
 
 if __name__ == "__main__":
-    root = "/nfs/test"
-    client = "linux.koldware.com"
-    dbname = "tardis.db"
+    root   = Util.getDefault('TARDIS_DB')
+    client = Util.getDefault('TARDIS_CLIENT')
+    dbname = Util.getDefault('TARDIS_DBNAME')
     password = None
 
     logging.basicConfig(level=logging.INFO)
