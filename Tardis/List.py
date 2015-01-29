@@ -259,7 +259,7 @@ def printit(info, name, color, gone):
             eol = False
         doprint(columnfmt % name, color, eol=eol)
 
-def printVersions(fInfos):
+def printVersions(fInfos, filename):
     global column
     pInfo = None        # Previous version's info
     lSet  = None
@@ -299,8 +299,7 @@ def printVersions(fInfos):
         if args.recent or not ((args.all or new) or (args.deletions and gone)):
             continue
         
-        name = bset['name']
-        printit(info, name, color, gone)
+        printit(info, bset['name'], color, gone)
 
     if args.recent:
         printit(fInfos[lSet['backupset']], lSet['name'], 'blue', False)
@@ -308,16 +307,16 @@ def printVersions(fInfos):
     if column != 0:
         doprint(eol=True)
 
-def processFile(filename, fInfos, tardis, crypt, depth=0, first=False):
+def processFile(filename, fInfos, tardis, crypt, depth=0, first=True):
     numFound = sum([1 for i in fInfos if fInfos[i] is not None])
-    if args.headers or (numFound == 0):
+    if args.headers or (numFound == 0) or args.recent or not first:
         doprint('%s' % filename, 'green')
         if numFound == 0:
             doprint(' Not found', 'red')
         doprint('', eol=True)
 
     if args.versions:
-        printVersions(fInfos)
+        printVersions(fInfos, filename)
 
     dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
     if len(dirs) and depth < args.maxdepth:
@@ -329,7 +328,7 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=False):
                 # skip hidden files, ie, starts with .
                 continue
             fInfo = getInfoByName(contents, name)
-            processFile(name, fInfo, tardis, crypt, depth+1)
+            processFile(name, fInfo, tardis, crypt, depth+1, first=False)
 
 def findSet(name):
     for i in backupSets:
@@ -448,7 +447,6 @@ def setupDisplay(tardis, crypt):
     elif args.daterange:
         pruneBackupSetsByDateRange(tardis)
 
-
     bsetNames = map(lambda x: x['name'], backupSets)
     longestName = max(map(len, bsetNames))
 
@@ -476,7 +474,7 @@ def processArgs():
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
-    parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
+    #parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
     parser.add_argument('--versions',       dest='versions', default=True,  action=Util.StoreBoolean,   help='Display versions of files.')
     parser.add_argument('--all',            dest='all',      default=False, action='store_true',        help='Show all versions of a file. Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',default=True,  action=Util.StoreBoolean,   help='Show deletions. Default: %(default)s')
@@ -507,7 +505,7 @@ def main():
     args = processArgs()
 
     FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
     logger = logging.getLogger("")
 
     # Load any password info
@@ -529,6 +527,9 @@ def main():
         tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
 
     setupDisplay(tardis, crypt)
+
+    if args.headers:
+        doprint("Client: %s    DB: %s" %(args.client, args.database), eol=True)
 
     for d in args.directories:
         d = os.path.abspath(d)
