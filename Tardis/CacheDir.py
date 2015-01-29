@@ -97,6 +97,13 @@ class CacheDir:
             return True
         except OSError:
             return False
+    
+    def move(self, oldname, newname):
+        try:
+            os.rename(self.path(oldname), self.path(newname))
+            return True
+        except OSError:
+            return False
 
 logger = logging.getLogger("CacheDir")
 
