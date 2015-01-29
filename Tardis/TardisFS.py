@@ -44,6 +44,7 @@ import os.path
 import logging
 import tempfile
 import socket
+import urlparse
 
 import TardisDB
 import RemoteDB
@@ -119,7 +120,6 @@ class TardisFS(fuse.Fuse):
             self.pwurl      = None
             self.pwprog     = None
             self.dbname     = dbname
-            self.remoteurl  = None
             self.cachetime  = 60
             self.nocrypt    = True
 
@@ -135,7 +135,6 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
             self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
             self.parser.add_option(mountopt="dbname",       help="Database Name")
-            self.parser.add_option(mountopt="remoteurl",    help="Remote URL to use for remote access mode")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
 
@@ -143,19 +142,13 @@ class TardisFS(fuse.Fuse):
 
             self.mountpoint = res.mountpoint
 
-            if self.remoteurl:
-                self.log.info("URL: %s", self.remoteurl)
-            else:
-                self.log.info("Database: %s", self.database)
+            self.log.info("Database: %s", self.database)
             self.log.info("Client: %s", self.client)
             self.log.info("Repoint Links: %s", self.repoint)
             self.log.info("MountPoint: %s", self.mountpoint)
             self.log.info("DBName: %s", self.dbname)
 
-            if self.remoteurl:
-                self.name = "TardisFS:<{}/{}>".format(self.remoteurl, self.client)
-            else:
-                self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
+            self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
             password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
 
@@ -165,7 +158,7 @@ class TardisFS(fuse.Fuse):
             self.fileCache  = Cache.Cache(0, float(self.cachetime))
 
             if password:
-                self.crypt = TardisCrypto.TardisCrypto(password)
+                self.crypt = TardisCrypto.TardisCrypto(password, self.client)
             password = None
 
             token = None
@@ -177,15 +170,16 @@ class TardisFS(fuse.Fuse):
                 self.crypt = None
 
             try:
-                if self.remoteurl:
-                    self.tardis = RemoteDB.RemoteDB(self.remoteurl, self.client, token=token)
+                loc = urlparse.urlparse(self.database)
+                if (loc.scheme == 'http') or (loc.scheme == 'https'):
+                    self.tardis = RemoteDB.RemoteDB(self.database, self.client, token=token)
                     self.cacheDir = self.tardis
                     self.path = None
                 else:
-                    self.path = os.path.join(self.database, self.client)
-                    self.cacheDir = CacheDir.CacheDir(self.path, create=False)
-                    dbPath = os.path.join(self.path, self.dbname)
-                    self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+                   self.path = os.path.join(loc.path, self.client)
+                   self.cacheDir = CacheDir.CacheDir(self.path, create=False)
+                   dbPath = os.path.join(self.path, self.dbname)
+                   self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
 
                 self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
                 self.files = {}
