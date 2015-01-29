@@ -606,7 +606,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         except Exception as e:
             logger.error("Could insert checksum %s info: %s", checksum, str(e))
-            if self.server.logexceptions:
+            if self.server.exceptions:
                 logger.exception(e)
 
         self.statBytesReceived += bytesReceived
@@ -787,7 +787,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 except OSError:
                     self.logger.warning("No checksum file for checksum %s", c)
                 except Exception as e:
-                    if self.server.logexceptions:
+                    if self.server.exceptions:
                         self.logger.exception(e)
                 self.db.deleteChecksum(c)
             if count:
@@ -897,7 +897,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 sock.sendall(json.dumps(message))
-                if self.server.logexceptions:
+                if self.server.exceptions:
                     self.logger.exception(e)
                 raise InitFailedException(str(e))
 
@@ -943,11 +943,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             completed = True
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
-            if self.server.logexceptions:
+            if self.server.exceptions:
                 self.logger.exception(e)
         except Exception as e:
             self.logger.error("Caught exception %s: %s", type(e), e)
-            if self.server.logexceptions:
+            if self.server.exceptions:
                 self.logger.exception(e)
         finally:
             sock.close()
@@ -1101,7 +1101,7 @@ def run_server():
         logger.info("Ending")
     except Exception as e:
         logger.critical("Unable to run server: {}".format(e))
-        if self.server.logexceptions:
+        if self.server.exceptions:
             logger.exception(e)
 
 def stop_server():
