@@ -880,16 +880,22 @@ def makePrefix(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
-def run_server(args, tempfile):
+def runServer(args, tempfile):
     server_cmd = shlex.split(args.serverprog) + ['--single', '--local', tempfile]
     #if args.serverargs:
         #server_cmd = server_cmd + args.serverargs
     logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
-    time.sleep(1.0)
-    if subp.poll():
-        raise Exception("Subprocess died:" + subp.returncode)
-    return subp
+    for i in range(0, 20):
+        if os.path.exists(tempfile):
+            return subp
+        if subp.poll():
+            raise Exception("Subprocess died: %d" % (subp.returncode))
+        time.sleep(0.5)
+
+    logger.error("Unable to locate socket %s from process %d.  Killing subprocess", tempfile, subp.pid)
+    subp.term()
+    return None
 
 def processCommandLine():
     if os.path.exists('/etc/tardis/tardisd.local.cfg'):
@@ -1073,7 +1079,10 @@ def main():
         tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
         args.port = tempsocket
         args.server = None
-        subserver = run_server(args, tempsocket)
+        subserver = runServer(args, tempsocket)
+        if subserver is None:
+            logger.critical("Unable to create server")
+            sys.exit(1)
 
     try:
         if args.protocol == 'json':
