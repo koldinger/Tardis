@@ -496,6 +496,9 @@ def processArgs():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                           help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
+    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
+
+
     parser.add_argument('directories', nargs='*', default='.',                                          help='List of directories/files to list')
 
     return parser.parse_args()
@@ -529,6 +532,9 @@ def main():
     except Exception as e:
         logger.critical(e)
         sys.exit(1)
+
+    if not args.crypt:
+        crypt = None
 
     setupDisplay(tardis, crypt)
 
