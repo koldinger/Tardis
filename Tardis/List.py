@@ -515,16 +515,20 @@ def main():
     token = None
     crypt = None
     if password:
-        crypt = TardisCrypto.TardisCrypto(password)
+        crypt = TardisCrypto.TardisCrypto(password, args.client)
         token = crypt.createToken()
     password = None
 
-    loc = urlparse.urlparse(args.database)
-    if (loc.scheme == 'http') or (loc.scheme == 'https'):
-        tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-    else:
-        dbfile = os.path.join(loc.path, args.client, args.dbname)
-        tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
+    try:
+        loc = urlparse.urlparse(args.database)
+        if (loc.scheme == 'http') or (loc.scheme == 'https'):
+            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
+        else:
+            dbfile = os.path.join(loc.path, args.client, args.dbname)
+            tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
+    except Exception as e:
+        logger.critical(e)
+        sys.exit(1)
 
     setupDisplay(tardis, crypt)
 
