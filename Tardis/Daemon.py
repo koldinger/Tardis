@@ -1186,16 +1186,18 @@ def main():
             daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
-            print >> "Caught Exception on Daemonize call: {}".format(e)
+            logger.critical("Caught Exception on Daemonize call: {}".format(e))
+            if args.exceptions:
+                logger.exception(e)
     else:
         try:
             run_server()
         except KeyboardInterrupt:
             pass
         except Exception as e:
-            print "Unable to run server: {}".format(e)
+            logger.critical("Unable to run server: {}".format(e))
             if args.exceptions:
-                traceback.print_exc()
+                logger.exception(e)
 
 if __name__ == "__main__":
     try:
