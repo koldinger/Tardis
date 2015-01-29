@@ -45,13 +45,13 @@ class TardisCrypto:
     keysize     = AES.key_size[-1]                                              # last (largest) acceptable keysize
     altchars    = '#@'
 
-    def __init__(self, password, hostname=None):
+    def __init__(self, password, client=None):
         self.random = Crypto.Random.new()
-        if hostname == None:
-            hostname = socket.gethostname()
+        if client == None:
+            client = Util.getDefault('TARDIS_CLIENT')
 
-        self.hostname = hostname
-        self.salt = hashlib.sha256(hostname).digest()
+        self.client = client
+        self.salt = hashlib.sha256(client).digest()
         keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
         self.contentKey = keys[0:self.keysize]                                     # First 256 bit key
         self.filenameKey = keys[self.keysize:]                                     # And the other one
@@ -110,10 +110,10 @@ class TardisCrypto:
         cipher = self.getFilenameCipher()
         return cipher.decrypt(base64.b64decode(name, self.altchars)).rstrip('\0')
 
-    def createToken(self, hostname=None):
-        if hostname is None:
-            hostname = self.hostname  
-        token = self.encryptFilename(hostname)
+    def createToken(self, client=None):
+        if client is None:
+            client = self.client  
+        token = self.encryptFilename(client)
         return token
 
 if __name__ == "__main__":
