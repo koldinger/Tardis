@@ -53,6 +53,7 @@ import Regenerate
 import TardisCrypto
 import Util
 import Cache
+import Defaults
 
 _BackupSetInfo = 0
 _LastBackupSet = 1
@@ -107,9 +108,9 @@ class TardisFS(fuse.Fuse):
         super(TardisFS, self).__init__(*args, **kw)
 
         try:
-            client   = Util.getDefault('TARDIS_CLIENT')
-            database = Util.getDefault('TARDIS_DB')
-            dbname   = Util.getDefault('TARDIS_DBNAME')
+            client   = Defaults.getDefault('TARDIS_CLIENT')
+            database = Defaults.getDefault('TARDIS_DB')
+            dbname   = Defaults.getDefault('TARDIS_DBNAME')
 
             # Parameters
             self.database   = database

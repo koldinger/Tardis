@@ -55,12 +55,13 @@ import Tardis
 import CompressedBuffer
 from Connection import JsonConnection, BsonConnection
 import Util
+import Defaults
 import parsedatetime
 
-skipFile            = Util.getDefault('TARDIS_SKIP')
-excludeFile         = Util.getDefault('TARDIS_EXCLUDES')
-localExcludeFile    = Util.getDefault('TARDIS_LOCAL_EXCLUDES')
-globalExcludeFile   = Util.getDefault('TARDIS_GLOBAL_EXCLUDES')
+skipFile            = Defaults.getDefault('TARDIS_SKIP')
+excludeFile         = Defaults.getDefault('TARDIS_EXCLUDES')
+localExcludeFile    = Defaults.getDefault('TARDIS_LOCAL_EXCLUDES')
+globalExcludeFile   = Defaults.getDefault('TARDIS_GLOBAL_EXCLUDES')
 excludeDirs         = []
 
 starttime           = None
@@ -909,11 +910,11 @@ def processCommandLine():
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter,
                                   epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
-    parser.add_argument('--server', '-s',   dest='server', default=Util.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
-    parser.add_argument('--port', '-p',     dest='port', type=int, default=Util.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
+    parser.add_argument('--server', '-s',   dest='server', default=Defaults.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
+    parser.add_argument('--port', '-p',     dest='port', type=int, default=Defaults.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--log', '-l',      dest='logfile', default=None,                           help='Send logging output to specified file.  Default: stderr')
 
-    parser.add_argument('--client',         dest='client', default=Util.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
+    parser.add_argument('--client',         dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")

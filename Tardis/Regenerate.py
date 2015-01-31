@@ -41,6 +41,8 @@ import CacheDir
 import RemoteDB
 import Util
 import CompressedBuffer
+import Defaults
+
 import logging
 import subprocess
 import time
@@ -253,9 +255,9 @@ def mkOutputDir(name):
         return name
 
 def parseArgs():
-    database = Util.getDefault('TARDIS_DB')
-    hostname = Util.getDefault('TARDIS_CLIENT')
-    dbname   = Util.getDefault('TARDIS_DBNAME')
+    database = Defaults.getDefault('TARDIS_DB')
+    hostname = Defaults.getDefault('TARDIS_CLIENT')
+    dbname   = Defaults.getDefault('TARDIS_DBNAME')
 
     parser = argparse.ArgumentParser(description="Regenerate a Tardis backed file", formatter_class=Util.HelpFormatter)
 

@@ -37,6 +37,8 @@ import os
 import os.path
 import base64
 
+import Defaults
+
 class TardisCrypto:
     contentKey  = None
     filenameKey = None
@@ -48,7 +50,7 @@ class TardisCrypto:
     def __init__(self, password, client=None):
         self.random = Crypto.Random.new()
         if client == None:
-            client = Util.getDefault('TARDIS_CLIENT')
+            client = Defaults.getDefault('TARDIS_CLIENT')
 
         self.client = client
         self.salt = hashlib.sha256(client).digest()

@@ -81,17 +81,6 @@ def shortPath(path, width=80):
     return ".../" + path
 
 """
-Get a default value
-"""
-def getDefault(var, defaults=Tardis.__defaults__):
-    if var in os.environ:
-        return os.environ[var]
-    elif var in defaults:
-        return defaults[var]
-    else:
-        return None
-
-"""
 Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)
 Not necessary in Python 3, but stat.filemode() doesn't exist in Python 2
 """

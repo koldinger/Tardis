@@ -41,10 +41,11 @@ import Tardis
 import TardisDB
 import Util
 import CacheDir
+import Defaults
 
-basedir = Util.getDefault('TARDIS_DB')
-dbname  = Util.getDefault('TARDIS_DBNAME')
-port    = Util.getDefault('TARDIS_REMOTEPORT')
+basedir = Defaults.getDefault('TARDIS_DB')
+dbname  = Defaults.getDefault('TARDIS_DBNAME')
+port    = Defaults.getDefault('TARDIS_REMOTEPORT')
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)

@@ -66,6 +66,7 @@ import CacheDir
 import TardisDB
 import Regenerate
 import Util
+import Defaults
 
 import Tardis
 
@@ -76,12 +77,12 @@ DELTA   = 3
 
 config = None
 args   = None
-databaseName = Util.getDefault('TARDIS_DBNAME')
-schemaName   = Util.getDefault('TARDIS_SCHEMA')
-configName   = Util.getDefault('TARDIS_DAEMON_CONFIG')
-baseDir      = Util.getDefault('TARDIS_DB')
-portNumber   = Util.getDefault('TARDIS_PORT')
-pidFileName  = Util.getDefault('TARDIS_PIDFILE')
+databaseName = Defaults.getDefault('TARDIS_DBNAME')
+schemaName   = Defaults.getDefault('TARDIS_SCHEMA')
+configName   = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
+baseDir      = Defaults.getDefault('TARDIS_DB')
+portNumber   = Defaults.getDefault('TARDIS_PORT')
+pidFileName  = Defaults.getDefault('TARDIS_PIDFILE')
 
 if  os.path.isabs(schemaName):
     schemaFile = schemaName
