@@ -32,6 +32,8 @@ import socket
 import ConfigParser
 import os
 
+SECTION = 'Tardis'
+
 _defaults = {
                 'TARDIS_DB'             : '/srv/tardis',
                 'TARDIS_DBNAME'         : 'tardis.db',
@@ -57,6 +59,7 @@ except:
     _default_file = _defaults['TARDIS_DEFAULTS']
 
 _parser = ConfigParser.ConfigParser(_defaults)
+_parser.add_section(SECTION)                       # Keep it happy later.
 _parser.read(_default_file)
 
 
@@ -68,6 +71,12 @@ def getDefault(var):
         return os.environ[var]
     else:
         try:
-            return _parser.get('Tardis', var)
-        except ConfigParser.Error:
+            return _parser.get(SECTION, var)
+        except ConfigParser.Error as e:
             return None
+
+if __name__ == "__main__":
+    print _default_file
+    for i in _defaults.keys():
+        print "%-24s: %s" % (i, getDefault(i))
+
