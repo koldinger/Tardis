@@ -9,3 +9,7 @@ test.cfg
 test
 mnt
 nohup.out*
+Tardis.egg-info/
+Tardis_Backup.egg-info/
+build/
+dist/
