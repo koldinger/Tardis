@@ -257,7 +257,7 @@ def patch(f, d, o=None):
     return o
 
 """
-New code by Eric Koldinger, (c) 2014, derived from above code.
+New code by Eric Koldinger, (c) 2014-2015, derived from above code.
 Licensing terms as above
 """
 
