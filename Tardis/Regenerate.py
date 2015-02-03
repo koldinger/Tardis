@@ -86,10 +86,6 @@ class Regenerator:
         outfile.seek(0)
         return outfile
 
-    def recoverChecksumFile(self, cksum):
-        self.logger.info("Recovering checksum: %s", cksum)
-        return self.recoverChecksum(cksum)
-
     def recoverChecksum(self, cksum):
         self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = self.db.getChecksumInfo(cksum)
@@ -390,37 +386,16 @@ def main():
 
     retcode = 0
     # do the work here
-    for i in args.files:
-        try:
-            path = None
-            f = None
-            # Recover the file
-            if args.cksum:
-                f = r.recoverChecksumFile(i)
-            else:
-                if args.last:
-                    (bset, path, name) = findLastPath(tardis, i, args.reduce)
-                    if bset is None:
-                        logger.error("Unable to find a latest version of %s", i)
-                        raise Exception("Unable to find a latest version of " + i)
-                    logger.info("Found %s in backup set %s", i, name)
-                else:
-                    path = computePath(tardis, bset, i, args.reduce)
-                    #logger.info("Reduced path %s to %s", path, tmp)
-                    if not path:
-                        logger.error("Unable to find a compute path for %s", i)
-                        raise Exception("Unable to compute path for " + i)
-                f = r.recoverFile(path, bset, permchecker=permChecker)
-
-            if f != None:
+    if args.cksum:
+        for i in args.files:
+            try:
+                f = r.recoverChecksum(i)
+                if f:
                 # Generate an output name
-                if outputdir:
-                    (d, n) = os.path.split(i)
-                    outname = os.path.join(outputdir, n)
-                    if args.cksum:
-                        path = i
-                    logger.debug("Writing output from %s to %s", path, outname)
-                    output = file(outname,  "wb")
+                    if outputdir:
+                        outname = os.path.join(outputdir, i)
+                        logger.debug("Writing output to %s", outname)
+                        output = file(outname,  "wb")
                 try:
                     x = f.read(16 * 1024)
                     while x:
@@ -433,31 +408,103 @@ def main():
                     f.close()
                     if output is not sys.stdout:
                         output.close()
-                    if output is not None:
-                        # TODO: Figure out a correct timestamp and/or permissions for this file?
-                        if not args.cksum and (args.settime or args.setperm) and (not output is sys.stdout):
-                            info = tardis.getFileInfoByPath(path, bset)
-                            if info:
-                                if args.settime:
-                                    try:
-                                        os.utime(outname, (info['atime'], info['mtime']))
-                                    except Exception as e:
-                                        logger.warning("Unable to set times for %s", outname)
-
-                                if args.setperm:
-                                    try:
-                                        os.chmod(outname, info['mode'])
-                                    except Exception as e:
-                                        logger.warning("Unable to set permissions for %s", outname)
-                                    try:
-                                        os.chown(outname, info['uid'], info['gid'])
-                                    except Exception as e:
-                                        logger.warning("Unable to set owner and group of %s", outname)
-        except Exception as e:
-            #logger.exception(e)
-            retcode += 1
+            except Exception as e:
+                #logger.exception(e)
+                retcode += 1
+    else:
+        for i in args.files:
+            i = os.path.abspath(i)
+            logger.info("Processing %s", i)
+            path = None
+            f = None
+            if args.last:
+                (bset, path, name) = findLastPath(tardis, i, args.reduce)
+                if bset is None:
+                    logger.error("Unable to find a latest version of %s", i)
+                    raise Exception("Unable to find a latest version of " + i)
+                logger.info("Found %s in backup set %s", i, name)
+            elif args.reduce:
+                path = computePath(tardis, bset, i, args.reduce)
+                logger.debug("Reduced path %s to %s", path, tmp)
+                if not path:
+                    logger.error("Unable to find a compute path for %s", i)
+                    raise Exception("Unable to compute path for " + i)
+            else:
+                path = i
+            retcode += recoverTree(r, tardis, path, bset, outputdir, args.setperm, crypt)
 
     return retcode
+
+
+def recoverTree(regenerator, tardis, path, bset, outputdir, setperm, crypt):
+    retCode = 0
+    outname = None
+    try:
+        logger.info("Recovering tree %s in %s", path, bset)
+        info = tardis.getFileInfoByPath(path, bset)
+        if info:
+            (d, f)  = os.path.split(path)
+            if outputdir:
+                outname = os.path.join(outputdir, f)
+            if info['dir']:
+                logger.debug("%s is a directory", path)
+                contents = tardis.readDirectory((info['inode'], info['device']), bset)
+                if not outname:
+                    logger.error("Cannot regenerate directory %s without outputdir specified", path)
+                    raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
+                os.mkdir(outname)
+                for i in contents:
+                    name = i['name']
+                    if crypt:
+                        name = crypt.decryptFilename(name)
+                    recoverTree(regenerator, tardis, os.path.join(path, name), bset, outname, setperm, crypt)
+            else:
+                checksum = info['checksum']
+                i = regenerator.recoverChecksum(checksum)
+                if i:
+                    if info['link']:
+                        # read and make a link
+                        x = i.read(16 * 1024)
+                        os.symlink(x, outname)
+                        pass
+                    else:
+                        if outputdir:
+                            # Generate an output name
+                            logger.debug("Writing output to %s", outname)
+                            output = file(outname,  "wb")
+                        else:
+                            output = sys.stdout
+                        try:
+                            x = i.read(16 * 1024)
+                            while x:
+                                output.write(x)
+                                x = i.read(16 * 1024)
+                        except Exception as e:
+                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                            raise
+                        finally:
+                            i.close()
+                            if output is not sys.stdout:
+                                output.close()
+
+            if setperm:
+                try:
+                    os.chmod(outname, info['mode'])
+                except Exception as e:
+                    logger.warning("Unable to set permissions for %s", outname)
+                try:
+                    # Change the group, then the owner.
+                    # Change the group first, as only root can change owner, and that might fail.
+                    os.chown(outname, -1, info['gid'])
+                    os.chown(outname, info['uid'], -1)
+                except Exception as e:
+                    logger.warning("Unable to set owner and group of %s", outname)
+
+    except Exception as e:
+        logger.exception(e)
+        retCode += 1
+
+    return retCode
 
 
 if __name__ == "__main__":
