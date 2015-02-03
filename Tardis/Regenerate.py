@@ -281,6 +281,7 @@ def parseArgs():
                         help='Reduce path by N directories.  No value for "smart" reduction')
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean, help='Set file times to match original file')
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
+    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='overwrite', choices=['overwrite', 'newer', 'older', 'skip'], help='Mode for handling existing files')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
@@ -431,16 +432,16 @@ def main():
                     raise Exception("Unable to compute path for " + i)
             else:
                 path = i
-            retcode += recoverTree(r, tardis, path, bset, outputdir, args.setperm, crypt)
+            retcode += recoverObject(r, tardis, path, bset, outputdir, args.setperm, crypt)
 
     return retcode
 
 
-def recoverTree(regenerator, tardis, path, bset, outputdir, setperm, crypt):
+def recoverObject(regenerator, tardis, path, bset, outputdir, setperm, crypt):
     retCode = 0
     outname = None
     try:
-        logger.info("Recovering tree %s in %s", path, bset)
+        logger.info("Recovering object %s", path)
         info = tardis.getFileInfoByPath(path, bset)
         if info:
             (d, f)  = os.path.split(path)
@@ -457,7 +458,7 @@ def recoverTree(regenerator, tardis, path, bset, outputdir, setperm, crypt):
                     name = i['name']
                     if crypt:
                         name = crypt.decryptFilename(name)
-                    recoverTree(regenerator, tardis, os.path.join(path, name), bset, outname, setperm, crypt)
+                    recoverObject(regenerator, tardis, os.path.join(path, name), bset, outname, setperm, crypt)
             else:
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum)
