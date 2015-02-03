@@ -56,9 +56,15 @@ import parsedatetime
 
 import Tardis
 
-
 logger  = None
 crypt = None
+OW_NEVER = 0
+OW_ALWAYS = 1
+OW_NEWER = 2
+OW_OLDER = 3
+
+overwriteNames = { 'never': OW_NEVER, 'always': OW_ALWAYS, 'newer': OW_NEWER, 'older': OW_OLDER }
+owMode = OW_NEVER
 
 class RegenerateException(Exception):
     def __init__(self, value):
@@ -166,6 +172,109 @@ class Regenerator:
             self.logger.error("Error recovering file: %s: %s", filename, str(e))
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
+
+
+def checkOverwrite(name, info):
+    if os.path.exists(name):
+        if owMode == OW_NEVER:
+            return False
+        elif owMode == OW_ALWAYS:
+            return True
+        else:
+            stat = os.lstat(name)
+            if stat.st_mtime < info['mtime']:
+                # Current version is older
+                return True if owMode == OW_NEWER else False
+            else:
+                # Current version is newer
+                return True if owMode == OW_OLDER else False
+    else:
+        return True
+
+def recoverObject(regenerator, info, bset, outputdir, path):
+    """
+    Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
+    Note that path is for debugging only.
+    """
+    retCode = 0
+    outname = None
+    skip = False
+    try:
+        logger.info("Recovering object %s", path)
+        if info:
+            realname = info['name']
+            if crypt:
+                realname = crypt.decryptFilename(realname)
+            if outputdir:
+                outname = os.path.join(outputdir, realname)
+                if not checkOverwrite(outname, info):
+                    skip = True
+                    logger.info("Skipping existing file: %s", path)
+
+            if info['dir']:
+                contents = tardis.readDirectory((info['inode'], info['device']), bset)
+                if not outname:
+                    logger.error("Cannot regenerate directory %s without outputdir specified", path)
+                    raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
+                if not os.path.exists(outname):
+                    os.mkdir(outname)
+                dirInode = (info['inode'], info['device'])
+                for i in contents:
+                    name = i['name']
+                    childInfo = tardis.getFileInfoByName(name, dirInode, bset)
+                    if crypt:
+                        name = crypt.decryptFilename(name)
+                    if childInfo:
+                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name))
+                    else:
+                        retCode += 1
+            elif not skip:
+                checksum = info['checksum']
+                i = regenerator.recoverChecksum(checksum)
+                if i:
+                    if info['link']:
+                        # read and make a link
+                        x = i.read(16 * 1024)
+                        os.symlink(x, outname)
+                        pass
+                    else:
+                        if outputdir:
+                            # Generate an output name
+                            logger.debug("Writing output to %s", outname)
+                            output = file(outname,  "wb")
+                        else:
+                            output = sys.stdout
+                        try:
+                            x = i.read(16 * 1024)
+                            while x:
+                                output.write(x)
+                                x = i.read(16 * 1024)
+                        except Exception as e:
+                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                            raise
+                        finally:
+                            i.close()
+                            if output is not sys.stdout:
+                                output.close()
+
+            if outname and args.setperm:
+                try:
+                    os.chmod(outname, info['mode'])
+                except Exception as e:
+                    logger.warning("Unable to set permissions for %s", outname)
+                try:
+                    # Change the group, then the owner.
+                    # Change the group first, as only root can change owner, and that might fail.
+                    os.chown(outname, -1, info['gid'])
+                    os.chown(outname, info['uid'], -1)
+                except Exception as e:
+                    logger.warning("Unable to set owner and group of %s", outname)
+
+    except Exception as e:
+        #logger.exception(e)
+        retCode += 1
+
+    return retCode
 
 def setupPermissionChecks():
     uid = os.getuid()
@@ -281,7 +390,7 @@ def parseArgs():
                         help='Reduce path by N directories.  No value for "smart" reduction')
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean, help='Set file times to match original file')
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
-    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='overwrite', choices=['overwrite', 'newer', 'older', 'skip'], help='Mode for handling existing files')
+    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
@@ -305,7 +414,7 @@ def setupLogging(args):
     return logger
 
 def main():
-    global logger, crypt
+    global logger, crypt, tardis, args, owMode
     args = parseArgs()
     logger = setupLogging(args)
 
@@ -318,6 +427,8 @@ def main():
     token = None
     if crypt:
         token = crypt.createToken()
+
+    owMode = overwriteNames[args.overwrite]
 
     try:
         loc = urlparse.urlparse(args.database)
@@ -432,80 +543,21 @@ def main():
                     raise Exception("Unable to compute path for " + i)
             else:
                 path = i
-            retcode += recoverObject(r, tardis, path, bset, outputdir, args.setperm, crypt)
+
+            if crypt:
+                actualPath = crypt.encryptPath(path)
+            else:
+                actualPath = path
+            info = tardis.getFileInfoByPath(actualPath, bset)
+            if info:
+                retcode += recoverObject(r, info, bset, outputdir, path)
+            else:
+                logger.error("Could not recover info for %s", i)
+                retcode += 1
 
     return retcode
 
 
-def recoverObject(regenerator, tardis, path, bset, outputdir, setperm, crypt):
-    retCode = 0
-    outname = None
-    try:
-        logger.info("Recovering object %s", path)
-        info = tardis.getFileInfoByPath(path, bset)
-        if info:
-            (d, f)  = os.path.split(path)
-            if outputdir:
-                outname = os.path.join(outputdir, f)
-            if info['dir']:
-                logger.debug("%s is a directory", path)
-                contents = tardis.readDirectory((info['inode'], info['device']), bset)
-                if not outname:
-                    logger.error("Cannot regenerate directory %s without outputdir specified", path)
-                    raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
-                os.mkdir(outname)
-                for i in contents:
-                    name = i['name']
-                    if crypt:
-                        name = crypt.decryptFilename(name)
-                    recoverObject(regenerator, tardis, os.path.join(path, name), bset, outname, setperm, crypt)
-            else:
-                checksum = info['checksum']
-                i = regenerator.recoverChecksum(checksum)
-                if i:
-                    if info['link']:
-                        # read and make a link
-                        x = i.read(16 * 1024)
-                        os.symlink(x, outname)
-                        pass
-                    else:
-                        if outputdir:
-                            # Generate an output name
-                            logger.debug("Writing output to %s", outname)
-                            output = file(outname,  "wb")
-                        else:
-                            output = sys.stdout
-                        try:
-                            x = i.read(16 * 1024)
-                            while x:
-                                output.write(x)
-                                x = i.read(16 * 1024)
-                        except Exception as e:
-                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
-                            raise
-                        finally:
-                            i.close()
-                            if output is not sys.stdout:
-                                output.close()
-
-            if setperm:
-                try:
-                    os.chmod(outname, info['mode'])
-                except Exception as e:
-                    logger.warning("Unable to set permissions for %s", outname)
-                try:
-                    # Change the group, then the owner.
-                    # Change the group first, as only root can change owner, and that might fail.
-                    os.chown(outname, -1, info['gid'])
-                    os.chown(outname, info['uid'], -1)
-                except Exception as e:
-                    logger.warning("Unable to set owner and group of %s", outname)
-
-    except Exception as e:
-        logger.exception(e)
-        retCode += 1
-
-    return retCode
 
 
 if __name__ == "__main__":
