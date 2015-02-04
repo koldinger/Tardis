@@ -36,6 +36,10 @@ from tornado.ioloop import IOLoop
 import os, os.path
 import logging
 import json
+import argparse
+import ConfigParser
+import zlib
+import base64
 
 import Tardis
 import TardisDB
@@ -43,15 +47,37 @@ import Util
 import CacheDir
 import Defaults
 
+
 basedir = Defaults.getDefault('TARDIS_DB')
 dbname  = Defaults.getDefault('TARDIS_DBNAME')
 port    = Defaults.getDefault('TARDIS_REMOTEPORT')
+configName = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
+
+configDefaults = {
+    'Port'              : port,
+    'BaseDir'           : basedir,
+    'DBName'            : dbname,
+    'LogFile'           : None,
+    'LogExceptions'     : str(False),
+    'Verbose'           : '0',
+    'Daemon'            : str(False),
+    'User'              : None,
+    'Group'             : None,
+    'SSL'               : str(False),
+    'CertFile'          : None,
+    'KeyFile'           : None,
+    'PidFile'           : None,
+    'Compress'          : str(False)
+}
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 dbs = {}
 caches= {}
+
+args = None
+config = None
 
 def getDB():
     if not 'host' in session:
@@ -67,6 +93,23 @@ def makeDict(row):
             d[i] = row[i]
         return d
     return None
+
+def compressMsg(string, threshold=1024):
+    if len(string) > threshold:
+        comp = base64.b64encode(zlib.compress(string))
+        if len(comp) < len(string):
+            return (comp, True)
+    return (string, False)
+
+def createResponse(string, compress=True):
+    if compress:
+        (data, compressed) = compressMsg(string)
+        response = flask.make_response(data)
+        response.headers['X-TardisCompressed'] = str(compressed)
+    else:
+        response = flask.make_response(string)
+        response.headers['X-TardisCompressed'] = str(False)
+    return response
 
 @app.route('/')
 def hello():
@@ -171,7 +214,7 @@ def readDirectory(backupset, device, inode):
 
 
 @app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
-def readDirectory(backupset, device, inode, first, last):
+def readDirectoryForRange(device, inode, first, last):
     #app.logger.info("readDirectoryForRange Invoked: %d (%d,%d) %d %d", inode, device, first, last)
     db = getDB()
     directory = []
@@ -230,14 +273,81 @@ def getFileData(checksum):
     except:
         abort(404)
 
+def processArgs():
+    parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
+
+    parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
+    (args, remaining) = parser.parse_known_args()
+
+    t = 'Tardis'
+    config = ConfigParser.ConfigParser(configDefaults)
+    config.add_section(t)                   # Make it safe for reading other values from.
+    config.read(args.config)
+
+    parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
+    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
+    parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
+
+    parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
+    parser.add_argument('--log-exceptions',     dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
+
+    parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'), help='Run as a daemon')
+    parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
+    parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
+    parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')
+
+    parser.add_argument('--ssl',                dest='ssl',             action=Util.StoreBoolean, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
+    parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
+    parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
+
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ , help='Show the version')
+    parser.add_argument('--help', '-h',         action='help')
+
+    args = parser.parse_args(remaining)
+    return(args, config)
+
+
+def setupLogging():
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+    logger = logging.getLogger('')
+
+    verbosity = args.verbose
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logger.setLevel(loglevel)
+
+    format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+
+    if args.logfile:
+        handler = logging.handlers.WatchedFileHandler(args.logfile)
+    elif args.daemon:
+        handler = logging.handlers.SysLogHandler()
+    else:
+        handler = logging.StreamHandler()
+
+    handler.setFormatter(format)
+    logger.addHandler(handler)
+
+def setup():
+    global args, cnofig
+    logging.basicConfig(loglevel=logging.DEBUG)
+    (args, config) = processArgs()
+    setupLogging()
+
 def main_flask():
-    logging.basicConfig(level=logging.DEBUG)
+    setup()
     app.run(debug=True, port=int(port))
 
 def tornado():
-    logging.basicConfig(level=logging.DEBUG)
-    http_server = HTTPServer(WSGIContainer(app))
-    http_server.listen(int(port))
+    setup()
+    sslOptions = None
+    if args.ssl:
+        sslOptions = {
+            "certfile": args.cert,
+            "keyfile" : args.key
+        }
+
+    http_server = HTTPServer(WSGIContainer(app), ssl_options = sslOptions)
+    http_server.listen(args.port)
     IOLoop.instance().start()
 
 if __name__ == "__main__":

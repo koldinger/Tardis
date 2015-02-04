@@ -47,8 +47,9 @@ _defaults = {
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
                 'TARDIS_SERVER'         : 'localhost',
-                'TARDIS_REMOTEPORT'	    : '5000',
+                'TARDIS_REMOTEPORT'	    : '7430',
                 'TARDIS_CLIENT'         : socket.gethostname(),
+                'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/remote.cfg',
                 'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
                }
 
