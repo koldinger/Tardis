@@ -153,18 +153,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     statDirs     = 0
     statBytesReceived = 0
     statCommands = {}
+    address = ''
 
     def setup(self):
         self.sessionid = str(uuid.uuid1())
         logger = logging.getLogger('Tardis')
         self.idstr= self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.idstr})
-        self.logger.info("Request received from: %s Session: %s", self.client_address[0], self.sessionid)
+        if self.client_address:
+            self.address = self.client_address[0]
+        else:
+            self.address = 'localhost'
+        self.logger.info("Request received from: %s Session: %s", self.address, self.sessionid)
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.server.umask)
 
     def finish(self):
-        self.logger.info("Ending session %s from %s", self.sessionid, self.client_address[0])
+        self.logger.info("Ending session %s from %s", self.sessionid, self.address)
 
     def checkFile(self, parent, f, dirhash):
         """ Process an individual file.  Check to see if it's different from what's there already """
