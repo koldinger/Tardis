@@ -42,6 +42,7 @@ import time
 import parsedatetime
 import urlparse
 
+import Tardis
 import TardisDB
 import RemoteDB
 import TardisCrypto
@@ -528,6 +529,7 @@ def processArgs():
 
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
 
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
 
     parser.add_argument('directories', nargs='*', default='.',                                          help='List of directories/files to list')
 
