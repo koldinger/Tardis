@@ -338,28 +338,35 @@ def printVersions(fInfos, filename):
     if column != 0:
         doprint(eol=True)
 
-def processFile(filename, fInfos, tardis, crypt, depth=0, first=True):
+def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
     numFound = sum([1 for i in fInfos if fInfos[i] is not None])
     if args.headers or (numFound == 0) or args.recent or not first:
-        doprint('%s' % filename, 'green')
+        color = 'green' if first else 'white'
+        doprint(fmt % filename, color)
         if numFound == 0:
             doprint(' Not found', 'red')
-        doprint('', eol=True)
+        if (numFound == 0) or args.versions or eol:
+            doprint('', eol=True)
 
     if args.versions:
         printVersions(fInfos, filename)
 
-    dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
-    if len(dirs) and depth < args.maxdepth:
-        (contents, names) = collectDirContents2(tardis, dirs, crypt)
-        #(contents, names) = collectDirContents(tardis, dirs, crypt)
-        #names = getFileNames(contents)
-        for name in sorted(names):
-            if not args.hidden and name.startswith('.'):
-                # skip hidden files, ie, starts with .
-                continue
-            fInfo = getInfoByName(contents, name)
-            processFile(name, fInfo, tardis, crypt, depth+1, first=False)
+    if depth < args.maxdepth:
+        dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
+        if len(dirs):
+            (contents, names) = collectDirContents2(tardis, dirs, crypt)
+            if not args.hidden:
+                names = [n for n in names if not n.startswith('.')]
+            (numCols, fmt) = computeColumnWidth(names)
+            #(contents, names) = collectDirContents(tardis, dirs, crypt)
+            #names = getFileNames(contents)
+            column = 0
+            for name in sorted(names):
+                fInfo = getInfoByName(contents, name)
+                column += 1
+                eol = True if ((column % numCols) == 0) else False
+                processFile(name, fInfo, tardis, crypt, depth+1, first=False, fmt=fmt, eol=eol)
+            doprint('', eol=True)
 
 def findSet(name):
     for i in backupSets:
@@ -464,7 +471,29 @@ def pruneBackupSetsByDateRange(tardis):
         sys.exit(1)
 
     pruneBackupSets(startRange, endRange)
-        
+
+
+"""
+Given a list of names, compute the columns widths
+"""
+def computeColumnWidth(names):
+    if len(names) == 0:
+        return (1, '%s')
+    longestName = max(map(len, names))
+
+    if args.columns:
+        columns = args.columns
+    else:
+        if os.isatty(sys.stdout.fileno()):
+            height, width = Util.getTerminalSize()
+            columns = width / (longestName + 4)
+        else:
+            columns = 1
+
+    fmt = "%%-%ds  " % (longestName + 2)
+
+    return (columns, fmt)
+
 """
 Calculate display parameters, including creating the list of backupsets that we want to process
 """
@@ -479,18 +508,9 @@ def setupDisplay(tardis, crypt):
         pruneBackupSetsByDateRange(tardis)
 
     bsetNames = map(lambda x: x['name'], backupSets)
-    longestName = max(map(len, bsetNames))
 
-    if args.columns:
-        columns = args.columns
-    else:
-        if os.isatty(sys.stdout.fileno()):
-            height, width = Util.getTerminalSize()
-            columns = width / (longestName + 4)
-        else:
-            columns = 1
+    (columns, columnfmt) = computeColumnWidth(bsetNames)
 
-    columnfmt = "%%-%ds  " % (longestName + 2)
 
 def processArgs():
     isatty = os.isatty(sys.stdout.fileno())
