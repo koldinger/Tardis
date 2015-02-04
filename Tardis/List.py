@@ -73,6 +73,12 @@ def doprint(string='', color=None, eol=False):
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
+def flushLine():
+    global line
+    if line:
+        print line.rstrip()     # clear out any trailing spaces
+        line=''
+
 """
 Collect information about a file in all the backupsets
 """
@@ -335,8 +341,7 @@ def printVersions(fInfos, filename):
     if args.recent:
         printit(fInfos[lSet['backupset']], lSet['name'], 'blue', False)
 
-    if column != 0:
-        doprint(eol=True)
+    flushLine()
 
 def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
     numFound = sum([1 for i in fInfos if fInfos[i] is not None])
@@ -346,7 +351,7 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', 
         if numFound == 0:
             doprint(' Not found', 'red')
         if (numFound == 0) or args.versions or eol:
-            doprint('', eol=True)
+            flushLine()
 
     if args.versions:
         printVersions(fInfos, filename)
@@ -366,7 +371,7 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', 
                 column += 1
                 eol = True if ((column % numCols) == 0) else False
                 processFile(name, fInfo, tardis, crypt, depth+1, first=False, fmt=fmt, eol=eol)
-            doprint('', eol=True)
+            flushLine()
 
 def findSet(name):
     for i in backupSets:
