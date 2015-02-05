@@ -15,9 +15,9 @@ setup(  name                    = 'Tardis-Backup',
         install_requires = ['bson', 'daemonize', 'parsedatetime', 'pycrypto', 'pycurl', 'requests', 'flask', 'tornado', 'termcolor' ],
         data_files = [( '/etc/tardis',              [ 'tardisd.cfg' ]),
                       ( 'schema',                   [ 'schema/tardis.sql' ]),
-                      ( '/etc/init.d',              [ 'init/tardisd' ]),
-                      ( '/usr/lib/systemd/system',  [ 'init/tardisd.service' ]),
-                      ( '/etc/logrotate.d',         [ 'logrotate/tardisd' ])
+                      ( '/etc/init.d',              [ 'init/tardisd', 'init/tardisremote' ]),
+                      ( '/usr/lib/systemd/system',  [ 'init/tardisd.service', 'init/tardisremote.service' ]),
+                      ( '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ])
                      ],
         entry_points = {
                 'console_scripts' : [
