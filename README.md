@@ -287,6 +287,9 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
   <tr> <td> MonthKeep, WeekKeep, DayKeep
    <td> 0, 180, 30
    <td> Number of days to keep for Monthly, Weekly, and Daily backups.  0 indicates keep forever.
+  <tr> <td> DBBackups
+   <td> 5
+   <td> Number of backup iterations of the database to keep.
   
 </table>
 Mounting the filesystem
