@@ -26,7 +26,7 @@ setup(  name                    = 'Tardis-Backup',
                     'tardisfs = Tardis.TardisFS:main',
                     'regenerate = Tardis.Regenerate:main',
                     'lstardis = Tardis.List:main',
-                    #'tardisremote = Tardis.HttpInterface:tornado',
+                    'tardisremote = Tardis.HttpInterface:tornado',
                 ],
         },
     )

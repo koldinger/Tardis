@@ -557,8 +557,5 @@ def main():
 
     return retcode
 
-
-
-
 if __name__ == "__main__":
     sys.exit(main())
