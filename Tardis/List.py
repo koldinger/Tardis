@@ -53,6 +53,7 @@ columns = None
 columnfmt = None
 args = None
 curcolor = None
+logger = None
 backupSets = []
 
 line = ''
@@ -516,6 +517,30 @@ def setupDisplay(tardis, crypt):
 
     (columns, columnfmt) = computeColumnWidth(bsetNames)
 
+def isMagic(path):
+    if ('*' in path) or ('?' in path) or ('[' in path):
+        return True
+    return False
+
+def globPath(path, tardis, crypt):
+    logger.debug("Globbing %s", path)
+    if not isMagic(path):
+        return [path]
+    comps = path.split(os.sep)
+    for i in range(0, len(comps)):
+        if isMagic(comps[i]):
+            currentPath = os.path.join('/', *comps[:i])
+            pattern = comps[i]
+            logger.debug("Globbing in component %d of %s: %s %s", i, path, currentPath, pattern)
+            fInfos = collectFileInfo(currentPath, tardis, crypt)
+            dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
+            (data, names) = collectDirContents2(tardis, dirs, crypt)
+            matches = fnmatch.filter(names, pattern)
+            globbed = sorted([os.path.join('/', currentPath, match, *comps[i+1:]) for match in matches])
+            logger.debug("Globbed %s: %s", path, globbed)
+            return globbed
+
+    return []
 
 def processArgs():
     isatty = os.isatty(sys.stdout.fileno())
@@ -539,7 +564,8 @@ def processArgs():
     parser.add_argument('--colors',         dest='colors',   default=isatty, action=Util.StoreBoolean,  help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',  type=int, default=None ,                   help='Number of columns to display')
     parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
-    parser.add_argument('--recent',     dest='recent',   default=False, action=Util.StoreBoolean,       help='Show only the most recent version of a file. Default: %(default)s')
+    parser.add_argument('--recent',         dest='recent',   default=False, action=Util.StoreBoolean,   help='Show only the most recent version of a file. Default: %(default)s')
+    parser.add_argument('--glob',           dest='glob',    default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
@@ -561,11 +587,11 @@ def processArgs():
     return parser.parse_args()
 
 def main():
-    global args
+    global args, logger
     args = processArgs()
 
     FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
     logger = logging.getLogger("")
 
     # Load any password info
@@ -598,7 +624,17 @@ def main():
     if args.headers:
         doprint("Client: %s    DB: %s" %(args.client, args.database), eol=True)
 
-    for d in args.directories:
+    if args.glob:
+        directories = []
+        for d in args.directories:
+            if not isMagic(d):
+                directories.append(d)
+            else:
+                directories += globPath(os.path.abspath(d), tardis, crypt)
+    else:
+        directories = args.directories
+
+    for d in directories:
         d = os.path.abspath(d)
         fInfo = collectFileInfo(d, tardis, crypt)
         processFile(d, fInfo, tardis, crypt)
