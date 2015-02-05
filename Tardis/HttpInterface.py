@@ -34,12 +34,13 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 
 import os, os.path
-import logging
+import logging, logging.handlers
 import json
 import argparse
 import ConfigParser
 import zlib
 import base64
+import daemonize
 
 import Tardis
 import TardisDB
@@ -52,10 +53,11 @@ basedir = Defaults.getDefault('TARDIS_DB')
 dbname  = Defaults.getDefault('TARDIS_DBNAME')
 port    = Defaults.getDefault('TARDIS_REMOTEPORT')
 configName = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
+pidFile = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
 
 configDefaults = {
     'Port'              : port,
-    'BaseDir'           : basedir,
+    'Database'          : basedir,
     'DBName'            : dbname,
     'LogFile'           : None,
     'LogExceptions'     : str(False),
@@ -66,7 +68,7 @@ configDefaults = {
     'SSL'               : str(False),
     'CertFile'          : None,
     'KeyFile'           : None,
-    'PidFile'           : None,
+    'PidFile'           : pidFile,
     'Compress'          : str(False)
 }
 
@@ -122,8 +124,8 @@ def login():
             #app.logger.debug(str(request))
             host    = request.form['host']
             token   = request.form['token'] if 'token' in request.form else None
-            dbPath  = os.path.join(basedir, host, dbname)
-            cache   = CacheDir.CacheDir(os.path.join(basedir, host), create=False)
+            dbPath  = os.path.join(args.database, host, dbname)
+            cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
             tardis  = TardisDB.TardisDB(dbPath, backup=False, token=token)
             #session['tardis']   = tardis
             session['host']     = host
@@ -286,6 +288,7 @@ def processArgs():
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
+    parser.add_argument('--database',           dest='database',        default=config.get(t, 'Database'), help='blah blah blah')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
 
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
@@ -326,29 +329,55 @@ def setupLogging():
 
     handler.setFormatter(format)
     logger.addHandler(handler)
+    return logger
 
 def setup():
-    global args, cnofig
+    global args, config, logger
     logging.basicConfig(loglevel=logging.DEBUG)
     (args, config) = processArgs()
-    setupLogging()
+    logger = setupLogging()
 
 def main_flask():
     setup()
     app.run(debug=True, port=int(port))
 
-def tornado():
-    setup()
+def run_server():
     sslOptions = None
     if args.ssl:
         sslOptions = {
-            "certfile": args.cert,
-            "keyfile" : args.key
+            "certfile": args.certfile,
+            "keyfile" : args.keyfile
         }
 
     http_server = HTTPServer(WSGIContainer(app), ssl_options = sslOptions)
     http_server.listen(args.port)
     IOLoop.instance().start()
+
+def tornado():
+    setup()
+    if args.daemon:
+        user  = args.user
+        group = args.group
+        pidfile = args.pidfile 
+        fds = [h.stream.fileno() for h in logger.handlers if isinstance(h, logging.StreamHandler)]
+        logger.info("About to daemonize")
+    
+        try:
+            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
+            daemon.start()
+        except Exception as e:
+            logger.critical("Caught Exception on Daemonize call: {}".format(e))
+            if args.exceptions:
+                logger.exception(e)
+    else:
+        try:
+            run_server()
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            logger.critical("Unable to run server: {}".format(e))
+            if args.exceptions:
+                logger.exception(e)
 
 if __name__ == "__main__":
     main_flask()
