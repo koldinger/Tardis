@@ -49,12 +49,14 @@ class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
 
-    def __init__(self, url, host, prevSet=None, extra=None, token=None):
+    def __init__(self, url, host, prevSet=None, extra=None, token=None, verify=False):
         self.logger=logging.getLogger('Remote')
         self.session = requests.Session()
         self.baseURL = url
         if not url.endswith('/'):
             self.baseURL += '/'
+
+        self.verify = verify
 
         postData = { 'host': host }
         if token:
@@ -91,7 +93,7 @@ class RemoteDB(object):
             return str(current)
 
     def listBackupSets(self):
-        r = self.session.get(self.baseURL + "listBackupSets")
+        r = self.session.get(self.baseURL + "listBackupSets", verify=self.verify)
         r.raise_for_status()
         for i in r.json():
             self.logger.debug("Returning %s", str(i))
@@ -99,24 +101,24 @@ class RemoteDB(object):
             yield i
 
     def lastBackupSet(self, completed=True):
-        r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)))
+        r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getBackupSetInfo(self, name):
-        r = self.session.get(self.baseURL + "getBackupSetInfo/" + name)
+        r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getBackupSetInfoForTime(self, time):
-        r = self.session.get(self.baseURL + "getBackupSetForTime/" + str(time))
+        r = self.session.get(self.baseURL + "getBackupSetForTime/" + str(time), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getFileInfoByName(self, name, parent, current=True):
         bset = self._bset(current)
         (inode, device) = parent
-        r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name)
+        r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
@@ -124,14 +126,14 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path)
+        r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "readDirectory/" + bset + "/" + str(device) + "/" + str(inode))
+        r = self.session.get(self.baseURL + "readDirectory/" + bset + "/" + str(device) + "/" + str(inode), verify=self.verify)
         r.raise_for_status()
         for i in r.json():
             i['name'] = fs_encode(i['name'])
@@ -139,7 +141,7 @@ class RemoteDB(object):
 
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
-        r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last))
+        r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last), verify=self.verify)
         r.raise_for_status()
         for i in r.json():
             i['name'] = fs_encode(i['name'])
@@ -147,7 +149,7 @@ class RemoteDB(object):
 
     def checkPermissions(self, path, checker, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path)
+        r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path, verify=self.verify)
         r.raise_for_status()
         for i in r.json():
             ret = checker(i['uid'], i['gid'], i['mode'])
@@ -160,29 +162,29 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path)
+        r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getChecksumInfo(self, checksum):
-        r = self.session.get(self.baseURL + "getChecksumInfo/" + checksum)
+        r = self.session.get(self.baseURL + "getChecksumInfo/" + checksum, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getFirstBackupSet(self, name, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name)
+        r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def getChainLength(self, checksum):
-        r = self.session.get(self.baseURL + "getChainLength/" + checksum)
+        r = self.session.get(self.baseURL + "getChainLength/" + checksum, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
     def open(self, checksum, mode):
         temp = tempfile.SpooledTemporaryFile("wb")
-        r = self.session.get(self.baseURL + "getFileData/" + checksum)
+        r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify)
         r.raise_for_status()
         for chunk in r.iter_content(chunk_size=64 * 1024):
             temp.write(chunk)
