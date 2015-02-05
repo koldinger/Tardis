@@ -37,19 +37,20 @@ SECTION = 'Tardis'
 _defaults = {
                 'TARDIS_DB'             : '/srv/tardis',
                 'TARDIS_DBNAME'         : 'tardis.db',
-                'TARDIS_PORT'           : '7420',
+                'TARDIS_CLIENT'         : socket.gethostname(),
+                'TARDIS_SERVER'         : 'localhost',
                 'TARDIS_EXCLUDES'       : '.tardis-excludes',
                 'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
                 'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
                 'TARDIS_SKIP'           : '.tardis-skip',
+                'TARDIS_PORT'           : '7420',
                 'TARDIS_DAEMON_CONFIG'  : '/etc/tardis/tardisd.cfg',
                 'TARDIS_LOCAL_CONFIG'   : '/etc/tardis/tardisd.local.cfg',
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
-                'TARDIS_SERVER'         : 'localhost',
                 'TARDIS_REMOTEPORT'	    : '7430',
-                'TARDIS_CLIENT'         : socket.gethostname(),
                 'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/remote.cfg',
+                'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
                 'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
                }
 
