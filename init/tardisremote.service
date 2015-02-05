@@ -1,0 +1,10 @@
+[Unit]
+Description=Tardis Backup Server
+After=syslog.target
+
+[Service]
+ExecStart=/usr/bin/tardisremote --daemon
+ExecStop=/usr/bin/killall tardisremote
+
+[Install]
+WantedBy=multi-user.target
