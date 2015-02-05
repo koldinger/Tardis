@@ -180,7 +180,7 @@ class TardisFS(fuse.Fuse):
                    self.path = os.path.join(loc.path, self.client)
                    self.cacheDir = CacheDir.CacheDir(self.path, create=False)
                    dbPath = os.path.join(self.path, self.dbname)
-                   self.tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+                   self.tardis = TardisDB.TardisDB(dbPath, token=token)
 
                 self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
                 self.files = {}

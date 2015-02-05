@@ -126,7 +126,7 @@ def login():
             token   = request.form['token'] if 'token' in request.form else None
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
-            tardis  = TardisDB.TardisDB(dbPath, backup=False, token=token)
+            tardis  = TardisDB.TardisDB(dbPath, token=token)
             #session['tardis']   = tardis
             session['host']     = host
             #app.logger.debug(str(session))

@@ -585,7 +585,7 @@ def main():
             tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
         else:
             dbfile = os.path.join(loc.path, args.client, args.dbname)
-            tardis = TardisDB.TardisDB(dbfile, backup=False, token=token)
+            tardis = TardisDB.TardisDB(dbfile, token=token)
     except Exception as e:
         logger.critical(e)
         sys.exit(1)
