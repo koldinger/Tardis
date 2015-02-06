@@ -363,7 +363,7 @@ def tornado():
         logger.info("About to daemonize")
     
         try:
-            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
+            daemon = daemonize.Daemonize(app="tardisremote", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
             logger.critical("Caught Exception on Daemonize call: {}".format(e))
