@@ -440,7 +440,7 @@ def main():
             baseDir = os.path.join(loc.path, args.client)
             cache = CacheDir.CacheDir(baseDir, create=False)
             dbPath = os.path.join(baseDir, args.dbname)
-            tardis = TardisDB.TardisDB(dbPath, backup=False, token=token)
+            tardis = TardisDB.TardisDB(dbPath, token=token)
     except Exception as e:
         logger.critical("Unable to connect to database: %s", str(e))
         logger.exception(e)

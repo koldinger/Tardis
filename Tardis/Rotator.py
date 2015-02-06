@@ -27,3 +27,39 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+
+import shutil
+import logging
+import subprocess
+import os, os.path
+import stat
+import time
+
+class Rotator:
+    def __init__(self, rotations=5, compress=32 * 1024, compressor='gzip'):
+        self.logger = logging.getLogger("Rotator")
+        self.rotations = rotations
+        self.compress = compress
+        self.compressor = compressor
+
+    def backup(self, name):
+        newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
+        self.logger.debug("Copying %s to %s", name, newname)
+        shutil.copyfile(name, newname)
+        stat = os.stat(newname)
+        if stat.st_size  > self.compress:
+            self.logger.debug("Compressing %s", newname)
+            args = [self.compressor, newname]
+            subprocess.check_call(args)
+
+    def rotate(self, name):
+        d, f = os.path.split(os.path.abspath(name))
+        prefix = f + '.'
+        files = [i for i in os.listdir(d) if i.startswith(prefix)]
+        self.logger.debug("Rotating %d files: %s", str(files))
+        files = sorted(files, reverse=True)
+        toDelete = files[self.rotations:]
+        for i in toDelete:
+            name = os.path.join(d, i)
+            self.logger.debug("Deleting %s", name)
+            os.remove(name)

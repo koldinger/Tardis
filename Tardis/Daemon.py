@@ -128,6 +128,7 @@ configDefaults = {
     'MaxDeltaChain'     : '5',
     'MaxChangePercent'  : '50',
     'SaveFull'          : str(False),
+    'DBBackups'         : '3'
 }
 
 server = None
@@ -729,7 +730,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
 
-        extra = {'connid': self.idstr }
+        connid = {'connid': self.idstr }
 
         if not os.path.exists(self.dbfile):
             if self.server.requirePW and token is None:
@@ -738,7 +739,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
 
-        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, extra=extra, token=token, user=self.server.user, group=self.server.group)
+        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, backup=True, connid=connid, token=token, user=self.server.user, group=self.server.group, numbackups=self.server.dbbackups)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
 
@@ -1028,6 +1029,8 @@ def setConfig(self, args, config):
     self.dayprio        = config.getint('Tardis', 'DayPrio')
     self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
 
+    self.dbbackups      = config.getint('Tardis', 'DBBackups')
+
     self.exceptions     = args.exceptions
 
     self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
@@ -1107,7 +1110,7 @@ def run_server():
         logger.info("Ending")
     except Exception as e:
         logger.critical("Unable to run server: {}".format(e))
-        if self.server.exceptions:
+        if args.exceptions:
             logger.exception(e)
 
 def stop_server():

@@ -37,6 +37,7 @@ import time
 import hashlib
 
 import ConnIdLogAdapter
+import Rotator
 
 # Expected SQL Schema
 """
@@ -157,7 +158,7 @@ class TardisDB(object):
     backup = False
     chunksize = 1000
 
-    def __init__(self, dbname, backup=True, prevSet=None, initialize=None, extra=None, token=None, user=-1, group=-1, chunksize=1000):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, token=None, user=-1, group=-1, chunksize=1000, numbackups=2):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
@@ -167,14 +168,17 @@ class TardisDB(object):
         if user  is None: user = -1
         if group is None: group = -1
 
-        if extra:
-            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(self.logger, extra)
+        if connid:
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(self.logger, connid)
 
         self.backup = backup
+        self.numbackups = numbackups
 
-        self.conn = sqlite3.connect(self.dbName)
-        self.conn.text_factory = str
-        self.conn.row_factory= sqlite3.Row
+        conn = sqlite3.connect(self.dbName)
+        conn.text_factory = str
+        conn.row_factory= sqlite3.Row
+
+        self.conn = conn
         self.cursor = self.conn.cursor()
 
         if (initialize):
@@ -711,11 +715,11 @@ class TardisDB(object):
         self.conn = None
 
         if self.backup:
-            backupName = self.dbName + ".bak"
+            r = Rotator.Rotator(rotations=self.numbackups)
             try:
-                self.logger.debug("Backing up {}".format(self.dbName))
-                shutil.copyfile(self.dbName, backupName)
-            except IOError:
+                r.backup(self.dbName)
+                r.rotate(self.dbName)
+            except Exception as e:
                 self.logger.error("Error detected creating database backup: %s", e)
 
     def __del__(self):

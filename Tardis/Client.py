@@ -899,9 +899,9 @@ def runServer(args, tempfile):
     return None
 
 def processCommandLine():
-    local_config = Defaults.getDefault('TARDIS_LOCAL_CONFIG'):
+    local_config = Defaults.getDefault('TARDIS_LOCAL_CONFIG')
     if not os.path.exists(local_config):
-        local_config = Defaults.getDefault('TARDIS_DAEMON_CONFIG'):
+        local_config = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 
     """ Do the command line thing.  Register arguments.  Parse it. """
     #parser = argparse.ArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@')
