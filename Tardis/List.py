@@ -58,14 +58,44 @@ backupSets = []
 
 line = ''
 
-"""
-Add some characters to a line to be printed.  If eol is True, print the line and restart.
-If color is not None, print in that color (if color enabled)
-"""
+colors = {
+    'gone'      :  'red',
+    'changed'   :  'cyan',
+    'moved'     :  'blue',
+    'header'    :  'green',
+    'name'      :  None,
+    'error'     :  'red',
+    'default'   :  None
+}
+
+def setColors(s):
+    global colors
+    groups = s.split(':')
+    groups = map(str.strip, groups)
+    for g in groups:
+        x = g.split('=')
+        name = x[0]
+        c = map(str.strip, x[1].split(','))
+        c = map(lambda x: None if x.lower() == 'none' else x, c)
+        if len(c) == 1:
+            colors[name] = c[0]
+        else:
+            colors[name] = tuple(c)
+
 def doprint(string='', color=None, eol=False):
+    """
+    Add some characters to a line to be printed.  If eol is True, print the line and restart.
+    Color can either be a color (red, blue, green, etc), or a tuple.
+    If it's a tuple, the first element is the color, the second is a background color ('on_white', 'on_blue', etc),
+    and any remaining values are attributes ('blink', 'underline') etc.
+    See the termcolor package for lists of colors
+    """
     global line
     if args.colors and color:
-        line += termcolor.colored(string, color)
+        if isinstance(color, str):
+            line += termcolor.colored(string, color)
+        else:
+            line += termcolor.colored(string, color[0], color[1], attrs=list(color[2:]))
     else:
         line += string
 
@@ -75,6 +105,9 @@ def doprint(string='', color=None, eol=False):
         line=''
 
 def flushLine():
+    """
+    Flush the line out, if there is one being built.
+    """
     global line
     if line:
         print line.rstrip()     # clear out any trailing spaces
@@ -276,18 +309,18 @@ def printit(info, name, color, gone):
             mtime = formatTime(info['mtime'])
             if info['size'] is not None:
                 if args.human:
-                    size = Util.fmtSize(info['size'])
+                    size = Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
                 else:
                     size = "%8d" % info['size']
             else:
                 size = ''
-            doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime))
+            doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
             if args.cksums:
                 doprint(' %32s ' % (cksum))
             doprint('%s' % (name), color, eol=True)
     elif args.cksums:
         doprint(columnfmt % name, color)
-        doprint(cksum, eol=True)
+        doprint(cksum, color=colors['name'], eol=True)
     else:
         column += 1
         if column == columns:
@@ -315,14 +348,14 @@ def printVersions(fInfos, filename):
             continue
         if (info is None) and pInfo is not None:
             # file disappeared.
-            color = 'red'
+            color = colors['gone']
             gone = True
         elif (pInfo is None) or (info['checksum'] != pInfo['checksum']) or \
             (args.checktimes and (info['mtime'] != pInfo['mtime'] or info['ctime'] != pInfo['ctime'])):
-            color = 'blue'
+            color = colors['changed']
             new = True
         elif (info['inode'] != pInfo['inode']):
-            color = 'cyan'
+            color = colors['moved']
             new = True
         else:
             pass
@@ -340,17 +373,17 @@ def printVersions(fInfos, filename):
         printit(info, bset['name'], color, gone)
 
     if args.recent:
-        printit(fInfos[lSet['backupset']], lSet['name'], 'blue', False)
+        printit(fInfos[lSet['backupset']], lSet['name'], colors['changed'], False)
 
     flushLine()
 
 def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
     numFound = sum([1 for i in fInfos if fInfos[i] is not None])
     if args.headers or (numFound == 0) or args.recent or not first:
-        color = 'green' if first else 'white'
+        color = colors['header'] if first else colors['name']
         doprint(fmt % filename, color)
         if numFound == 0:
-            doprint(' Not found', 'red')
+            doprint(' Not found', colors['error'])
         if (numFound == 0) or args.versions or eol:
             flushLine()
 
@@ -367,7 +400,8 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', 
             #(contents, names) = collectDirContents(tardis, dirs, crypt)
             #names = getFileNames(contents)
             column = 0
-            for name in sorted(names):
+            #for name in sorted(names, key=str.lower, reverse=args.reverse):
+            for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
                 fInfo = getInfoByName(contents, name)
                 column += 1
                 eol = True if ((column % numCols) == 0) else False
@@ -378,7 +412,7 @@ def findSet(name):
     for i in backupSets:
         if i['name'] == name:
             return i['backupset']
-    doprint("Could not find backupset %s" % name, color='red', eol=True)
+    doprint("Could not find backupset %s" % name, color=colors['error'], eol=True)
     return -1
 
 """
@@ -398,7 +432,7 @@ Parse and check the range varables, and prune the set appopriately.
 def pruneBackupSetsByRange():
     range = args.range.split(':')
     if len(range) > 2:
-        doprint("Invalid range '%s'" % args.range, color='red', eol=True)
+        doprint("Invalid range '%s'" % args.range, color=colors['error'], eol=True)
         sys.exit(1)
     if range[0]:
         try:
@@ -421,7 +455,7 @@ def pruneBackupSetsByRange():
         endRange = sys.maxint
 
     if endRange < startRange:
-        doprint("Invalid range.  Start must be before end", color='red', eol=True)
+        doprint("Invalid range.  Start must be before end", color=colors['error'], eol=True)
         sys.exit(1)
 
     pruneBackupSets(startRange, endRange)
@@ -434,7 +468,7 @@ def pruneBackupSetsByDateRange(tardis):
     cal = parsedatetime.Calendar()
     range = args.daterange.split(':')
     if len(range) > 2:
-        doprint("Invalid range '%s'" % args.daterange, color='red', eol=True)
+        doprint("Invalid range '%s'" % args.daterange, color=colors['error'], eol=True)
         sys.exit(1)
     if range[0]:
         (then, success) = cal.parse(range[0])
@@ -449,7 +483,7 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 startRange = 0
         else:
-            doprint("Invalid time: %s" % range[0], color='red', eol=True)
+            doprint("Invalid time: %s" % range[0], color=colors['error'], eol=True)
             sys.exit(1)
     else:
         startRange = 0
@@ -464,16 +498,16 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 endRange = sys.maxint
         else:
-            doprint("Invalid time: %s" % range[1], color='red', eol=True)
+            doprint("Invalid time: %s" % range[1], color=colors['error'], eol=True)
             sys.exit(1)
     else:
         endRange = sys.maxint
 
-    doprint("Starttime: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(startTime)), color='green', eol=True)
-    doprint("EndTime:   " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(endTime)), color='green', eol=True)
+    doprint("Starttime: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(startTime)), color=colors['header'], eol=True)
+    doprint("EndTime:   " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(endTime)), color=colors['header'], eol=True)
 
     if startTime > endTime:
-        doprint("Invalid time range: end before start", color='red', eol='True')
+        doprint("Invalid time range: end before start", color=colors['error'], eol='True')
         sys.exit(1)
 
     pruneBackupSets(startRange, endRange)
@@ -563,6 +597,7 @@ def processArgs():
 
     parser.add_argument('--long', '-l',     dest='long',     default=False, action='store_true',        help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',   default=False, action='store_true',        help='Show hidden files.')
+    parser.add_argument('--recerse', '-r',   dest='reverse',   default=False, action='store_true',      help='Reverse the sort order')
     parser.add_argument('--annotate', '-F', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
@@ -598,6 +633,7 @@ def processArgs():
 
     return parser.parse_args()
 
+
 def main():
     global args, logger
     args = processArgs()
@@ -605,6 +641,8 @@ def main():
     FORMAT = "%(levelname)s : %(message)s"
     logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
     logger = logging.getLogger("")
+
+    setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
     # Load any password info
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
@@ -634,7 +672,7 @@ def main():
     setupDisplay(tardis, crypt)
 
     if args.headers:
-        doprint("Client: %s    DB: %s" %(args.client, args.database), eol=True)
+        doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
 
     if args.glob:
         directories = []
