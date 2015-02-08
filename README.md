@@ -118,6 +118,10 @@ The filesystem approach is often the easiest method.  In this technique, a files
 
 Files can also be recovered via the regenerate application. The regenerate application takes the name of the file to be recovered, and can also be given a date for which to regenerate the file.  Dates can be via the --date (-D) option, and can be specified via a large variety of forms.  For instance "regenerate -D '3 days ago' filename" will regenerate a version from 3 days earlier.  Dates can also be specified expclitly in a wide variety of formats, such as "03/15/2014" to specify March 15, 2014 (obviously).
 
+Regenerate can be used to recover entire directory trees.  In general, using regenerate to recover files will be siginicantly faster than rsync'ing out of tardisfs.
+
+
+
 See regenerate -h for details.
 
 At present, the regenerate application does NO permission checking to determine if a user has permission to read a file.  Thus, any file in the database set can be accessed by anybody with access to the backup database.  If this is a problem in your environment, it is recommended to disable the regenerate application (or at least protect the database with a password that you don't share with all users), and allow access primarily through a tardisfs filesystem controlled by the super-user.  See Mounting the Filesystem below.
@@ -201,7 +205,25 @@ Environment Variables
         <td> File containing the schema for the database.
         <td> schema/tardis.sql
         <td> No <td> Yes <td> No <td> No <td> No
+    <tr>
+       <td> TARDIS_LS_COLORS
+       <td> Description of colors for lstardis
+       <td> 
+       <td> No <td> No <td> No <td> No <td> Yes
+    <tr>
+       <td> TARDIS_DEFAULTS
+       <td> Location of a defaults file.
+       <td> /etc/tardis/system.defaults
+       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
 </table>
+
+System Defaults
+---------------
+The above environment variables can have default values set via the system defaults file.  This file is located at /etc/tardis/system.defaults, or can be overridden by the TARDIS_DEFAULTS environment variable.  The system.defaults file is not installed by default.
+
+Format is a standard .ini file, with variables in the Tardis section, and each variable specified with the names in the table above.
+
+The location of the defaults files can be overridden by the TARDIS_DEFAULTS environment variable.
 
 Server Configuration File
 =========================
