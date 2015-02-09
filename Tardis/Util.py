@@ -47,10 +47,10 @@ import Tardis
 
 import pycurl
 
-def fmtSize(num, base=1024):
+def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     fmt = "%d %s"
     num = float(num)
-    for x in ['bytes','KB','MB','GB']:
+    for x in formats:
         #if num < base and num > -base:
         if -base < num < base:
             return fmt % (num, x)
