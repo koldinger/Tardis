@@ -496,9 +496,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                    self.db.insertChecksumFile(checksum, iv, size=size)
+                    self.db.insertChecksumFile(checksum, iv, size=size, disksize=bytesReceived)
                 else:
-                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
+                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
 
                 self.statUpdFiles += 1
 
@@ -601,9 +601,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.cache.mkdir(checksum)
                     #os.rename(temp.name, self.cache.path(checksum))
                     self.cache.insert(checksum, temp.name)
-                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
+                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
             else:
-                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
+                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed, disksize=bytesReceived)
 
             (inode, dev) = message['inode']
 
