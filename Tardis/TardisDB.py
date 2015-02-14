@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     Size        INTEGER,
     Basis       INTEGER,
     DeltaSize   INTEGER,
+    DiskSize    INTEGER,
+    Compressed  INTEGER,            -- Boolean
     InitVector  BLOB,
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
@@ -72,17 +74,12 @@ CREATE TABLE IF NOT EXISTS Names (
     NameId      INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
-CREATE TABLE IF NOT EXISTS Devices (
-    DeviceId    INTEGER PRIMARY KEY AUTOICREMENT,
-    MountPoint  CHARACTER UNIQUE NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS Files (
     NameId      INTEGER   NOT NULL,
     FirstSet    INTEGER   NOT NULL,
     LastSet     INTEGER   NOT NULL,
     Inode       INTEGER   NOT NULL,
-    Device      INTEGER   NOT NULL
+    Device      INTEGER   NOT NULL,
     Parent      INTEGER   NOT NULL,
     ParentDev   INTEGER   NOT NULL,
     ChecksumId  INTEGER,
@@ -95,43 +92,38 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
-    PRIMARY KEY(NameId, FirstSet, LastSet, Parent),
+    XattrID     INTEGER,
+    AclID       INTEGER,
+
+    PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
     FOREIGN KEY(NameId)      REFERENCES Names(NameId),
-    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD),
-    FOREIGN KEY(Device)      REFERENCES Devices(DeviceId),
-    FOREIGN KEY(ParentDev)   REFERENCES Devices(DeviceId)
+    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumIdD)
 );
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
-CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, LastSet ASC);
-CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, Device ASC, FirstSet ASC);
+CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, ParentDev ASC, FirstSet ASC);
+CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, Device ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
-
--- CREATE INDEX IF NOT EXISTS NameIndex ON Files(Name ASC, BackupSet ASC, Parent ASC);
-
-INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
-
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "1");
-
-CREATE VIEW IF NOT EXISTS VFiles AS
-    SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
-    FROM Files
-    JOIN Names ON Files.NameId = Names.NameId
-    JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
-    LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
 """
-
 # End of schema
 
 # Utility functions
 
 fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
-                 "Parent AS parent, ParentDev AS parentdev, Size AS size, " \
+                 "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet AS firstset, LastSet AS lastset, Checksum AS checksum "
+                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C2.Checksum AS xattrs, C3.Checksum AS acl "
+
+fileInfoJoin =    "FROM Files " \
+                  "JOIN Names ON Files.NameId = Names.NameId " \
+                  "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
+                  "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
+                  "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
@@ -309,9 +301,10 @@ class TardisDB(object):
         c = self.cursor
         c.execute("SELECT " +
                   fileInfoFields +
-                  "FROM Files "
-                  "JOIN Names ON Files.NameId = Names.NameId "
-                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                  #"FROM Files "
+                  #"JOIN Names ON Files.NameId = Names.NameId "
+                  #"LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                  fileInfoJoin +
                   "WHERE Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
@@ -362,10 +355,7 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
         c.execute("SELECT " +
-                  fileInfoFields +
-                  "FROM Files "
-                  "JOIN Names ON Files.NameId = Names.NameId "
-                  "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                  fileInfoFields + fileInfoJoin +
                   "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "device": device, "backup": backupset})
@@ -378,11 +368,8 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = backupset
         c = self.cursor.execute("SELECT " + 
-                                fileInfoFields +
-                                "FROM Files "
-                                "JOIN Names ON Files.NameId = Names.NameId "
-                                "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                                "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND "
+                                fileInfoFields + fileInfoJoin +
+                                "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 temp)
         return c.fetchone()
@@ -393,11 +380,8 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         c = self.cursor.execute("SELECT " +
-                                fileInfoFields +
-                                "FROM Files "
-                                "JOIN Names ON Files.NameId = Names.NameId "
-                                "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                                "WHERE Inode = :inode AND Mtime = :mtime AND Size = :size AND "
+                                fileInfoFields + fileInfoJoin +
+                                "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
@@ -514,6 +498,7 @@ class TardisDB(object):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
         comp = 1 if compressed else 0
+
         self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize) "
                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize)",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp, "disksize": disksize})
@@ -559,11 +544,8 @@ class TardisDB(object):
         backupset = self._bset(current)
         #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
 
-        c = self.execute("SELECT " + fileInfoFields + ", "
-                         "Checksum AS checksum, Basis AS basis, InitVector AS iv "
-                         "FROM Files "
-                         "JOIN Names ON Files.NameId = Names.NameId "
-                         "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+        c = self.execute("SELECT " + fileInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
+                         fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          {"parent": inode, "parentDev": device, "backup": backupset})
@@ -578,10 +560,8 @@ class TardisDB(object):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
         c = self.execute("SELECT " + fileInfoFields + ", "
-                         "Checksum AS checksum, Basis AS basis, InitVector AS iv "
-                         "FROM Files "
-                         "JOIN Names ON Files.NameId = Names.NameId "
-                         "LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                         "C1.Basis AS basis, C1.InitVector AS iv " + 
+                         fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          "Files.LastSet >= :first AND Files.FirstSet <= :last",
                          {"parent": inode, "parentDev": device, "first": first, "last": last})
