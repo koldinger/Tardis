@@ -697,32 +697,34 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
-        #if not messageType in self.statCommands:
-        #    self.statCommands[messageType] = 1
-        #else:
-        #    self.statCommands[messageType] += 1
+        # Stats
         self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
         if messageType == "DIR":
-            return self.processDir(message)
+            (response, flush) = self.processDir(message)
         elif messageType == "SGR":
-            return self.processSigRequest(message)
+            (response, flush) = self.processSigRequest(message)
         elif messageType == "SIG":
-            return self.processSignature(message)
+            (response, flush) = self.processSignature(message)
         elif messageType == "DEL":
-            return self.processDelta(message)
+            (response, flush) = self.processDelta(message)
         elif messageType == "CON":
-            return self.processContent(message)
+            (response, flush) = self.processContent(message)
         elif messageType == "CKS":
-            return self.processChecksum(message)
+            (response, flush) = self.processChecksum(message)
         elif messageType == "CLN":
-            return self.processClone(message)
+            (response, flush) = self.processClone(message)
         elif messageType == "BATCH":
-            return self.processBatch(message)
+            (response, flush) = self.processBatch(message)
         elif messageType == "PRG":
-            return self.processPurge(message)
+            (response, flush) = self.processPurge(message)
         else:
             raise Exception("Unknown message type", messageType)
+
+        if response and 'msgid' in message:
+            response['respid'] = message['msgid']
+
+        return (response, flush)
 
     def getDB(self, host, token):
         script = None
