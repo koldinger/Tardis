@@ -56,7 +56,7 @@ class Rotator:
         d, f = os.path.split(os.path.abspath(name))
         prefix = f + '.'
         files = [i for i in os.listdir(d) if i.startswith(prefix)]
-        self.logger.debug("Rotating %d files: %s", str(files))
+        self.logger.debug("Rotating %d files: %s", len(files), str(files))
         files = sorted(files, reverse=True)
         toDelete = files[self.rotations:]
         for i in toDelete:
