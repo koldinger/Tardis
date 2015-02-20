@@ -400,6 +400,14 @@ class TardisDB(object):
                             {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
         return self.cursor.rowcount
 
+    def setXattrs(self, inode, checksum):
+        self.cursor.execute("UPDATE Files SET XattrId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
+                            "WHERE Inode = :inode AND "
+                            ":backup BETWEEN FirstSet AND LastSet",
+                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+        self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
+        return self.cursor.rowcount
+
     def getChecksumByInode(self, inode, current=True):
         backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
@@ -501,8 +509,21 @@ class TardisDB(object):
 
         self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize) "
                             "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize)",
-                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp, "disksize": disksize})
+                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
+                             "compressed": comp, "disksize": disksize})
         return self.cursor.lastrowid
+
+    def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
+        self.logger.debug("Updating checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
+
+        comp = 1 if compressed else 0
+
+        self.cursor.execute("UPDATE CheckSums SET "
+                            "Size = :size, InitVector = :iv, Basis = :basis, DeltaSize = :deltasize, "
+                            "Compressed = :compressed, DiskSize = :disksize "
+                            "WHERE Checksum = :checksum",
+                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
+                             "compressed": comp, "disksize": disksize})
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
@@ -656,6 +677,7 @@ class TardisDB(object):
     def listOrphanChecksums(self):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
+                              "AND ChecksumID NOT IN (SELECT DISTINCT(XattrID) FROM Files WHERE XattrID IS NOT NULL) "
                               "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL)")
         while True:
             batch = c.fetchmany(self.chunksize)

@@ -53,6 +53,7 @@ import librsync
 import tempfile
 import shutil
 import parsedatetime
+import xattr
 
 import Tardis
 
@@ -269,6 +270,19 @@ def recoverObject(regenerator, info, bset, outputdir, path):
                     os.chown(outname, info['uid'], -1)
                 except Exception as e:
                     logger.warning("Unable to set owner and group of %s", outname)
+            if outname and args.setattrs and 'attr' in info:
+                try:
+                    f = regenerator.recoverChecksum(info['attr'])
+                    xattrs = json.loads(f.read())
+                    x = xattr.xattr(outname)
+                    for attr in xattrs.keys():
+                        value = base64.b64decode(xattrs[attr])
+                        try:
+                            x.set(attr, value)
+                        except IOError:
+                            logger.warning("Unable to set extended attribute %s on %s", attr, outname)
+                except Exception as e:
+                    logger.warning("Unable to process extended attributes for %s", outname)
 
     except Exception as e:
         #logger.exception(e)
@@ -388,8 +402,9 @@ def parseArgs():
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
-    parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean, help='Set file times to match original file')
-    parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean, help='Set file owner and permisions to match original file')
+    parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file')
+    parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file')
+    parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space')
     parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')

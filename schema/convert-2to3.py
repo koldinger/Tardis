@@ -23,7 +23,7 @@ if int(t[0]) != 2:
     sys.exit(1)
 
 conn.execute("ALTER TABLE Files ADD COLUMN XattrId INTEGER")
-conn.execute("ALTER TABLE Files ADD COLUMN AclID INTEGER")
+conn.execute("ALTER TABLE Files ADD COLUMN AclId INTEGER")
 conn.execute("ALTER TABLE CheckSums ADD COLUMN DiskSize INTEGER")
 
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "3")')

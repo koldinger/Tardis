@@ -46,6 +46,7 @@ import tempfile
 import cStringIO
 import pycurl
 import shlex
+import xattr
 from functools import partial
 
 import librsync
@@ -85,6 +86,8 @@ args                = None
 cloneDirs           = []
 cloneContents       = {}
 batchMsgs           = []
+metaCache           = Util.bidict()
+newmeta             = []
 
 crypt               = None
 logger              = None
@@ -180,6 +183,8 @@ def processChecksums(inodes):
                         m.update(chunk)
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
+        else:
+            logger.error("Unable to process checksum for %s, not found in inodeDB", str(inode))
     message = {
         "message": "CKS",
         "files": files
@@ -329,9 +334,6 @@ def processDelta(inode):
         else:
             sendContent(inode)
 
-def sendSignature(f):
-    pass
-
 def sendContent(inode):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
     if inode in inodeDB:
@@ -395,13 +397,36 @@ def sendContent(inode):
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
+def handleAckMeta(message):
+    checkMessage(message, 'ACKMETA')
+    content = message['content']
+    done = message['done']
+    
+    for cks in content:
+        logger.debug("Sending meta data chunk: %s", cks)
+        data = metaCache.inverse[cks][0]
+
+        (encrypt, iv) = makeEncryptor()
+        stats['delta'] += 1
+        message = {
+            "message": "METADATA",
+            "checksum": cks
+        }
+        if iv:
+            message["iv"] = base64.b64encode(iv)
+
+        sendMessage(message)
+        compress = True if (args.compress and (len(data) > args.mincompsize)) else False
+        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+
 def handleAckDir(message):
+    checkMessage(message, 'ACKDIR')
+
     content = message["content"]
     done    = message["done"]
     delta   = message["delta"]
     cksum   = message["cksum"]
 
-    checkMessage(message, 'ACKDIR')
 
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
@@ -438,6 +463,19 @@ def handleAckDir(message):
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
+def addMeta(meta):
+    global metaCache
+    global newmeta
+    if meta in metaCache:
+        return metaCache[meta]
+    else:
+        m = hashlib.md5()
+        m.update(meta)
+        digest = m.hexdigest()
+        metaCache[meta] = digest
+        newmeta.append(digest)
+        return digest
+
 def mkFileInfo(dir, name):
     file = None
     pathname = os.path.join(dir, name)
@@ -461,6 +499,20 @@ def mkFileInfo(dir, name):
             'gid':    s.st_gid,
             'dev':    s.st_dev
             }
+
+        if args.xattr:
+            attrs = xattr.xattr(pathname)
+            items = attrs.items()
+            if items:
+                # Convert to a set of readable string tuples
+                # We base64 encode the data chunk, as it's often binary
+                # Ugly, but unfortunately necessary
+                attr_string = json.dumps(dict(map(lambda x: (str(x[0]), base64.b64encode(x[1])), sorted(items))))
+                cks = addMeta(attr_string)
+                finfo['xattr'] = cks
+        if args.acl:
+            # TODO: Same thing for ACL's?  Technically they're stored as system xattrs, but....
+            pass
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
@@ -538,6 +590,8 @@ def handleAckClone(message):
                 if logdirs:
                     logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
                 (inode, device) = finfo
+                if newmeta:
+                    batchMessage(makeMetaMessage())
                 batchMessage(makeDirMessage(path, inode, device, files))
             else:
                 if logdirs:
@@ -599,6 +653,9 @@ def sendBatchDirs():
 def flushBatchDirs():
     if len(batchMsgs):
         sendBatchDirs()
+        return True
+    else:
+        return False
 
 def sendPurge(relative):
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
@@ -608,7 +665,7 @@ def sendPurge(relative):
     if purgeTime:
         message.update( { 'time': purgeTime, 'relative': relative })
 
-    response = batchMessage(message)
+    response = batchMessage(message, flush=True, batch=False)
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
@@ -636,6 +693,15 @@ def makeDirMessage(path, inode, dev, files):
         'path':   path,
         'message': 'DIR',
         }
+    return message
+
+def makeMetaMessage():
+    global newmeta
+    message = {
+        'message': 'META',
+        'metadata': newmeta
+        }
+    newmeta = []
     return message
 
 def recurseTree(dir, top, depth=0, excludes=[]):
@@ -686,11 +752,11 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
             cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
         else:
+            if newmeta:
+                batchMessage(makeMetaMessage())
             if len(files) < args.batchdirs:
                 batchMessage(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
             else:
-                if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
@@ -708,7 +774,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         raise
     except Exception as e:
         # TODO: Clean this up
-        #logger.exception(e)
+        logger.exception(e)
         raise
 
 def setBackupName(args):
@@ -820,9 +886,13 @@ def handleResponse(response):
         pass
     elif msgtype == 'ACKSUM':
         handleAckSum(response)
+    elif msgtype == 'ACKMETA':
+        handleAckMeta(response)
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
             handleResponse(ack)
+    else:
+        logger.critical("Unexpected message type: %s", msgtype)
 
 nextMsgId = 0
 
@@ -943,6 +1013,8 @@ def processCommandLine():
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
+    parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
+    parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
@@ -1141,7 +1213,11 @@ def main():
 
         # If any clone or batch requests still lying around, send them
         flushClones()
-        flushBatchDirs()
+        while True:
+            # Loop over flushing any batches, in casey they're rebuilt along the way.
+            ret = flushBatchDirs()
+            if not ret:
+                break
 
         # Sanity check.
         if len(cloneContents) != 0:

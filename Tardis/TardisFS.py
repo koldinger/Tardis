@@ -45,6 +45,8 @@ import logging
 import tempfile
 import socket
 import urlparse
+import json
+import base64
 
 import TardisDB
 import RemoteDB
@@ -643,7 +645,7 @@ class TardisFS(fuse.Fuse):
     @tracer
     def listxattr ( self, path, size ):
         path = self.fsEncodeName(path)
-        #self.log.info('CALL listxattr {} {}'.format(path, size))
+        self.log.info('CALL listxattr {} {}'.format(path, size))
         if size == 0:
             retFunc = lambda x: len("".join(x)) + len(str(x))
         else:
@@ -662,9 +664,20 @@ class TardisFS(fuse.Fuse):
                 subpath = parts[1]
                 if self.crypt:
                     subpath = self.crypt.encryptPath(subpath)
-                checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                if checksum:
-                    return retFunc(['user.checksum', 'user.since', 'user.chain'])
+                info = self.tardis.getFileInfoByPath(subpath, b['backupset'])
+                if info:
+                    attrs = ['user.tardis_checksum', 'user.tardis_since', 'user.tardis_chain']
+                    self.log.info("xattrs: %s", info['xattrs'])
+                    if info['xattrs']:
+                        f = self.regenerator.recoverChecksum(info['xattrs'])
+                        xattrs = json.loads(f.read())
+                        self.log.debug("Xattrs: %s", str(xattrs))
+                        attrs += map(str, xattrs.keys())
+                        self.log.debug("Adding xattrs: %s", xattrs.keys())
+                        self.log.info("Xattrs: %s", str(attrs))
+                        self.log.info("Returning: %s", str(retFunc(attrs)))
+
+                    return retFunc(attrs)
 
         return None
 
@@ -693,25 +706,35 @@ class TardisFS(fuse.Fuse):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
-            if attr == 'user.checksum':
+            if attr == 'user.tardis_checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
-            elif attr == 'user.since':
+            elif attr == 'user.tardis_since':
                 if b: 
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
                     self.log.debug(str(since))
                     if since:
                         return retFunc(since)
-            elif attr == 'user.chain':
+            elif attr == 'user.tardis_chain':
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     self.log.debug(str(checksum))
                     if checksum:
                         chain = self.tardis.getChainLength(checksum)
                         self.log.debug(str(chain))
                         return retFunc(chain)
+            else:
+                # Must be an imported value.  Let's generate it.
+                info = self.getFileInfoByPath(path)
+                if info['xattrs']:
+                    f = self.regenerator.recoverChecksum(info['xattrs'])
+                    xattrs = json.loads(f.read())
+                    if attr in xattrs:
+                        value = base64.b64decode(xattrs[attr])
+                        return retFunc(value)
+
         return 0
 
 def main():
