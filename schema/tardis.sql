@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     Size        INTEGER,
     Basis       INTEGER,
     DeltaSize   INTEGER,
+    DiskSize    INTEGER,
     Compressed  INTEGER,            -- Boolean
     InitVector  BLOB,
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
@@ -48,9 +49,14 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
+    XattrID     INTEGER,
+    AclID       INTEGER,
+
     PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
     FOREIGN KEY(NameId)      REFERENCES Names(NameId),
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumIdD)
 );
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
@@ -63,7 +69,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "2");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "3");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
 
 CREATE VIEW IF NOT EXISTS VFiles AS

@@ -510,13 +510,13 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
         comp = 1 if compressed else 0
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed)",
-                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp})
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize) "
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize)",
+                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp, "disksize": disksize})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
