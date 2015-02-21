@@ -596,9 +596,12 @@ def sendBatchDirs():
     handleResponse(response)
     logger.debug("BATCH Ending.")
 
-def flushBatchDirs():
+def flushBatchMsgs():
     if len(batchMsgs):
         sendBatchDirs()
+        return True
+    else:
+        return False
 
 def sendPurge(relative):
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
@@ -823,6 +826,8 @@ def handleResponse(response):
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
             handleResponse(ack)
+    else:
+        logger.error("Unexpected response: %s", msgtype)
 
 nextMsgId = 0
 
@@ -838,7 +843,7 @@ def batchMessage(message, batch=True, flush=False, response=True, extra=None):
         batchMsgs.append(message)
     if flush or not batch or len(batchMsgs) > args.batchsize:
         flushClones()
-        flushBatchDirs()
+        flushBatchMsgs()
     if not batch:
         sendMessage(message)
         if response:
@@ -1141,7 +1146,8 @@ def main():
 
         # If any clone or batch requests still lying around, send them
         flushClones()
-        flushBatchDirs()
+        while flushBatchMsgs():
+            pass
 
         # Sanity check.
         if len(cloneContents) != 0:
