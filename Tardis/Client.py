@@ -650,7 +650,7 @@ def sendBatchDirs():
     handleResponse(response)
     logger.debug("BATCH Ending.")
 
-def flushBatchDirs():
+def flushBatchMsgs():
     if len(batchMsgs):
         sendBatchDirs()
         return True
@@ -892,7 +892,7 @@ def handleResponse(response):
         for ack in response['responses']:
             handleResponse(ack)
     else:
-        logger.critical("Unexpected message type: %s", msgtype)
+        logger.error("Unexpected response: %s", msgtype)
 
 nextMsgId = 0
 
@@ -908,7 +908,7 @@ def batchMessage(message, batch=True, flush=False, response=True, extra=None):
         batchMsgs.append(message)
     if flush or not batch or len(batchMsgs) > args.batchsize:
         flushClones()
-        flushBatchDirs()
+        flushBatchMsgs()
     if not batch:
         sendMessage(message)
         if response:
@@ -1213,11 +1213,8 @@ def main():
 
         # If any clone or batch requests still lying around, send them
         flushClones()
-        while True:
-            # Loop over flushing any batches, in casey they're rebuilt along the way.
-            ret = flushBatchDirs()
-            if not ret:
-                break
+        while flushBatchMsgs():
+            pass
 
         # Sanity check.
         if len(cloneContents) != 0:
