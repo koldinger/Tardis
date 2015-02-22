@@ -405,7 +405,7 @@ class TardisDB(object):
                             "WHERE Inode = :inode AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
-        self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
+        #self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return self.cursor.rowcount
 
     def getChecksumByInode(self, inode, current=True):
