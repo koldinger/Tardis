@@ -60,12 +60,12 @@ class Connection(object):
         try:
             # Receive a string.  TARDIS proto=1.0
             message = self.sock.recv(32).strip()
-            if message == "TARDIS 1.0/SSL":
+            if message == "TARDIS 1.1/SSL":
                 # Overwrite self.sock
                 self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
                 if validate:
                     pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
-            elif message != "TARDIS 1.0":
+            elif message != "TARDIS 1.1":
                 raise Exception("Unknown protocol: {}".format(message))
 
             # Create a BACKUP message

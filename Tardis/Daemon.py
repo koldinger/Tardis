@@ -853,10 +853,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             sock = self.request
             if self.server.ssl:
-                sock.sendall("TARDIS 1.0/SSL")
+                sock.sendall("TARDIS 1.1/SSL")
                 sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
             else:
-                sock.sendall("TARDIS 1.0")
+                sock.sendall("TARDIS 1.1")
 
             message = sock.recv(1024)
             self.logger.debug(message)
