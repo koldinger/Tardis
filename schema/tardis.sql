@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     DeltaSize   INTEGER,
     DiskSize    INTEGER,
     Compressed  INTEGER,            -- Boolean
+    ChainLength INTEGER,
     InitVector  BLOB,
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );

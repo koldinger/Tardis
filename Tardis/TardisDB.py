@@ -452,6 +452,14 @@ class TardisDB(object):
         else:
             return None
 
+    def getChecksumInfoByPath(self, name, current=False, permchecker=None):
+        backupset = self._bset(current)
+        cksum = self.getChecksumByPath(name, backupset, permchecker)
+        if cksum:
+            return self.getChecksumInfo(cksum)
+        else:
+            return None
+
     def getFirstBackupSet(self, name, current=False):
         backupset = self._bset(current)
         self.logger.debug("getFirstBackupSet (%d) %s", backupset, name)
@@ -514,16 +522,21 @@ class TardisDB(object):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
         comp = 1 if compressed else 0
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize)",
-                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize, "compressed": comp, "disksize": disksize})
+        if basis is None:
+            chainlength = 0
+        else:
+            chainlength = self.getChainLength(basis) + 1
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength) "
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength)",
+                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
+                             "compressed": comp, "disksize": disksize, "chainlength": chainlength})
         return self.cursor.lastrowid
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.execute("SELECT "
                          "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, "
-                         "Size AS size, DeltaSize AS deltasize, Compressed as compressed "
+                         "Size AS size, DeltaSize AS deltasize, Compressed as compressed, ChainLength as chainlength "
                          "FROM Checksums WHERE CheckSum = :checksum",
                          {"checksum": checksum})
         row = c.fetchone()
@@ -536,10 +549,7 @@ class TardisDB(object):
     def getChainLength(self, checksum):
         data = self.getChecksumInfo(checksum)
         if data:
-            if data['basis'] is None:
-                return 0
-            else:
-                return self.getChainLength(data['basis']) + 1
+            return data['chainlength']
         else:
             return -1
         """

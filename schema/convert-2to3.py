@@ -25,9 +25,30 @@ if int(t[0]) != 2:
 conn.execute("ALTER TABLE Files ADD COLUMN XattrId INTEGER")
 conn.execute("ALTER TABLE Files ADD COLUMN AclID INTEGER")
 conn.execute("ALTER TABLE CheckSums ADD COLUMN DiskSize INTEGER")
+conn.execute("ALTER TABLE CheckSums ADD COLUMN ChainLength INTEGER")
 
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "3")')
 
+
+print "Setting chain lengths"
+conn.execute("UPDATE Checksums SET ChainLength = 0 WHERE Basis IS NULL")
+
+rnd = 0
+
+while True:
+    c = conn.execute("SELECT COUNT(*) FROM Checksums WHERE ChainLength IS NULL")
+    r = c.fetchone()
+    print "Round %d: Remaining empty chainlengths: %d" % (rnd, r[0])
+    rnd += 1
+    if r[0] == 0:
+        break
+    conn.execute("UPDATE Checksums "
+                 "SET ChainLength = 1 + (SELECT ChainLength FROM Checksums C WHERE C.Checksum == CheckSums.Basis) "
+                 "WHERE (Basis IS NOT NULL) AND (ChainLength IS NULL) AND "
+                 "Basis IN (SELECT Checksum FROM Checksums WHERE Chainlength IS NOT NULL)")
+
+
+print "Setting data sizes"
 cache = CacheDir.CacheDir(os.path.dirname(db))
 
 c = conn.execute("SELECT COUNT(*) FROM Checksums WHERE DiskSize IS NULL")
@@ -37,7 +58,6 @@ print numrows
 
 c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL")
 checksums = c.fetchall()
-
 # Build a progress bar, if we have that module.  Just for grins.
 if progress:
     widgets = [ progressbar.Counter(), ' ', progressbar.Bar(), ' ', progressbar.ETA() ]
@@ -57,5 +77,6 @@ for i in checksums:
 
 if progress:
     pbar.finish()
+
 
 conn.commit()
