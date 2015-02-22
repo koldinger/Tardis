@@ -53,10 +53,10 @@ def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     for x in formats:
         #if num < base and num > -base:
         if -base < num < base:
-            return fmt % (num, x)
+            return (fmt % (num, x)).strip()
         num /= float(base)
         fmt = "%3.1f %s"
-    return fmt % (num, 'TB')
+    return (fmt % (num, 'EB')).strip()
 
 def getIntOrNone(config, section, name):
     try:

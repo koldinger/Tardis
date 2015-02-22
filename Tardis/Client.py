@@ -211,7 +211,8 @@ def handleAckSum(response):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.log(logging.FILES, "File: [n]: %s %d", Util.shortPath(name), size)
+                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                logger.log(logging.FILES, "File: [n]: %s (%s)", Util.shortPath(name), size)
         sendContent(i)
         delInode(i)
 
@@ -224,7 +225,8 @@ def handleAckSum(response):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.log(logging.FILES, "File: [d]: %s %d", Util.shortPath(name), size)
+                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                logger.log(logging.FILES, "File: [d]: %s (%s)", Util.shortPath(name), size)
         processDelta(i)
         delInode(i)
 
@@ -419,7 +421,8 @@ def handleAckDir(message):
                         size = x["size"]
                     else:
                         size = 0;
-                    logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
+                    size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                    logger.log(logging.FILES, "File: [N]: %s (%s)", Util.shortPath(name), size)
             sendContent(i)
             delInode(i)
 
@@ -427,7 +430,7 @@ def handleAckDir(message):
         if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [D]: (%s)", Util.shortPath(name))
         processDelta(i)
         delInode(i)
 
