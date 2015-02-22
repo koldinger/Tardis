@@ -42,6 +42,19 @@ Tardis uses the librsync package, but since that is not current on pypi, it's co
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
 
+Version 0.20 Notice
+==================
+As of version 0.20, there are several small, but incompatible changes.
+
+First, the data transfer protocol has changed.  0.20 client will not communicate with the 0.19 or earlier server, or vice versa.  The new
+version is somewhat more efficient, especially in memory usage on the client.
+
+Secondly, the database schema has grown several new fields.  It is necessary to run the convert-2to-3.py script, in the schema directory,
+before attempting to run a server against it.   This will add the new fields, and populate them as necessary.
+
+Amongst the new fields created are support for extended attributes and posix access control lists.  Extended attributes will arrive in version 0.21, 
+which will again, constitute a change in the communications protocol.  Access control lists may also arrive in 0.21.  TBD.
+
 Installation
 ============
 Installing  up the server is relatively straightforward.
