@@ -99,7 +99,7 @@ class BinMessages(Messages):
             self.compress = zlib.compressobj()
             self.decompress = zlib.decompressobj()
 
-    def sendMessage(self, message, compress=True):
+    def sendMessage(self, message, compress=True, raw=False):
         if compress and self.compress:
             message = self.compress.compress(message)
             message += self.compress.flush(zlib.Z_SYNC_FLUSH)
@@ -140,13 +140,17 @@ class JsonMessages(TextMessages):
     def __init__(self, socket, stats=None, compress=False):
         TextMessages.__init__(self, socket, stats)
     
-    def sendMessage(self, message, compress=False):
-        self.lastMessageSent = message
-        super(JsonMessages, self).sendMessage(json.dumps(message))
+    def sendMessage(self, message, compress=False, raw=False):
+        if raw:
+            super(JsonMessages, self).sendMessage(message)
+        else:
+            super(JsonMessages, self).sendMessage(json.dumps(message))
 
-    def recvMessage(self):
-        message = json.loads(super(JsonMessages, self).recvMessage())
-        self.lastMessageReceived = message
+    def recvMessage(self, raw=False):
+        if raw:
+            message = super(JsonMessages, self).recvMessage()
+        else:
+            message = json.loads(super(JsonMessages, self).recvMessage())
         return message
 
     def encode(self, data):
@@ -162,13 +166,17 @@ class BsonMessages(BinMessages):
     def __init__(self, socket, stats=None, compress=True):
         BinMessages.__init__(self, socket, stats, compress=compress)
     
-    def sendMessage(self, message, compress=True):
-        self.lastMessageSent = message
-        super(BsonMessages, self).sendMessage(bson.dumps(message), compress=compress)
+    def sendMessage(self, message, compress=True, raw=False):
+        if raw:
+            super(BsonMessages, self).sendMessage(message, compress=compress, raw=True)
+        else:
+            super(BsonMessages, self).sendMessage(bson.dumps(message), compress=compress)
 
-    def recvMessage(self):
-        message = bson.loads(super(BsonMessages, self).recvMessage())
-        self.lastMessageReceived = message
+    def recvMessage(self, raw=False):
+        if raw:
+            message = super(BsonMessages, self).recvMessage()
+        else:
+            message = bson.loads(super(BsonMessages, self).recvMessage())
         return message
 
     def encode(self, data):
