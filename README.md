@@ -42,6 +42,15 @@ Tardis uses the librsync package, but since that is not current on pypi, it's co
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
 
+Future Releases
+===============
+Several releases will be coming soon:
+  * 0.20 will update the schema and communications protocol.  This will **require** running of a conversion script to convert the database.  0.20 clients will need to run against 0.20 or later servers.
+  * 0.21 will update the system to support backing up extended attributes, and possibly posix access control lists.  0.21 clients will need to run against 0.21 or later servers.
+  * 0.22 will (hopefully) make the HTTP interface stable enough for use.
+  * 0.23 will (hopefully) add the start of an administration tool.
+  * 0.24 and beyond will be bug fixes, and preparation for 1.0.
+
 Installation
 ============
 Installing  up the server is relatively straightforward.
