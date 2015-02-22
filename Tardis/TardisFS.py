@@ -696,20 +696,20 @@ class TardisFS(fuse.Fuse):
             if attr == 'user.checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                    self.log.debug(str(checksum))
+                    #self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
             elif attr == 'user.since':
                 if b: 
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
-                    self.log.debug(str(since))
+                    #self.log.debug(str(since))
                     if since:
                         return retFunc(since)
             elif attr == 'user.chain':
-                    checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                    self.log.debug(str(checksum))
-                    if checksum:
-                        chain = self.tardis.getChainLength(checksum)
+                    info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
+                    #self.log.debug(str(checksum))
+                    if info:
+                        chain = str(info['chainlength'])
                         self.log.debug(str(chain))
                         return retFunc(chain)
         return 0
