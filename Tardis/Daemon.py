@@ -759,7 +759,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Mark if the last secssion was completed
         self.lastCompleted = prev['completed']
         self.tempdir = os.path.join(self.basedir, "tmp")
-        os.makedirs(self.tempdir)
+        if not os.path.exists(self.tempdir):
+            os.makedirs(self.tempdir)
 
     def endSession(self):
         try:
