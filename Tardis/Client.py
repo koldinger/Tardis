@@ -430,7 +430,7 @@ def handleAckDir(message):
         if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [D]: (%s)", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         delInode(i)
 
