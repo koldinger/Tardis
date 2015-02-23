@@ -459,7 +459,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
                 #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
-                output = tempfile.SpooledTemporaryFile(dir=self.tempdir)
+                output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.sessionid)
             else:
                 output = self.cache.open(checksum, "wb")
 
@@ -492,13 +492,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     if type(basisFile) != types.FileType:
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
-                        basisFile = tempfile.TemporaryFile(dir=self.tempdir)
+                        basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.sessionid)
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                    self.db.insertChecksumFile(checksum, iv, size=size)
+                    self.db.insertChecksumFile(checksum, iv, size=size, disksize=bytesReceived)
                 else:
-                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed)
+                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
 
                 self.statUpdFiles += 1
 
@@ -577,7 +577,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "w")
         else:
-            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
+            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.sessionid)
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
 
@@ -601,9 +601,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.cache.mkdir(checksum)
                     #os.rename(temp.name, self.cache.path(checksum))
                     self.cache.insert(checksum, temp.name)
-                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed)
+                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
             else:
-                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed)
+                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed, disksize=bytesReceived)
 
             (inode, dev) = message['inode']
 
@@ -697,32 +697,34 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
-        #if not messageType in self.statCommands:
-        #    self.statCommands[messageType] = 1
-        #else:
-        #    self.statCommands[messageType] += 1
+        # Stats
         self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
         if messageType == "DIR":
-            return self.processDir(message)
+            (response, flush) = self.processDir(message)
         elif messageType == "SGR":
-            return self.processSigRequest(message)
+            (response, flush) = self.processSigRequest(message)
         elif messageType == "SIG":
-            return self.processSignature(message)
+            (response, flush) = self.processSignature(message)
         elif messageType == "DEL":
-            return self.processDelta(message)
+            (response, flush) = self.processDelta(message)
         elif messageType == "CON":
-            return self.processContent(message)
+            (response, flush) = self.processContent(message)
         elif messageType == "CKS":
-            return self.processChecksum(message)
+            (response, flush) = self.processChecksum(message)
         elif messageType == "CLN":
-            return self.processClone(message)
+            (response, flush) = self.processClone(message)
         elif messageType == "BATCH":
-            return self.processBatch(message)
+            (response, flush) = self.processBatch(message)
         elif messageType == "PRG":
-            return self.processPurge(message)
+            (response, flush) = self.processPurge(message)
         else:
             raise Exception("Unknown message type", messageType)
+
+        if response and 'msgid' in message:
+            response['respid'] = message['msgid']
+
+        return (response, flush)
 
     def getDB(self, host, token):
         script = None
@@ -756,14 +758,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Mark if the last secssion was completed
         self.lastCompleted = prev['completed']
-        self.tempdir = os.path.join(self.basedir, "tmp_" + str(self.sessionid))
+        self.tempdir = os.path.join(self.basedir, "tmp")
         os.makedirs(self.tempdir)
 
     def endSession(self):
         try:
-            if (self.tempdir):
+            pass
+            #if (self.tempdir):
                 # Clean out the temp dir
-                shutil.rmtree(self.tempdir)
+                #`shutil.rmtree(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
@@ -851,10 +854,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             sock = self.request
             if self.server.ssl:
-                sock.sendall("TARDIS 1.0/SSL")
+                sock.sendall("TARDIS 1.1/SSL")
                 sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
             else:
-                sock.sendall("TARDIS 1.0")
+                sock.sendall("TARDIS 1.1")
 
             message = sock.recv(1024)
             self.logger.debug(message)

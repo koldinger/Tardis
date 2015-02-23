@@ -84,7 +84,7 @@ args                = None
 
 cloneDirs           = []
 cloneContents       = {}
-batchDirs           = []
+batchMsgs           = []
 
 crypt               = None
 logger              = None
@@ -185,9 +185,12 @@ def processChecksums(inodes):
         "files": files
     }
 
-    response = sendAndReceive(message)
-    checkMessage(response, 'ACKSUM')
+    #response = sendAndReceive(message)
+    #handleAckSum(response)
+    batchMessage(message)
 
+def handleAckSum(response):
+    checkMessage(response, 'ACKSUM')
     logfiles = logger.isEnabledFor(logging.FILES)
 
     # First, delete all the files which are "done", ie, matched
@@ -208,7 +211,8 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.log(logging.FILES, "File: [n]: %s %d", Util.shortPath(name), size)
+                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                logger.log(logging.FILES, "File: [n]: %s (%s)", Util.shortPath(name), size)
         sendContent(i)
         delInode(i)
 
@@ -221,7 +225,8 @@ def processChecksums(inodes):
                     size = x["size"]
                 else:
                     size = 0;
-                logger.log(logging.FILES, "File: [d]: %s %d", Util.shortPath(name), size)
+                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                logger.log(logging.FILES, "File: [d]: %s (%s)", Util.shortPath(name), size)
         processDelta(i)
         delInode(i)
 
@@ -244,6 +249,9 @@ def processDelta(inode):
             "inode" : inode
         }
 
+        ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
+        ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
+        ## Follow on by more data, which is unique
         sigmessage = sendAndReceive(message)
 
         if sigmessage['status'] == 'OK':
@@ -300,7 +308,7 @@ def processDelta(inode):
                     #message["iv"] = conn.encode(iv)
                     message["iv"] = base64.b64encode(iv)
 
-                sendMessage(message)
+                batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
                 (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
                 delta.close()
@@ -311,7 +319,8 @@ def processDelta(inode):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                    sendMessage(message)
+                    #sendMessage(message)
+                    batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
                     Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
@@ -362,7 +371,8 @@ def sendContent(inode):
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
                 makeSig = True if crypt else False
-                sendMessage(message)
+                #sendMessage(message)
+                batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
@@ -371,7 +381,8 @@ def sendContent(inode):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                    sendMessage(message)
+                    #sendMessage(message)
+                    batchMessage(message, batch=False, flush=True, response=False)
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
@@ -410,7 +421,8 @@ def handleAckDir(message):
                         size = x["size"]
                     else:
                         size = 0;
-                    logger.log(logging.FILES, "File: [N]: %s %d", Util.shortPath(name), size)
+                    size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+                    logger.log(logging.FILES, "File: [N]: %s (%s)", Util.shortPath(name), size)
             sendContent(i)
             delInode(i)
 
@@ -418,7 +430,7 @@ def handleAckDir(message):
         if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [D]: (%s)", Util.shortPath(name))
         processDelta(i)
         delInode(i)
 
@@ -529,13 +541,10 @@ def handleAckClone(message):
                 if logdirs:
                     logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
                 (inode, device) = finfo
-                batchDirs.append(makeDirMessage(path, inode, device, files))
-                if len(batchDirs) >= args.batchsize:
-                    flushBatchDirs()
+                batchMessage(makeDirMessage(path, inode, device, files))
             else:
                 if logdirs:
                     logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
-                flushBatchDirs()
                 sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
 
@@ -569,41 +578,33 @@ def sendClones():
 def flushClones():
     if cloneDirs:
         if args.batchdirs:
-            message = makeCloneMessage()
-            batchDirs.append(message)
-            if len(batchDirs) >= args.batchsize:
-                sendBatchDirs()
+            batchMessage(makeCloneMessage())
         else:
             sendClones()
 
 def sendBatchDirs():
-    global batchDirs
+    global batchMsgs
     message = {
         'message' : 'BATCH',
-        'batch': batchDirs
+        'batch': batchMsgs
     }
-    logger.debug("BATCH Starting. %s commands", len(batchDirs))
+    logger.debug("BATCH Starting. %s commands", len(batchMsgs))
 
-    batchDirs = []
+    batchMsgs = []
 
     response = sendAndReceive(message)
     checkMessage(response, 'ACKBTCH')
     # Process the response messages
     logger.debug("Got response.  %d responses", len(response['responses']))
-    for ack in response['responses']:
-        logger.debug("Response: %s", ack['message'])
-        if ack['message'] == 'ACKDIR':
-            handleAckDir(ack)
-        elif ack['message'] == 'ACKCLN':
-            handleAckClone(ack)
-        else:
-            logger.error("Unexpected message type: %s", ack['message'])
-
+    handleResponse(response)
     logger.debug("BATCH Ending.")
 
-def flushBatchDirs():
-    if len(batchDirs):
+def flushBatchMsgs():
+    if len(batchMsgs):
         sendBatchDirs()
+        return True
+    else:
+        return False
 
 def sendPurge(relative):
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
@@ -613,8 +614,7 @@ def sendPurge(relative):
     if purgeTime:
         message.update( { 'time': purgeTime, 'relative': relative })
 
-    response = sendAndReceive(message)
-    checkMessage(response, 'ACKPRG')
+    response = batchMessage(message)
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
@@ -633,9 +633,7 @@ def sendDirChunks(path, inode, files):
         message["files"] = chunk
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
-        response = sendAndReceive(message)
-        checkMessage(response, 'ACKDIR')
-        handleAckDir(response)
+        batchMessage(message, batch=False)
 
 def makeDirMessage(path, inode, dev, files):
     message = {
@@ -693,21 +691,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
             cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
-            if len(cloneDirs) >= args.clones:
-                flushClones()
         else:
             if len(files) < args.batchdirs:
-                if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "Dir: [b]: %s", Util.shortPath(dir))
-                flushClones()
-                batchDirs.append(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
-                if len(batchDirs) >= args.batchsize:
-                    flushBatchDirs()
+                batchMessage(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
             else:
                 if logger.isEnabledFor(logging.DIRS):
                     logger.log(logging.DIRS, "Dir: [-]: %s", Util.shortPath(dir))
-                flushClones()
-                flushBatchDirs()
                 sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
@@ -827,6 +816,43 @@ def sendAndReceive(message):
     sendMessage(message)
     return receiveMessage()
 
+def handleResponse(response):
+    msgtype = response['message']
+    if msgtype == 'ACKDIR':
+        handleAckDir(response)
+    elif msgtype == 'ACKCLN':
+        handleAckClone(response)
+    elif msgtype == 'ACKPRG':
+        pass
+    elif msgtype == 'ACKSUM':
+        handleAckSum(response)
+    elif msgtype == 'ACKBTCH':
+        for ack in response['responses']:
+            handleResponse(ack)
+    else:
+        logger.error("Unexpected response: %s", msgtype)
+
+nextMsgId = 0
+
+def batchMessage(message, batch=True, flush=False, response=True, extra=None):
+    global nextMsgId
+    # Set a message ID.
+    message['msgid'] = nextMsgId
+    nextMsgId += 1
+
+    batch = batch and (args.batchsize > 0) 
+
+    if batch:
+        batchMsgs.append(message)
+    if flush or not batch or len(batchMsgs) > args.batchsize:
+        flushClones()
+        flushBatchMsgs()
+    if not batch:
+        sendMessage(message)
+        if response:
+            respmessage = receiveMessage()
+            handleResponse(respmessage)
+
 def sendDirEntry(parent, device, files):
     # send a fake root directory
     message = {
@@ -844,8 +870,7 @@ def sendDirEntry(parent, device, files):
             #files.append(file)
     #
     # and send it.
-    response = sendAndReceive(message)
-    handleAckDir(response)
+    batchMessage(message)
 
 def splitDirs(x):
     root, rest = os.path.split(x)
@@ -1124,7 +1149,8 @@ def main():
 
         # If any clone or batch requests still lying around, send them
         flushClones()
-        flushBatchDirs()
+        while flushBatchMsgs():
+            pass
 
         # Sanity check.
         if len(cloneContents) != 0:
@@ -1146,7 +1172,7 @@ def main():
         logger.warning("Backup Interupted")
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
-        #logger.exception(e)
+        logger.exception(e)
 
     if args.local:
         logger.info("Waiting for server to complete")

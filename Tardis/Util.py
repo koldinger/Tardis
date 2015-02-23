@@ -53,10 +53,10 @@ def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     for x in formats:
         #if num < base and num > -base:
         if -base < num < base:
-            return fmt % (num, x)
+            return (fmt % (num, x)).strip()
         num /= float(base)
         fmt = "%3.1f %s"
-    return fmt % (num, 'TB')
+    return (fmt % (num, 'EB')).strip()
 
 def getIntOrNone(config, section, name):
     try:
@@ -176,14 +176,15 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compr
     try:
         for chunk in iter(partial(stream.read, chunksize), ''):
             data = sender.encode(encrypt(chunk))
-            chunkMessage = { "chunk" : num, "data": data }
-            sender.sendMessage(chunkMessage)
-            num += 1
+            #chunkMessage = { "chunk" : num, "data": data }
+            sender.sendMessage(data, raw=True)
+            #num += 1
     except Exception as e:
         status = "Fail"
         #print e
         raise e
     finally:
+        sender.sendMessage('', raw=True)
         size = stream.size()
         compressed = stream.isCompressed()
         if stats and 'dataSent' in stats:
@@ -213,23 +214,24 @@ def receiveData(receiver, output):
     checksum = None
     compressed = False
     while True:
-        chunk = receiver.recvMessage()
+        chunk = receiver.recvMessage(raw=True)
         #print chunk
         # logger.debug("Chunk: %s", str(chunk))
-        if chunk['chunk'] == 'done':
-            status = chunk['status']
-            size   = chunk['size']
-            if 'checksum' in chunk:
-                checksum = chunk['checksum']
-            if 'compressed' in chunk:
-                compressed = chunk['compressed']
+        if len(chunk) == 0:
             break
-        bytes = receiver.decode(chunk["data"])
+        bytes = receiver.decode(chunk)
         if output:
             output.write(bytes)
             output.flush()
         bytesReceived += len(bytes)
 
+    chunk = receiver.recvMessage()
+    status = chunk['status']
+    size   = chunk['size']
+    if 'checksum' in chunk:
+        checksum = chunk['checksum']
+    if 'compressed' in chunk:
+        compressed = chunk['compressed']
     return (bytesReceived, status, size, checksum, compressed)
 
 """
