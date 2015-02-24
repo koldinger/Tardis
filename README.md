@@ -50,10 +50,22 @@ First, the data transfer protocol has changed.  0.20 client will not communicate
 version is somewhat more efficient, especially in memory usage on the client.
 
 Secondly, the database schema has grown several new fields.  It is necessary to run the convert-2to-3.py script, in the schema directory,
-before attempting to run a server against it.   This will add the new fields, and populate them as necessary.
+before attempting to run a server against it.   This will add the new fields, and populate them as necessary.  The script is simple, run as
+    * python <path/to/Tardis>/schema/convert-2to3.py <path/to/database>/<client>/tardis.db
+This can take quite a while, depending on the size of your backups, the number of files, and the speed of your computer.
 
 Amongst the new fields created are support for extended attributes and posix access control lists.  Extended attributes will arrive in version 0.21, 
 which will again, constitute a change in the communications protocol.  Access control lists may also arrive in 0.21.  TBD.
+
+
+Future Releases
+===============
+Several releases will be coming soon:
+  * 0.20 will update the schema and communications protocol.  This will **require** running of a conversion script to convert the database.  0.20 clients will need to run against 0.20 or later servers.
+  * 0.21 will update the system to support backing up extended attributes, and possibly posix access control lists.  0.21 clients will need to run against 0.21 or later servers.
+  * 0.22 will (hopefully) make the HTTP interface stable enough for use.
+  * 0.23 will (hopefully) add the start of an administration tool.
+  * 0.24 and beyond will be bug fixes, and preparation for 1.0.
 
 Installation
 ============
