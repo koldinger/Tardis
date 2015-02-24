@@ -489,8 +489,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     savefull = True
             if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
-                #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
-                output = tempfile.SpooledTemporaryFile(dir=self.tempdir)
+                output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.sessionid)
             else:
                 output = self.cache.open(checksum, "wb")
 
@@ -523,7 +522,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     if type(basisFile) != types.FileType:
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
-                        basisFile = tempfile.TemporaryFile(dir=self.tempdir)
+                        basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.sessionid)
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
@@ -716,7 +715,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "w")
         else:
-            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False)
+            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.sessionid)
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
 
@@ -844,14 +843,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Mark if the last secssion was completed
         self.lastCompleted = prev['completed']
-        self.tempdir = os.path.join(self.basedir, "tmp_" + str(self.sessionid))
-        os.makedirs(self.tempdir)
+        self.tempdir = os.path.join(self.basedir, "tmp")
+        if not os.path.exists(self.tempdir):
+            os.makedirs(self.tempdir)
 
     def endSession(self):
         try:
-            if (self.tempdir):
+            pass
+            #if (self.tempdir):
                 # Clean out the temp dir
-                shutil.rmtree(self.tempdir)
+                #`shutil.rmtree(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
