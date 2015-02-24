@@ -137,6 +137,7 @@ logger = None
 pp = pprint.PrettyPrinter(indent=2, width=200)
 
 logging.TRACE = logging.DEBUG - 1
+logging.MSGS  = logging.DEBUG - 2
 
 class InitFailedException(Exception):
     pass
@@ -166,6 +167,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             self.address = 'localhost'
         self.logger.info("Request received from: %s Session: %s", self.address, self.sessionid)
+        self.tempPrefix = self.sessionid + "-"
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.server.umask)
 
@@ -489,7 +491,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     savefull = True
             if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
-                output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.sessionid)
+                #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
+                output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
             else:
                 output = self.cache.open(checksum, "wb")
 
@@ -522,7 +525,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     if type(basisFile) != types.FileType:
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
-                        basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.sessionid)
+                        basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
@@ -715,7 +718,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "w")
         else:
-            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.sessionid)
+            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
             self.logger.debug("Sending output to temporary file %s", temp.name)
             output = temp.file
 
@@ -1149,6 +1152,7 @@ def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
 
     logging.addLevelName(logging.TRACE, 'Message')
+    logging.addLevelName(logging.MSGS,  'MSG')
 
     if args.logcfg:
         logging.config.fileConfig(args.logcfg)

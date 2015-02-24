@@ -93,6 +93,7 @@ crypt               = None
 logger              = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
+responseTimes       = []
 
 inodeDB             = {}
 
@@ -253,6 +254,7 @@ def processDelta(inode):
             "message" : "SGR",
             "inode" : inode
         }
+        setMessageID(message)
 
         ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
         ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
@@ -370,6 +372,7 @@ def sendContent(inode):
                 return
 
             # Attempt to send the data.
+            sig = None
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
                 makeSig = True if crypt else False
@@ -388,7 +391,7 @@ def sendContent(inode):
                     Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                #logger.exception(e)
+                logger.exception(e)
                 raise e
             finally:
                 if x is not None:
@@ -455,7 +458,7 @@ def handleAckDir(message):
         if logger.isEnabledFor(logging.FILES):
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [D]: (%s)", Util.shortPath(name))
+                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
         processDelta(i)
         delInode(i)
 
@@ -625,6 +628,7 @@ def makeCloneMessage():
 
 def sendClones():
     message = makeCloneMessage()
+    setMessageID(message)
     response = sendAndReceive(message)
     checkMessage(response, 'ACKCLN')
     handleAckClone(response)
@@ -636,12 +640,13 @@ def flushClones():
         else:
             sendClones()
 
-def sendBatchDirs():
+def sendBatchMsgs():
     global batchMsgs
     message = {
         'message' : 'BATCH',
         'batch': batchMsgs
     }
+    setMessageID(message)
     logger.debug("BATCH Starting. %s commands", len(batchMsgs))
 
     batchMsgs = []
@@ -655,7 +660,7 @@ def sendBatchDirs():
 
 def flushBatchMsgs():
     if len(batchMsgs):
-        sendBatchDirs()
+        sendBatchMsgs()
         return True
     else:
         return False
@@ -876,8 +881,12 @@ def receiveMessage():
     return response
 
 def sendAndReceive(message):
+    global responseTimes
+    sendTime = time.time()
     sendMessage(message)
-    return receiveMessage()
+    response = receiveMessage()
+    responseTimes.append(time.time() - sendTime)
+    return response
 
 def handleResponse(response):
     msgtype = response['message']
@@ -898,12 +907,13 @@ def handleResponse(response):
         logger.error("Unexpected response: %s", msgtype)
 
 nextMsgId = 0
-
-def batchMessage(message, batch=True, flush=False, response=True, extra=None):
+def setMessageID(message):
     global nextMsgId
-    # Set a message ID.
     message['msgid'] = nextMsgId
     nextMsgId += 1
+
+def batchMessage(message, batch=True, flush=False, response=True, extra=None):
+    setMessageID(message)
 
     batch = batch and (args.batchsize > 0) 
 
@@ -913,10 +923,11 @@ def batchMessage(message, batch=True, flush=False, response=True, extra=None):
         flushClones()
         flushBatchMsgs()
     if not batch:
-        sendMessage(message)
         if response:
-            respmessage = receiveMessage()
+            respmessage = sendAndReceive(message)
             handleResponse(respmessage)
+        else:
+            sendMessage(message)
 
 def sendDirEntry(parent, device, files):
     # send a fake root directory
@@ -1083,17 +1094,19 @@ def processCommandLine():
     return parser.parse_args()
 
 def setupLogging(logfile, verbosity):
-    global logger
+    global logger, msglogger
 
     # Define a couple custom logging levels
     logging.STATS = logging.INFO + 1
     logging.DIRS  = logging.INFO - 1
     logging.FILES = logging.INFO - 2
+    logging.MSGS  = logging.INFO - 3
     logging.addLevelName(logging.STATS, "STAT")
     logging.addLevelName(logging.FILES, "FILE")
     logging.addLevelName(logging.DIRS,  "DIR")
+    logging.addLevelName(logging.MSGS,  "MSG")
 
-    levels = [logging.STATS, logging.DIRS, logging.FILES, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.STATS, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
 
     formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
 
@@ -1106,10 +1119,12 @@ def setupLogging(logfile, verbosity):
     logging.root.addHandler(handler)
     logger = logging.getLogger('')
 
+
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
     logger.setLevel(loglevel)
 
+    # Create a special logger just for messages
     return logger
 
 def main():
