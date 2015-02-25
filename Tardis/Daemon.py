@@ -174,8 +174,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def finish(self):
         self.logger.info("Ending session %s from %s", self.sessionid, self.address)
 
+    def setXattrAcl(self, inode, device, xattr, acl):
+        self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
+        if xattr:
+            self.db.setXattrs(inode, xattr)
+        if acl:
+            self.db.setAcl(inode, acl)
+
     def checkFile(self, parent, f, dirhash):
         xattr = None
+        acl = None
         """ Process an individual file.  Check to see if it's different from what's there already """
         #self.logger.debug("Processing file: %s", str(f))
         name = f["name"]
@@ -183,6 +191,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         device = f["dev"]
         if 'xattr' in f:
             xattr = f['xattr']
+        if 'acl' in f:
+            acl = f['acl']
 
         #self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
         #self.logger.debug("DirHash: %s", str(dirhash))
@@ -199,12 +209,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.extendFile(parent, f['name'])
                 else:
                     self.db.insertFile(f, parent)
-                    if xattr:
-                        self.db.setXattrs(inode, xattr)
+                    self.setXattrAcl(inode, device, xattr, acl)
             else:
                 self.db.insertFile(f, parent)
-                if xattr:
-                    self.db.setXattrs(inode, xattr)
+                self.setXattrAcl(inode, device, xattr, acl)
             retVal = DONE
         else:
             # Get the last backup information
@@ -243,23 +251,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             #self.logger.debug("Inserting new version %s", name)
                             self.db.insertFile(f, parent)
                             self.db.setChecksum(inode, old['checksum'])
-                            if xattr:
-                                self.db.setXattrs(inode, xattr)
+                            self.setXattrAcl(inode, device, xattr, acl)
                         retVal = DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
                         #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
-                        if xattr:
-                            self.db.setXattrs(inode, xattr)
+                        self.setXattrAcl(inode, device, xattr, acl)
                         retVal = CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
                 elif (osize == fsize) and not (old["checksum"] is None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
-                    if xattr:
-                        self.db.setXattrs(inode, xattr)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.server.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.server.deltaPercent))) or \
@@ -271,22 +276,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     # File has changed size by more than a certain amount (typically 50%)
                     # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
-                    if xattr:
-                        self.db.setXattrs(inode, xattr)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = CONTENT
                 else:
                     # Otherwise, let's just get the delta
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
-                    if xattr:
-                        self.db.setXattrs(inode, xattr)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = DELTA
             else:
                 # Create a new record for this file
                 #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
-                if xattr:
-                    self.db.setXattrs(inode, xattr)
+                self.setXattrAcl(inode, device, xattr, acl)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
                     #self.logger.debug('Looking for file with same inode %d in backupset', inode)

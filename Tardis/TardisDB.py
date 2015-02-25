@@ -92,14 +92,14 @@ CREATE TABLE IF NOT EXISTS Files (
     UID         INTEGER,
     GID         INTEGER, 
     NLinks      INTEGER,
-    XattrID     INTEGER,
-    AclID       INTEGER,
+    XattrId     INTEGER,
+    AclId       INTEGER,
 
     PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
     FOREIGN KEY(NameId)      REFERENCES Names(NameId),
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(XattrId)     REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(AclId)       REFERENCES CheckSums(ChecksumIdD)
 );
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
@@ -408,6 +408,15 @@ class TardisDB(object):
         #self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return self.cursor.rowcount
 
+    def setAcl(self, inode, checksum):
+        self.cursor.execute("UPDATE Files SET AclId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
+                            "WHERE Inode = :inode AND "
+                            ":backup BETWEEN FirstSet AND LastSet",
+                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+        #self.logger.info("Setting ACL ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
+        return self.cursor.rowcount
+
+
     def getChecksumByInode(self, inode, current=True):
         backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
@@ -685,7 +694,8 @@ class TardisDB(object):
     def listOrphanChecksums(self):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
-                              "AND ChecksumID NOT IN (SELECT DISTINCT(XattrID) FROM Files WHERE XattrID IS NOT NULL) "
+                              "AND ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                              "AND ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
                               "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL)")
         while True:
             batch = c.fetchmany(self.chunksize)

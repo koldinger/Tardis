@@ -47,6 +47,7 @@ import cStringIO
 import pycurl
 import shlex
 import xattr
+import posix1e
 from functools import partial
 
 import librsync
@@ -517,8 +518,10 @@ def mkFileInfo(dir, name):
                 cks = addMeta(attr_string)
                 finfo['xattr'] = cks
         if args.acl:
-            # TODO: Same thing for ACL's?  Technically they're stored as system xattrs, but....
-            pass
+            if posix1e.has_extended(pathname):
+                acl = posix1e.ACL(file=pathname)
+                cks = addMeta(str(acl))
+                finfo['acl'] = cks
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
