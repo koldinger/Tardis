@@ -56,7 +56,7 @@ r = c.fetchone()
 numrows = r[0]
 print numrows
 
-c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL")
+c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL ORDER BY Checksum")
 checksums = c.fetchall()
 # Build a progress bar, if we have that module.  Just for grins.
 if progress:
