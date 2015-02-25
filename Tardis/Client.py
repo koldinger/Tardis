@@ -635,6 +635,7 @@ def sendClones():
 
 def flushClones():
     if cloneDirs:
+        logger.debug("Flushing %d clones", len(cloneDirs))
         if args.batchdirs:
             batchMessage(makeCloneMessage())
         else:
@@ -642,6 +643,7 @@ def flushClones():
 
 def sendBatchMsgs():
     global batchMsgs
+    logger.debug("Sending %d batch messages", len(batchMsgs))
     message = {
         'message' : 'BATCH',
         'batch': batchMsgs
@@ -752,13 +754,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             if logger.isEnabledFor(logging.DIRS):
                 logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
 
-            filenames = sorted([x["name"] for x in files])
-            m = hashlib.md5()
-            for f in filenames:
-                m.update(f)
-
-            cloneDirs.append({'inode':  s.st_ino, 'dev': s.st_dev, 'numfiles': len(files), 'cksum': m.hexdigest()})
-            cloneContents[(s.st_ino, s.st_dev)] = (os.path.relpath(dir, top), files)
+            cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
         else:
             if newmeta:
                 batchMessage(makeMetaMessage())
@@ -784,6 +780,18 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         # TODO: Clean this up
         logger.exception(e)
         raise
+
+def cloneDir(inode, device, files, path):
+    filenames = sorted([x["name"] for x in files])
+    m = hashlib.md5()
+    for f in filenames:
+        m.update(f)
+
+    message = {'inode':  inode, 'dev': device, 'numfiles': len(files), 'cksum': m.hexdigest()}
+    cloneDirs.append(message)
+    cloneContents[(inode, device)] = (path, files)
+    if len(cloneDirs) >= args.clones:
+        flushClones()
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
@@ -919,7 +927,7 @@ def batchMessage(message, batch=True, flush=False, response=True, extra=None):
 
     if batch:
         batchMsgs.append(message)
-    if flush or not batch or len(batchMsgs) > args.batchsize:
+    if flush or not batch or len(batchMsgs) >= args.batchsize:
         flushClones()
         flushBatchMsgs()
     if not batch:
@@ -1263,7 +1271,7 @@ def main():
     endtime = datetime.datetime.now()
 
     if args.stats:
-        logger.log(logging.STATS, "Runtime: {}".format((endtime - starttime)))
+        logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
         logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
         logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
         if conn is not None:

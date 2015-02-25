@@ -57,7 +57,7 @@ numrows = r[0]
 print numrows
 
 # Get all non-sized files.  Order by checksum so that we can get locality in the directories we read
-c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL ORDER BY Checksum ASC")
+c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL ORDER BY Checksum")
 checksums = c.fetchall()
 # Build a progress bar, if we have that module.  Just for grins.
 if progress:
