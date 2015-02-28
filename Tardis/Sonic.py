@@ -237,9 +237,16 @@ def main():
 
     crypt = None
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    if args.setpw and args.password:
+        pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt='Confirm Password: ')
+        if pw2 != password:
+            logger.error("Passwords don't match")
+            return -1
+
     if password:
         crypt = TardisCrypto.TardisCrypto(password)
         password = None
+        args.password = None
 
     if args.create:
         return createClient(crypt)

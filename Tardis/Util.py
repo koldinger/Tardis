@@ -123,7 +123,7 @@ If a string is passed in, returns it.
 If the string is True or empty (''), it will use the getpass function to prompt on the
 terminal.
 """
-def getPassword(password, pwfile, pwurl, pwprog):
+def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
     methods = 0
     if password: methods += 1
     if pwfile:   methods += 1
@@ -134,7 +134,7 @@ def getPassword(password, pwfile, pwurl, pwprog):
         raise Exception("Cannot specify more than one password retrieval mechanism")
 
     if password == True or password == '':
-        password = getpass.getpass()
+        password = getpass.getpass(prompt=prompt)
         password.rstrip()       # Delete trailing characters
 
     if pwfile:
