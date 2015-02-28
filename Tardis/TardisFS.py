@@ -111,6 +111,7 @@ class TardisFS(fuse.Fuse):
             client   = Defaults.getDefault('TARDIS_CLIENT')
             database = Defaults.getDefault('TARDIS_DB')
             dbname   = Defaults.getDefault('TARDIS_DBNAME')
+            current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
             # Parameters
             self.database   = database
@@ -123,6 +124,7 @@ class TardisFS(fuse.Fuse):
             self.dbname     = dbname
             self.cachetime  = 60
             self.nocrypt    = True
+            self.current    = current
 
             self.crypt      = None
             #logging.basicConfig(level=logging.INFO)
@@ -138,6 +140,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="dbname",       help="Database Name")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
+            self.parser.add_option(mountopt='current',      help="Name to use for most recent complete backup")
 
             res = self.parse(values=self, errex=1)
 
@@ -339,7 +342,7 @@ class TardisFS(fuse.Fuse):
             # Root directory contents
             lead = getParts(path)
             st = fuse.Stat()
-            if (lead[0] == 'Current'):
+            if (lead[0] == self.current):
                 target = self.lastBackupSet(True)
                 timestamp = float(target['endtime'])
                 st.st_mode = stat.S_IFLNK | 0755
@@ -415,7 +418,7 @@ class TardisFS(fuse.Fuse):
             dirents = [('.', stat.S_IFDIR), ('..', stat.S_IFDIR)]
             depth = getDepth(path)
             if depth == 0:
-                dirents.append(("Current", stat.S_IFLNK))
+                dirents.append((self.current, stat.S_IFLNK))
                 entries = self.tardis.listBackupSets()
                 dirents.extend([(y['name'], stat.S_IFDIR) for y in entries])
             else:
@@ -547,7 +550,7 @@ class TardisFS(fuse.Fuse):
         link = self.cache.retrieve(key)
         if link:
             return link
-        if path == '/Current':
+        if path == '/' + self.current:
             target = self.lastBackupSet(True)
             self.log.debug("Path: {} Target: {} {}".format(path, target['name'], target['backupset']))
             link = str(target['name'])
