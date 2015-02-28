@@ -236,13 +236,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 fsize = f['size']
                 osize = old['size']
 
-                if (old["inode"] == inode) and (osize == fsize) and \
-                   (old["mtime"] == f["mtime"]) and (old['xattrs'] == xattr):
+                if (old["inode"] == inode) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                     if not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
-                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']):
+                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
                             self.db.extendFile(parent, f['name'], old=fromPartial)
