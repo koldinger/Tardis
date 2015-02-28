@@ -35,6 +35,7 @@ import os, os.path
 import functools
 import time
 import hashlib
+import sys
 
 import ConnIdLogAdapter
 import Rotator
@@ -267,6 +268,11 @@ class TardisDB(object):
         except sqlite3.IntegrityError as e:
             self.logger.warning("Error processing data: %s %s", data, e)
             raise e
+
+    def getResult(self, query, data):
+        c = self.execute(query, data)
+        r = c.fetchone()
+        return r
 
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
@@ -604,8 +610,9 @@ class TardisDB(object):
 
     def listBackupSets(self):
         #self.logger.debug("list backup sets")
-        c = self.execute("SELECT "
-                         "Name AS name, BackupSet AS backupset "
+        #                 "Name AS name, BackupSet AS backupset "
+        c = self.execute("SELECT " +
+                         backupSetInfoFields +
                          "FROM Backups "
                          "ORDER BY backupset ASC", {})
         while True:
@@ -614,6 +621,15 @@ class TardisDB(object):
                 break
             for row in batch:
                 yield row
+
+    def getBackupSetInfoById(self, bset):
+        c = self.execute("SELECT " + 
+                         backupSetInfoFields +
+                         "FROM Backups WHERE BackupSet = :bset",
+                         { "bset": bset })
+        row = c.fetchone()
+        return row
+
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT " + 
                          backupSetInfoFields +
@@ -629,6 +645,42 @@ class TardisDB(object):
                          { "time": time })
         row = c.fetchone()
         return row
+
+    def getBackupSetDetails(self, bset):
+
+        row = self.getResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
+        files = row[0]
+        size = row[1] if row[1] else 0
+
+        row = self.getResult("SELECT COUNT(*) FROM Files WHERE Dir = 1 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
+        dirs = row[0]
+
+        # Figure out the first set after this one, and the last set before this one
+        row = self.getResult("SELECT MAX(BackupSet) FROM Backups WHERE BackupSet < :bset", {'bset': bset})
+        prevSet = row[0] if row else 0
+
+        row = self.getResult("SELECT MIN(BackupSet) FROM Backups WHERE BackupSet > :bset", {'bset': bset})
+        nextSet = row[0] if row[0] else sys.maxint
+
+        self.logger.debug("PrevSet: %s, NextSet: %s", prevSet, nextSet)
+        # Count of files that first appeared in this version.  May be delta's
+        row = self.getResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+                             "WHERE Dir = 0 AND FirstSet > :prevSet",
+                             {'prevSet': prevSet})
+        newFiles = row[0] if row[0] else 0
+        newSize  = row[1] if row[1] else 0
+        newSpace = row[2] if row[2] else 0
+
+        # Count of files that are last seen in this set, and are not part of somebody else's basis
+        row = self.getResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+                             "WHERE Dir = 0 AND LastSet < :nextSet "
+                             "AND Checksum NOT IN (SELECT Basis FROM Checksums WHERE Basis IS NOT NULL)",
+                             {'nextSet': nextSet})
+        endFiles = row[0] if row[0] else 0
+        endSize  = row[1] if row[1] else 0
+        endSpace = row[2] if row[2] else 0
+
+        return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
 
     def getConfigValue(self, key):
         c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
