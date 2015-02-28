@@ -54,6 +54,7 @@ import tempfile
 import shutil
 import parsedatetime
 import xattr
+#import posix1e
 
 import Tardis
 
@@ -283,14 +284,14 @@ def recoverObject(regenerator, info, bset, outputdir, path):
                             logger.warning("Unable to set extended attribute %s on %s", attr, outname)
                 except Exception as e:
                     logger.warning("Unable to process extended attributes for %s", outname)
-            if outname and args.setacl and info['acl']:
-                try:
-                    f = regenerator.recoverChecksum(info['acl'])
-                    acl = json.loads(f.read())
-                    a = posix1e.ACL(text=acl)
-                    a.applyto(outname)
-                except Exception as e:
-                    logger.warning("Unable to process extended attributes for %s", outname)
+            #if outname and args.setacl and info['acl']:
+            #   try:
+            #       f = regenerator.recoverChecksum(info['acl'])
+            #       acl = json.loads(f.read())
+            #       a = posix1e.ACL(text=acl)
+            #       a.applyto(outname)
+            #   except Exception as e:
+            #       logger.warning("Unable to process extended attributes for %s", outname)
 
     except Exception as e:
         #logger.exception(e)
@@ -413,7 +414,7 @@ def parseArgs():
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file')
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file')
     parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space')
-    parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file')
+    #parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file')
     parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')

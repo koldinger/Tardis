@@ -47,7 +47,7 @@ import cStringIO
 import pycurl
 import shlex
 import xattr
-import posix1e
+#import posix1e
 from functools import partial
 
 import librsync
@@ -517,11 +517,11 @@ def mkFileInfo(dir, name):
                 attr_string = json.dumps(dict(map(lambda x: (str(x[0]), base64.b64encode(x[1])), sorted(items))))
                 cks = addMeta(attr_string)
                 finfo['xattr'] = cks
-        if args.acl:
-            if posix1e.has_extended(pathname):
-                acl = posix1e.ACL(file=pathname)
-                cks = addMeta(str(acl))
-                finfo['acl'] = cks
+        #if args.acl:
+        #   if posix1e.has_extended(pathname):
+        #       acl = posix1e.ACL(file=pathname)
+        #       cks = addMeta(str(acl))
+        #       finfo['acl'] = cks
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
@@ -1039,7 +1039,7 @@ def processCommandLine():
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
     parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
-    parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
+    #parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
