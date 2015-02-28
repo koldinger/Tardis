@@ -645,7 +645,7 @@ def main():
     setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
     # Load any password info
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     args.password = None
 
     token = None

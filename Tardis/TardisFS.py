@@ -154,8 +154,7 @@ class TardisFS(fuse.Fuse):
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
-            password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog)
-
+            password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog, prompt="Password for %s: " % (self.client))
             self.password = None
 
             self.cache      = Cache.Cache(0, float(self.cachetime))
