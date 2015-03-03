@@ -35,6 +35,7 @@ import os, os.path
 import sys
 import time
 import datetime
+import pprint
 
 import parsedatetime
 
@@ -51,6 +52,7 @@ schemaName   = Defaults.getDefault('TARDIS_SCHEMA')
 configName   = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir      = Defaults.getDefault('TARDIS_DB')
 client       = Defaults.getDefault('TARDIS_CLIENT')
+current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
 configDefaults = {
     'BaseDir'           : baseDir,
@@ -95,13 +97,16 @@ def setToken(crypt):
 
 def listBSets(db, crypt):
     try:
+        last = db.lastBackupSet()
         for i in db.listBackupSets():
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(i['starttime'])))
             if i['endtime'] is not None:
                 duration = str(datetime.timedelta(seconds = (int(float(i['endtime']) - float(i['starttime'])))))
             else:
                 duration = ''
-            print "%-40s %-4d %d %3d  %s  %s" % (i['name'], i['backupset'], i['completed'], i['priority'], t, duration)
+            completed = 'Comp' if i['completed'] else 'Incomp'
+            isCurrent = current if i['backupset'] == last['backupset'] else ''
+            print "%-40s %-4d %-6s %3d  %s  %s %s" % (i['name'], i['backupset'], completed, i['priority'], t, duration, isCurrent)
     except Exception as e:
         logger.error(e)
         return 1
@@ -148,33 +153,50 @@ def bsetInfo(db, crypt):
     if printed:
         print "\n * Purgeable numbers are estimates only"
 
-def purgeIncomplete(db, cache, crypt):
-    bset = getBackupSet(db)
-    if bset == None:
-        logger.error("No backup set found")
-        sys.exit(1)
-    (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
-    print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
-    removeOrphans(db, cache)
+def confirm():
+    if not args.confirm:
+        return True
+    else:
+        print "Proceed (y/n): ",
+        yesno = sys.stdin.readline().strip().upper()
+        return (yesno == 'YES' or yesno == 'Y')
 
 def purge(db, cache, crypt):
+    bset = getBackupSet(db, True)
+    if bset == None:
+        logger.error("No backup set found")
+        sys.exit(1)
+    # List the sets we're going to delete`
+    if args.incomplete:
+        pSets = db.listPurgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
+    else:
+        pSets = db.listPurgeSets(args.priority, bset['endtime'], bset['backupset'])
+    names = [x['name'] for x in pSets]
+    if len(names) == 0:
+        print "No matching sets"
+        return
+
+    print "Sets to be deleted:"
+    pprint.pprint(names)
+
+    if confirm():
+        if args.incomplete:
+            (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
+        else:
+            (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset['endtime'], bset['backupset'])
+        print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
+        removeOrphans(db, cache)
+
+def deleteBset(db, cache):
     bset = getBackupSet(db)
     if bset == None:
         logger.error("No backup set found")
         sys.exit(1)
-    (filesDeleted, setsDeleted) = db.purgeFiles(args.priority, bset['endtime'], bset['backupset'])
-    print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
-    removeOrphans(db, cache)
-
-def deletBset(db, cache):
-    bset = getBackupSet(db)
-    if bset == None:
-        logger.error("No backup set found")
-        sys.exit(1)
-    filesDeleted = db.deleteBackupSet(bset['backupset'])
-    print "Deleted %d files" % (filesDeleted)
-    removeOrphans(db, cache)
-
+    print "Set to be deleted: %s" % (bset['name'])
+    if confirm():
+        filesDeleted = db.deleteBackupSet(bset['backupset'])
+        print "Deleted %d files" % (filesDeleted)
+        removeOrphans(db, cache)
 
 def _removeOrphans(db, cache):
     # Now remove any leftover orphans
@@ -220,6 +242,7 @@ def removeOrphans(db, cache):
 
 def parseArgs():
     global args
+
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', formatter_class=Util.HelpFormatter, add_help=False)
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
@@ -229,46 +252,53 @@ def parseArgs():
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
-    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    parser.add_argument('--client',             dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
-    parser.add_argument('--database',           dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
-    parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
-
-    bsetgroup = parser.add_mutually_exclusive_group()
+    # Shared parser
+    bsetParser = argparse.ArgumentParser(add_help=False)
+    bsetgroup = bsetParser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
     #bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"),
 
-    passgroup = parser.add_argument_group("Password/Encryption specification options")
+    purgeParser= argparse.ArgumentParser(add_help=False)
+    purgeParser.add_argument('--priority',       dest='priority',   default=0, type=int,                   help='Maximum priority backupset to purge')
+    purgeParser.add_argument('--incomplete',     dest='incomplete', default=False, action='store_true',    help='Purge only incomplete backup sets')
+
+    cnfParser = argparse.ArgumentParser(add_help=False)
+    cnfParser.add_argument('--confirm',          dest='confirm', action=Util.StoreBoolean, default=True,   help='Confirm deletes and purges')
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
+    common.add_argument('--client',             dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
+    common.add_argument('--database',           dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
+
+    passgroup = common.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
-    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,    help='Encrypt data.  Only valid if password is set')
 
-    commandgroup = parser.add_argument_group("Actions to take (one required)")
-    cmdgrp = commandgroup.add_mutually_exclusive_group(required=True)
-    cmdgrp.add_argument('--create',         dest='create', default=False, action='store_true',      help='Create a client database')
-    cmdgrp.add_argument('--set-password',   dest='setpw', default=False, action='store_true',       help='Set the password for the database')
-    cmdgrp.add_argument('--list',           dest='list', default=False, action='store_true',        help='List backupsets for the client')
-    cmdgrp.add_argument('--info',           dest='info', default=False, action='store_true',        help='List details for each backupset')
 
-    cmdgrp.add_argument('--purge',          dest='purge', default=False, action='store_true',       help='Purge backup sets')
-    cmdgrp.add_argument('--purge-incomplete',   dest='prginc', default=False, action='store_true',  help='Purge incomplete backup sets')
-    cmdgrp.add_argument('--delete',         dest='delete', default=False, action='store_true',  help='Purge incomplete backup sets')
+    subs = parser.add_subparsers(help="Commands", dest='command')
+    cp = subs.add_parser('create',       parents=[common], help='Create a client database')
+    sp = subs.add_parser('setpass',      parents=[common], help='Set a password')
+    lp = subs.add_parser('list',         parents=[common], help='List backup sets')
+    ip = subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
+    pp = subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
+    dp = subs.add_parser('delete',       parents=[common, bsetParser, cnfParser],               help='Delete an old backupset')
+    op = subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
 
-    cmdgrp.add_argument('--remove-orphans',   dest='orphans', default=False, action='store_true',  help='Purge orphaned checknusm')
+    cp.add_argument('--schema',                 dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
 
-    parser.add_argument('--priority',       dest='priority', default=0, type=int,                   help='Maximum priority to purge')
-
-    parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                help='Be verbose')
+    #parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Be verbose')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ , help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     args = parser.parse_args(remaining)
+    return args
 
-def getBackupSet(db):
+def getBackupSet(db, defaultCurrent=False):
     bsetInfo = None
     if args.date:
         cal = parsedatetime.Calendar()
@@ -290,9 +320,14 @@ def getBackupSet(db):
             bset = int(args.backup)
             bsetInfo = db.getBackupSetInfoById(bset)
         except:
-            bsetInfo = db.getBackupSetInfo(args.backup)
+            if args.backup == current:
+                bsetInfo = db.lastBackupSet()
+            else:
+                bsetInfo = db.getBackupSetInfo(args.backup)
             if not bsetInfo:
                 logger.critical("No backupset at for name: %s", args.backup)
+    elif defaultCurrent:
+        bsetInfo = db.lastBackupSet()
     return bsetInfo
 
 def setupLogging():
@@ -306,7 +341,7 @@ def main():
 
     crypt = None
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
-    if args.setpw and args.password:
+    if args.command == 'setpass' and args.password:
         pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt='Confirm Password: ')
         if pw2 != password:
             logger.error("Passwords don't match")
@@ -317,10 +352,10 @@ def main():
         password = None
         args.password = None
 
-    if args.create:
+    if args.command == 'create':
         return createClient(crypt)
 
-    if args.setpw:
+    if args.command == 'setpw':
         if not crypt:
             logger.error("No password specified")
             return -1
@@ -328,22 +363,19 @@ def main():
 
     (db, cache) = getDB(crypt)
 
-    if args.list:
+    if args.command == 'list':
         return listBSets(db, crypt)
 
-    if args.info:
+    if args.command == 'info':
         return bsetInfo(db, crypt)
 
-    if args.prginc:
-        return purgeIncomplete(db, cache, crypt)
-
-    if args.purge:
+    if args.command == 'purge':
         return purge(db, cache, crypt)
 
-    if args.delete:
+    if args.command == 'delete':
         return deleteBset(db, cache)
 
-    if args.orphans:
+    if args.command == 'orphans':
         return removeOrphans(db, cache)
 
 if __name__ == "__main__":

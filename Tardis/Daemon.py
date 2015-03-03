@@ -644,7 +644,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Purge the files
         if prevTime:
-            (files, sets) = self.db.purgeFiles(priority, prevTime)
+            (files, sets) = self.db.purgeSets(priority, prevTime)
             self.logger.info("Purged %d files in %d backup sets", files, sets)
             if files:
                 self.purged = True

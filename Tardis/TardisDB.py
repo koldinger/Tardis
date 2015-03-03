@@ -132,7 +132,7 @@ CREATE VIEW IF NOT EXISTS VFiles AS
 fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                  "Parent AS parent, ParentDev AS parentdev, Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet AS firstset, LastSet AS lastset, Checksum AS checksum "
+                 "FirstSet AS firstset, LastSet AS lastset, Checksum AS checksum, ChainLength AS chainlength "
 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
@@ -722,8 +722,24 @@ class TardisDB(object):
         filesDeleted = self.cursor.rowcount
         return filesDeleted
 
+    def listPurgeSets(self, priority, timestamp, current=False):
+        backupset = self._bset(current)
+        # First, purge out the backupsets that don't match
+        c = self.cursor.execute("SELECT " + backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        for row in c:
+            yield(row)
 
-    def purgeFiles(self, priority, timestamp, current=False):
+    def listPurgeIncomplete(self, priority, timestamp, current=False):
+        backupset = self._bset(current)
+        # First, purge out the backupsets that don't match
+        c = self.cursor.execute("SELECT " + backupSetInfoFields +
+                                " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        for row in c:
+            yield(row)
+
+    def purgeSets(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
         self.logger.debug("Purging backupsets below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
