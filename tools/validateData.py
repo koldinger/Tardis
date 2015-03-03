@@ -9,7 +9,7 @@ import sqlite3
 import time
 import logging
 
-from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Util
+from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Util, Defaults
 
 import progressbar as pb
 
@@ -45,7 +45,7 @@ def validate(root, client, dbname, password):
     num = row[0]
     print "Checksums: %d" % (num)
 
-    cur = conn.execute("SELECT Checksum FROM CheckSums ORDER BY Size ASC, Checksum ASC");
+    cur = conn.execute("SELECT Checksum FROM CheckSums ORDER BY Checksum ASC");
     pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
     pbar.start()
 
@@ -86,10 +86,10 @@ def validate(root, client, dbname, password):
     pbar.finish()
 
 if __name__ == "__main__":
-    root   = Util.getDefault('TARDIS_DB')
-    client = Util.getDefault('TARDIS_CLIENT')
-    dbname = Util.getDefault('TARDIS_DBNAME')
-    password = None
+    root   = Defaults.getDefault('TARDIS_DB')
+    client = Defaults.getDefault('TARDIS_CLIENT')
+    dbname = Defaults.getDefault('TARDIS_DBNAME')
+    password = None # 'PassWord'
 
     logging.basicConfig(level=logging.INFO)
 

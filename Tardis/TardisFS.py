@@ -45,6 +45,8 @@ import logging
 import tempfile
 import socket
 import urlparse
+import json
+import base64
 
 import TardisDB
 import RemoteDB
@@ -111,6 +113,7 @@ class TardisFS(fuse.Fuse):
             client   = Defaults.getDefault('TARDIS_CLIENT')
             database = Defaults.getDefault('TARDIS_DB')
             dbname   = Defaults.getDefault('TARDIS_DBNAME')
+            current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
             # Parameters
             self.database   = database
@@ -123,6 +126,7 @@ class TardisFS(fuse.Fuse):
             self.dbname     = dbname
             self.cachetime  = 60
             self.nocrypt    = True
+            self.current    = current
 
             self.crypt      = None
             #logging.basicConfig(level=logging.INFO)
@@ -138,6 +142,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="dbname",       help="Database Name")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
+            self.parser.add_option(mountopt='current',      help="Name to use for most recent complete backup")
 
             res = self.parse(values=self, errex=1)
 
@@ -339,7 +344,7 @@ class TardisFS(fuse.Fuse):
             # Root directory contents
             lead = getParts(path)
             st = fuse.Stat()
-            if (lead[0] == 'Current'):
+            if (lead[0] == self.current):
                 target = self.lastBackupSet(True)
                 timestamp = float(target['endtime'])
                 st.st_mode = stat.S_IFLNK | 0755
@@ -415,7 +420,7 @@ class TardisFS(fuse.Fuse):
             dirents = [('.', stat.S_IFDIR), ('..', stat.S_IFDIR)]
             depth = getDepth(path)
             if depth == 0:
-                dirents.append(("Current", stat.S_IFLNK))
+                dirents.append((self.current, stat.S_IFLNK))
                 entries = self.tardis.listBackupSets()
                 dirents.extend([(y['name'], stat.S_IFDIR) for y in entries])
             else:
@@ -547,7 +552,7 @@ class TardisFS(fuse.Fuse):
         link = self.cache.retrieve(key)
         if link:
             return link
-        if path == '/Current':
+        if path == '/' + self.current:
             target = self.lastBackupSet(True)
             self.log.debug("Path: {} Target: {} {}".format(path, target['name'], target['backupset']))
             link = str(target['name'])
@@ -643,7 +648,7 @@ class TardisFS(fuse.Fuse):
     @tracer
     def listxattr ( self, path, size ):
         path = self.fsEncodeName(path)
-        #self.log.info('CALL listxattr {} {}'.format(path, size))
+        self.log.info('CALL listxattr {} {}'.format(path, size))
         if size == 0:
             retFunc = lambda x: len("".join(x)) + len(str(x))
         else:
@@ -662,9 +667,20 @@ class TardisFS(fuse.Fuse):
                 subpath = parts[1]
                 if self.crypt:
                     subpath = self.crypt.encryptPath(subpath)
-                checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                if checksum:
-                    return retFunc(['user.checksum', 'user.since', 'user.chain'])
+                info = self.tardis.getFileInfoByPath(subpath, b['backupset'])
+                if info:
+                    attrs = ['user.tardis_checksum', 'user.tardis_since', 'user.tardis_chain']
+                    self.log.info("xattrs: %s", info['xattrs'])
+                    if info['xattrs']:
+                        f = self.regenerator.recoverChecksum(info['xattrs'])
+                        xattrs = json.loads(f.read())
+                        self.log.debug("Xattrs: %s", str(xattrs))
+                        attrs += map(str, xattrs.keys())
+                        self.log.debug("Adding xattrs: %s", xattrs.keys())
+                        self.log.info("Xattrs: %s", str(attrs))
+                        self.log.info("Returning: %s", str(retFunc(attrs)))
+
+                    return retFunc(attrs)
 
         return None
 
@@ -693,25 +709,35 @@ class TardisFS(fuse.Fuse):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
-            if attr == 'user.checksum':
+            if attr == 'user.tardis_checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     #self.log.debug(str(checksum))
                     if checksum:
                         return retFunc(checksum)
-            elif attr == 'user.since':
+            elif attr == 'user.tardis_since':
                 if b: 
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
                     #self.log.debug(str(since))
                     if since:
                         return retFunc(since)
-            elif attr == 'user.chain':
+            elif attr == 'user.tardis_chain':
                     info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
                     #self.log.debug(str(checksum))
                     if info:
                         chain = str(info['chainlength'])
                         self.log.debug(str(chain))
                         return retFunc(chain)
+            else:
+                # Must be an imported value.  Let's generate it.
+                info = self.getFileInfoByPath(path)
+                if info['xattrs']:
+                    f = self.regenerator.recoverChecksum(info['xattrs'])
+                    xattrs = json.loads(f.read())
+                    if attr in xattrs:
+                        value = base64.b64decode(xattrs[attr])
+                        return retFunc(value)
+
         return 0
 
 def main():

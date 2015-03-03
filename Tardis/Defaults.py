@@ -52,6 +52,7 @@ _defaults = {
                 'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/remote.cfg',
                 'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
                 'TARDIS_LS_COLORS'      : "gone=red:changed=cyan:moved=blue:header=green:name=white:error=red:default=white",
+                'TARDIS_RECENT_SET'     : 'Current',
                 'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
                }
 
