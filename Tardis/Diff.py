@@ -66,7 +66,7 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
-    parser.add_argument("--backup",       nargs=1, dest='backup', default='Current', help="Backup set(s) to use")
+    parser.add_argument("--backup",       nargs='+', dest='backup', default='Current', help="Backup set(s) to use")
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
@@ -231,8 +231,8 @@ def main():
         f1 = r.recoverFile(path, bsets[0]['backupset'])
         then = time.asctime(time.localtime(float(bsets[0]['starttime'])))
         if bsets[1] is not None:
-            logger.debug("Recovering %d %s", int(bsets[1]), path)
-            f2 = r.recoverFile(path, bset[1])
+            logger.debug("Recovering %d %s", int(bsets[1]['backupset']), path)
+            f2 = r.recoverFile(path, bsets[1]['backupset'])
             now = time.asctime(time.localtime(float(bsets[1]['starttime'])))
         else:
             logger.debug("Opening %s", path)
