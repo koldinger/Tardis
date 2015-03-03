@@ -174,12 +174,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def finish(self):
         self.logger.info("Ending session %s from %s", self.sessionid, self.address)
 
+    def setXattrAcl(self, inode, device, xattr, acl):
+        self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
+        if xattr:
+            self.db.setXattrs(inode, xattr)
+        if acl:
+            self.db.setAcl(inode, acl)
+
     def checkFile(self, parent, f, dirhash):
+        xattr = None
+        acl = None
         """ Process an individual file.  Check to see if it's different from what's there already """
         #self.logger.debug("Processing file: %s", str(f))
         name = f["name"]
         inode = f["inode"]
         device = f["dev"]
+        if 'xattr' in f:
+            xattr = f['xattr']
+        if 'acl' in f:
+            acl = f['acl']
 
         #self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
         #self.logger.debug("DirHash: %s", str(dirhash))
@@ -196,8 +209,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.db.extendFile(parent, f['name'])
                 else:
                     self.db.insertFile(f, parent)
+                    self.setXattrAcl(inode, device, xattr, acl)
             else:
                 self.db.insertFile(f, parent)
+                self.setXattrAcl(inode, device, xattr, acl)
             retVal = DONE
         else:
             # Get the last backup information
@@ -226,7 +241,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                     if not (old["checksum"] is None):
                         #self.db.setChecksum(inode, old['checksum'])
-                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']):
+                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
                             self.db.extendFile(parent, f['name'], old=fromPartial)
@@ -235,17 +250,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             #self.logger.debug("Inserting new version %s", name)
                             self.db.insertFile(f, parent)
                             self.db.setChecksum(inode, old['checksum'])
+                            self.setXattrAcl(inode, device, xattr, acl)
                         retVal = DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
                         #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
+                        self.setXattrAcl(inode, device, xattr, acl)
                         retVal = CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
                 elif (osize == fsize) and not (old["checksum"] is None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.server.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.server.deltaPercent))) or \
@@ -257,16 +275,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     # File has changed size by more than a certain amount (typically 50%)
                     # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = CONTENT
                 else:
                     # Otherwise, let's just get the delta
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
+                    self.setXattrAcl(inode, device, xattr, acl)
                     retVal = DELTA
             else:
                 # Create a new record for this file
                 #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
+                self.setXattrAcl(inode, device, xattr, acl)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
                     #self.logger.debug('Looking for file with same inode %d in backupset', inode)
@@ -279,10 +300,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 else:
                     #Check to see if it's been moved or copied
                     #self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
+                    # BUG: Don't we need to extend or insert the file here?
                     old = self.db.getFileInfoBySimilar(f)
 
                     if old:
-                        if old["name"] == f["name"] and old["parent"] == parent:
+                        if (old["name"] == f["name"]) and (old["parent"] == parent) and (old['device'] == f['parentdev']):
                             # If the name and parent ID are the same, assume it's the same
                             #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                             if not (old["checksum"] is None):
@@ -313,6 +335,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         cksum = set()
         content = set()
         delta = set()
+
+        attrs = set()
         # Keep the order
         queues = [done, content, cksum, delta]
 
@@ -357,6 +381,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
             queues[res].add(fileId)
+            if 'xattr' in f:
+                xattr = f['xattr']
+                # Check to see if we have this checksum
+                info = self.db.getChecksumInfo(xattr)
+                if (not info) or (info['size'] == -1):
+                    attrs.add(xattr)
+
 
         response = {
             "message"   : "ACKDIR",
@@ -366,7 +397,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "done"      : list(done),
             "cksum"     : list(cksum),
             "content"   : list(content),
-            "delta"     : list(delta)
+            "delta"     : list(delta),
+            "xattrs"    : list(attrs)
         }
 
         return (response, True)
@@ -549,7 +581,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # Check to see if the checksum exists
             # TODO: Is this faster than checking if the file exists?  Probably, but should test.
             info = self.db.getChecksumInfo(cksum)
-            if info is not None:
+            if info and info['size'] != -1:
                 self.db.setChecksum(inode, cksum)
                 done.append(f['inode'])
             else:
@@ -565,6 +597,114 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "delta"  : delta
             }
         return (message, False)
+
+
+    def processMeta(self, message):
+        """ Check metadata messages """
+        metadata = message['metadata']
+        done = []
+        content = []
+        for cksum in metadata:
+            info = self.db.getChecksumInfo(cksum)
+            if info and info['size'] != -1:
+                done.append(cksum)
+            else:
+                # Insert a placeholder with a negative size
+                # But only if we don't already have one, left over from a previous failing build.
+                if not info:
+                    self.db.insertChecksumFile(cksum, None, -1)
+                content.append(cksum)
+        message = {
+            'message': 'ACKMETA',
+            'content': content,
+            'done': done
+        }
+        return (message, False)
+    
+    def processMetaData(self, message):
+        """ Process a content message, including all the data content chunks """
+        self.logger.debug("Processing metadata message: %s", message)
+        checksum = message['checksum']
+        if self.cache.exists(checksum):
+            self.logger.debug("Checksum file %s already exists", checksum)
+            # Abort read
+        else:
+            output = self.cache.open(checksum, "w")
+
+        # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
+        # Would be more compact to store the blob, but we're not doing that now
+        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        iv = message['iv'] if 'iv' in message else None
+
+        (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
+        logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
+
+        output.close()
+
+        self.db.updateChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+        self.statNewFiles += 1
+
+        self.statBytesReceived += bytesReceived
+
+        return (None, False)
+
+    def processPurge(self, message):
+        self.logger.debug("Processing purge message: {}".format(str(message)))
+        prevTime = None
+        if 'time' in message:
+            if message['relative']:
+                prevTime = float(self.db.prevBackupDate) - float(message['time'])
+            else:
+                prevTime = float(message['time'])
+        elif self.serverKeepTime:
+            prevTime = float(self.db.prevBackupDate) - float(self.serverKeepTime)
+
+        if 'priority' in message:
+            priority = message['priority']
+        else:
+            priority = self.serverPriority
+
+        # Purge the files
+        if prevTime:
+            (files, sets) = self.db.purgeSets(priority, prevTime)
+            self.logger.info("Purged %d files in %d backup sets", files, sets)
+            if files:
+                self.purged = True
+            return ({"message": "ACKPRG", "status": "OK"}, True)
+        else:
+            return ({"message": "ACKPRG", "status": "FAIL"}, True)
+
+    def checksumDir(self, dirNode):
+        """ Generate a checksum of the file names in a directory"""
+        # Create a list of files, extracted from the directory
+        # ONLY include those that are directories, or that have a checksum ID
+        # eliminates any files which don't have a valid backup.
+        # Sort them to be in the same order as the sender
+        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode) if (x['size'] is not None or x['dir'] == 1)]) 
+        length = len(filenames)
+
+        m = hashlib.md5()
+        for f in filenames:
+            m.update(f)
+        return (length, m.hexdigest())
+
+    def processClone(self, message):
+        """ Clone an entire directory """
+        done = []
+        content = []
+        for d in message['clones']:
+            inode = d['inode']
+            device = d['dev']
+            (numfiles, checksum) = self.checksumDir((inode, device))
+            if numfiles != d['numfiles'] or checksum != d['cksum']:
+                self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, numfiles, d['numfiles'], checksum, d['cksum'])
+                content.append([inode, device])
+            else:
+                ### TODO Update to include device
+                rows = self.db.cloneDir((inode, device))
+                done.append([inode, device])
+        return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
+
 
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
@@ -626,63 +766,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             flush = True;
         return (None, flush)
 
-    def processPurge(self, message):
-        self.logger.debug("Processing purge message: {}".format(str(message)))
-        prevTime = None
-        if 'time' in message:
-            if message['relative']:
-                prevTime = float(self.db.prevBackupDate) - float(message['time'])
-            else:
-                prevTime = float(message['time'])
-        elif self.serverKeepTime:
-            prevTime = float(self.db.prevBackupDate) - float(self.serverKeepTime)
-
-        if 'priority' in message:
-            priority = message['priority']
-        else:
-            priority = self.serverPriority
-
-        # Purge the files
-        if prevTime:
-            (files, sets) = self.db.purgeSets(priority, prevTime)
-            self.logger.info("Purged %d files in %d backup sets", files, sets)
-            if files:
-                self.purged = True
-            return ({"message": "ACKPRG", "status": "OK"}, True)
-        else:
-            return ({"message": "ACKPRG", "status": "FAIL"}, True)
-
-    def checksumDir(self, dirNode):
-        """ Generate a checksum of the file names in a directory"""
-        # Create a list of files, extracted from the directory
-        # ONLY include those that are directories, or that have a checksum ID
-        # eliminates any files which don't have a valid backup.
-        # Sort them to be in the same order as the sender
-        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode) if (x['size'] is not None or x['dir'] == 1)]) 
-        length = len(filenames)
-
-        m = hashlib.md5()
-        for f in filenames:
-            m.update(f)
-        return (length, m.hexdigest())
-
-    def processClone(self, message):
-        """ Clone an entire directory """
-        done = []
-        content = []
-        for d in message['clones']:
-            inode = d['inode']
-            device = d['dev']
-            (numfiles, checksum) = self.checksumDir((inode, device))
-            if numfiles != d['numfiles'] or checksum != d['cksum']:
-                self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, numfiles, d['numfiles'], checksum, d['cksum'])
-                content.append([inode, device])
-            else:
-                ### TODO Update to include device
-                rows = self.db.cloneDir((inode, device))
-                done.append([inode, device])
-        return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
-
     def processBatch(self, message):
         batch = message['batch']
         responses = []
@@ -720,6 +803,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (response, flush) = self.processBatch(message)
         elif messageType == "PRG":
             (response, flush) = self.processPurge(message)
+        elif messageType == "META":
+            (response, flush) =  self.processMeta(message)
+        elif messageType == "METADATA":
+            (response, flush) =  self.processMetaData(message)
         else:
             raise Exception("Unknown message type", messageType)
 

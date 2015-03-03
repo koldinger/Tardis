@@ -23,7 +23,7 @@ if int(t[0]) != 2:
     sys.exit(1)
 
 conn.execute("ALTER TABLE Files ADD COLUMN XattrId INTEGER")
-conn.execute("ALTER TABLE Files ADD COLUMN AclID INTEGER")
+conn.execute("ALTER TABLE Files ADD COLUMN AclId INTEGER")
 conn.execute("ALTER TABLE CheckSums ADD COLUMN DiskSize INTEGER")
 conn.execute("ALTER TABLE CheckSums ADD COLUMN ChainLength INTEGER")
 
@@ -56,6 +56,7 @@ r = c.fetchone()
 numrows = r[0]
 print numrows
 
+# Get all non-sized files.  Order by checksum so that we can get locality in the directories we read
 c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL ORDER BY Checksum")
 checksums = c.fetchall()
 # Build a progress bar, if we have that module.  Just for grins.
