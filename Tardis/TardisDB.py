@@ -716,24 +716,48 @@ class TardisDB(object):
         self.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
         self.commit()
 
+    def _purgeFiles(self):
+        self.cursor.execute("DELETE FROM Files WHERE "
+                            "0 = (SELECT COUNT(*) FROM Backups WHERE Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet)")
+        filesDeleted = self.cursor.rowcount
+        return filesDeleted
+
+
     def purgeFiles(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
-        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        self.logger.debug("Purging backupsets below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
-        # Then delete the files which are 
-        # TODO: Move this to the removeOrphans phase
-        self.cursor.execute("DELETE FROM Files WHERE "
-                            "0 = (SELECT COUNT(*) FROM Backups WHERE Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet)")
-        #self.cursor.execute("DELETE FROM Files WHERE Files.BackupSet IN "
-        #                    "(SELECT BackupSet FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset)",
-        #                    {"priority": priority, "timestamp": timestamp, "backupset": backupset})
-        filesDeleted = self.cursor.rowcount
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
 
         return (filesDeleted, setsDeleted)
+
+    def purgeIncomplete(self, priority, timestamp, current=False):
+        """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
+        backupset = self._bset(current)
+        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        # First, purge out the backupsets that don't match
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        setsDeleted = self.cursor.rowcount
+
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
+
+        return (filesDeleted, setsDeleted)
+
+    def deleteBackupSet(self, current=False):
+        bset = self._bset(current)
+        self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset});
+        # TODO: Move this to the removeOrphans phase
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
+
+        return filesDeleted
 
     def listOrphanChecksums(self):
         c = self.conn.execute("SELECT Checksum FROM Checksums "

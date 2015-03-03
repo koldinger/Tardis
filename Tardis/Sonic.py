@@ -70,11 +70,11 @@ def getDB(crypt, new=False):
     schema = args.schema if new else None
     tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, token=token)
 
-    return tardisdb
+    return (tardisdb, cache)
 
 def createClient(crypt):
     try:
-        db = getDB(crypt, True)
+        (db, cache) = getDB(crypt, True)
         db.close()
         return 0
     except Exception as e:
@@ -85,7 +85,7 @@ def createClient(crypt):
 def setToken(crypt):
     try:
         # Must be no token specified yet
-        db = getDB(None)
+        (db, cache) = getDB(None)
         db.setToken(crypt.createToken())
         db.close()
         return 0
@@ -148,11 +148,75 @@ def bsetInfo(db, crypt):
     if printed:
         print "\n * Purgeable numbers are estimates only"
 
-def purgeIncomplete(db, crypt):
-    pass
+def purgeIncomplete(db, cache, crypt):
+    bset = getBackupSet(db)
+    if bset == None:
+        logger.error("No backup set found")
+        sys.exit(1)
+    (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
+    print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
+    removeOrphans(db, cache)
 
-def purge(db, crypt):
-    pass
+def purge(db, cache, crypt):
+    bset = getBackupSet(db)
+    if bset == None:
+        logger.error("No backup set found")
+        sys.exit(1)
+    (filesDeleted, setsDeleted) = db.purgeFiles(args.priority, bset['endtime'], bset['backupset'])
+    print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
+    removeOrphans(db, cache)
+
+def deletBset(db, cache):
+    bset = getBackupSet(db)
+    if bset == None:
+        logger.error("No backup set found")
+        sys.exit(1)
+    filesDeleted = db.deleteBackupSet(bset['backupset'])
+    print "Deleted %d files" % (filesDeleted)
+    removeOrphans(db, cache)
+
+
+def _removeOrphans(db, cache):
+    # Now remove any leftover orphans
+    size = 0
+    count = 0
+    # Get a list of orphan'd files
+    orphans = db.listOrphanChecksums()
+    logger.debug("Attempting to remove orphans")
+    for c in orphans:
+        # And remove them each....
+        try:
+            s = os.stat(cache.path(c))
+            if s:
+                count += 1
+                size += s.st_size
+            cache.remove(c)
+            sig = c + ".sig"
+            sigpath = cache.path(sig)
+            if os.path.exists(sigpath):
+                s = os.stat(cache.path(sig))
+                if s:
+                    count += 1
+                    size += s.st_size
+                cache.remove(sig)
+        except OSError:
+            logger.warning("No checksum file for checksum %s", c)
+        except Exception as e:
+            if server.exceptions:
+                logger.exception(e)
+        db.deleteChecksum(c)
+    return (count, size)
+
+def removeOrphans(db, cache):
+    count = 0
+    size = 0
+    rounds = 0
+    while True:
+        (lCount, lSize) = _removeOrphans(db, cache)
+        if lCount == 0:
+            break
+        rounds += 1
+    print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
 def parseArgs():
     global args
@@ -192,6 +256,11 @@ def parseArgs():
 
     cmdgrp.add_argument('--purge',          dest='purge', default=False, action='store_true',       help='Purge backup sets')
     cmdgrp.add_argument('--purge-incomplete',   dest='prginc', default=False, action='store_true',  help='Purge incomplete backup sets')
+    cmdgrp.add_argument('--delete',         dest='delete', default=False, action='store_true',  help='Purge incomplete backup sets')
+
+    cmdgrp.add_argument('--remove-orphans',   dest='orphans', default=False, action='store_true',  help='Purge orphaned checknusm')
+
+    parser.add_argument('--priority',       dest='priority', default=0, type=int,                   help='Maximum priority to purge')
 
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                help='Be verbose')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ , help='Show the version')
@@ -236,7 +305,7 @@ def main():
     setupLogging()
 
     crypt = None
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     if args.setpw and args.password:
         pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt='Confirm Password: ')
         if pw2 != password:
@@ -257,7 +326,7 @@ def main():
             return -1
         return setToken(crypt)
 
-    db = getDB(crypt)
+    (db, cache) = getDB(crypt)
 
     if args.list:
         return listBSets(db, crypt)
@@ -266,10 +335,16 @@ def main():
         return bsetInfo(db, crypt)
 
     if args.prginc:
-        return purgeIncomplete(db, crypt)
+        return purgeIncomplete(db, cache, crypt)
 
     if args.purge:
-        return purge(db, crypt)
+        return purge(db, cache, crypt)
+
+    if args.delete:
+        return deleteBset(db, cache)
+
+    if args.orphans:
+        return removeOrphans(db, cache)
 
 if __name__ == "__main__":
     main()
