@@ -145,7 +145,7 @@ def getBackupSet(db, bset):
     bsetInfo = None
     # First, try as an integer
     try:
-        bset = int(args.backup)
+        bset = int(bset)
         bsetInfo = db.getBackupSetInfoById(bset)
     except:
         # Else, let's look it up based on name
