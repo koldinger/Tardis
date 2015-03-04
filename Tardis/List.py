@@ -298,6 +298,11 @@ def printit(info, name, color, gone):
             cksum = info['checksum']
         else:
             cksum = ''
+    if args.chnlen:
+        if info and info['checksum']:
+            chnlen = info['chainlength']
+        else:
+            chnlen = ''
 
     if args.long:
         if gone:
@@ -317,10 +322,16 @@ def printit(info, name, color, gone):
             doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
             if args.cksums:
                 doprint(' %32s ' % (cksum))
+            if args.chnlen:
+                doprint(' %2d ' % (int(chnlen)))
             doprint('%s' % (name), color, eol=True)
-    elif args.cksums:
+    elif args.cksums or args.chnlen:
         doprint(columnfmt % name, color)
-        doprint(cksum, color=colors['name'], eol=True)
+        if args.cksums:
+            doprint(cksum, color=colors['name'])
+        if args.chnlen:
+            doprint(chnlen, color=colors['name'])
+        doprint('', eol=True)
     else:
         column += 1
         if column == columns:
@@ -602,6 +613,7 @@ def processArgs():
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
+    parser.add_argument('--chainlen', '-L', dest='chnlen',   default=False, action='store_true',        help='Print chainlengths.')
     #parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
     parser.add_argument('--versions',       dest='versions', default=True,  action=Util.StoreBoolean,   help='Display versions of files.')
     parser.add_argument('--all',            dest='all',      default=False, action='store_true',        help='Show all versions of a file. Default: %(default)s')
@@ -645,7 +657,7 @@ def main():
     setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
     # Load any password info
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     args.password = None
 
     token = None

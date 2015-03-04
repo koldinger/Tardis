@@ -1,0 +1,7 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+from Tardis import Diff
+import sys
+
+sys.exit(Diff.main())

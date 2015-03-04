@@ -35,6 +35,7 @@ import os, os.path
 import functools
 import time
 import hashlib
+import sys
 
 import ConnIdLogAdapter
 import Rotator
@@ -117,7 +118,8 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                  "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C2.Checksum AS xattrs, C3.Checksum AS acl "
+                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
+                 "C2.Checksum AS xattrs, C3.Checksum AS acl "
 
 fileInfoJoin =    "FROM Files " \
                   "JOIN Names ON Files.NameId = Names.NameId " \
@@ -259,6 +261,11 @@ class TardisDB(object):
         except sqlite3.IntegrityError as e:
             self.logger.warning("Error processing data: %s %s", data, e)
             raise e
+
+    def getResult(self, query, data):
+        c = self.execute(query, data)
+        r = c.fetchone()
+        return r
 
     def newBackupSet(self, name, session, priority, clienttime):
         """ Create a new backupset.  Set the current backup set to be that set. """
@@ -612,8 +619,9 @@ class TardisDB(object):
 
     def listBackupSets(self):
         #self.logger.debug("list backup sets")
-        c = self.execute("SELECT "
-                         "Name AS name, BackupSet AS backupset "
+        #                 "Name AS name, BackupSet AS backupset "
+        c = self.execute("SELECT " +
+                         backupSetInfoFields +
                          "FROM Backups "
                          "ORDER BY backupset ASC", {})
         while True:
@@ -622,6 +630,15 @@ class TardisDB(object):
                 break
             for row in batch:
                 yield row
+
+    def getBackupSetInfoById(self, bset):
+        c = self.execute("SELECT " + 
+                         backupSetInfoFields +
+                         "FROM Backups WHERE BackupSet = :bset",
+                         { "bset": bset })
+        row = c.fetchone()
+        return row
+
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT " + 
                          backupSetInfoFields +
@@ -637,6 +654,42 @@ class TardisDB(object):
                          { "time": time })
         row = c.fetchone()
         return row
+
+    def getBackupSetDetails(self, bset):
+
+        row = self.getResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
+        files = row[0]
+        size = row[1] if row[1] else 0
+
+        row = self.getResult("SELECT COUNT(*) FROM Files WHERE Dir = 1 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
+        dirs = row[0]
+
+        # Figure out the first set after this one, and the last set before this one
+        row = self.getResult("SELECT MAX(BackupSet) FROM Backups WHERE BackupSet < :bset", {'bset': bset})
+        prevSet = row[0] if row else 0
+
+        row = self.getResult("SELECT MIN(BackupSet) FROM Backups WHERE BackupSet > :bset", {'bset': bset})
+        nextSet = row[0] if row[0] else sys.maxint
+
+        self.logger.debug("PrevSet: %s, NextSet: %s", prevSet, nextSet)
+        # Count of files that first appeared in this version.  May be delta's
+        row = self.getResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+                             "WHERE Dir = 0 AND FirstSet > :prevSet",
+                             {'prevSet': prevSet})
+        newFiles = row[0] if row[0] else 0
+        newSize  = row[1] if row[1] else 0
+        newSpace = row[2] if row[2] else 0
+
+        # Count of files that are last seen in this set, and are not part of somebody else's basis
+        row = self.getResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+                             "WHERE Dir = 0 AND LastSet < :nextSet "
+                             "AND Checksum NOT IN (SELECT Basis FROM Checksums WHERE Basis IS NOT NULL)",
+                             {'nextSet': nextSet})
+        endFiles = row[0] if row[0] else 0
+        endSize  = row[1] if row[1] else 0
+        endSpace = row[2] if row[2] else 0
+
+        return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
 
     def getConfigValue(self, key):
         c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
@@ -672,24 +725,64 @@ class TardisDB(object):
         self.execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
         self.commit()
 
-    def purgeFiles(self, priority, timestamp, current=False):
+    def _purgeFiles(self):
+        self.cursor.execute("DELETE FROM Files WHERE "
+                            "0 = (SELECT COUNT(*) FROM Backups WHERE Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet)")
+        filesDeleted = self.cursor.rowcount
+        return filesDeleted
+
+    def listPurgeSets(self, priority, timestamp, current=False):
+        backupset = self._bset(current)
+        # First, purge out the backupsets that don't match
+        c = self.cursor.execute("SELECT " + backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        for row in c:
+            yield(row)
+
+    def listPurgeIncomplete(self, priority, timestamp, current=False):
+        backupset = self._bset(current)
+        # First, purge out the backupsets that don't match
+        c = self.cursor.execute("SELECT " + backupSetInfoFields +
+                                " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        for row in c:
+            yield(row)
+
+    def purgeSets(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
-        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        self.logger.debug("Purging backupsets below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
-        # Then delete the files which are 
-        # TODO: Move this to the removeOrphans phase
-        self.cursor.execute("DELETE FROM Files WHERE "
-                            "0 = (SELECT COUNT(*) FROM Backups WHERE Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet)")
-        #self.cursor.execute("DELETE FROM Files WHERE Files.BackupSet IN "
-        #                    "(SELECT BackupSet FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset)",
-        #                    {"priority": priority, "timestamp": timestamp, "backupset": backupset})
-        filesDeleted = self.cursor.rowcount
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
 
         return (filesDeleted, setsDeleted)
+
+    def purgeIncomplete(self, priority, timestamp, current=False):
+        """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
+        backupset = self._bset(current)
+        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        # First, purge out the backupsets that don't match
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+        setsDeleted = self.cursor.rowcount
+
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
+
+        return (filesDeleted, setsDeleted)
+
+    def deleteBackupSet(self, current=False):
+        bset = self._bset(current)
+        self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset});
+        # TODO: Move this to the removeOrphans phase
+        # Then delete the files which are no longer referenced
+        filesDeleted = _purgeFiles()
+
+        return filesDeleted
 
     def listOrphanChecksums(self):
         c = self.conn.execute("SELECT Checksum FROM Checksums "

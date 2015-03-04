@@ -443,7 +443,7 @@ def main():
     args = parseArgs()
     logger = setupLogging(args)
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     args.password = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password)
@@ -461,7 +461,7 @@ def main():
             tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
             cache = tardis
         else:
-            print args.database, loc.path, args.client
+            #print args.database, loc.path, args.client
             baseDir = os.path.join(loc.path, args.client)
             cache = CacheDir.CacheDir(baseDir, create=False)
             dbPath = os.path.join(baseDir, args.dbname)
@@ -562,7 +562,7 @@ def main():
                 logger.info("Found %s in backup set %s", i, name)
             elif args.reduce:
                 path = computePath(tardis, bset, i, args.reduce)
-                logger.debug("Reduced path %s to %s", path, tmp)
+                logger.debug("Reduced path %s to %s", path, i)
                 if not path:
                     logger.error("Unable to find a compute path for %s", i)
                     raise Exception("Unable to compute path for " + i)
