@@ -71,8 +71,8 @@ Installation
 ============
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python development
-    * Fedora: yum install librsync  python-devel python-fuse python-setuptools
-    * Ubuntu/Debian: apt-get install librsync python-dev python-fuse python-setuptools
+    * Fedora: yum install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools
+    * Ubuntu/Debian: apt-get install librsync libacl-dev libffi-dev python-dev python-fuse python-setuptools
   * Run the python setup:
     * python setup.py install
 
