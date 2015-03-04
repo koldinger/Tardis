@@ -30,7 +30,7 @@
 
 import logging
 import argparse
-import configparser
+import ConfigParser
 import os, os.path
 import sys
 import time
@@ -248,7 +248,7 @@ def parseArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Tardis'
-    config = configparser.ConfigParser(configDefaults)
+    config = ConfigParser.ConfigParser(configDefaults)
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
