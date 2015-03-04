@@ -118,7 +118,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                  "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, "
+                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
                  "C2.Checksum AS xattrs, C3.Checksum AS acl "
 
 fileInfoJoin =    "FROM Files " \
