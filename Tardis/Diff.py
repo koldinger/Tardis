@@ -66,7 +66,7 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
-    parser.add_argument("--backup",       nargs='+', dest='backup', default='Current', help="Backup set(s) to use")
+    parser.add_argument("--backup",       nargs='+', dest='backup', default=[current], help="Backup set(s) to use")
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
@@ -149,7 +149,7 @@ def getBackupSet(db, bset):
         bsetInfo = db.getBackupSetInfoById(bset)
     except:
         # Else, let's look it up based on name
-        if args.backup == current:
+        if bset  == current:
             bsetInfo = db.lastBackupSet()
         else:
             bsetInfo = db.getBackupSetInfo(bset)
@@ -177,7 +177,8 @@ def main():
     setupLogging()
 
     if len(args.backup) > 2:
-        logger.error("Too many backups (%d) specified.  Only 1 or two allowed", len(args.backup))
+        logger.error(args.backup)
+        logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
         sys.exit(1)
 
     crypt = None
