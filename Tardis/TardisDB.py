@@ -743,7 +743,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         # First, purge out the backupsets that don't match
         c = self.cursor.execute("SELECT " + backupSetInfoFields +
-                                " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                                " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
             yield(row)
@@ -757,7 +757,7 @@ class TardisDB(object):
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return (filesDeleted, setsDeleted)
 
@@ -766,12 +766,12 @@ class TardisDB(object):
         backupset = self._bset(current)
         self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
-        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
 
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return (filesDeleted, setsDeleted)
 
@@ -780,7 +780,7 @@ class TardisDB(object):
         self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset});
         # TODO: Move this to the removeOrphans phase
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return filesDeleted
 
