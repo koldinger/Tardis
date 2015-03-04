@@ -238,6 +238,8 @@ def removeOrphans(db, cache):
         if lCount == 0:
             break
         rounds += 1
+        count  += lCount
+        size   += lSize
     print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
 def parseArgs():
