@@ -82,8 +82,8 @@ def parseArgs():
     diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,          help='Generate context diff')
     diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',               help='Generate NDiff style diff')
 
-    #parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
-    #                    help='Reduce path by N directories.  No value for "smart" reduction')
+    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
+                        help='Reduce path by N directories.  No value for "smart" reduction')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
@@ -173,72 +173,94 @@ def getBackupSet(db, bset):
     return bsetInfo
 
 def main():
-    parseArgs()
-    setupLogging()
-
-    if len(args.backup) > 2:
-        logger.error(args.backup)
-        logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
-        sys.exit(1)
-
-    crypt = None
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
-    args.password = None
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password)
-    password = None
-
-    token = None
-    if crypt:
-        token = crypt.createToken()
-    if not args.crypt:
-        crypt = None
-
     try:
-        loc = urlparse.urlparse(args.database)
-        if (loc.scheme == 'http') or (loc.scheme == 'https'):
-            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-            cache = tardis
-        else:
-            #print args.database, loc.path, args.client
-            baseDir = os.path.join(loc.path, args.client)
-            cache = CacheDir.CacheDir(baseDir, create=False)
-            dbPath = os.path.join(baseDir, args.dbname)
-            tardis = TardisDB.TardisDB(dbPath, token=token)
-    except Exception as e:
-        logger.critical("Unable to connect to database: %s", str(e))
-        logger.exception(e)
-        sys.exit(1)
+        parseArgs()
+        setupLogging()
 
-    bsets = []
-    for i in args.backup:
-        bset = getBackupSet(tardis, i)
-        if bset:
-            logger.debug("Got backupset %s", str(bset))
-            logger.debug("backupset: %s", bset['backupset'])
-            bsets.append(bset)
-        else:
+        if len(args.backup) > 2:
+            logger.error(args.backup)
+            logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-    if len(bsets) == 1:
-        bsets.append(None)
+        crypt = None
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        args.password = None
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password)
+        password = None
 
-    r = Regenerate.Regenerator(cache, tardis, crypt)
-    now = time.asctime()
+        token = None
+        if crypt:
+            token = crypt.createToken()
+        if not args.crypt:
+            crypt = None
 
-    for f in args.files:
-        path = os.path.abspath(f)
-        logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
-        f1 = r.recoverFile(path, bsets[0]['backupset'])
+        try:
+            loc = urlparse.urlparse(args.database)
+            if (loc.scheme == 'http') or (loc.scheme == 'https'):
+                tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
+                cache = tardis
+            else:
+                #print args.database, loc.path, args.client
+                baseDir = os.path.join(loc.path, args.client)
+                cache = CacheDir.CacheDir(baseDir, create=False)
+                dbPath = os.path.join(baseDir, args.dbname)
+                tardis = TardisDB.TardisDB(dbPath, token=token)
+        except Exception as e:
+            logger.critical("Unable to connect to database: %s", str(e))
+            logger.exception(e)
+            sys.exit(1)
+
+        bsets = []
+        for i in args.backup:
+            bset = getBackupSet(tardis, i)
+            if bset:
+                logger.debug("Got backupset %s", str(bset))
+                logger.debug("backupset: %s", bset['backupset'])
+                bsets.append(bset)
+            else:
+                sys.exit(1)
+
+        if len(bsets) == 1:
+            bsets.append(None)
+
+        r = Regenerate.Regenerator(cache, tardis, crypt)
         then = time.asctime(time.localtime(float(bsets[0]['starttime'])))
-        if bsets[1] is not None:
-            logger.debug("Recovering %d %s", int(bsets[1]['backupset']), path)
-            f2 = r.recoverFile(path, bsets[1]['backupset'])
+        if bsets[1]:
             now = time.asctime(time.localtime(float(bsets[1]['starttime'])))
         else:
-            logger.debug("Opening %s", path)
-            f2 = file(path, "rb")
-        runDiff(f1, f2, f, then, now)
+            now = time.asctime()
+
+        for f in args.files:
+            path = os.path.abspath(f)
+            p1 = Util.reducePath(tardis, bsets[0]['backupset'], path, args.reduce, crypt)
+            logger.debug("Recovering %d %s", bsets[0]['backupset'], p1)
+            f1 = r.recoverFile(p1, bsets[0]['backupset'])
+            if not f1:
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+                continue
+
+            if bsets[1] is not None:
+                p2 = Util.reducePath(tardis, bsets[1]['backupset'], path, args.reduce, crypt)
+                logger.debug("Recovering %d %s", bsets[1]['backupset'], p2)
+                f2 = r.recoverFile(p2, bsets[1]['backupset'])
+                if not f1:
+                    logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                    continue
+            else:
+                logger.debug("Opening %s", path)
+                try:
+                    f2 = file(path, "rb")
+                except IOError as e:
+                    logger.error("Could not open %s: %s", path, str(e))
+                    continue
+
+            runDiff(f1, f2, f, then, now)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error("Caught exception: %s", str(e))
+        #logger.exception(e)
 
 if __name__ == "__main__":
     main()

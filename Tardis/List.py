@@ -115,6 +115,8 @@ def flushLine():
 
 """
 Collect information about a file in all the backupsets
+Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
+by directory basis.
 """
 def collectFileInfo(filename, tardis, crypt):
     lookup = crypt.encryptPath(filename) if crypt else filename
@@ -122,10 +124,13 @@ def collectFileInfo(filename, tardis, crypt):
     fInfos = {}
     lInfo = None
     for bset in backupSets:
+        temp = lookup
+        if args.reduce:
+            temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
         if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
             fInfos[bset['backupset']] = lInfo
         else:
-            lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
+            lInfo = tardis.getFileInfoByPath(temp, bset['backupset'])
             fInfos[bset['backupset']] = lInfo
     return fInfos
 
@@ -626,6 +631,8 @@ def processArgs():
     parser.add_argument('--recent',         dest='recent',   default=False, action=Util.StoreBoolean,   help='Show only the most recent version of a file. Default: %(default)s')
     parser.add_argument('--glob',           dest='glob',    default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
+    parser.add_argument('--reduce',         dest='reduce',  default=0,type=int, const=sys.maxint, nargs='?',    help='Reduce paths by N directories.  No value for smart reduction')
+
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',      dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
@@ -648,58 +655,64 @@ def processArgs():
 
 def main():
     global args, logger
-    args = processArgs()
-
-    FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
-    logger = logging.getLogger("")
-
-    setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
-
-    # Load any password info
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
-    args.password = None
-
-    token = None
-    crypt = None
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password, args.client)
-        token = crypt.createToken()
-    password = None
-
     try:
-        loc = urlparse.urlparse(args.database)
-        if (loc.scheme == 'http') or (loc.scheme == 'https'):
-            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-        else:
-            dbfile = os.path.join(loc.path, args.client, args.dbname)
-            tardis = TardisDB.TardisDB(dbfile, token=token)
-    except Exception as e:
-        logger.critical(e)
-        sys.exit(1)
+        args = processArgs()
 
-    if not args.crypt:
+        FORMAT = "%(levelname)s : %(message)s"
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+        logger = logging.getLogger("")
+
+        setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
+
+        # Load any password info
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        args.password = None
+
+        token = None
         crypt = None
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
+            token = crypt.createToken()
+        password = None
 
-    setupDisplay(tardis, crypt)
-
-    if args.headers:
-        doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
-
-    if args.glob:
-        directories = []
-        for d in args.directories:
-            if not isMagic(d):
-                directories.append(d)
+        try:
+            loc = urlparse.urlparse(args.database)
+            if (loc.scheme == 'http') or (loc.scheme == 'https'):
+                tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
             else:
-                directories += globPath(os.path.abspath(d), tardis, crypt)
-    else:
-        directories = args.directories
+                dbfile = os.path.join(loc.path, args.client, args.dbname)
+                tardis = TardisDB.TardisDB(dbfile, token=token)
+        except Exception as e:
+            logger.critical(e)
+            sys.exit(1)
 
-    for d in directories:
-        d = os.path.abspath(d)
-        fInfo = collectFileInfo(d, tardis, crypt)
-        processFile(d, fInfo, tardis, crypt)
+        if not args.crypt:
+            crypt = None
+
+        setupDisplay(tardis, crypt)
+
+        if args.headers:
+            doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
+
+        if args.glob:
+            directories = []
+            for d in args.directories:
+                if not isMagic(d):
+                    directories.append(d)
+                else:
+                    directories += globPath(os.path.abspath(d), tardis, crypt)
+        else:
+            directories = args.directories
+
+        for d in directories:
+            d = os.path.abspath(d)
+            fInfo = collectFileInfo(d, tardis, crypt)
+            processFile(d, fInfo, tardis, crypt)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error("Caught exception: %s", str(e))
+        #logger.exception(e)
 
 if __name__ == "__main__":
     main()
