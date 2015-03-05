@@ -338,47 +338,52 @@ def setupLogging():
     logger = logging.getLogger('')
 
 def main():
-    parseArgs()
-    setupLogging()
+    try:
+        parseArgs()
+        setupLogging()
 
-    crypt = None
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
-    if args.command == 'setpass' and args.password:
-        pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt='Confirm Password: ')
-        if pw2 != password:
-            logger.error("Passwords don't match")
-            return -1
+        crypt = None
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        if args.command == 'setpass' and args.password:
+            pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt='Confirm Password: ')
+            if pw2 != password:
+                logger.error("Passwords don't match")
+                return -1
 
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password)
-        password = None
-        args.password = None
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password)
+            password = None
+            args.password = None
 
-    if args.command == 'create':
-        return createClient(crypt)
+        if args.command == 'create':
+            return createClient(crypt)
 
-    if args.command == 'setpw':
-        if not crypt:
-            logger.error("No password specified")
-            return -1
-        return setToken(crypt)
+        if args.command == 'setpw':
+            if not crypt:
+                logger.error("No password specified")
+                return -1
+            return setToken(crypt)
 
-    (db, cache) = getDB(crypt)
+        (db, cache) = getDB(crypt)
 
-    if args.command == 'list':
-        return listBSets(db, crypt)
+        if args.command == 'list':
+            return listBSets(db, crypt)
 
-    if args.command == 'info':
-        return bsetInfo(db, crypt)
+        if args.command == 'info':
+            return bsetInfo(db, crypt)
 
-    if args.command == 'purge':
-        return purge(db, cache, crypt)
+        if args.command == 'purge':
+            return purge(db, cache, crypt)
 
-    if args.command == 'delete':
-        return deleteBset(db, cache)
+        if args.command == 'delete':
+            return deleteBset(db, cache)
 
-    if args.command == 'orphans':
-        return removeOrphans(db, cache)
+        if args.command == 'orphans':
+            return removeOrphans(db, cache)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error("Caught exception: %s", str(e))
 
 if __name__ == "__main__":
     main()
