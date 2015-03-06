@@ -567,22 +567,17 @@ def setupDisplay(tardis, crypt):
 
     (columns, columnfmt) = computeColumnWidth(bsetNames)
 
-def isMagic(path):
-    if ('*' in path) or ('?' in path) or ('[' in path):
-        return True
-    return False
-
 def globPath(path, tardis, crypt, first=0):
     """
     Glob a path.  Only globbs the first 
     """
     logger.debug("Globbing %s", path)
-    if not isMagic(path):
+    if not Util.isMagic(path):
         return [path]
     comps = path.split(os.sep)
     results = []
     for i in range(first, len(comps)):
-        if isMagic(comps[i]):
+        if Util.isMagic(comps[i]):
             currentPath = os.path.join('/', *comps[:i])
             pattern = comps[i]
             logger.debug("Globbing in component %d of %s: %s %s", i, path, currentPath, pattern)
@@ -697,7 +692,7 @@ def main():
         if args.glob:
             directories = []
             for d in args.directories:
-                if not isMagic(d):
+                if not Util.isMagic(d):
                     directories.append(d)
                 else:
                     directories += globPath(os.path.abspath(d), tardis, crypt)
