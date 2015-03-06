@@ -23,7 +23,7 @@ Tardis is currently under development, but is at beta level.
 Features currently planned to be implemented:
 
 1. ~~Handling multiple filesystems~~ (mostly handled.  Some potential issues)
-2. Saving of extended attributes
+2. ~~Saving of extended attributes and access control lists~~
 2. ~~Saving of per-connection configuration values in the server DB~~
 3. ~~Authentication of password~~
 4. Encrypted encryption key stored on server, decrypted on client?
@@ -72,7 +72,7 @@ Installation
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python development
     * Fedora: yum install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools
-    * Ubuntu/Debian: apt-get install librsync libacl-dev libffi-dev python-dev python-fuse python-setuptools
+    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse python-setuptools
   * Run the python setup:
     * python setup.py install
 
