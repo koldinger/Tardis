@@ -35,6 +35,7 @@ import sys
 import time
 import Messages
 import ssl
+import Tardis
 
 class ConnectionException(Exception):
     pass
@@ -139,8 +140,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force):
-        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force)
+    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version):
+        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -163,14 +164,14 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, version=Tardis.__version__):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname,  token, compress, force)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, version=Tardis.__version__):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 

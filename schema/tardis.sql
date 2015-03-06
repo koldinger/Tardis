@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS Backups (
     ClientTime      CHARACTER,
     Session         CHARACTER UNIQUE,
     Completed       INTEGER,
-    Priority        INTEGER DEFAULT 1
+    Priority        INTEGER DEFAULT 1,
+    ClientVersion   CHARACTER,
+    ServerVersion   CHARACTER
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (
@@ -70,7 +72,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "3");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "4");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
 
 CREATE VIEW IF NOT EXISTS VFiles AS

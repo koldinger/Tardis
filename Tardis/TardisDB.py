@@ -36,6 +36,7 @@ import functools
 import time
 import hashlib
 import sys
+import Tardis
 
 import ConnIdLogAdapter
 import Rotator
@@ -267,13 +268,13 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    def newBackupSet(self, name, session, priority, clienttime):
+    def newBackupSet(self, name, session, priority, clienttime, version=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) "
-                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime)",
-                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion) "
+                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion)",
+                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime, "clientversion": version, "serverversion": Tardis.__version__})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
 
