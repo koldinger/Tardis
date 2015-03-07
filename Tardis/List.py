@@ -113,12 +113,12 @@ def flushLine():
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
-"""
-Collect information about a file in all the backupsets
-Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
-by directory basis.
-"""
 def collectFileInfo(filename, tardis, crypt):
+    """
+    Collect information about a file in all the backupsets
+    Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
+    by directory basis.
+    """
     lookup = crypt.encryptPath(filename) if crypt else filename
 
     fInfos = {}
@@ -134,16 +134,13 @@ def collectFileInfo(filename, tardis, crypt):
             fInfos[bset['backupset']] = lInfo
     return fInfos
 
-"""
-Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
-Note: This is very inefficient.  You basically query for the same information over and over.
-Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
-all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
-3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
-any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
-each range.  Will cause you to go to the database a LOT fewer times, and use a lot less memory.
-"""
 def collectDirContents(tardis, dirlist, crypt):
+    """
+    Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
+    Note: This is very inefficient.  You basically query for the same information over and over.
+    Because of this, we use collectDirContents2 instead.  This function is left here for documentation
+    purposes primarily.
+    """
     contents = {}
     names = set()
     for (bset, finfo) in dirlist:
@@ -156,14 +153,15 @@ def collectDirContents(tardis, dirlist, crypt):
         contents[bset['backupset']] = dirInfo
     return contents, names
 
-"""
-Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
-all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
-3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
-any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
-each range.
-"""
 def collectDirContents2(tardis, dirList, crypt):
+    """
+    Do the same thing as collectDirContents, just a lot faster, relying on the structure of the DB.
+    Create a set of directory "ranges", a range being a set of entries in the dirlist that a: all have
+    the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are 3
+    backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then
+    query any directory entries that exist in here, and span each one over the approriate portions of the
+    range.  Repeat for each range.
+    """
     contents = {}
     for (x, y) in dirList:
         contents[x['backupset']] = {}
@@ -205,11 +203,11 @@ def collectDirContents2(tardis, dirList, crypt):
     return (contents, names)
 
 
-"""
-Extract a list of file names from file contents.  Names will contain a single entry
-for each name encountered.
-"""
 def getFileNames(contents):
+    """
+    Extract a list of file names from file contents.  Names will contain a single entry
+    for each name encountered.
+    """
     names = set()
     for bset in backupSets:
         if bset['backupset'] in contents:
@@ -217,10 +215,10 @@ def getFileNames(contents):
             names = names.union(lnames)
     return names
 
-"""
-Extract a list of fInfos corresponding to each backupset, based on the name list.
-"""
 def getInfoByName(contents, name):
+    """
+    Extract a list of fInfos corresponding to each backupset, based on the name list.
+    """
     fInfo = {}
     for bset in backupSets:
         if bset['backupset'] in contents:
@@ -304,10 +302,15 @@ def printit(info, name, color, gone):
         else:
             cksum = ''
     if args.chnlen:
-        if info and info['checksum']:
-            chnlen = info['chainlength']
+        if info and info['chainlength'] is not None:
+            chnlen = "%-3d" % int(info['chainlength'])
         else:
             chnlen = ''
+    if args.inode:
+        if info and info['inode'] is not None:
+            inode = "%8d" % int(info['inode'])
+        else:
+            inode = ''
 
     if args.long:
         if gone:
@@ -325,17 +328,21 @@ def printit(info, name, color, gone):
             else:
                 size = ''
             doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
+            if args.inode:
+                doprint(' %8s ' % (inode))
             if args.cksums:
                 doprint(' %32s ' % (cksum))
             if args.chnlen:
-                doprint(' %2d ' % (int(chnlen)))
+                doprint(' %-3s ' % (chnlen))
             doprint('%s' % (name), color, eol=True)
-    elif args.cksums or args.chnlen:
+    elif args.cksums or args.chnlen or args.inode:
         doprint(columnfmt % name, color)
+        if args.inode:
+            doprint(' ' + inode, color=colors['name'])
         if args.cksums:
-            doprint(cksum, color=colors['name'])
+            doprint(' ' + cksum, color=colors['name'])
         if args.chnlen:
-            doprint(chnlen, color=colors['name'])
+            doprint(' ' + chnlen, color=colors['name'])
         doprint('', eol=True)
     else:
         column += 1
@@ -347,6 +354,10 @@ def printit(info, name, color, gone):
         doprint(columnfmt % name, color, eol=eol)
 
 def printVersions(fInfos, filename):
+    """
+    Print info about each version of the file that exists
+    Doesn't actually do the printing, but calls printit to do it.
+    """
     global column
     pInfo = None        # Previous version's info
     lSet  = None
@@ -394,7 +405,15 @@ def printVersions(fInfos, filename):
     flushLine()
 
 def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
-    numFound = sum([1 for i in fInfos if fInfos[i] is not None])
+    """
+    Collect information about a file, across all the backup sets
+    Print a header for the file.
+    """
+
+    # Count the number of non-null entries
+    numFound = len([i for i in fInfos if fInfos[i] is not None])
+
+    # Print the header
     if args.headers or (numFound == 0) or args.recent or not first:
         color = colors['header'] if first else colors['name']
         doprint(fmt % filename, color)
@@ -614,6 +633,7 @@ def processArgs():
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',   default=False, action='store_true',        help='Print chainlengths.')
+    parser.add_argument('--inode', '-i',    dest='inode',    default=False, action='store_true',        help='Print inode numbers')
     #parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
     parser.add_argument('--versions',       dest='versions', default=True,  action=Util.StoreBoolean,   help='Display versions of files.')
     parser.add_argument('--all',            dest='all',      default=False, action='store_true',        help='Show all versions of a file. Default: %(default)s')
