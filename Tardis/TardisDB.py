@@ -129,7 +129,8 @@ fileInfoJoin =    "FROM Files " \
                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
-                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
+                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
+                      "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -268,13 +269,15 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    def newBackupSet(self, name, session, priority, clienttime, version=None):
+    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion) "
-                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion)",
-                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime, "clientversion": version, "serverversion": Tardis.__version__})
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
+                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
+                      {"name": name, "now": time.time(), "session": session, "priority": priority,
+                       "clienttime": clienttime, "clientversion": version, "clientip": ip,
+                       "serverversion": Tardis.__version__})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
 

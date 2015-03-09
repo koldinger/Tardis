@@ -18,6 +18,7 @@ if int(t[0]) != 3:
 
 conn.execute("ALTER TABLE Backups ADD COLUMN ClientVersion CHARACTER")
 conn.execute("ALTER TABLE Backups ADD COLUMN ServerVersion CHARACTER")
+conn.execute("ALTER TABLE Backups ADD COLUMN ClientIP CHARACTER")
 
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "4")')
 

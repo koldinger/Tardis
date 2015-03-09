@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS Backups (
     Completed       INTEGER,
     Priority        INTEGER DEFAULT 1,
     ClientVersion   CHARACTER,
-    ServerVersion   CHARACTER
+    ServerVersion   CHARACTER,
+    ClientIP        CHARACTER
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (
