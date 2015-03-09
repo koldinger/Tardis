@@ -508,7 +508,7 @@ def mkFileInfo(dir, name):
             }
 
         if args.xattr:
-            attrs = xattr.xattr(pathname)
+            attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
             items = attrs.items()
             if items:
                 # Convert to a set of readable string tuples
@@ -517,11 +517,22 @@ def mkFileInfo(dir, name):
                 attr_string = json.dumps(dict(map(lambda x: (str(x[0]), base64.b64encode(x[1])), sorted(items))))
                 cks = addMeta(attr_string)
                 finfo['xattr'] = cks
-        if args.acl:
-           if posix1e.has_extended(pathname):
-               acl = posix1e.ACL(file=pathname)
-               cks = addMeta(str(acl))
-               finfo['acl'] = cks
+            #xattrs = {}
+            #attrs = xattr.listxattr(pathname, nofollow=True)
+            #if len(attrs):
+            #    for i in sorted(attrs):
+            #        xattrs[i] = base64.b64encode(xattr.getxattr(pathname, i, nofollow=True))
+            #    attrString= json.dumps(xattrs)
+            ##    cks = addMeta(attr_string)
+            #    finfo['xattr'] = cks
+
+        if args.acl and (not S_ISLNK(mode)):
+            # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
+            # Definitely an issue
+            if posix1e.has_extended(pathname):
+                acl = posix1e.ACL(file=pathname)
+                cks = addMeta(str(acl))
+                finfo['acl'] = cks
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
