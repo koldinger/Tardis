@@ -38,6 +38,7 @@ import shlex
 import StringIO
 import getpass
 import stat
+import fnmatch
 from functools import partial
 
 import Messages
@@ -128,6 +129,44 @@ def reducePath(tardis, bset, path, reduce, crypt=None):
         #logger.info("Reduced path %s to %s", path, tmp)
         path = tmp
     return path 
+
+"""
+"""
+
+def isMagic(path):
+    if ('*' in path) or ('?' in path) or ('[' in path):
+        return True
+    return False
+
+def matchPath(pattern, path):
+    if pattern == path:
+        return True
+    pats = pattern.split(os.sep)
+    dirs = path.split(os.sep)
+    inWild = False
+    while (len(pats) != 0 and len(dirs) != 0):
+        if not inWild:
+            p = pats.pop(0)
+            d = dirs.pop(0)
+            if p == '**':
+                inWild = True
+            else:
+                if not fnmatch.fnmatch(d, p):
+                    return False
+        else:
+            d = dirs.pop(0)
+            p = pats[0]
+            if p != '**':
+                if fnmatch.fnmatch(d, p):
+                    inWild = False
+                    pats.pop(0)
+            else:
+                pats.pop(0)
+
+    if len(pats) or len(dirs):
+        return False
+    else:
+        return True
 
 """
 Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)

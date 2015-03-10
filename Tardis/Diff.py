@@ -96,7 +96,7 @@ def parseArgs():
 
 def setupLogging():
     global logger
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
     logger = logging.getLogger('')
     pass
 
