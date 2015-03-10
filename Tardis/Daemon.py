@@ -968,6 +968,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 clienttime  = fields['time']
                 autoname    = fields['autoname']
                 compress    = fields['compress']
+                version     = fields['version']
                 if 'token' in fields:
                     token = fields['token']
                 else:
@@ -984,7 +985,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.startSession(name, force)
                 if priority is None:
                     priority = 0
-                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime)
+                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address)
                 if autoname:
                     (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
                     self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))

@@ -36,6 +36,7 @@ import functools
 import time
 import hashlib
 import sys
+import Tardis
 
 import ConnIdLogAdapter
 import Rotator
@@ -128,7 +129,8 @@ fileInfoJoin =    "FROM Files " \
                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
 backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
-                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name "
+                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
+                      "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -267,13 +269,15 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    def newBackupSet(self, name, session, priority, clienttime):
+    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime) "
-                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime)",
-                      {"name": name, "now": time.time(), "session": session, "priority": priority, "clienttime": clienttime})
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
+                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
+                      {"name": name, "now": time.time(), "session": session, "priority": priority,
+                       "clienttime": clienttime, "clientversion": version, "clientip": ip,
+                       "serverversion": Tardis.__version__})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
 
@@ -743,7 +747,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         # First, purge out the backupsets that don't match
         c = self.cursor.execute("SELECT " + backupSetInfoFields +
-                                " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+                                " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
             yield(row)
@@ -757,7 +761,7 @@ class TardisDB(object):
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return (filesDeleted, setsDeleted)
 
@@ -766,12 +770,12 @@ class TardisDB(object):
         backupset = self._bset(current)
         self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
-        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         setsDeleted = self.cursor.rowcount
 
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return (filesDeleted, setsDeleted)
 
@@ -780,7 +784,7 @@ class TardisDB(object):
         self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset});
         # TODO: Move this to the removeOrphans phase
         # Then delete the files which are no longer referenced
-        filesDeleted = _purgeFiles()
+        filesDeleted = self._purgeFiles()
 
         return filesDeleted
 

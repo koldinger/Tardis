@@ -38,6 +38,7 @@ import shlex
 import StringIO
 import getpass
 import stat
+import fnmatch
 from functools import partial
 
 import Messages
@@ -45,7 +46,12 @@ import Connection
 import CompressedBuffer
 import Tardis
 
+import TardisDB
+import TardisCrypto
+
 import pycurl
+
+#logger = logging.getLogger('UTIL')
 
 def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     fmt = "%d %s"
@@ -66,7 +72,8 @@ def getIntOrNone(config, section, name):
         return None
 
 def shortPath(path, width=80):
-    """ Compress a path to only show the last elements if it's wider than specified.
+    """
+    Compress a path to only show the last elements if it's wider than specified.
     Replaces early elements with ".../"
     """
     if path == None or len(path) <= width:
@@ -79,6 +86,87 @@ def shortPath(path, width=80):
         except:
             break
     return ".../" + path
+
+"""
+Functions for reducing a path.
+"""
+def findDirInRoot(tardis, bset, path, crypt=None):
+    #logger = logging.getLogger('UTIL')
+    """
+    Find a directory which exists in the root directory
+    Return the number of components which must be removed to have a directory in
+    the root of the tree.
+    """
+    comps = path.split(os.sep)
+    comps.pop(0)
+    for i in range(0, len(comps)):
+        name = comps[i]
+        #logger.debug("Looking for root directory %s (%d)", name, i)
+        if crypt:
+            name = crypt.encryptFilename(name)
+        info = tardis.getFileInfoByName(name, (0, 0), bset)
+        if info and info['dir'] == 1:
+            return i
+    return None
+
+def reducePath(tardis, bset, path, reduce, crypt=None):
+    #logger = logging.getLogger('UTIL')
+    """
+    Reduce a path by a specified number of directory levels.
+    If the number is sys.maxint, perform a "smart" reduction, by looking for a directory
+    element which occurs in the root directory.
+    """
+    #logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
+    if reduce == sys.maxint:
+        reduce = findDirInRoot(tardis, bset, path, crypt)
+    if reduce:
+        #logger.debug("Reducing path by %d entries: %s", reduce, path)
+        comps = path.split(os.sep)
+        if reduce > len(comps):
+            #logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduce, len(comps), path)
+            return None
+        tmp = os.path.join(os.sep, *comps[reduce + 1:])
+        #logger.info("Reduced path %s to %s", path, tmp)
+        path = tmp
+    return path 
+
+"""
+"""
+
+def isMagic(path):
+    if ('*' in path) or ('?' in path) or ('[' in path):
+        return True
+    return False
+
+def matchPath(pattern, path):
+    if pattern == path:
+        return True
+    pats = pattern.split(os.sep)
+    dirs = path.split(os.sep)
+    inWild = False
+    while (len(pats) != 0 and len(dirs) != 0):
+        if not inWild:
+            p = pats.pop(0)
+            d = dirs.pop(0)
+            if p == '**':
+                inWild = True
+            else:
+                if not fnmatch.fnmatch(d, p):
+                    return False
+        else:
+            d = dirs.pop(0)
+            p = pats[0]
+            if p != '**':
+                if fnmatch.fnmatch(d, p):
+                    inWild = False
+                    pats.pop(0)
+            else:
+                pats.pop(0)
+
+    if len(pats) or len(dirs):
+        return False
+    else:
+        return True
 
 """
 Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)

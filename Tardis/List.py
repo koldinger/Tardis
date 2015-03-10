@@ -113,32 +113,34 @@ def flushLine():
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
-"""
-Collect information about a file in all the backupsets
-"""
 def collectFileInfo(filename, tardis, crypt):
+    """
+    Collect information about a file in all the backupsets
+    Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
+    by directory basis.
+    """
     lookup = crypt.encryptPath(filename) if crypt else filename
 
     fInfos = {}
     lInfo = None
     for bset in backupSets:
+        temp = lookup
+        if args.reduce:
+            temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
         if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
             fInfos[bset['backupset']] = lInfo
         else:
-            lInfo = tardis.getFileInfoByPath(lookup, bset['backupset'])
+            lInfo = tardis.getFileInfoByPath(temp, bset['backupset'])
             fInfos[bset['backupset']] = lInfo
     return fInfos
 
-"""
-Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
-Note: This is very inefficient.  You basically query for the same information over and over.
-Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
-all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
-3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
-any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
-each range.  Will cause you to go to the database a LOT fewer times, and use a lot less memory.
-"""
 def collectDirContents(tardis, dirlist, crypt):
+    """
+    Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
+    Note: This is very inefficient.  You basically query for the same information over and over.
+    Because of this, we use collectDirContents2 instead.  This function is left here for documentation
+    purposes primarily.
+    """
     contents = {}
     names = set()
     for (bset, finfo) in dirlist:
@@ -151,14 +153,15 @@ def collectDirContents(tardis, dirlist, crypt):
         contents[bset['backupset']] = dirInfo
     return contents, names
 
-"""
-Improvement: Create a set of directory "ranges", a range being a set of entries in the dirlist that a:
-all have the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are
-3 backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then query
-any directory entries that exist in here, and span each one over the approriate portions of the range.  Repeat for
-each range.
-"""
 def collectDirContents2(tardis, dirList, crypt):
+    """
+    Do the same thing as collectDirContents, just a lot faster, relying on the structure of the DB.
+    Create a set of directory "ranges", a range being a set of entries in the dirlist that a: all have
+    the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are 3
+    backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then
+    query any directory entries that exist in here, and span each one over the approriate portions of the
+    range.  Repeat for each range.
+    """
     contents = {}
     for (x, y) in dirList:
         contents[x['backupset']] = {}
@@ -200,11 +203,11 @@ def collectDirContents2(tardis, dirList, crypt):
     return (contents, names)
 
 
-"""
-Extract a list of file names from file contents.  Names will contain a single entry
-for each name encountered.
-"""
 def getFileNames(contents):
+    """
+    Extract a list of file names from file contents.  Names will contain a single entry
+    for each name encountered.
+    """
     names = set()
     for bset in backupSets:
         if bset['backupset'] in contents:
@@ -212,10 +215,10 @@ def getFileNames(contents):
             names = names.union(lnames)
     return names
 
-"""
-Extract a list of fInfos corresponding to each backupset, based on the name list.
-"""
 def getInfoByName(contents, name):
+    """
+    Extract a list of fInfos corresponding to each backupset, based on the name list.
+    """
     fInfo = {}
     for bset in backupSets:
         if bset['backupset'] in contents:
@@ -299,10 +302,15 @@ def printit(info, name, color, gone):
         else:
             cksum = ''
     if args.chnlen:
-        if info and info['checksum']:
-            chnlen = info['chainlength']
+        if info and info['chainlength'] is not None:
+            chnlen = "%-3d" % int(info['chainlength'])
         else:
             chnlen = ''
+    if args.inode:
+        if info and info['inode'] is not None:
+            inode = "%8d" % int(info['inode'])
+        else:
+            inode = ''
 
     if args.long:
         if gone:
@@ -320,17 +328,21 @@ def printit(info, name, color, gone):
             else:
                 size = ''
             doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
+            if args.inode:
+                doprint(' %8s ' % (inode))
             if args.cksums:
                 doprint(' %32s ' % (cksum))
             if args.chnlen:
-                doprint(' %2d ' % (int(chnlen)))
+                doprint(' %-3s ' % (chnlen))
             doprint('%s' % (name), color, eol=True)
-    elif args.cksums or args.chnlen:
+    elif args.cksums or args.chnlen or args.inode:
         doprint(columnfmt % name, color)
+        if args.inode:
+            doprint(' ' + inode, color=colors['name'])
         if args.cksums:
-            doprint(cksum, color=colors['name'])
+            doprint(' ' + cksum, color=colors['name'])
         if args.chnlen:
-            doprint(chnlen, color=colors['name'])
+            doprint(' ' + chnlen, color=colors['name'])
         doprint('', eol=True)
     else:
         column += 1
@@ -342,6 +354,10 @@ def printit(info, name, color, gone):
         doprint(columnfmt % name, color, eol=eol)
 
 def printVersions(fInfos, filename):
+    """
+    Print info about each version of the file that exists
+    Doesn't actually do the printing, but calls printit to do it.
+    """
     global column
     pInfo = None        # Previous version's info
     lSet  = None
@@ -389,7 +405,15 @@ def printVersions(fInfos, filename):
     flushLine()
 
 def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
-    numFound = sum([1 for i in fInfos if fInfos[i] is not None])
+    """
+    Collect information about a file, across all the backup sets
+    Print a header for the file.
+    """
+
+    # Count the number of non-null entries
+    numFound = len([i for i in fInfos if fInfos[i] is not None])
+
+    # Print the header
     if args.headers or (numFound == 0) or args.recent or not first:
         color = colors['header'] if first else colors['name']
         doprint(fmt % filename, color)
@@ -562,22 +586,17 @@ def setupDisplay(tardis, crypt):
 
     (columns, columnfmt) = computeColumnWidth(bsetNames)
 
-def isMagic(path):
-    if ('*' in path) or ('?' in path) or ('[' in path):
-        return True
-    return False
-
 def globPath(path, tardis, crypt, first=0):
     """
     Glob a path.  Only globbs the first 
     """
     logger.debug("Globbing %s", path)
-    if not isMagic(path):
+    if not Util.isMagic(path):
         return [path]
     comps = path.split(os.sep)
     results = []
     for i in range(first, len(comps)):
-        if isMagic(comps[i]):
+        if Util.isMagic(comps[i]):
             currentPath = os.path.join('/', *comps[:i])
             pattern = comps[i]
             logger.debug("Globbing in component %d of %s: %s %s", i, path, currentPath, pattern)
@@ -614,6 +633,7 @@ def processArgs():
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',   default=False, action='store_true',        help='Print chainlengths.')
+    parser.add_argument('--inode', '-i',    dest='inode',    default=False, action='store_true',        help='Print inode numbers')
     #parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
     parser.add_argument('--versions',       dest='versions', default=True,  action=Util.StoreBoolean,   help='Display versions of files.')
     parser.add_argument('--all',            dest='all',      default=False, action='store_true',        help='Show all versions of a file. Default: %(default)s')
@@ -625,6 +645,8 @@ def processArgs():
     parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
     parser.add_argument('--recent',         dest='recent',   default=False, action=Util.StoreBoolean,   help='Show only the most recent version of a file. Default: %(default)s')
     parser.add_argument('--glob',           dest='glob',    default=False, action=Util.StoreBoolean,    help='Glob filenames')
+
+    parser.add_argument('--reduce',         dest='reduce',  default=0,type=int, const=sys.maxint, nargs='?',    help='Reduce paths by N directories.  No value for smart reduction')
 
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
@@ -648,58 +670,64 @@ def processArgs():
 
 def main():
     global args, logger
-    args = processArgs()
-
-    FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
-    logger = logging.getLogger("")
-
-    setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
-
-    # Load any password info
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
-    args.password = None
-
-    token = None
-    crypt = None
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password, args.client)
-        token = crypt.createToken()
-    password = None
-
     try:
-        loc = urlparse.urlparse(args.database)
-        if (loc.scheme == 'http') or (loc.scheme == 'https'):
-            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-        else:
-            dbfile = os.path.join(loc.path, args.client, args.dbname)
-            tardis = TardisDB.TardisDB(dbfile, token=token)
-    except Exception as e:
-        logger.critical(e)
-        sys.exit(1)
+        args = processArgs()
 
-    if not args.crypt:
+        FORMAT = "%(levelname)s : %(message)s"
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+        logger = logging.getLogger("")
+
+        setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
+
+        # Load any password info
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        args.password = None
+
+        token = None
         crypt = None
+        if password:
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
+            token = crypt.createToken()
+        password = None
 
-    setupDisplay(tardis, crypt)
-
-    if args.headers:
-        doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
-
-    if args.glob:
-        directories = []
-        for d in args.directories:
-            if not isMagic(d):
-                directories.append(d)
+        try:
+            loc = urlparse.urlparse(args.database)
+            if (loc.scheme == 'http') or (loc.scheme == 'https'):
+                tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
             else:
-                directories += globPath(os.path.abspath(d), tardis, crypt)
-    else:
-        directories = args.directories
+                dbfile = os.path.join(loc.path, args.client, args.dbname)
+                tardis = TardisDB.TardisDB(dbfile, token=token)
+        except Exception as e:
+            logger.critical(e)
+            sys.exit(1)
 
-    for d in directories:
-        d = os.path.abspath(d)
-        fInfo = collectFileInfo(d, tardis, crypt)
-        processFile(d, fInfo, tardis, crypt)
+        if not args.crypt:
+            crypt = None
+
+        setupDisplay(tardis, crypt)
+
+        if args.headers:
+            doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
+
+        if args.glob:
+            directories = []
+            for d in args.directories:
+                if not Util.isMagic(d):
+                    directories.append(d)
+                else:
+                    directories += globPath(os.path.abspath(d), tardis, crypt)
+        else:
+            directories = args.directories
+
+        for d in directories:
+            d = os.path.abspath(d)
+            fInfo = collectFileInfo(d, tardis, crypt)
+            processFile(d, fInfo, tardis, crypt)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error("Caught exception: %s", str(e))
+        #logger.exception(e)
 
 if __name__ == "__main__":
     main()

@@ -328,42 +328,13 @@ def setupPermissionChecks():
     # And return the function.
     return checkPermission
 
-def findDirInRoot(tardis, bset, path):
-    comps = path.split(os.sep)
-    comps.pop(0)
-    for i in range(0, len(comps)):
-        name = comps[i]
-        logger.debug("Looking for root directory %s (%d)", name, i)
-        if crypt:
-            name = crypt.encryptFilename(name)
-        info = tardis.getFileInfoByName(name, (0, 0), bset)
-        if info and info['dir'] == 1:
-            return i
-    return None
-
-def computePath(tardis, bset, path, reduce):
-    logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
-    path = os.path.abspath(path)
-    if reduce == sys.maxint:
-        reduce = findDirInRoot(tardis, bset, path)
-    if reduce:
-        logger.debug("Reducing path by %d entries: %s", reduce, path)
-        comps = path.split(os.sep)
-        if reduce > len(comps):
-            logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduce, len(comps), path)
-            return None
-        tmp = os.path.join(os.sep, *comps[reduce + 1:])
-        #logger.info("Reduced path %s to %s", path, tmp)
-        path = tmp
-    return path
-
 def findLastPath(tardis, path, reduce):
     logger.debug("findLastPath: %s", path)
     # Search all the sets in backwards order
     bsets = list(tardis.listBackupSets())
     for bset in reversed(bsets):
         logger.debug("Checking for path %s in %s (%d)", path, bset['name'], bset['backupset'])
-        tmp = computePath(tardis, bset['backupset'], path, reduce)
+        tmp = Util.reducePath(tardis, bset['backupset'], os.path.abspath(path), reduce, crypt)
         tmp2 = tmp
         if crypt:
             tmp2 = crypt.encryptPath(tmp)
@@ -561,7 +532,7 @@ def main():
                     raise Exception("Unable to find a latest version of " + i)
                 logger.info("Found %s in backup set %s", i, name)
             elif args.reduce:
-                path = computePath(tardis, bset, i, args.reduce)
+                path = Util.reducePath(tardis, bset, i, args.reduce, crypt)
                 logger.debug("Reduced path %s to %s", path, i)
                 if not path:
                     logger.error("Unable to find a compute path for %s", i)
