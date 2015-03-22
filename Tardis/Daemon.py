@@ -1078,7 +1078,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.compact()
 
             if self.db:
-                self.db.close()
+                self.db.close(started)
 
         self.logger.info("Session from %s {%s} Ending: %s: %s", host, self.sessionid, str(completed), str(datetime.now() - starttime))
 
