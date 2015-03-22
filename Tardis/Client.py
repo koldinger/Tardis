@@ -706,6 +706,7 @@ def sendDirChunks(path, inode, files):
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
         message["files"] = chunk
+        message["last"]  = True if (x + args.dirslice > len(files) ) else False
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
