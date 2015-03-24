@@ -94,6 +94,7 @@ crypt               = None
 logger              = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
+report = {}
 responseTimes       = []
 
 inodeDB             = {}
@@ -330,8 +331,17 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
+
+                if args.report:
+                    x = { 'type': 'Delta', 'size': sent }
+                    if newsig:
+                        x['sigsize'] = sSent
+                    else:
+                        x['sigsize'] = 0
+
+                    report[pathname] = x
             else:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
@@ -365,9 +375,9 @@ def sendContent(inode):
                 if S_ISLNK(mode):
                     # It's a link.  Send the contents of readlink
                     #chunk = os.readlink(pathname)
-                    x = cStringIO.StringIO(os.readlink(pathname))
+                    data = cStringIO.StringIO(os.readlink(pathname))
                 else:
-                    x = open(pathname, "rb")
+                    data = open(pathname, "rb")
             except IOError as e:
                 logger.error("Could not open %s: %s", pathname, e)
                 return
@@ -379,7 +389,7 @@ def sendContent(inode):
                 makeSig = True if crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
                     x.seek(0)
@@ -389,17 +399,21 @@ def sendContent(inode):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
                 raise e
             finally:
-                if x is not None:
-                    x.close()
+                if data is not None:
+                    data.close()
                 if sig is not None:
                     sig.close()
             stats['new'] += 1
+            repInfo = { 'type': 'Delta', 'size': size, 'sigsize': 0 }
+            if sig:
+                repInfo['sigsize'] = sSent
+            report[pathname] = repInfo
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
@@ -1110,6 +1124,7 @@ def processCommandLine():
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
+    parser.add_argument('--report',             action='store_true', dest='report',                 help='Print a report on all files transferred')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of directories to sync")
@@ -1293,6 +1308,10 @@ def main():
             connstats = conn.getStats()
             logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
         logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+
+    if args.report:
+        for i in report:
+            print i, report[i]
 
     if args.local:
         os.unlink(tempsocket)
