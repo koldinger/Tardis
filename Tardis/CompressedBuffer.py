@@ -94,6 +94,9 @@ class BufferedReader(object):
     def size(self):
         return self.numbytes
 
+    def compsize(self):
+        return self.size()
+
     def isCompressed(self):
         return False
 
