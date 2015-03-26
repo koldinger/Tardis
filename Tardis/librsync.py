@@ -63,6 +63,9 @@ RS_JOB_BLOCKSIZE = 65536
 RS_DEFAULT_STRONG_LEN = 8
 RS_DEFAULT_BLOCK_LEN = 2048
 
+RS_DELTA_MAGIC          = 0x72730236      # r s \2 6
+RS_MD4_SIG_MAGIC        = 0x72730136      # r s \1 6
+RS_BLAKE2_SIG_MAGIC     = 0x72730137      # r s \1 7
 
 #############################
 #  DEFINES FROM librsync.h  #
@@ -85,7 +88,7 @@ _librsync.rs_strerror.argtypes = (ctypes.c_int, )
 
 # rs_job_t *rs_sig_begin(size_t new_block_len, size_t strong_sum_len);
 _librsync.rs_sig_begin.restype = ctypes.c_void_p
-_librsync.rs_sig_begin.argtypes = (ctypes.c_size_t, ctypes.c_size_t, )
+_librsync.rs_sig_begin.argtypes = (ctypes.c_size_t, ctypes.c_size_t, ctypes.c_int, )
 
 # rs_job_t *rs_loadsig_begin(rs_signature_t **);
 _librsync.rs_loadsig_begin.restype = ctypes.c_void_p
@@ -181,7 +184,7 @@ def debug(level=syslog.LOG_DEBUG):
     _librsync.rs_trace_set_level(level)
 
 @seekable
-def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
+def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC):
     """
     Generate a signature for the file `f`. The signature will be written to `s`.
     If `s` is omitted, a temporary file will be used. This function returns the
@@ -190,7 +193,7 @@ def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
     """
     if s is None:
         s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
-    job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN)
+    job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN, magic)
     try:
         _execute(job, f, s)
     finally:
@@ -262,10 +265,10 @@ Licensing terms as above
 """
 
 class SignatureJob(object):
-    def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
+    def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC):
         if s is None:
             s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
-        job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN)
+        job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN, magic)
         self.output = s
         self.job = job
         self.buff = Buffer()

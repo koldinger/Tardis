@@ -112,8 +112,8 @@ def listBSets(db, crypt):
         return 1
 
 def _bsetInfo(db, crypt, info):
-    print "Backupset       : %s" % (info['name'])
-    print "Completed       : %d" % (info['completed'])
+    print "Backupset       : %s (%d)" % ((info['name']), info['backupset'])
+    print "Completed       : %s" % ('True' if info['completed'] else 'False')
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
     print "StartTime       : %s" % (t)
     if info['endtime'] is not None:
@@ -121,6 +121,8 @@ def _bsetInfo(db, crypt, info):
         duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
         print "EndTime         : %s" % (t)
         print "Duration        : %s" % (duration)
+    print "SW Versions     : C:%s S:%s" % (info['clientversion'], info['serverversion'])
+    print "Client IP       : %s" % (info['clientip'])
     details = db.getBackupSetDetails(info['backupset'])
     (files, dirs, size, newInfo, endInfo) = details
     print "Files           : %d" % (files)

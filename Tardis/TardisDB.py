@@ -822,7 +822,7 @@ class TardisDB(object):
     def commit(self):
         self.conn.commit()
 
-    def close(self):
+    def close(self, completeBackup=True):
         self.logger.debug("Closing DB: {}".format(self.dbName))
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
@@ -831,7 +831,7 @@ class TardisDB(object):
         self.conn.close()
         self.conn = None
 
-        if self.backup:
+        if self.backup and completeBackup:
             r = Rotator.Rotator(rotations=self.numbackups)
             try:
                 r.backup(self.dbName)
