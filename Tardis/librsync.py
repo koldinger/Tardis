@@ -265,10 +265,10 @@ Licensing terms as above
 """
 
 class SignatureJob(object):
-    def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN):
+    def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC):
         if s is None:
             s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
-        job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN)
+        job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN, magic)
         self.output = s
         self.job = job
         self.buff = Buffer()

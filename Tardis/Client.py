@@ -410,10 +410,11 @@ def sendContent(inode):
                 if sig is not None:
                     sig.close()
             stats['new'] += 1
-            repInfo = { 'type': 'Delta', 'size': size, 'sigsize': 0 }
-            if sig:
-                repInfo['sigsize'] = sSent
-            report[pathname] = repInfo
+            if args.report:
+                repInfo = { 'type': 'Full', 'size': size, 'sigsize': 0 }
+                if sig:
+                    repInfo['sigsize'] = sSent
+                report[pathname] = repInfo
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
@@ -1310,8 +1311,16 @@ def main():
         logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
 
     if args.report:
-        for i in report:
-            print i, report[i]
+        fmts = ['','KB','MB','GB', 'TB', 'PB']
+        logger.log(logging.STATS, "")
+        logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", "FileName", "Type", "Size", "Sig Size")
+        logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", '-' * 50, '-' * 6, '-' * 10, '-' * 10)
+        for i in sorted(report):
+            r = report[i]
+            if r['sigsize']:
+                logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", Util.shortPath(i, 50), r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+            else:
+                logger.log(logging.STATS, "%-50s %-6s %-10s", Util.shortPath(i, 50), r['type'], Util.fmtSize(r['size'], formats=fmts))
 
     if args.local:
         os.unlink(tempsocket)
