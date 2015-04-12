@@ -392,7 +392,7 @@ def sendContent(inode):
                 (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
-                    x.seek(0)
+                    sig.seek(0)
                     message = {
                         "message" : "SIG",
                         "checksum": checksum
@@ -428,7 +428,6 @@ def handleAckMeta(message):
         data = metaCache.inverse[cks][0]
 
         (encrypt, iv) = makeEncryptor()
-        stats['delta'] += 1
         message = {
             "message": "METADATA",
             "checksum": cks
