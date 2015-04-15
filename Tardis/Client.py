@@ -197,6 +197,17 @@ def processChecksums(inodes):
     #handleAckSum(response)
     batchMessage(message)
 
+
+def logFileInfo(i, c):
+    if i in inodeDB:
+        (x, name) = inodeDB[i]
+        if "size" in x:
+            size = x["size"]
+        else:
+            size = 0;
+        size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+        logger.log(logging.FILES, "File: [%c]: %s (%s)", c, Util.shortPath(name), size)
+
 def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
     logfiles = logger.isEnabledFor(logging.FILES)
@@ -213,28 +224,13 @@ def handleAckSum(response):
     # FIXME: TODO: There should be a test in here for Delta's
     for i in [tuple(x) for x in response['content']]:
         if logfiles:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                if "size" in x:
-                    size = x["size"]
-                else:
-                    size = 0;
-                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                logger.log(logging.FILES, "File: [n]: %s (%s)", Util.shortPath(name), size)
-        sendContent(i)
+            logFileInfo(i, 'n')
+        sendContent(i, 'Full')
         delInode(i)
-
 
     for i in [tuple(x) for x in response['delta']]:
         if logfiles:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                if "size" in x:
-                    size = x["size"]
-                else:
-                    size = 0;
-                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                logger.log(logging.FILES, "File: [d]: %s (%s)", Util.shortPath(name), size)
+            logFileInfo(i, 'd')
         processDelta(i)
         delInode(i)
 
@@ -299,7 +295,7 @@ def processDelta(inode):
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 #logger.exception(e)
-                sendContent(inode)
+                sendContent(inode, 'Full')
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
@@ -345,11 +341,11 @@ def processDelta(inode):
             else:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
-                sendContent(inode)
+                sendContent(inode, 'Full')
         else:
-            sendContent(inode)
+            sendContent(inode, 'Full')
 
-def sendContent(inode):
+def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
     if inode in inodeDB:
         checksum = None
@@ -411,7 +407,7 @@ def sendContent(inode):
                     sig.close()
             stats['new'] += 1
             if args.report:
-                repInfo = { 'type': 'Full', 'size': size, 'sigsize': 0 }
+                repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
                 if sig:
                     repInfo['sigsize'] = sSent
                 report[pathname] = repInfo
@@ -446,7 +442,7 @@ def handleAckDir(message):
     done    = message["done"]
     delta   = message["delta"]
     cksum   = message["cksum"]
-
+    refresh = message["refresh"]
 
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
@@ -458,16 +454,15 @@ def handleAckDir(message):
     if not args.ckscontent:
         for i in [tuple(x) for x in content]:
             if logger.isEnabledFor(logging.FILES):
-                if i in inodeDB:
-                    (x, name) = inodeDB[i]
-                    if "size" in x:
-                        size = x["size"]
-                    else:
-                        size = 0;
-                    size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                    logger.log(logging.FILES, "File: [N]: %s (%s)", Util.shortPath(name), size)
-            sendContent(i)
+                logFileInfo(i, 'N')
+            sendContent(i, 'New')
             delInode(i)
+
+    for i in [tuple(x) for x in refresh]:
+        if logger.isEnabledFor(logging.FILES):
+            logFileInfo(i, 'N')
+        sendContent(i, 'Full')
+        delInode(i)
 
     for i in [tuple(x) for x in delta]:
         if logger.isEnabledFor(logging.FILES):
@@ -1165,6 +1160,33 @@ def setupLogging(logfile, verbosity):
     # Create a special logger just for messages
     return logger
 
+def printStats(starttime, endtime):
+    logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
+    logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+    logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+    if conn is not None:
+        connstats = conn.getStats()
+        logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+    logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+
+
+def printReport():
+    lastDir = ''
+    fmts = ['','KB','MB','GB', 'TB', 'PB']
+    logger.log(logging.STATS, "")
+    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", "FileName", "Type", "Size", "Sig Size")
+    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", '-' * 50, '-' * 6, '-' * 10, '-' * 10)
+    for i in sorted(report):
+        r = report[i]
+        (d, f) = os.path.split(i)
+        if d != lastDir:
+            logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
+            lastDir = d
+        if r['sigsize']:
+            logger.log(logging.STATS, "  %-53s %-6s %-10s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+        else:
+            logger.log(logging.STATS, "  %-53s %-6s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+
 def main():
     global starttime, args, config, conn, verbosity, crypt
     # Read the command line arguments.
@@ -1300,26 +1322,11 @@ def main():
 
     endtime = datetime.datetime.now()
 
+    # Print stats and files report
     if args.stats:
-        logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
-        logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-        if conn is not None:
-            connstats = conn.getStats()
-            logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-        logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
-
+        printStats(starttime, endtime)
     if args.report:
-        fmts = ['','KB','MB','GB', 'TB', 'PB']
-        logger.log(logging.STATS, "")
-        logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", "FileName", "Type", "Size", "Sig Size")
-        logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", '-' * 50, '-' * 6, '-' * 10, '-' * 10)
-        for i in sorted(report):
-            r = report[i]
-            if r['sigsize']:
-                logger.log(logging.STATS, "%-50s %-6s %-10s %-10s", Util.shortPath(i, 50), r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
-            else:
-                logger.log(logging.STATS, "%-50s %-6s %-10s", Util.shortPath(i, 50), r['type'], Util.fmtSize(r['size'], formats=fmts))
+        printReport()
 
     if args.local:
         os.unlink(tempsocket)
