@@ -212,8 +212,12 @@ def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
     logfiles = logger.isEnabledFor(logging.FILES)
 
+    done    = response.setdefault('done', {})
+    content = response.setdefault('content', {})
+    content = response.setdefault('delta', {})
+
     # First, delete all the files which are "done", ie, matched
-    for i in [tuple(x) for x in response['done']]:
+    for i in [tuple(x) for x in done]:
         if logfiles:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
@@ -222,13 +226,13 @@ def handleAckSum(response):
 
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
-    for i in [tuple(x) for x in response['content']]:
+    for i in [tuple(x) for x in content]:
         if logfiles:
             logFileInfo(i, 'n')
         sendContent(i, 'Full')
         delInode(i)
 
-    for i in [tuple(x) for x in response['delta']]:
+    for i in [tuple(x) for x in delta]:
         if logfiles:
             logFileInfo(i, 'd')
         processDelta(i)
@@ -416,8 +420,8 @@ def sendContent(inode, reportType):
 
 def handleAckMeta(message):
     checkMessage(message, 'ACKMETA')
-    content = message['content']
-    done = message['done']
+    content = message.setdefault('content', {})
+    done    = message.setdefault('done', {})
     
     for cks in content:
         logger.debug("Sending meta data chunk: %s", cks)
@@ -438,11 +442,11 @@ def handleAckMeta(message):
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
 
-    content = message["content"]
-    done    = message["done"]
-    delta   = message["delta"]
-    cksum   = message["cksum"]
-    refresh = message["refresh"]
+    content = message.setdefault("content", {})
+    done    = message.setdefault("done", {})
+    delta   = message.setdefault("delta", {})
+    cksum   = message.setdefault("cksum", {})
+    refresh = message.setdefault("refresh", {})
 
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
@@ -610,8 +614,11 @@ def handleAckClone(message):
 
     logdirs = logger.isEnabledFor(logging.DIRS)
 
+    content = message.setdefault('content', {})
+    done    = message.setdefault('done', {})
+
     # Process the directories that have changed
-    for i in message["content"]:
+    for i in content:
         finfo = tuple(i)
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
@@ -629,7 +636,7 @@ def handleAckClone(message):
             del cloneContents[finfo]
 
     # Purge out what hasn't changed
-    for i in message["done"]:
+    for i in done:
         inode = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
