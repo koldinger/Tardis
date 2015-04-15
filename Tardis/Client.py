@@ -214,7 +214,7 @@ def handleAckSum(response):
 
     done    = response.setdefault('done', {})
     content = response.setdefault('content', {})
-    content = response.setdefault('delta', {})
+    delta   = response.setdefault('delta', {})
 
     # First, delete all the files which are "done", ie, matched
     for i in [tuple(x) for x in done]:
