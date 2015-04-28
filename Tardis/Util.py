@@ -274,10 +274,7 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compr
     finally:
         sender.sendMessage('', raw=True)
         compressed = stream.isCompressed()
-        if compressed:
-            size = stream.compsize()
-        else:
-            size = stream.size()
+        size = stream.size()
 
         if stats and 'dataSent' in stats:
             stats['dataSent'] += size
