@@ -1007,6 +1007,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             if encoding == "JSON":
                 self.messenger = Messages.JsonMessages(sock, compress=compress)
+            elif encoding == 'MSGP':
+                self.messenger = Messages.MsgPackMessages(sock, compress=compress)
             elif encoding == "BSON":
                 self.messenger = Messages.BsonMessages(sock, compress=compress)
             else:
