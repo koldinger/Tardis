@@ -273,13 +273,11 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compr
         raise e
     finally:
         sender.sendMessage('', raw=True)
-        size = stream.size()
         compressed = stream.isCompressed()
+        size = stream.size()
+
         if stats and 'dataSent' in stats:
-            if compressed:
-                stats['dataSent'] += stream.compsize()
-            else:
-                stats['dataSent'] += size
+            stats['dataSent'] += size
         message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
         if checksum:
             ck = stream.checksum()

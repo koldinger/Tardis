@@ -74,6 +74,7 @@ DONE    = 0
 CONTENT = 1
 CKSUM   = 2
 DELTA   = 3
+REFRESH = 4                     # Perform a full content update
 
 config = None
 args   = None
@@ -276,7 +277,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = CONTENT
+                    retVal = REFRESH
                 else:
                     # Otherwise, let's just get the delta
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
@@ -335,10 +336,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         cksum = set()
         content = set()
         delta = set()
+        refresh = set()
 
         attrs = set()
         # Keep the order
-        queues = [done, content, cksum, delta]
+        queues = [done, content, cksum, delta, refresh]
 
         parentInode = tuple(data['inode'])      # Contains both inode and device in message
         files = data['files']
@@ -398,6 +400,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "cksum"     : list(cksum),
             "content"   : list(content),
             "delta"     : list(delta),
+            "refresh"   : list(refresh),
             "xattrs"    : list(attrs)
         }
 
@@ -1004,6 +1007,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             if encoding == "JSON":
                 self.messenger = Messages.JsonMessages(sock, compress=compress)
+            elif encoding == 'MSGP':
+                self.messenger = Messages.MsgPackMessages(sock, compress=compress)
             elif encoding == "BSON":
                 self.messenger = Messages.BsonMessages(sock, compress=compress)
             else:
@@ -1078,7 +1083,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.compact()
 
             if self.db:
-                self.db.close()
+                self.db.close(started)
 
         self.logger.info("Session from %s {%s} Ending: %s: %s", host, self.sessionid, str(completed), str(datetime.now() - starttime))
 

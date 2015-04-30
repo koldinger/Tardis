@@ -55,7 +55,7 @@ import librsync
 import TardisCrypto
 import Tardis
 import CompressedBuffer
-from Connection import JsonConnection, BsonConnection
+import Connection
 import Util
 import Defaults
 import parsedatetime
@@ -94,6 +94,7 @@ crypt               = None
 logger              = None
 
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
+report = {}
 responseTimes       = []
 
 inodeDB             = {}
@@ -196,12 +197,27 @@ def processChecksums(inodes):
     #handleAckSum(response)
     batchMessage(message)
 
+
+def logFileInfo(i, c):
+    if i in inodeDB:
+        (x, name) = inodeDB[i]
+        if "size" in x:
+            size = x["size"]
+        else:
+            size = 0;
+        size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+        logger.log(logging.FILES, "File: [%c]: %s (%s)", c, Util.shortPath(name), size)
+
 def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
     logfiles = logger.isEnabledFor(logging.FILES)
 
+    done    = response.setdefault('done', {})
+    content = response.setdefault('content', {})
+    delta   = response.setdefault('delta', {})
+
     # First, delete all the files which are "done", ie, matched
-    for i in [tuple(x) for x in response['done']]:
+    for i in [tuple(x) for x in done]:
         if logfiles:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
@@ -210,30 +226,15 @@ def handleAckSum(response):
 
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
-    for i in [tuple(x) for x in response['content']]:
+    for i in [tuple(x) for x in content]:
         if logfiles:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                if "size" in x:
-                    size = x["size"]
-                else:
-                    size = 0;
-                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                logger.log(logging.FILES, "File: [n]: %s (%s)", Util.shortPath(name), size)
-        sendContent(i)
+            logFileInfo(i, 'n')
+        sendContent(i, 'Full')
         delInode(i)
 
-
-    for i in [tuple(x) for x in response['delta']]:
+    for i in [tuple(x) for x in delta]:
         if logfiles:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                if "size" in x:
-                    size = x["size"]
-                else:
-                    size = 0;
-                size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                logger.log(logging.FILES, "File: [d]: %s (%s)", Util.shortPath(name), size)
+            logFileInfo(i, 'd')
         processDelta(i)
         delInode(i)
 
@@ -298,7 +299,7 @@ def processDelta(inode):
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 #logger.exception(e)
-                sendContent(inode)
+                sendContent(inode, 'Full')
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
@@ -330,16 +331,25 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
+
+                if args.report:
+                    x = { 'type': 'Delta', 'size': sent }
+                    if newsig:
+                        x['sigsize'] = sSent
+                    else:
+                        x['sigsize'] = 0
+
+                    report[pathname] = x
             else:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
-                sendContent(inode)
+                sendContent(inode, 'Full')
         else:
-            sendContent(inode)
+            sendContent(inode, 'Full')
 
-def sendContent(inode):
+def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
     if inode in inodeDB:
         checksum = None
@@ -365,9 +375,9 @@ def sendContent(inode):
                 if S_ISLNK(mode):
                     # It's a link.  Send the contents of readlink
                     #chunk = os.readlink(pathname)
-                    x = cStringIO.StringIO(os.readlink(pathname))
+                    data = cStringIO.StringIO(os.readlink(pathname))
                 else:
-                    x = open(pathname, "rb")
+                    data = open(pathname, "rb")
             except IOError as e:
                 logger.error("Could not open %s: %s", pathname, e)
                 return
@@ -379,41 +389,45 @@ def sendContent(inode):
                 makeSig = True if crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, x, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
-                    x.seek(0)
+                    sig.seek(0)
                     message = {
                         "message" : "SIG",
                         "checksum": checksum
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
                 raise e
             finally:
-                if x is not None:
-                    x.close()
+                if data is not None:
+                    data.close()
                 if sig is not None:
                     sig.close()
             stats['new'] += 1
+            if args.report:
+                repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
+                if sig:
+                    repInfo['sigsize'] = sSent
+                report[pathname] = repInfo
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
 def handleAckMeta(message):
     checkMessage(message, 'ACKMETA')
-    content = message['content']
-    done = message['done']
+    content = message.setdefault('content', {})
+    done    = message.setdefault('done', {})
     
     for cks in content:
         logger.debug("Sending meta data chunk: %s", cks)
         data = metaCache.inverse[cks][0]
 
         (encrypt, iv) = makeEncryptor()
-        stats['delta'] += 1
         message = {
             "message": "METADATA",
             "checksum": cks
@@ -428,11 +442,11 @@ def handleAckMeta(message):
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
 
-    content = message["content"]
-    done    = message["done"]
-    delta   = message["delta"]
-    cksum   = message["cksum"]
-
+    content = message.setdefault("content", {})
+    done    = message.setdefault("done", {})
+    delta   = message.setdefault("delta", {})
+    cksum   = message.setdefault("cksum", {})
+    refresh = message.setdefault("refresh", {})
 
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
@@ -444,16 +458,15 @@ def handleAckDir(message):
     if not args.ckscontent:
         for i in [tuple(x) for x in content]:
             if logger.isEnabledFor(logging.FILES):
-                if i in inodeDB:
-                    (x, name) = inodeDB[i]
-                    if "size" in x:
-                        size = x["size"]
-                    else:
-                        size = 0;
-                    size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-                    logger.log(logging.FILES, "File: [N]: %s (%s)", Util.shortPath(name), size)
-            sendContent(i)
+                logFileInfo(i, 'N')
+            sendContent(i, 'New')
             delInode(i)
+
+    for i in [tuple(x) for x in refresh]:
+        if logger.isEnabledFor(logging.FILES):
+            logFileInfo(i, 'N')
+        sendContent(i, 'Full')
+        delInode(i)
 
     for i in [tuple(x) for x in delta]:
         if logger.isEnabledFor(logging.FILES):
@@ -601,8 +614,11 @@ def handleAckClone(message):
 
     logdirs = logger.isEnabledFor(logging.DIRS)
 
+    content = message.setdefault('content', {})
+    done    = message.setdefault('done', {})
+
     # Process the directories that have changed
-    for i in message["content"]:
+    for i in content:
         finfo = tuple(i)
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
@@ -620,7 +636,7 @@ def handleAckClone(message):
             del cloneContents[finfo]
 
     # Purge out what hasn't changed
-    for i in message["done"]:
+    for i in done:
         inode = tuple(i)
         if inode in cloneContents:
             (path, files) = cloneContents[inode]
@@ -706,6 +722,7 @@ def sendDirChunks(path, inode, files):
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
         message["files"] = chunk
+        message["last"]  = True if (x + args.dirslice > len(files) ) else False
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
@@ -1095,7 +1112,7 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
-    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],      help='Protocol for data transfer.  Default: %(default)s')
+    comgrp.add_argument('--protocol',           dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],      help='Protocol for data transfer.  Default: %(default)s')
 
     parser.add_argument('--deltathreshold',     dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
 
@@ -1109,6 +1126,7 @@ def processCommandLine():
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
+    parser.add_argument('--report',             action='store_true', dest='report',                 help='Print a report on all files transferred')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of directories to sync")
@@ -1148,6 +1166,33 @@ def setupLogging(logfile, verbosity):
 
     # Create a special logger just for messages
     return logger
+
+def printStats(starttime, endtime):
+    logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
+    logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+    logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+    if conn is not None:
+        connstats = conn.getStats()
+        logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+    logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+
+
+def printReport():
+    lastDir = ''
+    fmts = ['','KB','MB','GB', 'TB', 'PB']
+    logger.log(logging.STATS, "")
+    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", "FileName", "Type", "Size", "Sig Size")
+    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", '-' * 50, '-' * 6, '-' * 10, '-' * 10)
+    for i in sorted(report):
+        r = report[i]
+        (d, f) = os.path.split(i)
+        if d != lastDir:
+            logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
+            lastDir = d
+        if r['sigsize']:
+            logger.log(logging.STATS, "  %-53s %-6s %-10s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+        else:
+            logger.log(logging.STATS, "  %-53s %-6s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts))
 
 def main():
     global starttime, args, config, conn, verbosity, crypt
@@ -1215,10 +1260,13 @@ def main():
 
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
+            conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+            conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+            setEncoder("bin")
+        elif args.protocol == 'msgp':
+            conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
@@ -1284,14 +1332,11 @@ def main():
 
     endtime = datetime.datetime.now()
 
+    # Print stats and files report
     if args.stats:
-        logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
-        logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-        logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-        if conn is not None:
-            connstats = conn.getStats()
-            logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-        logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+        printStats(starttime, endtime)
+    if args.report:
+        printReport()
 
     if args.local:
         os.unlink(tempsocket)
