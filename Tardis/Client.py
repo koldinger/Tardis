@@ -55,7 +55,7 @@ import librsync
 import TardisCrypto
 import Tardis
 import CompressedBuffer
-from Connection import JsonConnection, BsonConnection
+import Connection
 import Util
 import Defaults
 import parsedatetime
@@ -1112,7 +1112,7 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
     comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
     comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
-    comgrp.add_argument('--protocol',           dest='protocol', default="bson", choices=["json", "bson"],      help='Protocol for data transfer.  Default: %(default)s')
+    comgrp.add_argument('--protocol',           dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],      help='Protocol for data transfer.  Default: %(default)s')
 
     parser.add_argument('--deltathreshold',     dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
 
@@ -1260,10 +1260,13 @@ def main():
 
     try:
         if args.protocol == 'json':
-            conn = JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
+            conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
             setEncoder("base64")
         elif args.protocol == 'bson':
-            conn = BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+            conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+            setEncoder("bin")
+        elif args.protocol == 'msgp':
+            conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
             setEncoder("bin")
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
