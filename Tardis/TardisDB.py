@@ -530,18 +530,18 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
-
+        added = self._bset(current)
         comp = 1 if compressed else 0
         if basis is None:
             chainlength = 0
         else:
             chainlength = self.getChainLength(basis) + 1
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength)",
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength, Added) "
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength, :added)",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
-                             "compressed": comp, "disksize": disksize, "chainlength": chainlength})
+                             "compressed": comp, "disksize": disksize, "chainlength": chainlength, "added": added})
         return self.cursor.lastrowid
 
     def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
