@@ -41,96 +41,25 @@ import Tardis
 import ConnIdLogAdapter
 import Rotator
 
-# Expected SQL Schema
-"""
-CREATE TABLE IF NOT EXISTS Config (
-    Key             CHARACTER PRIMARY KEY,
-    Value           CHARACTER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS Backups (
-    Name            CHARACTER UNIQUE,
-    BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT,
-    StartTime       CHARACTER,
-    EndTime         CHARACTER,
-    ClientTime      CHARACTER,
-    Session         CHARACTER UNIQUE,
-    Completed       INTEGER,
-    Priority        INTEGER DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS CheckSums (
-    Checksum    CHARACTER UNIQUE NOT NULL,
-    ChecksumId  INTEGER PRIMARY KEY AUTOINCREMENT,
-    Size        INTEGER,
-    Basis       INTEGER,
-    DeltaSize   INTEGER,
-    DiskSize    INTEGER,
-    Compressed  INTEGER,            -- Boolean
-    InitVector  BLOB,
-    FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
-);
-
-CREATE TABLE IF NOT EXISTS Names (
-    Name        CHARACTER UNIQUE NOT NULL,
-    NameId      INTEGER PRIMARY KEY AUTOINCREMENT
-);
-
-CREATE TABLE IF NOT EXISTS Files (
-    NameId      INTEGER   NOT NULL,
-    FirstSet    INTEGER   NOT NULL,
-    LastSet     INTEGER   NOT NULL,
-    Inode       INTEGER   NOT NULL,
-    Device      INTEGER   NOT NULL,
-    Parent      INTEGER   NOT NULL,
-    ParentDev   INTEGER   NOT NULL,
-    ChecksumId  INTEGER,
-    Dir         INTEGER,
-    Link        INTEGER,
-    MTime       INTEGER,
-    CTime       INTEGER,
-    ATime       INTEGER,
-    Mode        INTEGER,
-    UID         INTEGER,
-    GID         INTEGER, 
-    NLinks      INTEGER,
-    XattrId     INTEGER,
-    AclId       INTEGER,
-
-    PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
-    FOREIGN KEY(NameId)      REFERENCES Names(NameId),
-    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(XattrId)     REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(AclId)       REFERENCES CheckSums(ChecksumIdD)
-);
-
-CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
-
-CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, Device ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, ParentDev ASC, FirstSet ASC);
-CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, Device ASC, LastSet ASC);
-CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
-CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
-"""
-# End of schema
-
 # Utility functions
 
-fileInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
+_fieldInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                  "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                  "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
                  "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
                  "C2.Checksum AS xattrs, C3.Checksum AS acl "
 
-fileInfoJoin =    "FROM Files " \
+_fileInfoJoin =    "FROM Files " \
                   "JOIN Names ON Files.NameId = Names.NameId " \
                   "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
                   "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
-backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
+_backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
+
+_schemaVersion = 5
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -203,6 +132,11 @@ class TardisDB(object):
                 self.logger.error("No token/password specified")
                 raise Exception("No password specified")
 
+        version = self.getConfigValue('SchemaVersion')
+        if int(version) != _schemaVersion:
+            self.logger.error("Schema version mismatch: Database %s is %d:  Exepected %d.   Please convert", dbname, int(version), _schemaVersion)
+            raise Exception("Schema version mismatch: Database {} is {}:  Exepected {}.   Please convert".format(dbname, version, _schemaVersion))
+
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
             if f:
@@ -247,11 +181,11 @@ class TardisDB(object):
         """ Select the last backup set. """
         if completed:
             c = self.cursor.execute("SELECT " +
-                                     backupSetInfoFields +
+                                     _backupSetInfoFields +
                                     "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
             c = self.cursor.execute("SELECT " +
-                                     backupSetInfoFields +
+                                     _backupSetInfoFields +
                                     "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         return row
@@ -311,11 +245,11 @@ class TardisDB(object):
         #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
         c = self.cursor
         c.execute("SELECT " +
-                  fileInfoFields +
+                  _fieldInfoFields +
                   #"FROM Files "
                   #"JOIN Names ON Files.NameId = Names.NameId "
                   #"LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  fileInfoJoin +
+                  _fileInfoJoin +
                   "WHERE Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
@@ -366,7 +300,7 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
         c.execute("SELECT " +
-                  fileInfoFields + fileInfoJoin +
+                  _fieldInfoFields + _fileInfoJoin +
                   "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "device": device, "backup": backupset})
@@ -379,7 +313,7 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = backupset
         c = self.cursor.execute("SELECT " + 
-                                fileInfoFields + fileInfoJoin +
+                                _fieldInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 temp)
@@ -391,7 +325,7 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         c = self.cursor.execute("SELECT " +
-                                fileInfoFields + fileInfoJoin +
+                                _fieldInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
@@ -530,18 +464,18 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
-
+        added = self._bset(current)
         comp = 1 if compressed else 0
         if basis is None:
             chainlength = 0
         else:
             chainlength = self.getChainLength(basis) + 1
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength)",
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength, Added) "
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength, :added)",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
-                             "compressed": comp, "disksize": disksize, "chainlength": chainlength})
+                             "compressed": comp, "disksize": disksize, "chainlength": chainlength, "added": added})
         return self.cursor.lastrowid
 
     def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
@@ -593,8 +527,8 @@ class TardisDB(object):
         backupset = self._bset(current)
         #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
 
-        c = self.execute("SELECT " + fileInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
-                         fileInfoJoin +
+        c = self.execute("SELECT " + _fieldInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
+                         _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          {"parent": inode, "parentDev": device, "backup": backupset})
@@ -608,9 +542,9 @@ class TardisDB(object):
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
-        c = self.execute("SELECT " + fileInfoFields + ", "
+        c = self.execute("SELECT " + _fieldInfoFields + ", "
                          "C1.Basis AS basis, C1.InitVector AS iv " + 
-                         fileInfoJoin +
+                         _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          "Files.LastSet >= :first AND Files.FirstSet <= :last",
                          {"parent": inode, "parentDev": device, "first": first, "last": last})
@@ -625,7 +559,7 @@ class TardisDB(object):
         #self.logger.debug("list backup sets")
         #                 "Name AS name, BackupSet AS backupset "
         c = self.execute("SELECT " +
-                         backupSetInfoFields +
+                         _backupSetInfoFields +
                          "FROM Backups "
                          "ORDER BY backupset ASC", {})
         while True:
@@ -637,7 +571,7 @@ class TardisDB(object):
 
     def getBackupSetInfoById(self, bset):
         c = self.execute("SELECT " + 
-                         backupSetInfoFields +
+                         _backupSetInfoFields +
                          "FROM Backups WHERE BackupSet = :bset",
                          { "bset": bset })
         row = c.fetchone()
@@ -645,7 +579,7 @@ class TardisDB(object):
 
     def getBackupSetInfo(self, name):
         c = self.execute("SELECT " + 
-                         backupSetInfoFields +
+                         _backupSetInfoFields +
                          "FROM Backups WHERE Name = :name",
                          { "name": name })
         row = c.fetchone()
@@ -653,7 +587,7 @@ class TardisDB(object):
 
     def getBackupSetInfoForTime(self, time):
         c = self.execute("SELECT " + 
-                         backupSetInfoFields +
+                         _backupSetInfoFields +
                          "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
                          { "time": time })
         row = c.fetchone()
@@ -738,7 +672,7 @@ class TardisDB(object):
     def listPurgeSets(self, priority, timestamp, current=False):
         backupset = self._bset(current)
         # First, purge out the backupsets that don't match
-        c = self.cursor.execute("SELECT " + backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+        c = self.cursor.execute("SELECT " + _backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
             yield(row)
@@ -746,7 +680,7 @@ class TardisDB(object):
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         backupset = self._bset(current)
         # First, purge out the backupsets that don't match
-        c = self.cursor.execute("SELECT " + backupSetInfoFields +
+        c = self.cursor.execute("SELECT " + _backupSetInfoFields +
                                 " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
