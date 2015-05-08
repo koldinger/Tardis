@@ -31,7 +31,7 @@ Features currently planned to be implemented:
 6. ~~Python EGG setup.~~
 7. ~~Better daemon support.~~
 8. ~~LSB init script (systemctl support)?~~
-9. Space management.  Multiple purge schedules for different prioritys.  On demand purging when low on space.
+9. Space management.  ~~Multiple purge schedules for different priorities.~~  On demand purging when low on space.
 10. ~~Client side configuration files.~~ (as argument files)
 11. ~~Stand alone execution (no need for separate server)~~
 12. Remote access to data and files.
@@ -350,6 +350,10 @@ Password should only be set if a password is specified in the backup.  If you le
 Other options are available via -help.  (details TBD)
 
 Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
+
+Logwatch Support
+================
+Basic logwatch support is available in the logwatch directory.  You have to install these files by hand, no support is in setup.py yet.
 
 MacOS X Support
 ===============
