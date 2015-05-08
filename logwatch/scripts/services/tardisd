@@ -128,6 +128,8 @@ if ($Detail >= 10) {
     print "Session breakdown:\n";
     foreach my $session (keys %sessionInfo) {
         my $info = $sessionInfo{$session};
-        print $session, " ", $info->{'host'}, "\n";
+        my $host = $info->{'host'};
+        $host = "** no host named **" unless defined $host;
+        printf "%-20s %-20s %5s\n", $session, $host, $info->{'success'};
     }
 }
