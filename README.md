@@ -351,5 +351,13 @@ Other options are available via -help.  (details TBD)
 
 Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
 
+MacOS X Support
+===============
+I'm in the early stages of testing Tardis on MacOS X, but it appears that, for the most part, it works, at least the client.
 
+Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Python, and librsync.  You'll also need to remove all references to pyacl and posix1e in setup.py and Tardis/Client.py.  I'll adjust the code later to do this automatically, once testing proceeds.
+
+Beyond this, it appears to function as normal.
+
+Tested only on Yosemite.
 

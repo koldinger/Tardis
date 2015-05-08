@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     Compressed  INTEGER,            -- Boolean
     ChainLength INTEGER,
     InitVector  BLOB,
+    Added       INTEGER,            -- References BackupSet, but not foreign key, as sets can be deleted.
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
@@ -73,7 +74,7 @@ CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "4");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "5");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
 
 CREATE VIEW IF NOT EXISTS VFiles AS

@@ -1,0 +1,133 @@
+#! /usr/bin/perl
+ 
+####################################################
+# vim: set et sw=4 sts=4 fileencoding=utf-8:
+#
+# Tardis: A Backup System
+# Copyright 2013-2015, Eric Koldinger, All Rights Reserved.
+# kolding@washington.edu
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of the copyright holder nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+####################################################
+
+use strict;
+use Logwatch ':all';
+
+my $Debug = $ENV{'LOGWATCH_DEBUG'} || 0;
+my $Detail = $ENV{'LOGWATCH_DETAIL_LEVEL'} || 0;
+
+my $starts = 0;
+my $requests  = 0;
+my $sessions  = 0;
+my $completed = 0;
+my $success   = 0;
+my $newFiles = 0;
+my $updatedFiles = 0;
+my $data = 0;
+
+my %hosts = ();
+my %sessionInfo = ();
+
+## Session Format:
+# 2015-03-25 21:40:48,931 INFO : [466e21da-d372]: Request received from: 127.0.0.1 Session: 466e21da-d372-11e4-b3b8-003067ee8ca4
+# 2015-03-25 21:40:48,935 INFO : [466e21da-d372]: Creating backup for linux.koldware.com: Backup_2015-03-25_21:40:48 (Autoname: True) 0.22 1427344848.94
+# 2015-03-25 21:40:48,938 INFO : [466e21da-d372]: Created new backup set: 31: Backup_2015-03-25_21:40:48 466e21da-d372-11e4-b3b8-003067ee8ca4
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: Connection completed successfully: True  Runtime: 0:00:01.961591
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: New or replaced files:    1
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: Updated file:             0
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: Total file data received: 2.8 KB
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: Command breakdown:        {'CLN': 14, 'META': 1, 'BATCH': 2, 'DIR': 3, 'CON': 1}
+# 2015-03-25 21:40:50,929 INFO : [466e21da-d372]: Removed Orphans           0 (0 bytes)
+# 2015-03-25 21:40:51,538 INFO : [466e21da-d372]: Session from linux.koldware.com {466e21da-d372-11e4-b3b8-003067ee8ca4} Ending: True: 0:00:02.605941
+# 2015-03-25 21:40:51,539 INFO : [466e21da-d372]: Ending session 466e21da-d372-11e4-b3b8-003067ee8ca4 from 127.0.0.1
+#
+#  self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
+#  self.logger.info("New or replaced files:    %d", self.statNewFiles)
+#  self.logger.info("Updated file:             %d", self.statUpdFiles)
+#  self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
+#  self.logger.info("Command breakdown:        %s", self.statCommands)
+#  self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
+
+my $sessionId;
+while (<STDIN>) {
+    chomp;
+    if ($_ =~ /INFO : \[([0-9a-f-]+)\]: /)
+    {
+        $sessionId = $1;
+        if ($_ =~ /Request received from:\s*(\d+\.\d+\.\d+\.\d+)\s*Session:\s*([a-f0-9-]+)/) {
+            $requests++;
+            $sessionInfo{$sessionId} = { 'complete' => 'Folse' };
+            #$sessionInfo{$sessionId}->{'complete'} = "False";
+        } elsif ($_ =~ /Creating backup for\s*([\w\.]+):/) {
+            my $host = $1;
+            $sessions++;
+            $hosts{$host}++;
+            $sessionInfo{$sessionId}->{'host'} = $host;
+        } elsif ($_ =~ /Session from\s*([\w\.]+).*Ending:\s*(\w+)*/) { #\s*\{[a-f0-9-]\}\s*Ending: ({True|False})/) {
+            #Session from linux.koldware.com {466e21da-d372-11e4-b3b8-003067ee8ca4} Ending: True: 0:00:02.605941
+            $completed++;
+            if ($2 eq "True") {
+                $success++;
+            }
+            $sessionInfo{$sessionId}->{'success'} = $2;
+        } elsif ($_ =~ /New or replaced files:\s*(\d+)\s*$/) {
+            $newFiles += $1;
+            $sessionInfo{$sessionId}->{'new'} = $1;
+        } elsif ($_ =~ /Updated file:\s*(\d+)\s*$/) {
+            $updatedFiles += $1;
+            $sessionInfo{$sessionId}->{'upd'} = $1;
+        }
+    } elsif ($_ =~ /Starting server Port: (\d+)/) {
+        $starts++;
+    }
+
+}
+
+printf "Tardisd system starts: %d\n", $starts;
+print "\n";
+
+printf "Connection requests: %d\n", $requests;
+printf "Backups started    : %d\n", $sessions;
+printf "Complete backups   : %d\n", $success;
+printf "Files Uploaded     : %d\n", $newFiles;
+printf "Files Updated      : %d\n", $updatedFiles;
+
+if ($Detail >= 5) {
+    print "\n";
+    print "Sessions per Client:\n";
+    foreach my $host (keys %hosts) {
+        printf "%-15s: %d\n", $host, $hosts{$host};
+    }
+}
+
+
+if ($Detail >= 10) {
+    print "\n";
+    print "Session breakdown:\n";
+    foreach my $session (keys %sessionInfo) {
+        my $info = $sessionInfo{$session};
+        print $session, " ", $info->{'host'}, "\n";
+    }
+}
