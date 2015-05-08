@@ -38,6 +38,7 @@ use Logwatch ':all';
 my $Debug = $ENV{'LOGWATCH_DEBUG'} || 0;
 my $Detail = $ENV{'LOGWATCH_DETAIL_LEVEL'} || 0;
 
+my $starts = 0;
 my $requests  = 0;
 my $sessions  = 0;
 my $completed = 0;
@@ -98,14 +99,20 @@ while (<STDIN>) {
             $updatedFiles += $1;
             $sessionInfo{$sessionId}->{'upd'} = $1;
         }
+    } elsif ($_ =~ /Starting server Port: (\d+)/) {
+        $starts++;
     }
+
 }
 
+printf "Tardisd system starts: %d\n", $starts;
+print "\n";
+
 printf "Connection requests: %d\n", $requests;
-printf "Sessions started and completed: %d %d\n", $sessions, $completed;
-printf "Successful completions: %d\n", $success;
-printf "Files Uploaded: %d\n", $newFiles;
-printf "Files Updated:  %d\n", $updatedFiles;
+printf "Backups started    : %d\n", $sessions;
+printf "Complete backups   : %d\n", $success;
+printf "Files Uploaded     : %d\n", $newFiles;
+printf "Files Updated      : %d\n", $updatedFiles;
 
 if ($Detail >= 5) {
     print "\n";
