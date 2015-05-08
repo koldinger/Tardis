@@ -175,6 +175,12 @@ class BsonConnection(ProtocolConnection):
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
+class MsgPackConnection(ProtocolConnection):
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, version=Tardis.__version__):
+        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version)
+        # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
+        self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
+
 class NullConnection(Connection):
     def __init__(self, host, port, name):
         pass

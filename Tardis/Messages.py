@@ -32,10 +32,18 @@ import socket
 import os
 import sys
 import json
-import bson
+import msgpack
 import base64
 import struct
 import zlib
+
+try:
+    import bson
+    _supportBson = True
+except:
+    _supportBson = False
+    pass
+
 
 class Messages(object):
     __socket = None
@@ -161,6 +169,32 @@ class JsonMessages(TextMessages):
 
     def getEncoding(self):
         return "base64"
+
+class MsgPackMessages(BinMessages):
+    def __init__(self, socket, stats=None, compress=True):
+        BinMessages.__init__(self, socket, stats, compress=compress)
+    
+    def sendMessage(self, message, compress=True, raw=False):
+        if raw:
+            super(MsgPackMessages, self).sendMessage(message, compress=compress, raw=True)
+        else:
+            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=True), compress=compress)
+
+    def recvMessage(self, raw=False):
+        if raw:
+            message = super(MsgPackMessages, self).recvMessage()
+        else:
+            message = msgpack.unpackb(super(MsgPackMessages, self).recvMessage())
+        return message
+
+    def encode(self, data):
+        return data
+
+    def decode(self, data):
+        return data
+
+    def getEncoding(self):
+        return "bin"
 
 class BsonMessages(BinMessages):
     def __init__(self, socket, stats=None, compress=True):
