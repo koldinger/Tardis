@@ -365,3 +365,10 @@ Beyond this, it appears to function as normal.
 
 Tested only on Yosemite.
 
+Bugs in 0.22
+============
+I've identified two bugs in the 0.22 release that can have major impacts.
+  * File sizes are incorrectly recorded in compressed backups.  No real fix right now.  Data is just wrong in the database.
+  * Encryption keys are improperly generated if you use the --client option to tardis or any of the command line tools.   Keys are generated as if you were using the value in the TARDIS_CLIENT variable (or the default hostname if you haven't specified TARDIS_CLIENT).  This could be a major problem for existing encrypted databases that used a non-default client value originally.
+
+If you install after this message is here, from a post 0.22 version, these bugs are fixed.  If you have an encrypted or compressed (or both) database before, I recommend proceeding with extreme caution.  Maintain a 0.22 installation and use it to extract your backup data.
