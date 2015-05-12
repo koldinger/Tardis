@@ -186,7 +186,7 @@ def main():
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
         if password:
-            crypt = TardisCrypto.TardisCrypto(password)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
         password = None
 
         token = None

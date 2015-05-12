@@ -1239,7 +1239,7 @@ def main():
 
         token = None
         if password:
-            crypt = TardisCrypto.TardisCrypto(password)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
             token = crypt.createToken()
         password = None
 
