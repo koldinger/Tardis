@@ -60,6 +60,7 @@ configDefaults = {
     'Schema'            : schemaName,
 }
 
+logger = None
 
 def getDB(crypt, new=False):
     basedir = os.path.join(args.database, args.client)
@@ -341,8 +342,8 @@ def setupLogging():
 
 def main():
     try:
-        parseArgs()
         setupLogging()
+        parseArgs()
 
         crypt = None
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))

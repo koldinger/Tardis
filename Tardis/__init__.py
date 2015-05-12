@@ -28,4 +28,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import os
+
 __version__ = "0.22"
+
+def __check_features():
+    xattr_pkg = 'xattr'
+    acl_pkg   = 'pylibacl'
+    os_info = os.uname()
+    if os_info[0] == 'Linux':
+        return [xattr_pkg, acl_pkg]
+    elif os_info[0] == 'Darwin':
+        return [xattr_pkg]
+    else:
+        return []

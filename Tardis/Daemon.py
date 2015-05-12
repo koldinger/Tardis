@@ -1074,8 +1074,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 (count, size) = self.removeOrphans()
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
                 self.logger.info("New or replaced files:    %d", self.statNewFiles)
-                self.logger.info("Updated file:             %d", self.statUpdFiles)
-                self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
+                self.logger.info("Updated files:            %d", self.statUpdFiles)
+                self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
                 self.logger.info("Command breakdown:        %s", self.statCommands)
                 self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 

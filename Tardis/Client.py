@@ -46,8 +46,8 @@ import tempfile
 import cStringIO
 import pycurl
 import shlex
-import xattr
-import posix1e
+
+
 from functools import partial
 
 import librsync
@@ -59,6 +59,15 @@ import Connection
 import Util
 import Defaults
 import parsedatetime
+
+features = Tardis.__check_features()
+support_xattr = True if 'xattr' in features else False
+support_acl   = True if 'pylibacl' in features else False
+
+if support_xattr:
+    import xattr
+if support_acl:
+    import posix1e
 
 skipFile            = Defaults.getDefault('TARDIS_SKIP')
 excludeFile         = Defaults.getDefault('TARDIS_EXCLUDES')
@@ -520,7 +529,7 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        if args.xattr:
+        if support_xattr and args.xattr:
             attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
             items = attrs.items()
             if items:
@@ -539,7 +548,7 @@ def mkFileInfo(dir, name):
             ##    cks = addMeta(attr_string)
             #    finfo['xattr'] = cks
 
-        if args.acl and (not S_ISLNK(mode)):
+        if support_acl and args.acl and (not S_ISLNK(mode)):
             # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
             # Definitely an issue
             if posix1e.has_extended(pathname):
@@ -1066,8 +1075,10 @@ def processCommandLine():
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
-    parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
-    parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
+    if support_xattr:
+        parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
+    if support_acl:
+        parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')

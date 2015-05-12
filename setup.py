@@ -5,6 +5,7 @@ import sys, os
 import Tardis
 
 version = Tardis.__version__
+add_pkgs = Tardis.__check_features()
 
 setup(  name                    = 'Tardis-Backup',
         version                 = version,
@@ -12,12 +13,14 @@ setup(  name                    = 'Tardis-Backup',
         packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
         include_package_data    = True,
         zip_safe                = False,
-        install_requires = ['msgpack-python', 'daemonize', 'parsedatetime', 'pycrypto', 'xattr', 'pylibacl', 'pycurl', 'requests', 'flask', 'tornado', 'termcolor' ],
+        install_requires = ['msgpack-python', 'daemonize', 'parsedatetime', 'pycrypto', 'pycurl', 'requests', 'flask', 'tornado', 'termcolor' ] + add_pkgs,
         data_files = [( '/etc/tardis',              [ 'tardisd.cfg' ]),
                       ( 'schema',                   [ 'schema/tardis.sql' ]),
                       ( '/etc/init.d',              [ 'init/tardisd', 'init/tardisremote' ]),
                       ( '/usr/lib/systemd/system',  [ 'init/tardisd.service', 'init/tardisremote.service' ]),
-                      ( '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ])
+                      ( '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ]),
+                      #( '/etc/logwatch/conf/services', [ 'logwatch/tardisd.conf' ]),
+                      #( '/etc/logwatch/scripts/services', [ 'logwatch/tardisd.pl' ]),
                      ],
         entry_points = {
                 'console_scripts' : [
