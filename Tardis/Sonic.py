@@ -353,7 +353,7 @@ def main():
                 return -1
 
         if password:
-            crypt = TardisCrypto.TardisCrypto(password)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
             password = None
             args.password = None
 
