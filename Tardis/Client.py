@@ -1051,7 +1051,7 @@ def processCommandLine():
 
     parser.add_argument('--server', '-s',   dest='server', default=Defaults.getDefault('TARDIS_SERVER'),        help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',     dest='port', type=int, default=Defaults.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
-    parser.add_argument('--log', '-l',      dest='logfile', default=None,                           help='Send logging output to specified file.  Default: stderr')
+    parser.add_argument('--log', '-l',      dest='logfiles', action='append', default=[], nargs="?", const=sys.stderr,  help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
     parser.add_argument('--client',         dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
@@ -1133,8 +1133,8 @@ def processCommandLine():
 
     return parser.parse_args()
 
-def setupLogging(logfile, verbosity):
-    global logger, msglogger
+def setupLogging(logfiles, verbosity):
+    global logger
 
     # Define a couple custom logging levels
     logging.STATS = logging.INFO + 1
@@ -1150,16 +1150,19 @@ def setupLogging(logfile, verbosity):
 
     formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
 
-    if logfile:
-        handler = logging.handlers.WatchedFileHandler(logfile)
-    else:
-        handler = logging.StreamHandler(sys.stderr)
+    if len(logfiles) == 0:
+        logfiles.append(sys.stderr)
+    for logfile in logfiles:
+        if type(logfile) == str:
+            handler = logging.handlers.WatchedFileHandler(logfile)
+        else:
+            handler = logging.StreamHandler(logfile)
 
-    handler.setFormatter(formatter)
-    logging.root.addHandler(handler)
+        handler.setFormatter(formatter)
+        logging.root.addHandler(handler)
+
+    # Default logger
     logger = logging.getLogger('')
-
-
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
     logger.setLevel(loglevel)
@@ -1206,7 +1209,7 @@ def main():
 
     # Set up logging
     verbosity=args.verbose if args.verbose else 0
-    setupLogging(args.logfile, verbosity)
+    setupLogging(args.logfiles, verbosity)
 
     starttime = datetime.datetime.now()
     subserver = None
