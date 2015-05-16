@@ -656,6 +656,16 @@ class TardisDB(object):
         else:
             return False
 
+    def setKeys(self, token, filenameKey, contentKey):
+        self.beginTransaction()
+        self.setToken(token)
+        self.setConfigValue('FilenameKey', filenameKey)
+        self.setConfigValue('ContentKey', contentKey)
+        self.commit()
+
+    def getKeys(self):
+        return (self.getConfigValue('FilenameKey'), self.getConfigValue('ContentKey'))
+
     def beginTransaction(self):
         self.cursor.execute("BEGIN")
 

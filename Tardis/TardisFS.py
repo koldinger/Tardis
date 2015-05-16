@@ -186,8 +186,15 @@ class TardisFS(fuse.Fuse):
                    dbPath = os.path.join(self.path, self.dbname)
                    self.tardis = TardisDB.TardisDB(dbPath, token=token)
 
+                # Insert the retrieved keys from the DB
+                if self.crypt:
+                    (f, c) = self.tardis.getKeys()
+                    self.crypt.setKeys(f, c)
+
+                # Create a regenerator.
                 self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
                 self.files = {}
+
             except Exception as e:
                 self.log.critical("Could not initialize: %s", str(e))
                 self.log.exception(e)

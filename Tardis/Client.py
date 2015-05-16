@@ -936,6 +936,19 @@ def sendAndReceive(message):
     responseTimes.append(time.time() - sendTime)
     return response
 
+def sendKeys(crypt):
+    (f, c) = crypt.getKeys()
+    token = crypt.createToken()
+    message = { "message": "SETKEYS",
+                "filenameKey": f,
+                "contentKey": c,
+                "token": token
+                }
+    response = sendAndReceive(message)
+    checkMessage(response, 'ACKSETKEYS')
+    if response['response'] != 'OK':
+        logger.error("Could not set keys")
+
 def handleResponse(response):
     msgtype = response['message']
     if msgtype == 'ACKDIR':
@@ -1292,6 +1305,14 @@ def main():
 
     if not args.crypt:
         crypt = None
+
+    if crypt:
+        (f, c) = conn.getKeys()
+        if f and c:
+            crypt.setKeys(f, c)
+        else:
+            crypt.genKeys()
+            sendKeys(crypt)
 
     # Now, do the actual work here.
     try:
