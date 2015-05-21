@@ -439,11 +439,15 @@ def main():
             tardis = TardisDB.TardisDB(dbPath, token=token)
     except Exception as e:
         logger.critical("Unable to connect to database: %s", str(e))
-        logger.exception(e)
+        #logger.exception(e)
         sys.exit(1)
 
     if not args.crypt:
         crypt = None
+
+    if crypt:
+        (f, c) = tardis.getKeys()
+        crypt.setKeys(f, c)
 
     r = Regenerator(cache, tardis, crypt=crypt)
 

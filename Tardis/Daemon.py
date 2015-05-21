@@ -117,6 +117,7 @@ configDefaults = {
     'CertFile'          : None,
     'KeyFile'           : None,
     'PidFile'           : pidFileName,
+    'ReuseAddr'         : str(False),
     'MonthFmt'          : 'Monthly-%Y-%m',
     'WeekFmt'           : 'Weekly-%Y-%U',
     'DayFmt'            : 'Daily-%Y-%m-%d',
@@ -782,6 +783,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, True)
 
+    def processSetKeys(self, message):
+        filenameKey = message['filenameKey']
+        contentKey  = message['contentKey']
+        token       = message['token']
+
+        ret = self.db.setKeys(token, filenameKey, contentKey)
+        response = {
+            'message': 'ACKSETKEYS',
+            'response': ret
+        }
+        return (response, True)
+
     def processMessage(self, message):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
@@ -810,6 +823,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (response, flush) =  self.processMeta(message)
         elif messageType == "METADATA":
             (response, flush) =  self.processMetaData(message)
+        elif messageType == "SETKEYS":
+            (response, flush) = self.processSetKeys(message)
         else:
             raise Exception("Unknown message type", messageType)
 
@@ -820,6 +835,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getDB(self, host, token):
         script = None
+        ret = "EXISTING"
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
@@ -832,10 +848,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 raise InitFailedException("Password required for creation")
             self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
             script = schemaFile
+            ret = "NEW"
 
         self.db = TardisDB.TardisDB(self.dbfile, initialize=script, backup=True, connid=connid, token=token, user=self.server.user, group=self.server.group, numbackups=self.server.dbbackups)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
+        return ret
 
     def startSession(self, name, force):
         self.name = name
@@ -984,7 +1002,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             serverName = None
             try:
-                self.getDB(host, token)
+                new = self.getDB(host, token)
                 self.startSession(name, force)
                 if priority is None:
                     priority = 0
@@ -1013,10 +1031,22 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.messenger = Messages.BsonMessages(sock, compress=compress)
             else:
                 message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
-                sock.sendall(json.dumps(mesage))
+                sock.sendall(json.dumps(message))
                 raise InitFailedException("Unknown encoding: ", encoding)
 
-            response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "name": serverName if serverName else name}
+            response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "new": new, "name": serverName if serverName else name }
+            if token:
+                filenameKey = self.db.getConfigValue('FilenameKey')
+                contentKey  = self.db.getConfigValue('ContentKey')
+
+                if (filenameKey is None) ^ (contentKey is None):
+                    self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
+                
+                if filenameKey:
+                    response['filenameKey'] = filenameKey
+                if contentKey:
+                    response['contentKey'] = contentKey
+
             sock.sendall(json.dumps(response))
 
             started = True
@@ -1092,6 +1122,11 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args
+
+        if args.reuseaddr:
+            # Allow reuse of the address before timeout if requested.
+            self.allow_reuse_address = True
+
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
         logger.info("TCP Server %s Running: %s", Tardis.__version__, self.dbname)
@@ -1252,6 +1287,9 @@ def processArgs():
                                                                         help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
+
+    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean,default=config.getboolean(t, 'ReuseAddr'),
+                                                                        help='Reuse the socket address immediately')
 
     parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
                                                                         help='Run as a daemon')
