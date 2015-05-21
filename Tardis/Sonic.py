@@ -89,7 +89,24 @@ def setToken(crypt):
         (db, cache) = getDB(None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
-        db.setKeys(crypt.getToken(), f, c)
+        db.setKeys(crypt.createToken(), f, c)
+        db.close()
+        return 0
+    except Exception as e:
+        logger.error(e)
+        return 1
+
+def changePassword(crypt, crypt2):
+    try:
+        (db, cache) = getDB(crypt)
+        # Grab the keys from one crypt object.
+        # Need to do this because getKeys/setKeys assumes they're encrypted, and we need the raw
+        # versions
+        crypt2.filenameKey = crypt.filenameKey
+        crypt2.contentKey = crypt.contentKey
+        # Now get the encrypted versions
+        (f, c) = crypt2.getKeys()
+        db.setKeys(crypt2.createToken(), f, c)
         db.close()
         return 0
     except Exception as e:
@@ -361,6 +378,7 @@ def main():
             if pw2 != password:
                 logger.error("Passwords don't match")
                 return -1
+            pw2 = None
 
         if password:
             crypt = TardisCrypto.TardisCrypto(password, args.client)
@@ -377,8 +395,17 @@ def main():
             return setToken(crypt)
 
         if args.command == 'chpass':
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
+            if args.newpw:
+                newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
+                if newpw2 != newpw:
+                    logger.error("Passwords don't match")
+                    return -1
+                newpw2 = None
+            crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
+            newpw = None
+            args.newpw = None
             return changePassword(crypt, crypt2)
-
 
         (db, cache) = getDB(crypt)
 

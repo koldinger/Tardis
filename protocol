@@ -1,15 +1,10 @@
 #### This is hopelessly out of date at this point.
 
 C->S    open
-S->C        "TARDIS proto=1.0"
-C->S        "BACKUP host name encoding"
-                host == hostname
-                name == backupset name
-                encoding = JSON or BIN
-                EX: 
-                    BACKUP linux.koldware.com Daily-Jan-1-2013 JSON
-            "SESSION uuid"
-                reopens/continues a session which previously existed
+S->C        "TARDIS 1.1/SSL"
+C->S        { "message": "BACKUP", "host": client, "encoding": encoding, "name": name, "priority": priority, "force": force, "version": version, "compress": compress, "protocol": protocol
+              "autoname": auto, "clienttime": time, ["token": token]  }
+
 S->C        "OK uuid"
             "FAIL reasonCode string"
 
