@@ -99,6 +99,7 @@ batchMsgs           = []
 metaCache           = Util.bidict()
 newmeta             = []
 
+
 crypt               = None
 logger              = None
 
@@ -107,7 +108,9 @@ report = {}
 responseTimes       = []
 
 inodeDB             = {}
-
+dirHashes           = {
+    (0, 0): ('000000', 0)
+    }
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
 # will only have a message
@@ -448,6 +451,20 @@ def handleAckMeta(message):
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
         (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
 
+def sendDirHash(inode):
+    i = tuple(inode)
+    (h,s) = dirHashes[i]
+
+    message = {
+        'message': 'DHSH',
+        'inode'  : inode,
+        'hash'   : h,
+        'size'   : s
+        }
+    batchMessage(message)
+    if i != (0, 0):             # Leave the dummy entry
+        del dirHashes[i]
+
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
 
@@ -491,6 +508,9 @@ def handleAckDir(message):
         cksum.extend(content)
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
+
+    if message['last']:
+        sendDirHash(message['inode'])
 
 def addMeta(meta):
     global metaCache
@@ -631,17 +651,9 @@ def handleAckClone(message):
         finfo = tuple(i)
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
-            if len(files) < args.batchdirs:
-                if logdirs:
-                    logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
-                (inode, device) = finfo
-                if newmeta:
-                    batchMessage(makeMetaMessage())
-                batchMessage(makeDirMessage(path, inode, device, files))
-            else:
-                if logdirs:
-                    logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
-                sendDirChunks(path, finfo, files)
+            if logdirs:
+                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
+            sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
 
     # Purge out what hasn't changed
@@ -716,12 +728,12 @@ def sendPurge(relative):
 
     response = batchMessage(message, flush=True, batch=False)
 
-def sendDirChunks(path, inode, files):
+def sendDirChunks(path, inode, files, hash=None):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     message = {
         'message': 'DIR',
-        'path':  path,
-        'inode': list(inode)
+        'path'   :  path,
+        'inode'  : list(inode),
     }
 
     chunkNum = 0
@@ -735,15 +747,6 @@ def sendDirChunks(path, inode, files):
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
-
-def makeDirMessage(path, inode, dev, files):
-    message = {
-        'files':  files,
-        'inode':  [inode, dev],
-        'path':   path,
-        'message': 'DIR',
-        }
-    return message
 
 def makeMetaMessage():
     global newmeta
@@ -796,12 +799,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
         else:
+            h = hashDir(files)
+            dirHashes[(s.st_ino, s.st_dev)] = h
+            if logger.isEnabledFor(logging.DIRS):
+                logger.log(logging.DIRS, "Dir: [N]: %s", Util.shortPath(dir))
             if newmeta:
                 batchMessage(makeMetaMessage())
-            if len(files) < args.batchdirs:
-                batchMessage(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
-            else:
-                sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
+            sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -821,13 +825,20 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         logger.exception(e)
         raise
 
-def cloneDir(inode, device, files, path):
+def hashDir(files):
+    """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     filenames = sorted([x["name"] for x in files])
     m = hashlib.md5()
     for f in filenames:
         m.update(f)
+    return (m.hexdigest(), len(filenames))
 
-    message = {'inode':  inode, 'dev': device, 'numfiles': len(files), 'cksum': m.hexdigest()}
+def cloneDir(inode, device, files, path):
+    """ Send a clone message, containing the hash of the filenames, and the number of files """
+    (h, s) = hashDir(files)
+    dirHashes[(inode, device)] = (h, s)
+
+    message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
     cloneContents[(inode, device)] = (path, files)
     if len(cloneDirs) >= args.clones:
@@ -961,6 +972,9 @@ def handleResponse(response):
         handleAckSum(response)
     elif msgtype == 'ACKMETA':
         handleAckMeta(response)
+    elif msgtype == 'ACKDHSH':
+        # TODO: Respond
+        pass
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
             handleResponse(ack)
@@ -995,9 +1009,10 @@ def sendDirEntry(parent, device, files):
     message = {
         'message': 'DIR',
         'files': files,
-        'path':  None,
+        'path' : None,
         'inode': [parent, device],
-        'files': files
+        'files': files,
+        'last' : True
         }
 
     #for x in map(os.path.realpath, args.directories):

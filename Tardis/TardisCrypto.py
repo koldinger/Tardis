@@ -69,8 +69,8 @@ class TardisCrypto:
         cipher = AES.new(self.contentKey, AES.MODE_CBC, IV=iv)
         return cipher
 
-    def getFilenameCipher(self):
-        cipher = AES.new(self.filenameKey, AES.MODE_ECB)
+    def getFilenameCipher(self, iv):
+        cipher = AES.new(self.filenameKey, AES.MODE_CFB, IV=iv)
         return cipher
 
     def getIV(self, ivLength=AES.block_size):
@@ -111,8 +111,13 @@ class TardisCrypto:
         return encpath
 
     def encryptFilename(self, name):
-        cipher = self.getFilenameCipher()
-        return base64.b64encode(cipher.encrypt(self.pad(name)), self.altchars)
+        s = hashlib.sha1()
+        s.update(name)
+        i = s.digest()
+        print i
+        i = i[0:self.blocksize]
+        cipher = self.getFilenameCipher(i)
+        return base64.b64encode((i + cipher.encrypt()), self.altchars)
 
     def decryptFilename(self, name):
         cipher = self.getFilenameCipher()
