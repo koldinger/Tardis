@@ -42,22 +42,6 @@ Tardis uses the librsync package, but since that is not current on pypi, it's co
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
 
-Version 0.20 Notice
-==================
-As of version 0.20, there are several small, but incompatible changes.
-
-First, the data transfer protocol has changed.  0.20 client will not communicate with the 0.19 or earlier server, or vice versa.  The new
-version is somewhat more efficient, especially in memory usage on the client.
-
-Secondly, the database schema has grown several new fields.  It is necessary to run the convert-2to-3.py script, in the schema directory,
-before attempting to run a server against it.   This will add the new fields, and populate them as necessary.  The script is simple, run as
-    * python <path/to/Tardis>/schema/convert-2to3.py <path/to/database>/<client>/tardis.db
-This can take quite a while, depending on the size of your backups, the number of files, and the speed of your computer.
-
-Amongst the new fields created are support for extended attributes and posix access control lists.  Extended attributes will arrive in version 0.21, 
-which will again, constitute a change in the communications protocol.  Access control lists may also arrive in 0.21.  TBD.
-
-
 Future Releases
 ===============
 Several releases will be coming soon:
@@ -365,3 +349,16 @@ Beyond this, it appears to function as normal.
 
 Tested only on Yosemite.
 
+Bugs in 0.22
+============
+I've identified two bugs in the 0.22 release that can have major impacts.
+  * File sizes are incorrectly recorded in compressed backups.  No real fix right now.  Data is just wrong in the database.
+  * Encryption keys are improperly generated if you use the --client option to tardis or any of the command line tools.   Keys are generated as if you were using the value in the TARDIS_CLIENT variable (or the default hostname if you haven't specified TARDIS_CLIENT).  This could be a major problem for existing encrypted databases that used a non-default client value originally.
+
+If you install after this message is here, from a post 0.22 version, these bugs are fixed.  If you have an encrypted or compressed (or both) database before, I recommend proceeding with extreme caution.  Maintain a 0.22 installation and use it to extract your backup data.
+
+Note on Post 0.22 Installation
+==============================
+Sometime after the 0.22 release, the BSON package I was using in Tardis disappeared.  As a result, I've switched from using BSON to a different serialization format called MsgPack.  BSON is still supported if it's on your system, but MsgPack has become the default.
+
+Also, post 0.22 I've introduced checking in the Daemon to make sure you have the correct database version.  If you are out of date, it will complain.  There are scripts in the schema directory called things like "convert2-3.py", "convert3-4.py", etc, to convert the various formats.  These scripts are invoked "python convert3-4.py /path/to/tardis.db".  Some are significant, for instance 4-5 is really slow (you can remove the SQL Update command and be just fine, it will be hugely faster, should you so desire).
