@@ -117,6 +117,7 @@ configDefaults = {
     'CertFile'          : None,
     'KeyFile'           : None,
     'PidFile'           : pidFileName,
+    'ReuseAddr'         : str(False),
     'MonthFmt'          : 'Monthly-%Y-%m',
     'WeekFmt'           : 'Weekly-%Y-%U',
     'DayFmt'            : 'Daily-%Y-%m-%d',
@@ -1030,7 +1031,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.messenger = Messages.BsonMessages(sock, compress=compress)
             else:
                 message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
-                sock.sendall(json.dumps(mesage))
+                sock.sendall(json.dumps(message))
                 raise InitFailedException("Unknown encoding: ", encoding)
 
             response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "new": new, "name": serverName if serverName else name }
@@ -1121,6 +1122,11 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
     def __init__(self, args, config):
         self.config = config
         self.args = args
+
+        if args.reuseaddr:
+            # Allow reuse of the address before timeout if requested.
+            self.allow_reuse_address = True
+
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
         logger.info("TCP Server %s Running: %s", Tardis.__version__, self.dbname)
@@ -1281,6 +1287,9 @@ def processArgs():
                                                                         help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
+
+    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean,default=config.getboolean(t, 'ReuseAddr'),
+                                                                        help='Reuse the socket address immediately')
 
     parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
                                                                         help='Run as a daemon')
