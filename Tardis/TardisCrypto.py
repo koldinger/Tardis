@@ -56,14 +56,14 @@ class TardisCrypto:
 
         self.client = client
         self.salt = hashlib.sha256(client).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
-        self.tokenKey   = keys[0:self.keysize]                                     # First 256 bit key
-        self.keyKey     = keys[self.keysize:]                                     # And the other one
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)     # 2x256 bit keys
+        self.keyKey     = keys[0:self.keysize]                                      # First 256 bit key
+        self.tokenKey   = keys[self.keysize:]                                       # And the other one
 
     def changePassword(self, newPassword):
         keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
-        self.tokenKey   = keys[0:self.keysize]                                     # First 256 bit key
-        self.keyKey     = keys[self.keysize:]                                     # And the other one
+        self.keyKey     = keys[0:self.keysize]                                      # First 256 bit key
+        self.tokenKey   = keys[self.keysize:]                                       # And the other one
 
     def getContentCipher(self, iv):
         cipher = AES.new(self.contentKey, AES.MODE_CBC, IV=iv)
@@ -153,6 +153,9 @@ class TardisCrypto:
 if __name__ == "__main__":
     enc = TardisCrypto("I've got a password, do you?")
     dec = TardisCrypto("I've got a password, do you?")
+
+    print enc.createToken()
+    print dec.createToken()
 
     enc.genKeys()
     (a, b) = enc.getKeys()
