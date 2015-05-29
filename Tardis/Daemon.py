@@ -916,7 +916,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             for c in orphans:
                 # And remove them each....
                 try:
-                    path = self.cache.path(c))
+                    path = self.cache.path(c)
                     if os.path.exists(path):
                         s = os.stat(self.cache.path(c))
                         count += 1
