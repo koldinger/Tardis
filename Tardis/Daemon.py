@@ -717,14 +717,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             device = d['dev']
             info = self.db.getFileInfoByInode((inode, device), current=True)
 
-
             if info and info['size'] is not None and info['checksum'] is not None:
                 logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
                 if (info['size'] == d['numfiles']) and (info['checksum'] == d['cksum']):
                     rows = self.db.cloneDir((inode, device))
                     done.append([inode, device])
                 else:
-                    self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], int(info['checksum']), d['cksum'])
+                    self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
                     content.append([inode, device])
             else:
                 self.logger.warning("No info available to process clone (%d %d)", inode, device)
