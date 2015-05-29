@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     ChainLength INTEGER,
     InitVector  BLOB,
     Added       INTEGER,            -- References BackupSet, but not foreign key, as sets can be deleted.
+    IsFile      INTEGER,            -- Boolean, is there a file backing this checksum
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)
 );
 
@@ -44,7 +45,8 @@ CREATE TABLE IF NOT EXISTS Files (
     Device      INTEGER   NOT NULL,
     Parent      INTEGER   NOT NULL,
     ParentDev   INTEGER   NOT NULL,
-    ChecksumId  INTEGER,
+    ChecksumId  INTEGER,            -- On a file, represents the file data.  On a directory, the hash of the filenames in the directory.
+                                    -- On a directory, this can be rewritten over time, and is the most recent hash.
     Dir         INTEGER,
     Link        INTEGER,
     MTime       INTEGER,

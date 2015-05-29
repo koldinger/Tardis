@@ -397,6 +397,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             "status"    : "OK",
             "path"      : data["path"],
             "inode"     : data["inode"],
+            "last"      : data["last"],
             "done"      : list(done),
             "cksum"     : list(cksum),
             "content"   : list(content),
@@ -406,6 +407,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
 
         return (response, True)
+
+    def processDirHash(self, message):
+        checksum = message['hash']
+        inode = tuple(message['inode'])
+        ckinfo = self.db.getChecksumInfo(checksum)
+        if ckinfo:
+            cksid = ckinfo['checksumid']
+        else:
+            cksid = self.db.insertChecksumFile(checksum, size=message['size'], isFile=False)
+        self.db.updateDirChecksum(inode, cksid)
+        response = {
+            "message" : "ACKDHSH",
+            "status"  : "OK"
+        }
+        return (response, False)
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
@@ -699,14 +715,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         for d in message['clones']:
             inode = d['inode']
             device = d['dev']
-            (numfiles, checksum) = self.checksumDir((inode, device))
-            if numfiles != d['numfiles'] or checksum != d['cksum']:
-                self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, numfiles, d['numfiles'], checksum, d['cksum'])
-                content.append([inode, device])
+            info = self.db.getFileInfoByInode((inode, device), current=True)
+
+
+            if info and info['size'] is not None and info['checksum'] is not None:
+                logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
+                if (info['size'] == d['numfiles']) and (info['checksum'] == d['cksum']):
+                    rows = self.db.cloneDir((inode, device))
+                    done.append([inode, device])
+                else:
+                    self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], int(info['checksum']), d['cksum'])
+                    content.append([inode, device])
             else:
-                ### TODO Update to include device
-                rows = self.db.cloneDir((inode, device))
-                done.append([inode, device])
+                self.logger.warning("No info available to process clone (%d %d)", inode, device)
+                content.append([inode, device])
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
 
@@ -803,6 +825,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if messageType == "DIR":
             (response, flush) = self.processDir(message)
+        elif messageType == "DHSH":
+            (response, flush) = self.processDirHash(message)
         elif messageType == "SGR":
             (response, flush) = self.processSigRequest(message)
         elif messageType == "SIG":
@@ -892,11 +916,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             for c in orphans:
                 # And remove them each....
                 try:
-                    s = os.stat(self.cache.path(c))
-                    if s:
+                    path = self.cache.path(c)
+                    if os.path.exists(path):
+                        s = os.stat(self.cache.path(c))
                         count += 1
                         size += s.st_size
-                    self.cache.remove(c)
+                        self.cache.remove(c)
                     sig = c + ".sig"
                     sigpath = self.cache.path(sig)
                     if os.path.exists(sigpath):
@@ -905,12 +930,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             count += 1
                             size += s.st_size
                         self.cache.remove(sig)
+                    self.db.deleteChecksum(c)
                 except OSError:
-                    self.logger.warning("No checksum file for checksum %s", c)
+                    self.logger.warning("Unable to remove checksum %s", c)
                 except Exception as e:
                     if self.server.exceptions:
                         self.logger.exception(e)
-                self.db.deleteChecksum(c)
             if count:
                 self.purged = True
             return (count, size)
@@ -1104,8 +1129,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 (count, size) = self.removeOrphans()
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
                 self.logger.info("New or replaced files:    %d", self.statNewFiles)
-                self.logger.info("Updated file:             %d", self.statUpdFiles)
-                self.logger.info("Total file data received: %s", Util.fmtSize(self.statBytesReceived))
+                self.logger.info("Updated files:            %d", self.statUpdFiles)
+                self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
                 self.logger.info("Command breakdown:        %s", self.statCommands)
                 self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 

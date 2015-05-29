@@ -44,20 +44,20 @@ import Rotator
 # Utility functions
 
 _fieldInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
-                 "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
-                 "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                 "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
-                 "C2.Checksum AS xattrs, C3.Checksum AS acl "
+                   "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
+                   "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
+                   "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
+                   "C2.Checksum AS xattrs, C3.Checksum AS acl "
 
 _fileInfoJoin =    "FROM Files " \
-                  "JOIN Names ON Files.NameId = Names.NameId " \
-                  "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
-                  "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
-                  "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
+                   "JOIN Names ON Files.NameId = Names.NameId " \
+                   "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
+                   "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
+                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
-                      "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
-                      "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
+                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
+                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
 
 _schemaVersion = 5
 
@@ -431,6 +431,14 @@ class TardisDB(object):
                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                      temp)
 
+    def updateDirChecksum(self, directory, cksid, current=True):
+        bset = self._bset(current)
+        (inode, device) = directory
+        self.execute("UPDATE FILES "
+                     "SET ChecksumID = :cksid "
+                     "WHERE Inode = :inode AND DEVICE = :device AND :bset BETWEEN FirstSet AND LastSet",
+                     {"inode": inode, "device": device, "cksid": cksid, "bset": bset})
+
     def extendFile(self, parent, name, old=False, current=True):
         old = self._bset(old)
         (parIno, parDev) = parent
@@ -464,31 +472,29 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True):
+    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
-        comp = 1 if compressed else 0
+
         if basis is None:
             chainlength = 0
         else:
             chainlength = self.getChainLength(basis) + 1
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength, Added) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength, :added)",
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength, Added, IsFile) "
+                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
-                             "compressed": comp, "disksize": disksize, "chainlength": chainlength, "added": added})
+                             "compressed": int(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return self.cursor.lastrowid
 
     def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
         self.logger.debug("Updating checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
-
-        comp = 1 if compressed else 0
 
         self.cursor.execute("UPDATE CheckSums SET "
                             "Size = :size, InitVector = :iv, Basis = :basis, DeltaSize = :deltasize, "
                             "Compressed = :compressed, DiskSize = :disksize "
                             "WHERE Checksum = :checksum",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
-                             "compressed": comp, "disksize": disksize})
+                             "compressed": int(compressed), "disksize": disksize})
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)

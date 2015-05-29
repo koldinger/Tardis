@@ -46,8 +46,8 @@ import tempfile
 import cStringIO
 import pycurl
 import shlex
-import xattr
-import posix1e
+
+
 from functools import partial
 
 import librsync
@@ -59,6 +59,15 @@ import Connection
 import Util
 import Defaults
 import parsedatetime
+
+features = Tardis.__check_features()
+support_xattr = True if 'xattr' in features else False
+support_acl   = True if 'pylibacl' in features else False
+
+if support_xattr:
+    import xattr
+if support_acl:
+    import posix1e
 
 skipFile            = Defaults.getDefault('TARDIS_SKIP')
 excludeFile         = Defaults.getDefault('TARDIS_EXCLUDES')
@@ -90,6 +99,7 @@ batchMsgs           = []
 metaCache           = Util.bidict()
 newmeta             = []
 
+
 crypt               = None
 logger              = None
 
@@ -98,7 +108,9 @@ report = {}
 responseTimes       = []
 
 inodeDB             = {}
-
+dirHashes           = {
+    (0, 0): ('000000', 0)
+    }
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
 # will only have a message
@@ -439,6 +451,20 @@ def handleAckMeta(message):
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
         (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
 
+def sendDirHash(inode):
+    i = tuple(inode)
+    (h,s) = dirHashes[i]
+
+    message = {
+        'message': 'DHSH',
+        'inode'  : inode,
+        'hash'   : h,
+        'size'   : s
+        }
+    batchMessage(message)
+    if i != (0, 0):             # Leave the dummy entry
+        del dirHashes[i]
+
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
 
@@ -483,6 +509,9 @@ def handleAckDir(message):
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
+    if message['last']:
+        sendDirHash(message['inode'])
+
 def addMeta(meta):
     global metaCache
     global newmeta
@@ -520,7 +549,7 @@ def mkFileInfo(dir, name):
             'dev':    s.st_dev
             }
 
-        if args.xattr:
+        if support_xattr and args.xattr:
             attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
             items = attrs.items()
             if items:
@@ -539,7 +568,7 @@ def mkFileInfo(dir, name):
             ##    cks = addMeta(attr_string)
             #    finfo['xattr'] = cks
 
-        if args.acl and (not S_ISLNK(mode)):
+        if support_acl and args.acl and (not S_ISLNK(mode)):
             # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
             # Definitely an issue
             if posix1e.has_extended(pathname):
@@ -622,17 +651,9 @@ def handleAckClone(message):
         finfo = tuple(i)
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
-            if len(files) < args.batchdirs:
-                if logdirs:
-                    logger.log(logging.DIRS, "Dir: [r]: %s", Util.shortPath(path))
-                (inode, device) = finfo
-                if newmeta:
-                    batchMessage(makeMetaMessage())
-                batchMessage(makeDirMessage(path, inode, device, files))
-            else:
-                if logdirs:
-                    logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
-                sendDirChunks(path, finfo, files)
+            if logdirs:
+                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
+            sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
 
     # Purge out what hasn't changed
@@ -707,12 +728,12 @@ def sendPurge(relative):
 
     response = batchMessage(message, flush=True, batch=False)
 
-def sendDirChunks(path, inode, files):
+def sendDirChunks(path, inode, files, hash=None):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     message = {
         'message': 'DIR',
-        'path':  path,
-        'inode': list(inode)
+        'path'   :  path,
+        'inode'  : list(inode),
     }
 
     chunkNum = 0
@@ -726,15 +747,6 @@ def sendDirChunks(path, inode, files):
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
-
-def makeDirMessage(path, inode, dev, files):
-    message = {
-        'files':  files,
-        'inode':  [inode, dev],
-        'path':   path,
-        'message': 'DIR',
-        }
-    return message
 
 def makeMetaMessage():
     global newmeta
@@ -787,12 +799,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
             cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
         else:
+            h = hashDir(files)
+            dirHashes[(s.st_ino, s.st_dev)] = h
+            if logger.isEnabledFor(logging.DIRS):
+                logger.log(logging.DIRS, "Dir: [N]: %s", Util.shortPath(dir))
             if newmeta:
                 batchMessage(makeMetaMessage())
-            if len(files) < args.batchdirs:
-                batchMessage(makeDirMessage(os.path.relpath(dir, top), s.st_ino, s.st_dev, files))
-            else:
-                sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
+            sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -812,13 +825,20 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         logger.exception(e)
         raise
 
-def cloneDir(inode, device, files, path):
+def hashDir(files):
+    """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     filenames = sorted([x["name"] for x in files])
     m = hashlib.md5()
     for f in filenames:
         m.update(f)
+    return (m.hexdigest(), len(filenames))
 
-    message = {'inode':  inode, 'dev': device, 'numfiles': len(files), 'cksum': m.hexdigest()}
+def cloneDir(inode, device, files, path):
+    """ Send a clone message, containing the hash of the filenames, and the number of files """
+    (h, s) = hashDir(files)
+    dirHashes[(inode, device)] = (h, s)
+
+    message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
     cloneContents[(inode, device)] = (path, files)
     if len(cloneDirs) >= args.clones:
@@ -952,6 +972,9 @@ def handleResponse(response):
         handleAckSum(response)
     elif msgtype == 'ACKMETA':
         handleAckMeta(response)
+    elif msgtype == 'ACKDHSH':
+        # TODO: Respond
+        pass
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
             handleResponse(ack)
@@ -986,9 +1009,10 @@ def sendDirEntry(parent, device, files):
     message = {
         'message': 'DIR',
         'files': files,
-        'path':  None,
+        'path' : None,
         'inode': [parent, device],
-        'files': files
+        'files': files,
+        'last' : True
         }
 
     #for x in map(os.path.realpath, args.directories):
@@ -1079,8 +1103,10 @@ def processCommandLine():
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
-    parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
-    parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
+    if support_xattr:
+        parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
+    if support_acl:
+        parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
 
     """
     parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')

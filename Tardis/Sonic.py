@@ -60,6 +60,7 @@ configDefaults = {
     'Schema'            : schemaName,
 }
 
+logger = None
 
 def getDB(crypt, new=False):
     basedir = os.path.join(args.database, args.client)
