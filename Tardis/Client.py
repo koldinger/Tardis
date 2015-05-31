@@ -453,7 +453,7 @@ def handleAckMeta(message):
 
 def sendDirHash(inode):
     i = tuple(inode)
-    (h,s) = dirHashes[i]
+    (h,s) = dirHashes.setdefault(i, ('00000000000000000000', 0))
 
     message = {
         'message': 'DHSH',
