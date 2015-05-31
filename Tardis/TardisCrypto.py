@@ -40,49 +40,50 @@ import base64
 import Defaults
 
 class TardisCrypto:
-    contentKey  = None
-    filenameKey = None
-    tokenKey    = None
-    keyKey      = None
-    random      = None
-    blocksize   = AES.block_size
-    keysize     = AES.key_size[-1]                                              # last (largest) acceptable keysize
-    altchars    = '#@'
+    _contentKey  = None
+    _filenameKey = None
+    _tokenKey    = None
+    _keyKey      = None
+    _random      = None
+    _filenameEnc = None
+    _blocksize   = AES.block_size
+    _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
+    _altchars    = '#@'
 
     def __init__(self, password, client=None):
-        self.random = Crypto.Random.new()
+        self._random = Crypto.Random.new()
         if client == None:
             client = Defaults.getDefault('TARDIS_CLIENT')
 
         self.client = client
         self.salt = hashlib.sha256(client).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)     # 2x256 bit keys
-        self.keyKey     = keys[0:self.keysize]                                      # First 256 bit key
-        self.tokenKey   = keys[self.keysize:]                                       # And the other one
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)     # 2x256 bit keys
+        self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
+        self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
     def changePassword(self, newPassword):
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
-        self.keyKey     = keys[0:self.keysize]                                      # First 256 bit key
-        self.tokenKey   = keys[self.keysize:]                                       # And the other one
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)    # 2x256 bit keys
+        self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
+        self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
     def getContentCipher(self, iv):
-        cipher = AES.new(self.contentKey, AES.MODE_CBC, IV=iv)
+        cipher = AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
         return cipher
 
-    def getFilenameCipher(self, iv):
-        cipher = AES.new(self.filenameKey, AES.MODE_CFB, IV=iv)
-        return cipher
+    def getFilenameCipher(self):
+        #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
+        return self._filenameEnc
 
     def getIV(self, ivLength=AES.block_size):
-        iv = self.random.read(ivLength)
+        iv = self._random.read(ivLength)
         return iv
 
     def pad(self, x):
-        remainder = len(x) % self.blocksize
+        remainder = len(x) % self._blocksize
         if remainder == 0:
             return x
         else:
-            return x + (self.blocksize - remainder) * '\0'
+            return x + (self._blocksize - remainder) * '\0'
 
     def encryptPath(self, path):
         rooted = False
@@ -91,7 +92,7 @@ class TardisCrypto:
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self.altchars) for x in comps]
+        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self._altchars) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
@@ -104,56 +105,50 @@ class TardisCrypto:
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [encoder.decrypt(base64.b64decode(x, self.altchars)).rstrip('\0') for x in comps]
+        enccomps = [encoder.decrypt(base64.b64decode(x, self._altchars)).rstrip('\0') for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
         return encpath
 
     def encryptFilename(self, name):
-        s = hashlib.sha1()
-        s.update(name)
-        i = s.digest()
-        print i
-        i = i[0:self.blocksize]
-        cipher = self.getFilenameCipher(i)
-        return base64.b64encode((i + cipher.encrypt()), self.altchars)
+        return base64.b64encode(self._filenameEnc.encrypt(self.pad(name)), self._altchars)
 
     def decryptFilename(self, name):
         cipher = self.getFilenameCipher()
-        return cipher.decrypt(base64.b64decode(name, self.altchars)).rstrip('\0')
+        return cipher.decrypt(base64.b64decode(name, self._altchars)).rstrip('\0')
 
     def createToken(self, client=None):
         if client is None:
             client = self.client  
-        cipher = AES.new(self.tokenKey, AES.MODE_ECB)
-        token = base64.b64encode(cipher.encrypt(self.pad(client)), self.altchars)
+        cipher = AES.new(self._tokenKey, AES.MODE_ECB)
+        token = base64.b64encode(cipher.encrypt(self.pad(client)), self._altchars)
         return token
 
     def genKeys(self):
-        self.contentKey  = self.random.read(self.keysize)
-        self.filenameKey = self.random.read(self.keysize)
-        self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
+        self._contentKey  = self._random.read(self._keysize)
+        self._filenameKey = self._random.read(self._keysize)
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
 
-    def setKeys(self, filenameKey, contentKey):
-        cipher = AES.new(self.keyKey, AES.MODE_ECB)
-        self.contentKey  = cipher.decrypt(base64.b64decode(contentKey, self.altchars))
-        self.filenameKey = cipher.decrypt(base64.b64decode(filenameKey, self.altchars))
-        self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
+    def setKeys(self, _filenameKey, _contentKey):
+        cipher = AES.new(self._keyKey, AES.MODE_ECB)
+        self._contentKey  = cipher.decrypt(base64.b64decode(_contentKey))
+        self._filenameKey = cipher.decrypt(base64.b64decode(_filenameKey))
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
 
     def getKeys(self):
-        if self.filenameKey and self.contentKey:
-            cipher = AES.new(self.keyKey, AES.MODE_ECB)
-            contentKey  = base64.b64encode(cipher.encrypt(self.contentKey), self.altchars)
-            filenameKey = base64.b64encode(cipher.encrypt(self.filenameKey), self.altchars)
-            return (filenameKey, contentKey)
+        if self._filenameKey and self._contentKey:
+            cipher = AES.new(self._keyKey, AES.MODE_ECB)
+            _contentKey  = base64.b64encode(cipher.encrypt(self._contentKey))
+            _filenameKey = base64.b64encode(cipher.encrypt(self._filenameKey))
+            return (_filenameKey, _contentKey)
         else:
             return (None, None)
 
     def setOldStyleKeys(self):
-        self.contentKey  = self.tokenKey
-        self.filenameKey = self.keyKey
-        self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
+        self._contentKey  = self._tokenKey
+        self._filenameKey = self._keyKey
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
 
 if __name__ == "__main__":
     enc = TardisCrypto("I've got a password, do you?")
@@ -167,8 +162,8 @@ if __name__ == "__main__":
     print "Keys: ", a, b
     dec.setKeys(a, b)
 
-    #print base64.b64encode(enc.filenameKey)
-    #print base64.b64encode(enc.contentKey)
+    #print base64.b64encode(enc._filenameKey)
+    #print base64.b64encode(enc._contentKey)
 
     iv = enc.getIV()
     cc = enc.getContentCipher(iv)
