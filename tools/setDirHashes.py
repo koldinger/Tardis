@@ -1,10 +1,14 @@
 #! /usr/bin/python
 
+import sys
+sys.path.insert(0, '.')
+
 from Tardis import Defaults, Util, TardisDB, TardisCrypto
 import os.path
 import logging
 import argparse
 import hashlib
+
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Set a token/password')
@@ -22,7 +26,7 @@ def processArgs():
     return parser.parse_args()
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     crypto = None
     token = None
     args = processArgs()
@@ -57,13 +61,16 @@ def main():
             m = hashlib.md5()
             for f in names:
                 m.update(f)
-            print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, m.hexdigest(), len(names))
-            ckinfo = self.getChecksumInfo(checksum)
+            checksum = m.hexdigest()
+            print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, len(names))
+            ckinfo = db.getChecksumInfo(checksum)
             if ckinfo:
                 cksid = ckinfo['checksumid']
             else:
-                cksid = db.insertChecksumFile(checksum, size=message['size'], isFile=False)
-                db.updateDirChecksum((inode, device), cksid, current=lastset)
+                cksid = db.insertChecksumFile(checksum, size=len(names), isFile=False)
+
+            db.updateDirChecksum((inode, device), cksid, current=lastset)
+        conn.commit()
 
 if __name__ == "__main__":
     main()
