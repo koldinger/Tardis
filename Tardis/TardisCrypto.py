@@ -40,43 +40,50 @@ import base64
 import Defaults
 
 class TardisCrypto:
-    contentKey  = None
-    filenameKey = None
-    random      = None
-    blocksize   = AES.block_size
-    keysize     = AES.key_size[-1]                                              # last (largest) acceptable keysize
-    altchars    = '#@'
+    _contentKey  = None
+    _filenameKey = None
+    _tokenKey    = None
+    _keyKey      = None
+    _random      = None
+    _filenameEnc = None
+    _blocksize   = AES.block_size
+    _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
+    _altchars    = '#@'
 
     def __init__(self, password, client=None):
-        self.random = Crypto.Random.new()
+        self._random = Crypto.Random.new()
         if client == None:
             client = Defaults.getDefault('TARDIS_CLIENT')
 
         self.client = client
         self.salt = hashlib.sha256(client).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self.keysize * 2)    # 2x256 bit keys
-        self.contentKey = keys[0:self.keysize]                                     # First 256 bit key
-        self.filenameKey = keys[self.keysize:]                                     # And the other one
-        self.filenameEncryptor = AES.new(self.filenameKey, AES.MODE_ECB)
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)     # 2x256 bit keys
+        self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
+        self._tokenKey   = keys[self._keysize:]                                       # And the other one
+
+    def changePassword(self, newPassword):
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)    # 2x256 bit keys
+        self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
+        self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
     def getContentCipher(self, iv):
-        cipher = AES.new(self.contentKey, AES.MODE_CBC, IV=iv)
+        cipher = AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
         return cipher
 
     def getFilenameCipher(self):
-        cipher = AES.new(self.filenameKey, AES.MODE_ECB)
-        return cipher
+        #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
+        return self._filenameEnc
 
-    def getIV(self, ivLength=16):
-        iv = self.random.read(ivLength)
+    def getIV(self, ivLength=AES.block_size):
+        iv = self._random.read(ivLength)
         return iv
 
     def pad(self, x):
-        remainder = len(x) % self.blocksize
+        remainder = len(x) % self._blocksize
         if remainder == 0:
             return x
         else:
-            return x + (self.blocksize - remainder) * '\0'
+            return x + (self._blocksize - remainder) * '\0'
 
     def encryptPath(self, path):
         rooted = False
@@ -85,7 +92,7 @@ class TardisCrypto:
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self.altchars) for x in comps]
+        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self._altchars) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
@@ -98,54 +105,99 @@ class TardisCrypto:
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [encoder.decrypt(base64.b64decode(x, self.altchars)).rstrip('\0') for x in comps]
+        enccomps = [encoder.decrypt(base64.b64decode(x, self._altchars)).rstrip('\0') for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
         return encpath
 
     def encryptFilename(self, name):
-        cipher = self.getFilenameCipher()
-        return base64.b64encode(cipher.encrypt(self.pad(name)), self.altchars)
+        return base64.b64encode(self._filenameEnc.encrypt(self.pad(name)), self._altchars)
 
     def decryptFilename(self, name):
         cipher = self.getFilenameCipher()
-        return cipher.decrypt(base64.b64decode(name, self.altchars)).rstrip('\0')
+        return cipher.decrypt(base64.b64decode(name, self._altchars)).rstrip('\0')
 
     def createToken(self, client=None):
         if client is None:
             client = self.client  
-        token = self.encryptFilename(client)
+        cipher = AES.new(self._tokenKey, AES.MODE_ECB)
+        token = base64.b64encode(cipher.encrypt(self.pad(client)), self._altchars)
         return token
 
+    def genKeys(self):
+        self._contentKey  = self._random.read(self._keysize)
+        self._filenameKey = self._random.read(self._keysize)
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
+
+    def setKeys(self, _filenameKey, _contentKey):
+        cipher = AES.new(self._keyKey, AES.MODE_ECB)
+        self._contentKey  = cipher.decrypt(base64.b64decode(_contentKey))
+        self._filenameKey = cipher.decrypt(base64.b64decode(_filenameKey))
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
+
+    def getKeys(self):
+        if self._filenameKey and self._contentKey:
+            cipher = AES.new(self._keyKey, AES.MODE_ECB)
+            _contentKey  = base64.b64encode(cipher.encrypt(self._contentKey))
+            _filenameKey = base64.b64encode(cipher.encrypt(self._filenameKey))
+            return (_filenameKey, _contentKey)
+        else:
+            return (None, None)
+
+    def setOldStyleKeys(self):
+        self._contentKey  = self._tokenKey
+        self._filenameKey = self._keyKey
+        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
+
 if __name__ == "__main__":
-    tc = TardisCrypto("I've got a password, do you?")
-    print base64.b64encode(tc.filenameKey)
-    print base64.b64encode(tc.contentKey)
+    enc = TardisCrypto("I've got a password, do you?")
+    dec = TardisCrypto("I've got a password, do you?")
 
-    iv = tc.getIV()
-    cc = tc.getContentCipher(iv)
+    print enc.createToken()
+    print dec.createToken()
 
-    fc = tc.getFilenameCipher()
+    enc.genKeys()
+    (a, b) = enc.getKeys()
+    print "Keys: ", a, b
+    dec.setKeys(a, b)
+
+    #print base64.b64encode(enc._filenameKey)
+    #print base64.b64encode(enc._contentKey)
+
+    iv = enc.getIV()
+    cc = enc.getContentCipher(iv)
+
+    fc = enc.getFilenameCipher()
 
     print "---- Paths"
-    a = tc.encryptPath('a/b/c/d/e')
-    b = tc.encryptPath('/srv/music/MP3/CD/Classical/Bartók,_Béla_&_Kodaly,_Zoltan/Bartok_-_The_Miraculous_Mandarin_Kodály_-_Háry_Janos_Dances_Of_Galánta/02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
-    c = tc.encryptPath(os.path.join('a' * 16, 'b' * 32, 'c' * 48, 'd' * 64, 'e' * 80, 'f' * 96, 'g' * 112))
+    a = enc.encryptPath('a/b/c/d/e')
+    b = enc.encryptPath('/srv/music/MP3/CD/Classical/Bartók,_Béla_&_Kodaly,_Zoltan/Bartok_-_The_Miraculous_Mandarin_Kodály_-_Háry_Janos_Dances_Of_Galánta/02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
+    c = enc.encryptPath(os.path.join('a' * 16, 'b' * 32, 'c' * 48, 'd' * 64, 'e' * 80, 'f' * 96, 'g' * 112))
     print "1", a
     print "2", b
     print "3", c
 
-    print tc.decryptPath(a)
-    print tc.decryptPath(b)
-    print tc.decryptPath(c)
+    print "1", dec.decryptPath(a)
+    print "2", dec.decryptPath(b)
+    print "3", dec.decryptPath(c)
 
-    print "---- Names ----"
-    a =  tc.encryptFilename("srv")
+    print "---- Names"
+    a =  enc.encryptFilename("srv")
     print a
-    print tc.decryptFilename(a)
+    print dec.decryptFilename(a)
 
-    print "------------------------------------------"
-    b = tc.encryptFilename('02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
+    print "---- More Names"
+    b = enc.encryptFilename('02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
     print b
-    print tc.decryptFilename(b)
+    print dec.decryptFilename(b)
+
+    print "---- Data"
+    pt = "This is a test.  This is only a test.  This is a test of the Emergency Broadcasting System.  Had this been an actual emergency, the attention signal you just heard"
+    iv = enc.getIV()
+    cipher = enc.getContentCipher(iv)
+    ct = cipher.encrypt(enc.pad(pt))
+
+    decipher = dec.getContentCipher(iv)
+    dt = decipher.decrypt(ct)
+    print dt

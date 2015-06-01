@@ -704,6 +704,10 @@ def main():
         if not args.crypt:
             crypt = None
 
+        if crypt:
+            (f, c) = tardis.getKeys()
+            crypt.setKeys(f, c)
+
         setupDisplay(tardis, crypt)
 
         if args.headers:

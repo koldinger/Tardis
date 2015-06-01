@@ -417,7 +417,7 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     args.password = None
     if password:
-        crypt = TardisCrypto.TardisCrypto(password)
+        crypt = TardisCrypto.TardisCrypto(password, args.client)
     password = None
 
     token = None
@@ -439,11 +439,15 @@ def main():
             tardis = TardisDB.TardisDB(dbPath, token=token)
     except Exception as e:
         logger.critical("Unable to connect to database: %s", str(e))
-        logger.exception(e)
+        #logger.exception(e)
         sys.exit(1)
 
     if not args.crypt:
         crypt = None
+
+    if crypt:
+        (f, c) = tardis.getKeys()
+        crypt.setKeys(f, c)
 
     r = Regenerator(cache, tardis, crypt=crypt)
 

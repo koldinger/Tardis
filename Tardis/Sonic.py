@@ -60,6 +60,7 @@ configDefaults = {
     'Schema'            : schemaName,
 }
 
+logger = None
 
 def getDB(crypt, new=False):
     basedir = os.path.join(args.database, args.client)
@@ -83,12 +84,30 @@ def createClient(crypt):
         logger.error(e)
         return 1
 
-
 def setToken(crypt):
     try:
         # Must be no token specified yet
         (db, cache) = getDB(None)
-        db.setToken(crypt.createToken())
+        crypt.genKeys()
+        (f, c) = crypt.getKeys()
+        db.setKeys(crypt.createToken(), f, c)
+        db.close()
+        return 0
+    except Exception as e:
+        logger.error(e)
+        return 1
+
+def changePassword(crypt, crypt2):
+    try:
+        (db, cache) = getDB(crypt)
+        # Grab the keys from one crypt object.
+        # Need to do this because getKeys/setKeys assumes they're encrypted, and we need the raw
+        # versions
+        crypt2.filenameKey = crypt.filenameKey
+        crypt2.contentKey = crypt.contentKey
+        # Now get the encrypted versions
+        (f, c) = crypt2.getKeys()
+        db.setKeys(crypt2.createToken(), f, c)
         db.close()
         return 0
     except Exception as e:
@@ -283,11 +302,20 @@ def parseArgs():
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,    help='Encrypt data.  Only valid if password is set')
 
+    newPassParser = argparse.ArgumentParser(add_help=False)
+    newpassgrp = newPassParser.add_argument_group("New Password specification options")
+    pwgroup = passgroup.add_mutually_exclusive_group()
+    pwgroup.add_argument('--newpassword',      dest='newpw', default=None, nargs='?', const=True,   help='Change to this password')
+    pwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                         help='Read new password from file')
+    pwgroup.add_argument('--newpassword-url',  dest='newpwu', default=None,                         help='Retrieve new password from the specified URL')
+    pwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                         help='Use the specified command to generate the new password on stdout')
+
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     cp = subs.add_parser('create',       parents=[common], help='Create a client database')
     sp = subs.add_parser('setpass',      parents=[common], help='Set a password')
-    lp = subs.add_parser('list',         parents=[common], help='List backup sets')
+    cp = subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
+    lp = subs.add_parser('list',         parents=[common],                                      help='List backup sets')
     ip = subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
     pp = subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
     dp = subs.add_parser('delete',       parents=[common, bsetParser, cnfParser],               help='Delete an old backupset')
@@ -340,10 +368,10 @@ def setupLogging():
     logger = logging.getLogger('')
 
 def main():
-    try:
-        parseArgs()
-        setupLogging()
+    parseArgs()
+    setupLogging()
 
+    try:
         crypt = None
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
         if args.command == 'setpass' and args.password:
@@ -351,20 +379,34 @@ def main():
             if pw2 != password:
                 logger.error("Passwords don't match")
                 return -1
+            pw2 = None
 
         if password:
-            crypt = TardisCrypto.TardisCrypto(password)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
             password = None
             args.password = None
 
         if args.command == 'create':
             return createClient(crypt)
 
-        if args.command == 'setpw':
+        if args.command == 'setpass':
             if not crypt:
                 logger.error("No password specified")
                 return -1
             return setToken(crypt)
+
+        if args.command == 'chpass':
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
+            if args.newpw:
+                newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
+                if newpw2 != newpw:
+                    logger.error("Passwords don't match")
+                    return -1
+                newpw2 = None
+            crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
+            newpw = None
+            args.newpw = None
+            return changePassword(crypt, crypt2)
 
         (db, cache) = getDB(crypt)
 

@@ -17,9 +17,12 @@ if int(t[0]) != 4:
     sys.exit(1)
 
 conn.execute("ALTER TABLE Checksums ADD COLUMN Added INTEGER")
+conn.execute("ALTER TABLE Checksums ADD COLUMN IsFile INTEGER")         # Old version only uses checksums for files.
 
-# This can be really slow.  It can be removed if you feel it's not worth it.
-conn.execute("UPDATE Checksums SET Added = (SELECT MIN(FirstSet) FROM Files WHERE Files.ChecksumID = Checksums.ChecksumID)")
+conn.execute("UPDATE Checksums SET IsFile = 1")
+
+# This can be really slow.  Only enable it if you really want it.
+#conn.execute("UPDATE Checksums SET Added = (SELECT MIN(FirstSet) FROM Files WHERE Files.ChecksumID = Checksums.ChecksumID OR Files.XattrID = Checksums.ChecksumID OR Files.AclID = Checksums.ChecksumId)")
 
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "5")')
 

@@ -42,6 +42,8 @@ class ConnectionException(Exception):
 
 class Connection(object):
     lastTimestamp = None
+    filenameKey = None
+    contentKey = None
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
@@ -98,6 +100,10 @@ class Connection(object):
             self.sessionid = uuid.UUID(fields['sessionid'])
             self.lastTimestamp = float(fields['prevDate'])
             self.name = fields['name']
+            if 'filenameKey' in fields:
+                self.filenameKey = fields['filenameKey']
+            if 'contentKey' in fields:
+                self.contentKey = fields['contentKey']
         except Exception as e:
             self.sock.close()
             raise
@@ -134,6 +140,9 @@ class Connection(object):
 
     def getLastTimestap(self):
         return self.lastTimestamp
+
+    def getKeys(self):
+        return (self.filenameKey, self.contentKey)
 
     def getStats(self):
         return self.stats
