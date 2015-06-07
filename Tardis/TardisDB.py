@@ -37,6 +37,7 @@ import time
 import hashlib
 import sys
 import Tardis
+import array
 
 import ConnIdLogAdapter
 import Rotator
@@ -134,8 +135,8 @@ class TardisDB(object):
 
         version = self.getConfigValue('SchemaVersion')
         if int(version) != _schemaVersion:
-            self.logger.error("Schema version mismatch: Database %s is %d:  Exepected %d.   Please convert", dbname, int(version), _schemaVersion)
-            raise Exception("Schema version mismatch: Database {} is {}:  Exepected {}.   Please convert".format(dbname, version, _schemaVersion))
+            self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", dbname, int(version), _schemaVersion)
+            raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(dbname, version, _schemaVersion))
 
         if (prevSet):
             f = self.getBackupSetInfo(prevSet)
