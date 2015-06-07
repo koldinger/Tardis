@@ -627,7 +627,7 @@ def processArgs():
 
     parser.add_argument('--long', '-l',     dest='long',     default=False, action='store_true',        help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',   default=False, action='store_true',        help='Show hidden files.')
-    parser.add_argument('--recerse', '-r',   dest='reverse',   default=False, action='store_true',      help='Reverse the sort order')
+    parser.add_argument('--reverse', '-r',   dest='reverse',   default=False, action='store_true',      help='Reverse the sort order')
     parser.add_argument('--annotate', '-F', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
@@ -647,6 +647,7 @@ def processArgs():
     parser.add_argument('--glob',           dest='glob',    default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
     parser.add_argument('--reduce',         dest='reduce',  default=0,type=int, const=sys.maxint, nargs='?',    help='Reduce paths by N directories.  No value for smart reduction')
+    parser.add_argument('--realpath',       dest='realpath', default=True, action=Util.StoreBoolean,    help='Use the full path, expanding symlinks to their actual path components')
 
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
@@ -725,6 +726,8 @@ def main():
 
         for d in directories:
             d = os.path.abspath(d)
+            if args.realpath:
+                d = os.path.realpath(d)
             fInfo = collectFileInfo(d, tardis, crypt)
             processFile(d, fInfo, tardis, crypt)
     except KeyboardInterrupt:
