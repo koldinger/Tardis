@@ -349,16 +349,18 @@ Beyond this, it appears to function as normal.
 
 Tested only on Yosemite.
 
-Bugs in 0.22
+Bugs in 0.21
 ============
-I've identified two bugs in the 0.22 release that can have major impacts.
+I've identified two bugs in the 0.21 release that can have major impacts.
   * File sizes are incorrectly recorded in compressed backups.  No real fix right now.  Data is just wrong in the database.
   * Encryption keys are improperly generated if you use the --client option to tardis or any of the command line tools.   Keys are generated as if you were using the value in the TARDIS_CLIENT variable (or the default hostname if you haven't specified TARDIS_CLIENT).  This could be a major problem for existing encrypted databases that used a non-default client value originally.
 
-If you install after this message is here, from a post 0.22 version, these bugs are fixed.  If you have an encrypted or compressed (or both) database before, I recommend proceeding with extreme caution.  Maintain a 0.22 installation and use it to extract your backup data.
+If you install after this message is here, from a post 0.21 version, these bugs are fixed.  If you have an encrypted or compressed (or both) database before, I recommend proceeding with extreme caution.  Maintain a 0.22 installation and use it to extract your backup data.
 
-Note on Post 0.22 Installation
+Note on Post 0.21 Installation
 ==============================
-Sometime after the 0.22 release, the BSON package I was using in Tardis disappeared.  As a result, I've switched from using BSON to a different serialization format called MsgPack.  BSON is still supported if it's on your system, but MsgPack has become the default.
+Sometime after the 0.21 release, the BSON package I was using in Tardis disappeared.  As a result, I've switched from using BSON to a different serialization format called MsgPack.  BSON is still supported if it's on your system, but MsgPack has become the default.
 
-Also, post 0.22 I've introduced checking in the Daemon to make sure you have the correct database version.  If you are out of date, it will complain.  There are scripts in the schema directory called things like "convert2-3.py", "convert3-4.py", etc, to convert the various formats.  These scripts are invoked "python convert3-4.py /path/to/tardis.db".  Some are significant, for instance 4-5 is really slow (you can remove the SQL Update command and be just fine, it will be hugely faster, should you so desire).
+Also, post 0.21 I've introduced checking in the Daemon to make sure you have the correct database version.  If you are out of date, it will complain.  There are scripts in the schema directory called things like "convert2-3.py", "convert3-4.py", etc, to convert the various formats.  These scripts are invoked "python convert3-4.py /path/to/tardis.db".  Some are significant, for instance 4-5 is really slow (you can remove the SQL Update command and be just fine, it will be hugely faster, should you so desire).
+
+0.22 Changes the database functionality in an attempt to make things a bit faster, and to fix an issue with encrypted backups, have added some new information to the database.  You don't need to do anything to deal with this, but it will cause a couple of backups after you upgrade to be significantly slower.  You can run the setDirHashes script in the tools directory.  This takes same sort of arguments as tardis, and will automatically generate the correct hash values.   Should only take a few minutes, depending on the speed of the machine you're running on, and the speed of the disk drive.
