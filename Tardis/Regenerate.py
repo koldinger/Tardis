@@ -106,13 +106,7 @@ class Regenerator:
         try:
             if cksInfo['basis']:
                 basis = self.recoverChecksum(cksInfo['basis'])
-                # UGLY.  Put the basis into an actual file for librsync
-                if type(basis) is not types.FileType:
-                    self.logger.debug("Checksum %s is not a file.  Creating a tempfile", cksum)
-                    temp = tempfile.TemporaryFile()
-                    shutil.copyfileobj(basis, temp)
-                    basis = temp
-                #librsync.patch(basis, self.cacheDir.open(cksum, "rb"), output)
+
                 if cksInfo['iv']:
                     patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
                 else:
