@@ -187,7 +187,7 @@ def checkOverwrite(name, info):
     else:
         return True
 
-def recoverObject(regenerator, info, bset, outputdir, path, name=None):
+def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
     Note that path is for debugging only.
@@ -211,6 +211,16 @@ def recoverObject(regenerator, info, bset, outputdir, path, name=None):
                 skip = True
                 logger.info("Skipping existing file: %s", path)
 
+            # First, determine if we're in a linking situation
+            if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
+                key = (info['inode'], info['device'])
+                if key in linkDB:
+                    logger.info("Linking %s to %s", outname, linkDB[key])
+                    os.link(linkDB[key], outname)
+                    skip = True
+                else:
+                    linkDB[key] = outname
+
             if info['dir']:
                 contents = tardis.readDirectory((info['inode'], info['device']), bset)
                 if not outname:
@@ -225,7 +235,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, name=None):
                     if crypt:
                         name = crypt.decryptFilename(name)
                     if childInfo:
-                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name))
+                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB)
                     else:
                         retCode += 1
             elif not skip:
@@ -380,11 +390,14 @@ def parseArgs():
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
-    parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file')
-    parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file')
-    parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space')
-    parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file')
-    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files')
+    parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file. Default: %(default)s')
+    parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file. Default: %(default)s')
+    parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
+    parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file. Default: %(default)s')
+    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files. Default: %(default)s')
+
+
+    parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
@@ -478,6 +491,7 @@ def main():
     outputdir = None
     output    = sys.stdout
     outname   = None
+    linkDB    = None
 
     if args.output:
         if len(args.files) > 1:
@@ -487,6 +501,9 @@ def main():
         else:
             outname = args.output
     logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
+
+    if args.hardlinks:
+        linkDB = {}
 
     #if args.cksum and (args.settime or args.setperm):
         #logger.warning("Unable to set time or permissions on files specified by checksum.")
@@ -550,7 +567,7 @@ def main():
                 actualPath = path
             info = tardis.getFileInfoByPath(actualPath, bset)
             if info:
-                retcode += recoverObject(r, info, bset, outputdir, path, name=outname)
+                retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname)
             else:
                 logger.error("Could not recover info for %s", i)
                 retcode += 1
