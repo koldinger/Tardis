@@ -187,7 +187,7 @@ def checkOverwrite(name, info):
     else:
         return True
 
-def recoverObject(regenerator, info, bset, outputdir, path):
+def recoverObject(regenerator, info, bset, outputdir, path, name=None):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
     Note that path is for debugging only.
@@ -201,11 +201,15 @@ def recoverObject(regenerator, info, bset, outputdir, path):
             realname = info['name']
             if crypt:
                 realname = crypt.decryptFilename(realname)
-            if outputdir:
+            if name:
+                # This should only happen only one file specified.
+                outname = name
+            elif outputdir:
                 outname = os.path.join(outputdir, realname)
-                if not checkOverwrite(outname, info):
-                    skip = True
-                    logger.info("Skipping existing file: %s", path)
+
+            if outname and not checkOverwrite(outname, info):
+                skip = True
+                logger.info("Skipping existing file: %s", path)
 
             if info['dir']:
                 contents = tardis.readDirectory((info['inode'], info['device']), bset)
@@ -482,7 +486,6 @@ def main():
             outputdir = args.output
         else:
             outname = args.output
-            output = file(args.output, "wb")
     logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
 
     #if args.cksum and (args.settime or args.setperm):
@@ -498,7 +501,10 @@ def main():
                 f = r.recoverChecksum(i)
                 if f:
                 # Generate an output name
-                    if outputdir:
+                    if outname:
+                        # Note, this should ONLY be true if only one file
+                        output = file(outname,  "wb")
+                    elif outputdir:
                         outname = os.path.join(outputdir, i)
                         logger.debug("Writing output to %s", outname)
                         output = file(outname,  "wb")
@@ -544,7 +550,7 @@ def main():
                 actualPath = path
             info = tardis.getFileInfoByPath(actualPath, bset)
             if info:
-                retcode += recoverObject(r, info, bset, outputdir, path)
+                retcode += recoverObject(r, info, bset, outputdir, path, name=outname)
             else:
                 logger.error("Could not recover info for %s", i)
                 retcode += 1
