@@ -1324,7 +1324,6 @@ def main():
     if crypt:
         (f, c) = conn.getKeys()
         if f and c:
-            print f, c
             crypt.setKeys(f, c)
         else:
             crypt.genKeys()
