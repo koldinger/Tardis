@@ -47,6 +47,7 @@ _defaults = {
                 'TARDIS_DAEMON_CONFIG'  : '/etc/tardis/tardisd.cfg',
                 'TARDIS_LOCAL_CONFIG'   : '/etc/tardis/tardisd.local.cfg',
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
+                'TARDIS_JOURNAL'        : 'tardis.journal',
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
                 'TARDIS_REMOTEPORT'	    : '7430',
                 'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/remote.cfg',

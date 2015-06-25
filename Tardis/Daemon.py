@@ -84,6 +84,7 @@ configName   = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir      = Defaults.getDefault('TARDIS_DB')
 portNumber   = Defaults.getDefault('TARDIS_PORT')
 pidFileName  = Defaults.getDefault('TARDIS_PIDFILE')
+journalName  = Defaults.getDefault('TARDIS_JOURNAL')
 
 if  os.path.isabs(schemaName):
     schemaFile = schemaName
@@ -103,6 +104,7 @@ configDefaults = {
     'LogCfg'            : None,
     'Profile'           : str(False),
     'LogFile'           : None,
+    'JournalFile'       : journalName,
     'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
@@ -293,6 +295,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
                     #self.logger.debug('Looking for file with same inode %d in backupset', inode)
+                    # TODO: Check that the file hasn't changed since it was last written. If file is in flux,
+                    # it's a problem.
                     checksum = self.db.getChecksumByInode(inode, True)
                     if checksum:
                         self.db.setChecksum(inode, checksum)
@@ -859,9 +863,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def getDB(self, host, token):
         script = None
         ret = "EXISTING"
+        journal = None
         self.basedir = os.path.join(self.server.basedir, host)
         self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
         self.dbfile = os.path.join(self.basedir, self.server.dbname)
+
+        if self.server.journal:
+            journal = os.path.join(self.basedir, self.server.journal)
 
         connid = {'connid': self.idstr }
 
@@ -873,7 +881,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             script = schemaFile
             ret = "NEW"
 
-        self.db = TardisDB.TardisDB(self.dbfile, initialize=script, backup=True, connid=connid, token=token, user=self.server.user, group=self.server.group, numbackups=self.server.dbbackups)
+        self.db = TardisDB.TardisDB(self.dbfile,
+                                    initialize=script,
+                                    backup=True,
+                                    connid=connid,
+                                    token=token,
+                                    user=self.server.user,
+                                    group=self.server.group,
+                                    numbackups=self.server.dbbackups,
+                                    journal=journal)
 
         self.regenerator = Regenerate.Regenerator(self.cache, self.db)
         return ret
@@ -1174,6 +1190,7 @@ def setConfig(self, args, config):
     self.dbname         = args.dbname
     self.allowNew       = args.newhosts
     self.schemaFile     = args.schema
+    self.journal        = args.journal
 
     self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
 
@@ -1311,6 +1328,8 @@ def processArgs():
                                                                         help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
+
+    parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')
 
     parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean,default=config.getboolean(t, 'ReuseAddr'),
                                                                         help='Reuse the socket address immediately')

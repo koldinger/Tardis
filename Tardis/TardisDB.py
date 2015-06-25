@@ -83,8 +83,9 @@ class TardisDB(object):
     dirinodes = {}
     backup = False
     chunksize = 1000
+    journal = None
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, token=None, user=-1, group=-1, chunksize=1000, numbackups=2):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, token=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
@@ -165,6 +166,10 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
         self.conn.execute("PRAGMA journal_mode=truncate")
 
+
+        if journal:
+            self.journal = file(journal, 'a')
+
         # Make sure the permissions are set the way we want, if that's specified.
         if user != -1 or group != -1:
             os.chown(self.dbName, user, group)
@@ -207,10 +212,11 @@ class TardisDB(object):
     def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
+        now = time.time()
         try:
             c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
                       "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
-                      {"name": name, "now": time.time(), "session": session, "priority": priority,
+                      {"name": name, "now": now, "session": session, "priority": priority,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
                        "serverversion": Tardis.__version__})
         except sqlite3.IntegrityError as e:
@@ -219,7 +225,10 @@ class TardisDB(object):
         self.currBackupSet = c.lastrowid
         self.currBackupName = name
         self.conn.commit()
-        self.logger.info("Created new backup set: {}: {} {}".format(self.currBackupSet, name, session))
+        self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
+        if self.journal:
+            self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__version__))
+
         return self.currBackupSet
 
     def setBackupSetName(self, name, priority, current=True):
@@ -476,6 +485,9 @@ class TardisDB(object):
     def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
+
+        if self.journal:
+            self.journal.write("{}:{}:{}\n".format(checksum, basis, iv))
 
         if basis is None:
             chainlength = 0
