@@ -719,7 +719,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         for d in message['clones']:
             inode = d['inode']
             device = d['dev']
-            info = self.db.getFileInfoByInode((inode, device), current=True)
+            info = self.db.getFileInfoByInode((inode, device), current=False)
 
             if info and info['size'] is not None and info['checksum'] is not None:
                 logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
@@ -731,6 +731,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     content.append([inode, device])
             else:
                 self.logger.warning("No info available to process clone (%d %d)", inode, device)
+                if info:
+                    logger.debug("Clone got info: Inode: (%d, %d) Files: %s Hash: %s", inode, device, info['size'], info['checksum'])
                 content.append([inode, device])
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
