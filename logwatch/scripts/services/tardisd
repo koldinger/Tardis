@@ -80,12 +80,12 @@ while (<STDIN>) {
             $requests++;
             $sessionInfo{$sessionId} = { 'complete' => 'Folse' };
             #$sessionInfo{$sessionId}->{'complete'} = "False";
-        } elsif ($_ =~ /Creating backup for\s*([\w\.]+):/) {
+        } elsif ($_ =~ /Creating backup for\s*([\w\.\-]+):/) {
             my $host = $1;
             $sessions++;
             $hosts{$host}++;
             $sessionInfo{$sessionId}->{'host'} = $host;
-        } elsif ($_ =~ /Session from\s*([\w\.]+).*Ending:\s*(\w+)*/) { #\s*\{[a-f0-9-]\}\s*Ending: ({True|False})/) {
+        } elsif ($_ =~ /Session from\s*([\w\.\-]+).*Ending:\s*(\w+)*/) { #\s*\{[a-f0-9-]\}\s*Ending: ({True|False})/) {
             #Session from linux.koldware.com {466e21da-d372-11e4-b3b8-003067ee8ca4} Ending: True: 0:00:02.605941
             $completed++;
             if ($2 eq "True") {
