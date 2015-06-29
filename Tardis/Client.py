@@ -1064,6 +1064,8 @@ def runServer(args, tempfile):
         #server_cmd = server_cmd + args.serverargs
     logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
+    # Wait until the subprocess has created the domain socket.
+    # There's got to be a better way to do this. Oy.
     for i in range(0, 20):
         if os.path.exists(tempfile):
             return subp
@@ -1074,6 +1076,18 @@ def runServer(args, tempfile):
     logger.error("Unable to locate socket %s from process %d.  Killing subprocess", tempfile, subp.pid)
     subp.term()
     return None
+
+def getConnection(name, priority, auto, token):
+    if args.protocol == 'json':
+        conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
+        setEncoder("base64")
+    elif args.protocol == 'bson':
+        conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+        setEncoder("bin")
+    elif args.protocol == 'msgp':
+        conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+        setEncoder("bin")
+    return conn
 
 def processCommandLine():
     local_config = Defaults.getDefault('TARDIS_LOCAL_CONFIG')
@@ -1301,15 +1315,7 @@ def main():
             sys.exit(1)
 
     try:
-        if args.protocol == 'json':
-            conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
-            setEncoder("base64")
-        elif args.protocol == 'bson':
-            conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
-            setEncoder("bin")
-        elif args.protocol == 'msgp':
-            conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
-            setEncoder("bin")
+        conn = getConnection(name, priority, auto, token)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
         #logger.exception(e)
