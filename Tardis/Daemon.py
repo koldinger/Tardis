@@ -719,9 +719,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             inode = d['inode']
             device = d['dev']
             info = self.db.getFileInfoByInode((inode, device), current=False)
+
             if not info and not self.lastCompleted:
                 # Check for copies in a partial directory backup, if some exist and we didn't find one here..
-                # Note, this is sub-optimaze
+                # This should only happen in rare circumstances, namely if the list of directories to backup
+                # has changed, and a directory which is older than the last completed backup is added to the backup.
                 info = self.db.getFileInfoByInodeFromPartial((inode, device))
 
             if info and info['size'] is not None and info['checksum'] is not None:
