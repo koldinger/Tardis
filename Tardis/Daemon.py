@@ -181,15 +181,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def setXattrAcl(self, inode, device, xattr, acl):
         self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
         if xattr:
-            self.db.setXattrs(inode, xattr)
+            self.db.setXattrs(inode, device, xattr)
         if acl:
-            self.db.setAcl(inode, acl)
+            self.db.setAcl(inode, device, acl)
 
     def checkFile(self, parent, f, dirhash):
         xattr = None
         acl = None
         """ Process an individual file.  Check to see if it's different from what's there already """
-        #self.logger.debug("Processing file: %s", str(f))
+        self.logger.debug("Processing file: %s %s", str(f), str(parent))
         name = f["name"]
         inode = f["inode"]
         device = f["dev"]
@@ -231,7 +231,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if old:
                     fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
-
             if old:
                 #self.logger.debug("Comparing versions: New: %s", str(f))
                 #self.logger.debug("Comparing version: Old: %s", str(old))
@@ -244,7 +243,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                     if not (old["checksum"] is None):
-                        #self.db.setChecksum(inode, old['checksum'])
+                        #self.db.setChecksum(inode, device, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
@@ -253,7 +252,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             #self.logger.debug("Inserting new version %s", name)
                             self.db.insertFile(f, parent)
-                            self.db.setChecksum(inode, old['checksum'])
+                            self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
                         retVal = DONE       # we're done either way
                     else:
@@ -297,9 +296,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.logger.debug('Looking for file with same inode %d in backupset', inode)
                     # TODO: Check that the file hasn't changed since it was last written. If file is in flux,
                     # it's a problem.
-                    checksum = self.db.getChecksumByInode(inode, True)
+                    checksum = self.db.getChecksumByInode(inode, device, True)
                     if checksum:
-                        self.db.setChecksum(inode, checksum)
+                        self.db.setChecksum(inode, device, checksum)
                         retVal = DONE
                     else:
                         retVal = CONTENT
@@ -314,7 +313,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             # If the name and parent ID are the same, assume it's the same
                             #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                             if not (old["checksum"] is None):
-                                self.db.setChecksum(inode, old['checksum'])
+                                self.db.setChecksum(inode, device, old['checksum'])
                                 retVal = DONE
                             else:
                                 retVal = CONTENT
@@ -561,7 +560,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.statUpdFiles += 1
 
                 self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
-                self.db.setChecksum(inode, checksum)
+                self.db.setChecksum(inode, dev, checksum)
             except Exception as e:
                 logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
@@ -590,7 +589,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if output is not None:
             output.close()
 
-        #self.db.setChecksum(inode, checksum)
+        #self.db.setChecksum(inode, device, checksum)
         return (None, False)
 
     def processChecksum(self, message):
@@ -606,7 +605,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # TODO: Is this faster than checking if the file exists?  Probably, but should test.
             info = self.db.getChecksumInfo(cksum)
             if info and info['size'] != -1:
-                self.db.setChecksum(inode, cksum)
+                self.db.setChecksum(inode, dev, cksum)
                 done.append(f['inode'])
             else:
                 # FIXME: TODO: If no checksum, should we request a delta???
@@ -720,6 +719,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             inode = d['inode']
             device = d['dev']
             info = self.db.getFileInfoByInode((inode, device), current=False)
+            if not info and not self.lastCompleted:
+                # Check for copies in a partial directory backup, if some exist and we didn't find one here..
+                # Note, this is sub-optimaze
+                info = self.db.getFileInfoByInodeFromPartial((inode, device))
 
             if info and info['size'] is not None and info['checksum'] is not None:
                 logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
@@ -730,9 +733,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
                     content.append([inode, device])
             else:
-                self.logger.warning("No info available to process clone (%d %d)", inode, device)
-                if info:
-                    logger.debug("Clone got info: Inode: (%d, %d) Files: %s Hash: %s", inode, device, info['size'], info['checksum'])
+                self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append([inode, device])
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
@@ -781,7 +782,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (inode, dev) = message['inode']
 
             self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
-            self.db.setChecksum(inode, checksum)
+            self.db.setChecksum(inode, dev, checksum)
             self.statNewFiles += 1
 
         except Exception as e:

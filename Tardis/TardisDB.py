@@ -324,62 +324,76 @@ class TardisDB(object):
         temp["backup"] = backupset
         c = self.cursor.execute("SELECT " + 
                                 _fieldInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
+                                "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 temp)
         return c.fetchone()
 
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
-        self.logger.debug("Looking up file for similar info: %s", fileInfo)
+        #self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
+        #self.logger.info("getFileFromPartialBackup: %s", str(fileInfo))
         c = self.cursor.execute("SELECT " +
                                 _fieldInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Mtime = :mtime AND C1.Size = :size AND "
+                                "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
         return c.fetchone()
 
+    def getFileInfoByInodeFromPartial(self, inode):
+        (ino, dev) = inode
+        c = self.cursor.execute("SELECT " +
+                                _fieldInfoFields + _fileInfoJoin +
+                                "WHERE Inode = :inode AND Device = :device AND "
+                                "Files.LastSet >= :backup "
+                                "ORDER BY Files.LastSet DESC LIMIT 1",
+                                {"inode": ino, "device": dev, "backup": self.prevBackupSet })
+
+        return c.fetchone()
+
+    """
     def copyChecksum(self, old_inode, new_inode):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT CheckSumID FROM Files WHERE Inode = :oldInode AND BackupSet = :prev) "
                             "WHERE INode = :newInode AND BackupSet = :backup",
                             {"oldInode": old_inode, "newInode": new_inode, "prev": self.prevBackupSet, "backup": self.currBackupSet})
         return self.cursor.rowcount
+    """
 
-    def setChecksum(self, inode, checksum):
+    def setChecksum(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND "
+                            "WHERE Inode = :inode AND Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
         return self.cursor.rowcount
 
-    def setXattrs(self, inode, checksum):
+    def setXattrs(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET XattrId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND "
+                            "WHERE Inode = :inode AND Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
         #self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return self.cursor.rowcount
 
-    def setAcl(self, inode, checksum):
+    def setAcl(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET AclId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND "
+                            "WHERE Inode = :inode AND Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
         #self.logger.info("Setting ACL ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return self.cursor.rowcount
 
 
-    def getChecksumByInode(self, inode, current=True):
+    def getChecksumByInode(self, inode, device, current=True):
         backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
                                 "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
-                                "WHERE Files.INode = :inode AND "
+                                "WHERE Files.INode = :inode AND Device = :device AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                                { "backup" : backupset, "inode" : inode })
+                                { "backup" : backupset, "inode" : inode, "device": device })
         row = c.fetchone()
         return row[0] if row else None
         #if row: return row[0] else: return None
