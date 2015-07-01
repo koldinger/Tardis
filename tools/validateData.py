@@ -45,7 +45,7 @@ def validate(root, client, dbname, password):
     num = row[0]
     print "Checksums: %d" % (num)
 
-    cur = conn.execute("SELECT Checksum FROM CheckSums ORDER BY Checksum ASC");
+    cur = conn.execute("SELECT Checksum, IsFile FROM CheckSums ORDER BY Checksum ASC");
     pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
     pbar.start()
 
@@ -56,8 +56,9 @@ def validate(root, client, dbname, password):
         i += 1
         try:
             checksum = row['Checksum']
-            try:
-                if not checksum in checked:
+            isFile = row['IsFile']
+            if isFile and not checksum in checked:
+                try:
                     f = regen.recoverChecksum(checksum)
                     if f:
                         m = hashlib.md5()
@@ -74,10 +75,10 @@ def validate(root, client, dbname, password):
                         else:
                             checked[checksum] = 1
                             valid.write(checksum + "\n")
-            except Exception as e:
-                print "Caught exception processing %s: %s" % (checksum, str(e))
-                output.write(checksum + '\n')
-                output.flush()
+                except Exception as e:
+                    print "Caught exception processing %s: %s" % (checksum, str(e))
+                    output.write(checksum + '\n')
+                    output.flush()
 
             row = cur.fetchone()
         except sqlite3.OperationalError as e:
