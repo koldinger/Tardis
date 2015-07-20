@@ -40,12 +40,12 @@ def validate(root, client, dbname, password):
 
     conn = db.conn
 
-    cur = conn.execute("SELECT count(*) FROM CheckSums")
+    cur = conn.execute("SELECT count(*) FROM CheckSums WHERE IsFile = 1")
     row = cur.fetchone()
     num = row[0]
     print "Checksums: %d" % (num)
 
-    cur = conn.execute("SELECT Checksum, IsFile FROM CheckSums ORDER BY Checksum ASC");
+    cur = conn.execute("SELECT Checksum FROM CheckSums WHERE IsFile = 1 ORDER BY Checksum ASC");
     pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
     pbar.start()
 
@@ -56,8 +56,7 @@ def validate(root, client, dbname, password):
         i += 1
         try:
             checksum = row['Checksum']
-            isFile = row['IsFile']
-            if isFile and not checksum in checked:
+            if not checksum in checked:
                 try:
                     f = regen.recoverChecksum(checksum)
                     if f:
