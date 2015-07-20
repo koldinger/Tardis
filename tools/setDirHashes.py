@@ -39,6 +39,10 @@ def main():
     path = os.path.join(args.database, args.client, args.dbname)
     db = TardisDB.TardisDB(path, token=token, backup=False)
 
+    if crypto:
+        (a, b) = db.getKeys()
+        crypto.setKeys(a, b)
+
     conn = db.conn
     dirs = conn.execute("SELECT Name as name, Inode AS inode, Device AS device, FirstSet as firstset, LastSet AS lastset FROM Files JOIN Names ON Files.NameId = Names.NameId WHERE Dir = 1")
     while True:
