@@ -88,11 +88,10 @@ class TardisCrypto:
     def encryptPath(self, path):
         rooted = False
         comps = path.split(os.sep)
-        encoder = self.getFilenameCipher()
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [base64.b64encode(encoder.encrypt(self.pad(x)), self._altchars) for x in comps]
+        enccomps = [self.encryptFilename(x) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
@@ -101,11 +100,10 @@ class TardisCrypto:
     def decryptPath(self, path):
         rooted = False
         comps = path.split(os.sep)
-        encoder = self.getFilenameCipher()
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [encoder.decrypt(base64.b64decode(x, self._altchars)).rstrip('\0') for x in comps]
+        enccomps = [self.decryptFilename(x) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
@@ -115,8 +113,8 @@ class TardisCrypto:
         return base64.b64encode(self._filenameEnc.encrypt(self.pad(name)), self._altchars)
 
     def decryptFilename(self, name):
-        cipher = self.getFilenameCipher()
-        return cipher.decrypt(base64.b64decode(name, self._altchars)).rstrip('\0')
+        #cipher = self.getFilenameCipher()
+        return self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)).rstrip('\0')
 
     def createToken(self, client=None):
         if client is None:
