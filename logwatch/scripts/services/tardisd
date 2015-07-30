@@ -95,7 +95,7 @@ while (<STDIN>) {
         } elsif ($_ =~ /New or replaced files:\s*(\d+)\s*$/) {
             $newFiles += $1;
             $sessionInfo{$sessionId}->{'new'} = $1;
-        } elsif ($_ =~ /Updated file:\s*(\d+)\s*$/) {
+        } elsif ($_ =~ /Updated files:\s*(\d+)\s*$/) {
             $updatedFiles += $1;
             $sessionInfo{$sessionId}->{'upd'} = $1;
         }
