@@ -37,6 +37,10 @@ import Messages
 import ssl
 import Tardis
 
+protocolVersion = "1.1"
+headerString    = "TARDIS " + protocolVersion
+sslHeaderString = headerString + "/SSL"
+
 class ConnectionException(Exception):
     pass
 
@@ -63,12 +67,12 @@ class Connection(object):
         try:
             # Receive a string.  TARDIS proto=1.0
             message = self.sock.recv(32).strip()
-            if message == "TARDIS 1.1/SSL":
+            if message == sslHeaderString:
                 # Overwrite self.sock
                 self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
                 if validate:
                     pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
-            elif message != "TARDIS 1.1":
+            elif message != headerString:
                 raise Exception("Unknown protocol: {}".format(message))
 
             # Create a BACKUP message
