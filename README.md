@@ -83,6 +83,14 @@ Server Setup
          * start the service
           * service tardisd start
 
+Server Requirements
+-------------------
+The server should run on any system running Linux.  Fedora, Ubuntu, and Raspbian have all been used successfully
+
+It does not need to be particularly powerful.  A Raspberry Pi Model B has been used, but is a bit underpowered.  A Raspberry Pi 2 Model B seems to work quite well, primarily due to the larger memory.
+
+Typically, a faster processor and more memory will lead to shorter backup times, as will faster I/O connections to the disk drives.  On a benchmark system, a Raspberry Pi server would run a backup in about 40-50 minutes, a Raspberry Pi 2 will reduce that time to under 30 minutes, and a dual core 1.5GHz Celeron (with 4GB of memory, and USB 3.0 disk drives) will run the benchmark in 3-5 minutes.  
+
 Running the Client
 ==================
 Should probably run as root.  Basic operation is thus:
