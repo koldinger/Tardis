@@ -67,6 +67,7 @@ import TardisDB
 import Regenerate
 import Util
 import Defaults
+import Connection
 
 import Tardis
 
@@ -1010,10 +1011,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             sock = self.request
             if self.server.ssl:
-                sock.sendall("TARDIS 1.1/SSL")
+                sock.sendall(Connection.sslHeaderString)
                 sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
             else:
-                sock.sendall("TARDIS 1.1")
+                sock.sendall(Connection.headerString)
 
             message = sock.recv(1024)
             self.logger.debug(message)
