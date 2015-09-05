@@ -475,7 +475,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     "size": len(sig) }
                 self.messenger.sendMessage(response)
                 sigio = StringIO.StringIO(sig)
-                Util.sendData(self.messenger, sigio, lambda x:x, compress=False)
+                Util.sendData(self.messenger, sigio, lambda x:x, lambda x:x, compress=False)
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
@@ -505,7 +505,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         if 'iv' in message:
             iv = message['iv']
-            output.write(base64.b64decode(iv))
         else:
             iv = None
 
@@ -525,6 +524,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
             else:
                 output = self.cache.open(checksum, "wb")
+
+        if iv:
+            output.write(base64.b64decode(iv))
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
