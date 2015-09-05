@@ -377,8 +377,8 @@ def sendContent(inode, reportType):
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                "encoding" : encoding,
-                "pathname" : pathname
+                "encoding" : encoding
+                #"pathname" : pathname
                 }
             if iv:
                 message["iv"] = base64.b64encode(iv)
