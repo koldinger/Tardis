@@ -254,11 +254,13 @@ def makeEncryptor():
     if crypt:
         iv = crypt.getIV()
         encryptor = crypt.getContentCipher(iv)
-        func = lambda x: encryptor.encrypt(crypt.pad(x))
+        func = lambda x: encryptor.encrypt(x)
+        pad  = lambda x: crypt.pad(x)
     else:
         iv = None
         func = lambda x: x
-    return (func, iv)
+        pad  = lambda x: x
+    return (func, pad, iv)
 
 def processDelta(inode):
     """ Generate a delta and send it """
@@ -315,7 +317,7 @@ def processDelta(inode):
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-                (encrypt, iv) = makeEncryptor()
+                (encrypt, pad, iv) = makeEncryptor()
                 stats['delta'] += 1
                 message = {
                     "message": "DEL",
@@ -331,7 +333,7 @@ def processDelta(inode):
 
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -343,7 +345,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -371,7 +373,7 @@ def sendContent(inode, reportType):
             filesize = fileInfo["size"]
             if S_ISDIR(mode):
                 return
-            (encrypt, iv) = makeEncryptor()
+            (encrypt, pad, iv) = makeEncryptor()
             message = {
                 "message" : "CON",
                 "inode" : inode,
@@ -401,7 +403,7 @@ def sendContent(inode, reportType):
                 makeSig = True if crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
                     sig.seek(0)
@@ -411,7 +413,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
@@ -439,7 +441,7 @@ def handleAckMeta(message):
         logger.debug("Sending meta data chunk: %s", cks)
         data = metaCache.inverse[cks][0]
 
-        (encrypt, iv) = makeEncryptor()
+        (encrypt, pad, iv) = makeEncryptor()
         message = {
             "message": "METADATA",
             "checksum": cks
@@ -449,7 +451,7 @@ def handleAckMeta(message):
 
         sendMessage(message)
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
-        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats)
 
 def sendDirHash(inode):
     i = tuple(inode)

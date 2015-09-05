@@ -245,7 +245,16 @@ def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
 
     return password
 
-def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
+def chunks(stream, chunksize):
+    last = ''
+    for chunk in iter(partial(stream.read, chunksize), ''):
+        if last:
+            yield (last, False)
+        last = chunk
+    yield (last, True)
+
+
+def sendData(sender, data, encrypt, pad, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -262,14 +271,19 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compr
         stream = CompressedBuffer.BufferedReader(data, checksum=checksum, signature=signature)
 
     try:
-        for chunk in iter(partial(stream.read, chunksize), ''):
+        for chunk, eof in chunks(stream, chunksize):
+            if eof:
+                chunk = pad(chunk)
+            #print len(chunk), eof
             data = sender.encode(encrypt(chunk))
             #chunkMessage = { "chunk" : num, "data": data }
-            sender.sendMessage(data, raw=True)
+            if data:
+                sender.sendMessage(data, raw=True)
             #num += 1
     except Exception as e:
         status = "Fail"
-        #print e
+        #logger = logging.getLogger('Data')
+        #logger.exception(e)
         raise e
     finally:
         sender.sendMessage('', raw=True)

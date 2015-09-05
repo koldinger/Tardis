@@ -82,13 +82,15 @@ class Regenerator:
         self.tempdir = tempdir
         self.crypt = crypt
 
-    def decryptFile(self, filename, size, iv):
+    def decryptFile(self, filename, size, iv=None):
         self.logger.debug("Decrypting %s", filename)
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
-        cipher = self.crypt.getContentCipher(base64.b64decode(iv))
-        outfile = tempfile.TemporaryFile()
         infile = self.cacheDir.open(filename, 'rb')
+        if not iv:
+            iv = infile.read(self.crypt.ivLength)
+        cipher = self.crypt.getContentCipher(iv)
+        outfile = tempfile.TemporaryFile()
         outfile.write(cipher.decrypt(infile.read()))
         outfile.truncate(size)
         outfile.seek(0)
@@ -108,7 +110,7 @@ class Regenerator:
                 basis = self.recoverChecksum(cksInfo['basis'])
 
                 if cksInfo['iv']:
-                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
+                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'])
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
 
@@ -129,7 +131,7 @@ class Regenerator:
                 return output
             else:
                 if cksInfo['iv']:
-                    output =  self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                    output =  self.decryptFile(cksum, cksInfo['size'])
                 else:
                     output =  self.cacheDir.open(cksum, "rb")
 

@@ -50,6 +50,8 @@ class TardisCrypto:
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
     _altchars    = '#@'
 
+    ivLength    = _blocksize
+
     def __init__(self, password, client=None):
         self._random = Crypto.Random.new()
         if client == None:
@@ -57,12 +59,12 @@ class TardisCrypto:
 
         self.client = client
         self.salt = hashlib.sha256(client).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)     # 2x256 bit keys
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
     def changePassword(self, newPassword):
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)    # 2x256 bit keys
+        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
@@ -74,11 +76,30 @@ class TardisCrypto:
         #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
         return self._filenameEnc
 
-    def getIV(self, ivLength=AES.block_size):
-        iv = self._random.read(ivLength)
+    def getIV(self):
+        iv = self._random.read(self.ivLength)
         return iv
 
-    def pad(self, x):
+    def pad(self, data, length=None):
+        if length is None:
+            length = len(data)
+        pad = self._blocksize - (length % self._blocksize)
+        data += chr(pad) * pad
+        return data
+
+    def unpad(self, data, validate=True):
+        if validate:
+            self.checkpad(data)
+        return data[:-data[-1]]
+
+    def checkpad(self, data):
+        l = data[-1]            # Grab the last byte
+        # Make sure last L bytes are all set to L
+        valid = reduce(lambda x, y: x and y, map(lambda x: x == l, data[-l:]))
+        if not valid:
+            raise Exception("Invalid padding")
+
+    def padzero(self, x):
         remainder = len(x) % self._blocksize
         if remainder == 0:
             return x
@@ -110,10 +131,9 @@ class TardisCrypto:
         return encpath
 
     def encryptFilename(self, name):
-        return base64.b64encode(self._filenameEnc.encrypt(self.pad(name)), self._altchars)
+        return base64.b64encode(self._filenameEnc.encrypt(self.padzero(name)), self._altchars)
 
     def decryptFilename(self, name):
-        #cipher = self.getFilenameCipher()
         return self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)).rstrip('\0')
 
     def createToken(self, client=None):
