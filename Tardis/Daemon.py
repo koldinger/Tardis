@@ -1080,7 +1080,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 sock.sendall(json.dumps(message))
                 raise InitFailedException("Unknown encoding: ", encoding)
 
-            response = {"status": "OK", "sessionid": str(self.sessionid), "prevDate": str(self.db.prevBackupDate), "new": new, "name": serverName if serverName else name }
+            response = {
+                "status": "OK",
+                "sessionid": str(self.sessionid),
+                "prevDate": str(self.db.prevBackupDate),
+                "new": new,
+                "name": serverName if serverName else name
+                }
             if token:
                 filenameKey = self.db.getConfigValue('FilenameKey')
                 contentKey  = self.db.getConfigValue('ContentKey')
