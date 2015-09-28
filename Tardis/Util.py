@@ -254,7 +254,7 @@ def chunks(stream, chunksize):
     yield (last, True)
 
 
-def sendData(sender, data, encrypt, pad, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):

@@ -345,7 +345,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -413,7 +413,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
