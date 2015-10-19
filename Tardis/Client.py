@@ -657,6 +657,8 @@ def handleAckClone(message):
                 logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
             sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
+        else:
+            logger.error("Unable to locate info for %s", str(finfo))
 
     # Purge out what hasn't changed
     for i in done:
@@ -667,6 +669,8 @@ def handleAckClone(message):
                 key = (f['inode'], f['dev'])
                 delInode(key)
             del cloneContents[inode]
+        else:
+            logger.error("Unable to locate info for %s", inode);
         # And the directory.
         delInode(inode)
 
@@ -799,7 +803,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             if logger.isEnabledFor(logging.DIRS):
                 logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
 
-            cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
+            #cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
+            cloneDir(s.st_ino, s.st_dev, files, dir)
         else:
             h = hashDir(files)
             dirHashes[(s.st_ino, s.st_dev)] = h
