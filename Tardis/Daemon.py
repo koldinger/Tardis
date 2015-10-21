@@ -837,7 +837,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         ret = self.db.setKeys(token, filenameKey, contentKey)
         response = {
             'message': 'ACKSETKEYS',
-            'response': ret
+            'response': 'OK' if ret else 'FAIL'
         }
         return (response, True)
 

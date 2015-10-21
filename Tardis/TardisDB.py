@@ -690,11 +690,16 @@ class TardisDB(object):
             return False
 
     def setKeys(self, token, filenameKey, contentKey):
-        self.beginTransaction()
-        self.setToken(token)
-        self.setConfigValue('FilenameKey', filenameKey)
-        self.setConfigValue('ContentKey', contentKey)
-        self.commit()
+        try:
+            self.beginTransaction()
+            self.setToken(token)
+            self.setConfigValue('FilenameKey', filenameKey)
+            self.setConfigValue('ContentKey', contentKey)
+            self.commit()
+            return True
+        except Exception as e:
+            self.logger.error("Setkeys failed: %s", e)
+            return False
 
     def getKeys(self):
         return (self.getConfigValue('FilenameKey'), self.getConfigValue('ContentKey'))
