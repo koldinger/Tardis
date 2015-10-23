@@ -661,6 +661,7 @@ def processArgs():
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',        dest='keys', default=None,                                  help='Load keys from file.')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
 
@@ -706,7 +707,11 @@ def main():
             crypt = None
 
         if crypt:
-            (f, c) = tardis.getKeys()
+            if args.keys:
+                (f, c) = Util.loadKeys(args.keys)
+            else:
+                (f, c) = tardis.getKeys()
+            print f, c
             crypt.setKeys(f, c)
 
         setupDisplay(tardis, crypt)
@@ -734,7 +739,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        #logger.exception(e)
+        logger.exception(e)
 
 if __name__ == "__main__":
     main()

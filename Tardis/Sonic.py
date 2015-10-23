@@ -62,7 +62,7 @@ configDefaults = {
 
 logger = None
 
-def getDB(crypt, new=False):
+def getDB(crypt, new=False, keyfile=None):
     basedir = os.path.join(args.database, args.client)
     dbfile = os.path.join(basedir, args.dbname)
     if new and os.path.exists(dbfile):

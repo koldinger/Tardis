@@ -39,6 +39,8 @@ import StringIO
 import getpass
 import stat
 import fnmatch
+import json
+import base64
 from functools import partial
 
 import Messages
@@ -333,6 +335,28 @@ def receiveData(receiver, output):
     if 'compressed' in chunk:
         compressed = chunk['compressed']
     return (bytesReceived, status, size, checksum, compressed)
+
+"""
+Load a key file.
+Key files are JSON documents, with at least two fields, FilenameKey and ContentKey, each containing a base64 blob containing a key.
+"""
+def _updateLen(value, length):
+    res = base64.b64decode(value)
+    if len(res) != length:
+        if len(res) > length:
+            res = base64.b64encode(res[0:length])
+        else:
+            res = base64.b64encode(res + '\0' * (length - len(res)))
+    else:
+        res = value
+    return res
+
+def loadKeys(name):
+    with file(name, 'r') as f:
+        t = json.loads(f.read())
+        fkey = _updateLen(t['ContentKey'], 32)
+        nkey = _updateLen(t['FilenameKey'], 32)
+        return (fkey, nkey)
 
 """
 Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,

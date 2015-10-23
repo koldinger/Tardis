@@ -147,7 +147,7 @@ class Regenerator:
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            #self.logger.exception(e)
+            self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None):
@@ -388,7 +388,8 @@ def parseArgs():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
+    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
+    parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
@@ -459,7 +460,10 @@ def main():
         crypt = None
 
     if crypt:
-        (f, c) = tardis.getKeys()
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys)
+        else:
+            (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
 
     r = Regenerator(cache, tardis, crypt=crypt)

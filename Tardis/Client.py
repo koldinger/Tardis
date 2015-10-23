@@ -1120,7 +1120,8 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
-    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True, help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',           dest='keys', default=None,                           help='Load keys from file.  Keys are not stored in database')
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
@@ -1335,7 +1336,12 @@ def main():
         crypt = None
 
     if crypt:
-        (f, c) = conn.getKeys()
+        (f, c) = (None, None)
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys)
+        else:
+            (f, c) = conn.getKeys()
+
         if f and c:
             crypt.setKeys(f, c)
         else:
