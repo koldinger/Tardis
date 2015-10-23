@@ -31,6 +31,7 @@
 import os
 import logging
 import argparse
+import ConfigParser
 import sys
 import subprocess
 import hashlib
@@ -351,12 +352,22 @@ def _updateLen(value, length):
         res = value
     return res
 
-def loadKeys(name):
-    with file(name, 'r') as f:
-        t = json.loads(f.read())
-        fkey = _updateLen(t['ContentKey'], 32)
-        nkey = _updateLen(t['FilenameKey'], 32)
-        return (fkey, nkey)
+def loadKeys(name, client):
+    config = ConfigParser.ConfigParser()
+    config.add_section(client)
+    config.read(name)
+    contentKey = _updateLen(config.get(client, 'ContentKey'), 32)
+    nameKey = _updateLen(config.get(client, 'FilenameKey'), 32)
+    return (nameKey, contentKey)
+
+def saveKeys(name, client, nameKey, contentKey):
+    config = ConfigParser.ConfigParser()
+    config.add_section(client)
+    config.read(name)
+    config.set(client, 'ContentKey', contentKey)
+    config.set(client, 'FilenameKey', nameKey)
+    with open(name, 'wb') as configfile:
+        config.write(configfile)
 
 """
 Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,

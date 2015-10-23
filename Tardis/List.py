@@ -708,7 +708,7 @@ def main():
 
         if crypt:
             if args.keys:
-                (f, c) = Util.loadKeys(args.keys)
+                (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
             else:
                 (f, c) = tardis.getKeys()
             print f, c

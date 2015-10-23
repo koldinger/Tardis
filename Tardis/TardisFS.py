@@ -191,7 +191,7 @@ class TardisFS(fuse.Fuse):
                 # Insert the retrieved keys from the DB
                 if self.crypt:
                     if self.keys:
-                        (f, c) = Util.loadKeys(self.keys)
+                        (f, c) = Util.loadKeys(args.keys, self.tardis.getConfigValue('ClientID'))
                     else:
                         (f, c) = self.tardis.getKeys()
                     self.crypt.setKeys(f, c)

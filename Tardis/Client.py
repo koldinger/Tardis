@@ -1338,7 +1338,7 @@ def main():
     if crypt:
         (f, c) = (None, None)
         if args.keys:
-            (f, c) = Util.loadKeys(args.keys)
+            (f, c) = Util.loadKeys(args.keys, conn.getClientId())
         else:
             (f, c) = conn.getKeys()
 
