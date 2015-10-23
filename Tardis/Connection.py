@@ -101,9 +101,10 @@ class Connection(object):
                 if 'error' in fields:
                     errmesg = errmesg + ": " + fields['error']
                 raise ConnectionException(errmesg)
-            self.sessionid = uuid.UUID(fields['sessionid'])
-            self.lastTimestamp = float(fields['prevDate'])
-            self.name = fields['name']
+            self.sessionid      = uuid.UUID(fields['sessionid'])
+            self.clientId       = uuid.UUID(fields['clientid'])
+            self.lastTimestamp  = float(fields['prevDate'])
+            self.name           = fields['name']
             if 'filenameKey' in fields:
                 self.filenameKey = fields['filenameKey']
             if 'contentKey' in fields:
@@ -138,6 +139,9 @@ class Connection(object):
 
     def getSessionId(self):
         return str(self.sessionid)
+
+    def getClientId(self):
+        return str(self.clientId)
 
     def getBackupName(self):
         return str(self.name)

@@ -1100,7 +1100,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "sessionid": str(self.sessionid),
                 "prevDate": str(self.db.prevBackupDate),
                 "new": new,
-                "name": serverName if serverName else name
+                "name": serverName if serverName else name,
+                "clientid": str(self.db.clientId)
                 }
             if token:
                 filenameKey = self.db.getConfigValue('FilenameKey')

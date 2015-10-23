@@ -38,6 +38,7 @@ import hashlib
 import sys
 import Tardis
 import array
+import uuid
 
 import ConnIdLogAdapter
 import Rotator
@@ -78,14 +79,16 @@ class TardisDB(object):
     conn    = None
     cursor  = None
     dbName  = None
-    db      = None
-    currBackupSet = None
-    dirinodes = {}
-    backup = False
-    chunksize = 1000
-    journal = None
+    db              = None
+    currBackupSet   = None
+    prevBackupSet   = None
+    dirinodes       = {}
+    backup          = False
+    clientId        = None
+    chunksize       = 1000
+    journal         = None
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, token=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, token=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, clientId=None):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to {}".format(dbname))
@@ -124,6 +127,7 @@ class TardisDB(object):
                 raise
             if token:
                 self.setToken(token)
+            self.setConfigValue('ClientID', str(uuid.uuid1()))
 
         if token:
             if not self.checkToken(token):
@@ -155,6 +159,8 @@ class TardisDB(object):
             self.lastClientTime = b['clienttime']
             #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
+        self.clientId = self.getConfigValue('ClientID')
+
         #row = self.cursor.fetchone()
         #self.prevBackupName = row[0]
         #self.prevBackupSet = row[1]
@@ -165,7 +171,6 @@ class TardisDB(object):
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
         self.conn.execute("PRAGMA journal_mode=truncate")
-
 
         if journal:
             self.journal = file(journal, 'a')
