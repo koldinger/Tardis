@@ -675,6 +675,9 @@ class TardisDB(object):
     def setConfigValue(self, key, value):
         c = self.execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})
 
+    def delConfigValue(self, key):
+        c = self.execute("DELETE FROM Config WHERE Key = :key", {'key': key})
+
     def getToken(self):
         return self.getConfigValue('Token')
 
@@ -698,12 +701,19 @@ class TardisDB(object):
         try:
             self.beginTransaction()
             self.setToken(token)
-            self.setConfigValue('FilenameKey', filenameKey)
-            self.setConfigValue('ContentKey', contentKey)
+            if filenameKey:
+                self.setConfigValue('FilenameKey', filenameKey)
+            else:
+                self.delConfigValue('FilenameKey')
+            if contentKey:
+                self.setConfigValue('ContentKey', contentKey)
+            else:
+                self.delConfigValue('ContentKey')
             self.commit()
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)
+            self.logger.exception(e)
             return False
 
     def getKeys(self):
