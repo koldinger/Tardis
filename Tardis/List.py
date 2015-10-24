@@ -711,7 +711,6 @@ def main():
                 (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
             else:
                 (f, c) = tardis.getKeys()
-            print f, c
             crypt.setKeys(f, c)
 
         setupDisplay(tardis, crypt)
