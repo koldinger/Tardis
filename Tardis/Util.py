@@ -342,6 +342,9 @@ Load a key file.
 Key files are JSON documents, with at least two fields, FilenameKey and ContentKey, each containing a base64 blob containing a key.
 """
 def _updateLen(value, length):
+    if value is None:
+        return None
+
     res = base64.b64decode(value)
     if len(res) != length:
         if len(res) > length:
@@ -353,7 +356,7 @@ def _updateLen(value, length):
     return res
 
 def loadKeys(name, client):
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
     config.add_section(client)
     config.read(name)
     contentKey = _updateLen(config.get(client, 'ContentKey'), 32)
