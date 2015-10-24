@@ -1346,7 +1346,11 @@ def main():
             crypt.setKeys(f, c)
         else:
             crypt.genKeys()
-            sendKeys(crypt)
+            if args.keys:
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(args.keys, conn.getClientId(), f, c)
+            else:
+                sendKeys(crypt)
 
     # Now, do the actual work here.
     try:
