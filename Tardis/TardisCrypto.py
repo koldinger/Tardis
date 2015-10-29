@@ -63,11 +63,6 @@ class TardisCrypto:
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
-    def changePassword(self, newPassword):
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
-        self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
-        self._tokenKey   = keys[self._keysize:]                                       # And the other one
-
     def getContentCipher(self, iv):
         cipher = AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
         return cipher
@@ -140,7 +135,7 @@ class TardisCrypto:
         if client is None:
             client = self.client  
         cipher = AES.new(self._tokenKey, AES.MODE_ECB)
-        token = base64.b64encode(cipher.encrypt(self.pad(client)), self._altchars)
+        token = base64.b64encode(cipher.encrypt(self.padzero(client)), self._altchars)
         return token
 
     def genKeys(self):
