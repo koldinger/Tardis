@@ -22,15 +22,14 @@ def encryptFilenames(db, crypto):
 
     conn.commit()
 
-def encryptFile(checksum, cacheDir, cipher, pad):
+def encryptFile(checksum, cacheDir, cipher, iv, pad):
     f = cacheDir.open(checksum, 'rb')
     o = cacheDir.open(checksum + '.enc', 'wb')
-    while True:
-        x = f.read(64 * 1024)
-        if not x:
-            break
-        y = cipher.encrypt(pad(x))
-        o.write(y)
+    o.write(iv)
+    for chunk, eof in Util.chunks(f, 64 * 1024):
+        if eof:
+            chunk = pad(chunk)
+        o.write(cipher.encrypt(chunk))
     o.close()
     if not cacheDir.move(checksum, checksum + ".bak"):
         cacheDir.remove(checksum + ".enc")
@@ -49,7 +48,7 @@ def encryptFiles(db, crypto, cacheDir):
     c = conn.cursor()
     regenerator = Regenerate.Regenerator(cacheDir, db, crypto)
 
-    r = c.execute("SELECT Checksum FROM Checksums WHERE InitVector IS NULL ORDER BY CheckSum")
+    r = c.execute("SELECT Checksum FROM Checksums WHERE InitVector IS NULL AND IsFile = 1 ORDER BY CheckSum")
     checksums = r.fetchall()
     c2 = conn.cursor()
     for row in checksums:
@@ -60,10 +59,11 @@ def encryptFiles(db, crypto, cacheDir):
         logger.info("Encrypting %s", checksum)
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
-        encryptFile(checksum, cacheDir, cipher, crypto.pad)
+        encryptFile(checksum, cacheDir, cipher, iv, crypto.pad)
         biv = base64.b64encode(iv)
+        st = os.stat(cacheDir.path(checksum))
 
-        c2.execute('UPDATE CheckSums SET InitVector = ? WHERE Checksum = ?', (biv, checksum))
+        c2.execute('UPDATE CheckSums SET InitVector = ?, DiskSize = ? WHERE Checksum = ?', (biv, st.st_size, checksum))
         conn.commit()
         cacheDir.remove(checksum + '.bak')
 
@@ -88,14 +88,18 @@ def processArgs():
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('')
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
 
     crypto = TardisCrypto.TardisCrypto(password, args.client)
     token = crypto.createToken()
 
+    logger.info("Created token: %s", token)
     path = os.path.join(args.database, args.client, args.dbname)
     db = TardisDB.TardisDB(path, token=token, backup=False)
+    (f, c) = db.getKeys()
+    crypto.setKeys(f, c)
 
     cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
 
