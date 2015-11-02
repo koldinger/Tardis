@@ -31,6 +31,7 @@
 import os
 import logging
 import argparse
+import ConfigParser
 import sys
 import subprocess
 import hashlib
@@ -39,6 +40,8 @@ import StringIO
 import getpass
 import stat
 import fnmatch
+import json
+import base64
 from functools import partial
 
 import Messages
@@ -245,7 +248,16 @@ def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
 
     return password
 
-def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
+def chunks(stream, chunksize):
+    last = ''
+    for chunk in iter(partial(stream.read, chunksize), ''):
+        if last:
+            yield (last, False)
+        last = chunk
+    yield (last, True)
+
+
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -262,14 +274,19 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), checksum=False, compr
         stream = CompressedBuffer.BufferedReader(data, checksum=checksum, signature=signature)
 
     try:
-        for chunk in iter(partial(stream.read, chunksize), ''):
+        for chunk, eof in chunks(stream, chunksize):
+            if eof:
+                chunk = pad(chunk)
+            #print len(chunk), eof
             data = sender.encode(encrypt(chunk))
             #chunkMessage = { "chunk" : num, "data": data }
-            sender.sendMessage(data, raw=True)
+            if data:
+                sender.sendMessage(data, raw=True)
             #num += 1
     except Exception as e:
         status = "Fail"
-        #print e
+        #logger = logging.getLogger('Data')
+        #logger.exception(e)
         raise e
     finally:
         sender.sendMessage('', raw=True)
@@ -319,6 +336,41 @@ def receiveData(receiver, output):
     if 'compressed' in chunk:
         compressed = chunk['compressed']
     return (bytesReceived, status, size, checksum, compressed)
+
+"""
+Load a key file.
+Key files are JSON documents, with at least two fields, FilenameKey and ContentKey, each containing a base64 blob containing a key.
+"""
+def _updateLen(value, length):
+    if value is None:
+        return None
+
+    res = base64.b64decode(value)
+    if len(res) != length:
+        if len(res) > length:
+            res = base64.b64encode(res[0:length])
+        else:
+            res = base64.b64encode(res + '\0' * (length - len(res)))
+    else:
+        res = value
+    return res
+
+def loadKeys(name, client):
+    config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
+    config.add_section(client)
+    config.read(name)
+    contentKey = _updateLen(config.get(client, 'ContentKey'), 32)
+    nameKey = _updateLen(config.get(client, 'FilenameKey'), 32)
+    return (nameKey, contentKey)
+
+def saveKeys(name, client, nameKey, contentKey):
+    config = ConfigParser.ConfigParser()
+    config.add_section(client)
+    config.read(name)
+    config.set(client, 'ContentKey', contentKey)
+    config.set(client, 'FilenameKey', nameKey)
+    with open(name, 'wb') as configfile:
+        config.write(configfile)
 
 """
 Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,

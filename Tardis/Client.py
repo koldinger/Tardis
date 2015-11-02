@@ -254,11 +254,13 @@ def makeEncryptor():
     if crypt:
         iv = crypt.getIV()
         encryptor = crypt.getContentCipher(iv)
-        func = lambda x: encryptor.encrypt(crypt.pad(x))
+        func = lambda x: encryptor.encrypt(x)
+        pad  = lambda x: crypt.pad(x)
     else:
         iv = None
         func = lambda x: x
-    return (func, iv)
+        pad  = lambda x: x
+    return (func, pad, iv)
 
 def processDelta(inode):
     """ Generate a delta and send it """
@@ -315,7 +317,7 @@ def processDelta(inode):
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-                (encrypt, iv) = makeEncryptor()
+                (encrypt, pad, iv) = makeEncryptor()
                 stats['delta'] += 1
                 message = {
                     "message": "DEL",
@@ -331,7 +333,7 @@ def processDelta(inode):
 
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -343,7 +345,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, lambda x:x, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -371,12 +373,12 @@ def sendContent(inode, reportType):
             filesize = fileInfo["size"]
             if S_ISDIR(mode):
                 return
-            (encrypt, iv) = makeEncryptor()
+            (encrypt, pad, iv) = makeEncryptor()
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                "encoding" : encoding,
-                "pathname" : pathname
+                "encoding" : encoding
+                #"pathname" : pathname
                 }
             if iv:
                 message["iv"] = base64.b64encode(iv)
@@ -401,7 +403,7 @@ def sendContent(inode, reportType):
                 makeSig = True if crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
                     sig.seek(0)
@@ -411,7 +413,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, lambda x:x, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 logger.exception(e)
@@ -439,7 +441,7 @@ def handleAckMeta(message):
         logger.debug("Sending meta data chunk: %s", cks)
         data = metaCache.inverse[cks][0]
 
-        (encrypt, iv) = makeEncryptor()
+        (encrypt, pad, iv) = makeEncryptor()
         message = {
             "message": "METADATA",
             "checksum": cks
@@ -449,7 +451,7 @@ def handleAckMeta(message):
 
         sendMessage(message)
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
-        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats)
 
 def sendDirHash(inode):
     i = tuple(inode)
@@ -464,6 +466,13 @@ def sendDirHash(inode):
     batchMessage(message)
     if i != (0, 0):             # Leave the dummy entry
         del dirHashes[i]
+
+def cksize(i, threshhold):
+    if i in inodeDB:
+       (f, p) = inodeDB[i]
+       if f['size'] > threshhold:
+        return True
+    return False
 
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
@@ -481,8 +490,10 @@ def handleAckDir(message):
         delInode(i)
 
     # If checksum content in NOT specified, send the data for each file
-    if not args.ckscontent:
-        for i in [tuple(x) for x in content]:
+    for i in [tuple(x) for x in content]:
+        if args.ckscontent and cksize(i, args.ckscontent):
+            cksum.append(i)
+        else:
             if logger.isEnabledFor(logging.FILES):
                 logFileInfo(i, 'N')
             sendContent(i, 'New')
@@ -504,8 +515,6 @@ def handleAckDir(message):
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
-    if args.ckscontent:
-        cksum.extend(content)
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
@@ -1118,7 +1127,8 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
-    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--crypt',          dest='crypt',action=Util.StoreBoolean, default=True, help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',           dest='keys', default=None,                           help='Load keys from file.  Keys are not stored in database')
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
@@ -1164,12 +1174,12 @@ def processCommandLine():
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
     comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',        dest='ckscontent', default=False, action=Util.StoreBoolean, help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
-    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,           help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
-    comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,         help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
-    comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
-    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
-    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
+    comgrp.add_argument('--cks-content',        dest='ckscontent', default=0, type=int, nargs='?', const=4096,   help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
+    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,               help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
+    comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,             help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
+    comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,            help='Maximum number of small dirs to batch together.  Default: %(default)s')
+    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,       help='Chunk size for sending data.  Default: %(default)s')
+    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,            help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],      help='Protocol for data transfer.  Default: %(default)s')
 
     parser.add_argument('--deltathreshold',     dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
@@ -1333,12 +1343,21 @@ def main():
         crypt = None
 
     if crypt:
-        (f, c) = conn.getKeys()
+        (f, c) = (None, None)
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys, conn.getClientId())
+        else:
+            (f, c) = conn.getKeys()
+
         if f and c:
             crypt.setKeys(f, c)
         else:
             crypt.genKeys()
-            sendKeys(crypt)
+            if args.keys:
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(args.keys, conn.getClientId(), f, c)
+            else:
+                sendKeys(crypt)
 
     # Now, do the actual work here.
     try:

@@ -123,6 +123,7 @@ class TardisFS(fuse.Fuse):
             self.pwfile     = None
             self.pwurl      = None
             self.pwprog     = None
+            self.keys       = None
             self.dbname     = dbname
             self.cachetime  = 60
             self.nocrypt    = True
@@ -138,6 +139,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
             self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
             self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
+            self.parser.add_option(mountopt="keys",         help="Load keys from the specified file")
             self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
             self.parser.add_option(mountopt="dbname",       help="Database Name")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
@@ -188,7 +190,10 @@ class TardisFS(fuse.Fuse):
 
                 # Insert the retrieved keys from the DB
                 if self.crypt:
-                    (f, c) = self.tardis.getKeys()
+                    if self.keys:
+                        (f, c) = Util.loadKeys(args.keys, self.tardis.getConfigValue('ClientID'))
+                    else:
+                        (f, c) = self.tardis.getKeys()
                     self.crypt.setKeys(f, c)
 
                 # Create a regenerator.

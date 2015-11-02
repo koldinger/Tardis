@@ -475,7 +475,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     "size": len(sig) }
                 self.messenger.sendMessage(response)
                 sigio = StringIO.StringIO(sig)
-                Util.sendData(self.messenger, sigio, lambda x:x, compress=False)
+                Util.sendData(self.messenger, sigio, compress=False)
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
@@ -500,9 +500,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         basis    = message["basis"]
         size     = message["size"]          # size of the original file, not the content
         (inode, dev)    = message["inode"]
-        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        iv = message['iv'] if 'iv' in message else None
+
         deltasize = message['deltasize'] if 'deltasize' in message else None
+        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
+        if 'iv' in message:
+            iv = message['iv']
+        else:
+            iv = None
 
         savefull = self.server.savefull and iv is None
         if self.cache.exists(checksum):
@@ -520,6 +524,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
             else:
                 output = self.cache.open(checksum, "wb")
+
+        if iv:
+            output.write(base64.b64decode(iv))
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
@@ -658,7 +665,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
         # Would be more compact to store the blob, but we're not doing that now
         #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        iv = message['iv'] if 'iv' in message else None
+        if 'iv' in message:
+            iv = message['iv']
+            output.write(base64.b64decode(iv))
+        else:
+            iv = None
 
         (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
@@ -761,7 +772,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
         # Would be more compact to store the blob, but we're not doing that now
         #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        iv = message['iv'] if 'iv' in message else None
+        if 'iv' in message:
+            iv = message['iv']
+            output.write(base64.b64decode(iv))
+        else:
+            iv = None
 
         (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
@@ -822,7 +837,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         ret = self.db.setKeys(token, filenameKey, contentKey)
         response = {
             'message': 'ACKSETKEYS',
-            'response': ret
+            'response': 'OK' if ret else 'FAIL'
         }
         return (response, True)
 
@@ -1085,7 +1100,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "sessionid": str(self.sessionid),
                 "prevDate": str(self.db.prevBackupDate),
                 "new": new,
-                "name": serverName if serverName else name
+                "name": serverName if serverName else name,
+                "clientid": str(self.db.clientId)
                 }
             if token:
                 filenameKey = self.db.getConfigValue('FilenameKey')

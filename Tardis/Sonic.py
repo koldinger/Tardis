@@ -62,7 +62,7 @@ configDefaults = {
 
 logger = None
 
-def getDB(crypt, new=False):
+def getDB(crypt, new=False, keyfile=None):
     basedir = os.path.join(args.database, args.client)
     dbfile = os.path.join(basedir, args.dbname)
     if new and os.path.exists(dbfile):
@@ -90,7 +90,12 @@ def setToken(crypt):
         (db, cache) = getDB(None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
-        db.setKeys(crypt.createToken(), f, c)
+        token = crypt.createToken()
+        if args.keys:
+            db.setToken(token)
+            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+        else:
+            db.setKeys(token, f, c)
         db.close()
         return 0
     except Exception as e:
@@ -100,15 +105,49 @@ def setToken(crypt):
 def changePassword(crypt, crypt2):
     try:
         (db, cache) = getDB(crypt)
+        # Load the keys, and insert them into the crypt object, to decyrpt them
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+        else:
+            (f, c) = db.getKeys()
+        crypt.setKeys(f, c)
+
         # Grab the keys from one crypt object.
         # Need to do this because getKeys/setKeys assumes they're encrypted, and we need the raw
         # versions
-        crypt2.filenameKey = crypt.filenameKey
-        crypt2.contentKey = crypt.contentKey
+        crypt2._filenameKey = crypt._filenameKey
+        crypt2._contentKey  = crypt._contentKey
         # Now get the encrypted versions
         (f, c) = crypt2.getKeys()
-        db.setKeys(crypt2.createToken(), f, c)
+        if args.keys:
+            db.setToken(crypt2.createToken())
+            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+        else:
+            db.setKeys(crypt2.createToken(), f, c)
         db.close()
+        return 0
+    except Exception as e:
+        logger.error(e)
+        return 1
+
+def moveKeys(db, crypt):
+    try:
+        if args.keys is None:
+            logger.error("Must specify key file for key manipulation")
+            return 1
+        clientId = db.getConfigValue('ClientID')
+        token    = crypt.createToken()
+        (db, cache) = getDB(crypt)
+        if args.extract:
+            (f, c) = db.getKeys()
+            Util.saveKeys(args.keys, clientId, f, c)
+            if args.deleteKeys:
+                db.setKeys(token, None, None)
+        elif args.insert:
+            (f, c) = Util.loadKeys(args.keys, clientId)
+            db.setKeys(token, f, c)
+            if args.deleteKeys:
+                Util.saveKeys(args.keys, clientId, None, None)
         return 0
     except Exception as e:
         logger.error(e)
@@ -289,6 +328,12 @@ def parseArgs():
     cnfParser = argparse.ArgumentParser(add_help=False)
     cnfParser.add_argument('--confirm',          dest='confirm', action=Util.StoreBoolean, default=True,   help='Confirm deletes and purges')
 
+    keyParser = argparse.ArgumentParser(add_help=False)
+    keyGroup = keyParser.add_mutually_exclusive_group(required=True)
+    keyGroup.add_argument('--extract',          dest='extract', default=False, action='store_true',         help='Extract keys from database')
+    keyGroup.add_argument('--insert',           dest='insert', default=False, action='store_true',          help='Insert keys from database')
+    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean,     help='Delete keys from server or database')
+
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     common.add_argument('--client',             dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
@@ -301,20 +346,22 @@ def parseArgs():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,    help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',        dest='keys', default=None,                              help='Load keys from key database')
 
     newPassParser = argparse.ArgumentParser(add_help=False)
     newpassgrp = newPassParser.add_argument_group("New Password specification options")
-    pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--newpassword',      dest='newpw', default=None, nargs='?', const=True,   help='Change to this password')
-    pwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                         help='Read new password from file')
-    pwgroup.add_argument('--newpassword-url',  dest='newpwu', default=None,                         help='Retrieve new password from the specified URL')
-    pwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                         help='Use the specified command to generate the new password on stdout')
+    npwgroup = newpassgrp.add_mutually_exclusive_group()
+    npwgroup.add_argument('--newpassword',      dest='newpw', default=None, nargs='?', const=True,  help='Change to this password')
+    npwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                        help='Read new password from file')
+    npwgroup.add_argument('--newpassword-url',  dest='newpwu', default=None,                        help='Retrieve new password from the specified URL')
+    npwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                        help='Use the specified command to generate the new password on stdout')
 
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     cp = subs.add_parser('create',       parents=[common], help='Create a client database')
     sp = subs.add_parser('setpass',      parents=[common], help='Set a password')
     cp = subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
+    kp = subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
     lp = subs.add_parser('list',         parents=[common],                                      help='List backup sets')
     ip = subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
     pp = subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
@@ -409,6 +456,9 @@ def main():
             return changePassword(crypt, crypt2)
 
         (db, cache) = getDB(crypt)
+
+        if args.command == 'keys':
+            return moveKeys(db, crypt)
 
         if args.command == 'list':
             return listBSets(db, crypt)

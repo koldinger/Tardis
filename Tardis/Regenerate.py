@@ -82,13 +82,15 @@ class Regenerator:
         self.tempdir = tempdir
         self.crypt = crypt
 
-    def decryptFile(self, filename, size, iv):
+    def decryptFile(self, filename, size, iv=None):
         self.logger.debug("Decrypting %s", filename)
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
-        cipher = self.crypt.getContentCipher(base64.b64decode(iv))
-        outfile = tempfile.TemporaryFile()
         infile = self.cacheDir.open(filename, 'rb')
+        if not iv:
+            iv = infile.read(self.crypt.ivLength)
+        cipher = self.crypt.getContentCipher(iv)
+        outfile = tempfile.TemporaryFile()
         outfile.write(cipher.decrypt(infile.read()))
         outfile.truncate(size)
         outfile.seek(0)
@@ -108,7 +110,7 @@ class Regenerator:
                 basis = self.recoverChecksum(cksInfo['basis'])
 
                 if cksInfo['iv']:
-                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], cksInfo['iv'])
+                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'])
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
 
@@ -129,7 +131,7 @@ class Regenerator:
                 return output
             else:
                 if cksInfo['iv']:
-                    output =  self.decryptFile(cksum, cksInfo['size'], cksInfo['iv'])
+                    output =  self.decryptFile(cksum, cksInfo['size'])
                 else:
                     output =  self.cacheDir.open(cksum, "rb")
 
@@ -145,7 +147,7 @@ class Regenerator:
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            #self.logger.exception(e)
+            self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None):
@@ -386,7 +388,8 @@ def parseArgs():
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
+    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
+    parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
@@ -457,7 +460,10 @@ def main():
         crypt = None
 
     if crypt:
-        (f, c) = tardis.getKeys()
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
+        else:
+            (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
 
     r = Regenerator(cache, tardis, crypt=crypt)

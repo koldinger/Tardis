@@ -78,20 +78,21 @@ while (<STDIN>) {
         $sessionId = $1;
         if ($_ =~ /Request received from:\s*(\d+\.\d+\.\d+\.\d+)\s*Session:\s*([a-f0-9-]+)/) {
             $requests++;
-            $sessionInfo{$sessionId} = { 'complete' => 'Folse' };
+            $sessionInfo{$sessionId} = { 'complete' => 'Folse', 'new' => 0, 'upd' => 0, 'runtime' => '' };
             #$sessionInfo{$sessionId}->{'complete'} = "False";
         } elsif ($_ =~ /Creating backup for\s*([\w\.\-]+):/) {
             my $host = $1;
             $sessions++;
             $hosts{$host}++;
             $sessionInfo{$sessionId}->{'host'} = $host;
-        } elsif ($_ =~ /Session from\s*([\w\.\-]+).*Ending:\s*(\w+)*/) { #\s*\{[a-f0-9-]\}\s*Ending: ({True|False})/) {
+        } elsif ($_ =~ /Session from\s*([\w\.\-]+).*Ending:\s*(\w+)\s*Runtime:\s*(\d+:\d+:\d+).*/) { #\s*\{[a-f0-9-]\}\s*Ending: ({True|False})/) 
             #Session from linux.koldware.com {466e21da-d372-11e4-b3b8-003067ee8ca4} Ending: True: 0:00:02.605941
             $completed++;
             if ($2 eq "True") {
                 $success++;
             }
             $sessionInfo{$sessionId}->{'success'} = $2;
+            $sessionInfo{$sessionId}->{'runtime'} = $3;
         } elsif ($_ =~ /New or replaced files:\s*(\d+)\s*$/) {
             $newFiles += $1;
             $sessionInfo{$sessionId}->{'new'} = $1;
@@ -102,7 +103,6 @@ while (<STDIN>) {
     } elsif ($_ =~ /Starting server Port: (\d+)/) {
         $starts++;
     }
-
 }
 
 printf "Tardisd system starts: %d\n", $starts;
@@ -130,6 +130,6 @@ if ($Detail >= 10) {
         my $info = $sessionInfo{$session};
         my $host = $info->{'host'};
         $host = "** no host named **" unless defined $host;
-        printf "%-20s %-20s %5s\n", $session, $host, $info->{'success'};
+        printf "%-20s %-20s %5s %6d %6d\n", $session, $host, $info->{'success'}, $info->{'new'}, $info->{'upd'};
     }
 }
