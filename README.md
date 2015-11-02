@@ -12,11 +12,12 @@ relatively platform independent, although it's only been tested on linux so far.
 easy ported to Windows.
 
 Tardis consists of several components:
-* tardisd (Daemon): The tardis daemon process which maintains the backups
-* tardis  (Client): The tardis client process, which creates backup data and pushes it to the server
-* tardisfs (TardisFS): A FUSE based file system which provides views of the various backup sets.
-* regenerate (Regenerate): A program to retrieve an individual verson of the file without using the TardisFS
-* lstardis (List): List versions of files and directories in the database.
+* tardisd (Daemon.py): The tardis daemon process which maintains the backups
+* tardis  (Client.py): The tardis client process, which creates backup data and pushes it to the server
+* tardisfs (TardisFS.py): A FUSE based file system which provides views of the various backup sets.
+* regenerate (Regenerate.py): A program to retrieve an individual verson of the file without using the TardisFS
+* lstardis (List.py): List versions of files and directories in the database.
+* sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
@@ -45,12 +46,9 @@ Note: as of version 0.15, references to host or hostname have been changed to cl
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.20 will update the schema and communications protocol.  This will **require** running of a conversion script to convert the database.  0.20 clients will need to run against 0.20 or later servers.
-  * 0.21 will update the system to support backing up extended attributes, and possibly posix access control lists.  0.21 clients will need to run against 0.21 or later servers.
-  * 0.22 will (hopefully) make the HTTP interface stable enough for use.
-  * 0.23 will (hopefully) add the start of an administration tool.
-  * 0.24 and beyond will be bug fixes, and preparation for 1.0.
-
+  * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
+  * 0.25 Improved HTTP filesystem, allowing incremental retrieval of files, rather than having to retrieve full files on any access.
+  
 Installation
 ============
 Installing  up the server is relatively straightforward.
@@ -108,8 +106,7 @@ Note on Passwords
 =================
 There is no mechanism for recovering a lost password.  If you lose it, you're done.
 
-There is currently no mechanism for changing passwords; make sure your initial password is secure.
-This will probably change in a later release, but has not yet been implemented.
+Passwords can be changed with the sonic utility.
 
 Running the Client without a Server locally
 ===========================================
@@ -136,8 +133,6 @@ The filesystem approach is often the easiest method.  In this technique, a files
 Files can also be recovered via the regenerate application. The regenerate application takes the name of the file to be recovered, and can also be given a date for which to regenerate the file.  Dates can be via the --date (-D) option, and can be specified via a large variety of forms.  For instance "regenerate -D '3 days ago' filename" will regenerate a version from 3 days earlier.  Dates can also be specified expclitly in a wide variety of formats, such as "03/15/2014" to specify March 15, 2014 (obviously).
 
 Regenerate can be used to recover entire directory trees.  In general, using regenerate to recover files will be siginicantly faster than rsync'ing out of tardisfs.
-
-
 
 See regenerate -h for details.
 
