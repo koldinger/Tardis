@@ -467,6 +467,13 @@ def sendDirHash(inode):
     if i != (0, 0):             # Leave the dummy entry
         del dirHashes[i]
 
+def cksize(i, threshhold):
+    if i in inodeDB:
+       (f, p) = inodeDB[i]
+       if f['size'] > threshhold:
+        return True
+    return False
+
 def handleAckDir(message):
     checkMessage(message, 'ACKDIR')
 
@@ -483,8 +490,10 @@ def handleAckDir(message):
         delInode(i)
 
     # If checksum content in NOT specified, send the data for each file
-    if not args.ckscontent:
-        for i in [tuple(x) for x in content]:
+    for i in [tuple(x) for x in content]:
+        if args.ckscontent and cksize(i, args.ckscontent):
+            cksum.append(i)
+        else:
             if logger.isEnabledFor(logging.FILES):
                 logFileInfo(i, 'N')
             sendContent(i, 'New')
@@ -506,8 +515,6 @@ def handleAckDir(message):
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
-    if args.ckscontent:
-        cksum.extend(content)
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
@@ -1167,12 +1174,12 @@ def processCommandLine():
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
     comgrp.add_argument('--compress-msgs',      dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',        dest='ckscontent', default=False, action=Util.StoreBoolean, help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
-    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,           help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
-    comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,         help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
-    comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,        help='Maximum number of small dirs to batch together.  Default: %(default)s')
-    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,   help='Chunk size for sending data.  Default: %(default)s')
-    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,        help='Maximum number of directory entries per message.  Default: %(default)s')
+    comgrp.add_argument('--cks-content',        dest='ckscontent', default=0, type=int, nargs='?', const=4096,   help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
+    comgrp.add_argument('--clones', '-L',       dest='clones', type=int, default=100,               help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
+    comgrp.add_argument('--batchdir', '-B',     dest='batchdirs', type=int, default=16,             help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
+    comgrp.add_argument('--batchsize',          dest='batchsize', type=int, default=100,            help='Maximum number of small dirs to batch together.  Default: %(default)s')
+    comgrp.add_argument('--chunksize',          dest='chunksize', type=int, default=256*1024,       help='Chunk size for sending data.  Default: %(default)s')
+    comgrp.add_argument('--dirslice',           dest='dirslice', type=int, default=1000,            help='Maximum number of directory entries per message.  Default: %(default)s')
     comgrp.add_argument('--protocol',           dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],      help='Protocol for data transfer.  Default: %(default)s')
 
     parser.add_argument('--deltathreshold',     dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
