@@ -90,11 +90,12 @@ def setToken(crypt):
         (db, cache) = getDB(None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
+        token = crypt.createToken()
         if args.keys:
-            db.setToken(crypt.createToken())
+            db.setToken(token)
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
         else:
-            db.setKeys(crypt.createToken(), f, c)
+            db.setKeys(token, f, c)
         db.close()
         return 0
     except Exception as e:
