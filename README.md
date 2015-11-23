@@ -27,7 +27,8 @@ Features currently planned to be implemented:
 2. ~~Saving of extended attributes and access control lists~~
 2. ~~Saving of per-connection configuration values in the server DB~~
 3. ~~Authentication of password~~
-4. Encrypted encryption key stored on server, decrypted on client?
+4. ~~Encrypted encryption key stored on server, decrypted on client?~~
+5. ~~Option to save key on the client.~~
 5. ~~User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  Currently different backup sessions could use different keys, and basically create a mess of everything).~~
 6. ~~Python EGG setup.~~
 7. ~~Better daemon support.~~
@@ -38,7 +39,7 @@ Features currently planned to be implemented:
 12. Remote access to data and files.
 13. ~~Read password without echo.~~
 
-Tardis relies on the bson, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, pycurl, requests, and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, pycurl, requests, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
