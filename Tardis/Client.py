@@ -549,9 +549,9 @@ def mkFileInfo(dir, name):
             'link':   S_ISLNK(mode),
             'nlinks': s.st_nlink,
             'size':   s.st_size,
-            'mtime':  s.st_mtime,
-            'ctime':  s.st_ctime,
-            'atime':  s.st_atime,
+            'mtime':  int(s.st_mtime),              # We strip these down to the integer value beacuse FP conversions on the back side can get confused.
+            'ctime':  int(s.st_ctime),
+            'atime':  int(s.st_atime),
             'mode':   s.st_mode,
             'uid':    s.st_uid,
             'gid':    s.st_gid,
