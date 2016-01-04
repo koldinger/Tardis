@@ -30,7 +30,7 @@
 
 import os
 
-__version__ = "0.23"
+__version__ = "0.24"
 
 def __check_features():
     xattr_pkg = 'xattr'
