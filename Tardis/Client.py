@@ -416,7 +416,8 @@ def sendContent(inode, reportType):
                     (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
-                logger.exception(e)
+                if args.exceptions:
+                    logger.exception(e)
                 raise e
             finally:
                 if data is not None:
@@ -638,8 +639,8 @@ def getDirContents(dir, dirstat, excludes=[]):
             except Exception as e:
                 ## Is this necessary?  Fold into above?
                 logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
-                #logger.exception(e)
-                #traceback.print_exc()
+                if args.exceptions:
+                    logger.exception(e)
     except (IOError, OSError) as e:
         logger.error("Error reading directory %s: %s" ,dir, str(e))
 
@@ -836,7 +837,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         raise
     except Exception as e:
         # TODO: Clean this up
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         raise
 
 def hashDir(files):
@@ -1093,13 +1095,13 @@ def runServer(args, tempfile):
 
 def getConnection(name, priority, auto, token):
     if args.protocol == 'json':
-        conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force)
+        conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force, timeout=args.timeout)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+        conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
         setEncoder("bin")
     elif args.protocol == 'msgp':
-        conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force)
+        conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
         setEncoder("bin")
     return conn
 
@@ -1120,6 +1122,8 @@ def processCommandLine():
 
     parser.add_argument('--client',         dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',          dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
+
+    parser.add_argument('--timeout',        dest='timeout', default=300.0, type=float, const=None,      help='Set the timeout to N seconds.  Default: %(default)s')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
@@ -1196,6 +1200,8 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--report',             action='store_true', dest='report',                 help='Print a report on all files transferred')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
+
+    parser.add_argument('--log-exceptions',     dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of directories to sync")
 
@@ -1404,7 +1410,8 @@ def main():
         logger.warning("Backup Interupted")
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
 
     if args.local:
         logger.info("Waiting for server to complete")

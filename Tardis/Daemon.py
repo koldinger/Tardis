@@ -79,13 +79,15 @@ REFRESH = 4                     # Perform a full content update
 
 config = None
 args   = None
-databaseName = Defaults.getDefault('TARDIS_DBNAME')
-schemaName   = Defaults.getDefault('TARDIS_SCHEMA')
-configName   = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
-baseDir      = Defaults.getDefault('TARDIS_DB')
-portNumber   = Defaults.getDefault('TARDIS_PORT')
-pidFileName  = Defaults.getDefault('TARDIS_PIDFILE')
-journalName  = Defaults.getDefault('TARDIS_JOURNAL')
+databaseName    = Defaults.getDefault('TARDIS_DBNAME')
+schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
+configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
+baseDir         = Defaults.getDefault('TARDIS_DB')
+portNumber      = Defaults.getDefault('TARDIS_PORT')
+pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
+journalName     = Defaults.getDefault('TARDIS_JOURNAL')
+timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
+logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
 
 if  os.path.isabs(schemaName):
     schemaFile = schemaName
@@ -117,6 +119,7 @@ configDefaults = {
     'User'              : None,
     'Group'             : None,
     'SSL'               : str(False),
+    'Timeout'           : timeout,
     'CertFile'          : None,
     'KeyFile'           : None,
     'PidFile'           : pidFileName,
@@ -1025,6 +1028,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         try:
             sock = self.request
+            sock.settimeout(args.timeout)
+
             if self.server.ssl:
                 sock.sendall(Connection.sslHeaderString)
                 sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
@@ -1220,6 +1225,8 @@ def setConfig(self, args, config):
     self.schemaFile     = args.schema
     self.journal        = args.journal
 
+    self.timeout        = args.timeout
+
     self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
 
     self.monthfmt       = config.get('Tardis', 'MonthFmt')
@@ -1357,6 +1364,7 @@ def processArgs():
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
 
+    parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
     parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')
 
     parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean,default=config.getboolean(t, 'ReuseAddr'),

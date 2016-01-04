@@ -49,7 +49,7 @@ class Connection(object):
     filenameKey = None
     contentKey = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True):
+    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True, timeout=None):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         if client is None:
@@ -58,11 +58,15 @@ class Connection(object):
         # Create and open the socket
         if host:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if timeout:
+                sock.settimeout(timeout)
             sock.connect((host, int(port)))
             self.sock = sock
         else:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect(port)
+            if timeout:
+                sock.settimeout(timeout)
+            self.sock.connect(port, timeout)
 
         try:
             # Receive a string.  TARDIS proto=1.0
@@ -157,8 +161,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version):
-        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version)
+    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version, timeout):
+        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version, timeout=timeout)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -181,20 +185,20 @@ class ProtocolConnection(Connection):
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, version=Tardis.__version__):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=Tardis.__version__):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, version=Tardis.__version__):
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=Tardis.__version__):
         ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, version=Tardis.__version__):
-        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=Tardis.__version__):
+        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
