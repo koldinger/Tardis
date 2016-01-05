@@ -371,4 +371,8 @@ Also, post 0.21 I've introduced checking in the Daemon to make sure you have the
 
 Note on 0.24 Release
 ====================
-The 0.24 release, when it occurs, will change the format of the encrypted files.  The goal is to make the encrypted files easier to recover should the database become damaged.  No longer will the file's initialization vector be stored in the database.  Instead, it will be stored as the first 16 bytes of the file.  In addition, the padding will be compatible with PKCS#7, ie padding with the number of bytes to delete.  As a result, files which are a multiple of the blocksize will be padded with an additional block.  Thus, files may increase by up to 32 bytes in practice, 16 for the init vector, and 16 for the padding.
+The 0.24 release changes the format of the encrypted files.  The goal is to make the encrypted files easier to recover should the database become damaged.  No longer will the file's initialization vector be stored in the database.  Instead, it will be stored as the first 16 bytes of the file.  In addition, the padding will be compatible with PKCS#7, ie padding with the number of bytes to delete.  As a result, files which are a multiple of the blocksize will be padded with an additional block.  Thus, files may increase by up to 32 bytes in practice, 16 for the init vector, and 16 for the padding.
+
+The result of this is that encrypted backups with 0.24 and later are not compatible with files from 0.23 and earlier.  I am working on a script, but just need to find some time to complete it, hopefully in the next few days.
+
+0.24 also introduces a new way to store keys.   Keys are normally stored in encrypted format in the database.  As of 0.24, keys can be stored independently in a user controlled file.  They still remain encrypted.  This key database is accessed via the --keys option to the client and regenerate, and the "keys=filename" option to tardisfs.
