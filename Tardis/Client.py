@@ -1339,7 +1339,8 @@ def main():
         conn = getConnection(name, priority, auto, token)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
-        #logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         sys.exit(1)
 
     if verbosity or args.stats:
