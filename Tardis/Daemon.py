@@ -712,20 +712,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             return ({"message": "ACKPRG", "status": "FAIL"}, True)
 
-    def checksumDir(self, dirNode):
-        """ Generate a checksum of the file names in a directory"""
-        # Create a list of files, extracted from the directory
-        # ONLY include those that are directories, or that have a checksum ID
-        # eliminates any files which don't have a valid backup.
-        # Sort them to be in the same order as the sender
-        filenames = sorted([x['name'] for x in self.db.readDirectory(dirNode) if (x['size'] is not None or x['dir'] == 1)]) 
-        length = len(filenames)
-
-        m = hashlib.md5()
-        for f in filenames:
-            m.update(f)
-        return (length, m.hexdigest())
-
     def processClone(self, message):
         """ Clone an entire directory """
         done = []

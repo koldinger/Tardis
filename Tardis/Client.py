@@ -42,11 +42,11 @@ import base64
 import traceback
 import subprocess
 import hashlib
+import hmac
 import tempfile
 import cStringIO
 import pycurl
 import shlex
-
 
 from functools import partial
 
@@ -187,7 +187,7 @@ def processChecksums(inodes):
     for inode in inodes:
         if inode in inodeDB:
             (fileInfo, pathname) = inodeDB[inode]
-            m = hashlib.md5()
+            m = Util.getHash(crypt)
             s = os.lstat(pathname)
             mode = s.st_mode
             if S_ISLNK(mode):
@@ -403,7 +403,7 @@ def sendContent(inode, reportType):
                 makeSig = True if crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, checksum=True, chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, hasher=Util.getHash(crypt), chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
                 if crypt:
                     sig.seek(0)
@@ -528,7 +528,7 @@ def addMeta(meta):
     if meta in metaCache:
         return metaCache[meta]
     else:
-        m = hashlib.md5()
+        m = Util.getHash(crypt)
         m.update(meta)
         digest = m.hexdigest()
         metaCache[meta] = digest
@@ -844,7 +844,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 def hashDir(files):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     filenames = sorted([x["name"] for x in files])
-    m = hashlib.md5()
+    m = Util.getHash(crypt)
     for f in filenames:
         m.update(f)
     return (m.hexdigest(), len(filenames))

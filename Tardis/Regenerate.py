@@ -56,6 +56,9 @@ import parsedatetime
 import xattr
 import posix1e
 
+import hashlib
+import hmac
+
 import Tardis
 
 logger  = None
@@ -171,7 +174,6 @@ class Regenerator:
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
 
-
 def checkOverwrite(name, info):
     if os.path.exists(name):
         if owMode == OW_NEVER:
@@ -189,7 +191,25 @@ def checkOverwrite(name, info):
     else:
         return True
 
-def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
+def doAuthenticate(outname, checksum, digest):
+    logger.debug("File: %s Expected Hash: %s Hash: %s", outname, checksum, digest)
+    if checksum != digest:
+        if args.authfailaction == 'keep':
+            action = 'Keeping'
+            target = outname
+        elif args.authfailaction == 'rename':
+            target = outname + '-CORRUPT'
+            action = 'Renaming to ' + target
+            os.rename(outname, target)
+        elif args.authfailaction == 'delete':
+            action = 'Deleting'
+            os.unlink(outname)
+            target = None
+        logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s", 
+                        outname, checksum, digest, action)
+        return target
+
+def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, authenticate=True):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
     Note that path is for debugging only.
@@ -197,12 +217,14 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
     retCode = 0
     outname = None
     skip = False
+    hasher = None
     try:
         logger.info("Recovering object %s", path)
         if info:
             realname = info['name']
             if crypt:
                 realname = crypt.decryptFilename(realname)
+
             if name:
                 # This should only happen only one file specified.
                 outname = name
@@ -237,17 +259,23 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
                     if crypt:
                         name = crypt.decryptFilename(name)
                     if childInfo:
-                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB)
+                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     else:
                         retCode += 1
             elif not skip:
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum)
+
                 if i:
+                    if authenticate:
+                        hasher = Util.getHash(crypt)
+
                     if info['link']:
                         # read and make a link
                         x = i.read(16 * 1024)
                         os.symlink(x, outname)
+                        if hasher:
+                            hasher.update(x)
                         pass
                     else:
                         if outputdir:
@@ -260,6 +288,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
                             x = i.read(16 * 1024)
                             while x:
                                 output.write(x)
+                                if hasher:
+                                    hasher.update(x)
                                 x = i.read(16 * 1024)
                         except Exception as e:
                             logger.error("Unable to read file: {}: {}".format(i, repr(e)))
@@ -268,6 +298,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None):
                             i.close()
                             if output is not sys.stdout:
                                 output.close()
+
+                        if authenticate:
+                            outname = doAuthenticate(outname, checksum, hasher.hexdigest())
 
             if outname and args.setperm:
                 try:
@@ -391,6 +424,9 @@ def parseArgs():
     parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
     parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
 
+    parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
+    parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
+
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file. Default: %(default)s')
@@ -398,7 +434,6 @@ def parseArgs():
     parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
     parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file. Default: %(default)s')
     parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files. Default: %(default)s')
-
 
     parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
@@ -517,10 +552,14 @@ def main():
     permChecker = setupPermissionChecks()
 
     retcode = 0
+    hasher = None
     # do the work here
     if args.cksum:
         for i in args.files:
             try:
+                if args.auth:
+                    hasher = Util.getHash(crypt)
+                    logger.debug("Authenticating")
                 f = r.recoverChecksum(i)
                 if f:
                 # Generate an output name
@@ -531,21 +570,27 @@ def main():
                         outname = os.path.join(outputdir, i)
                         logger.debug("Writing output to %s", outname)
                         output = file(outname,  "wb")
-                try:
-                    x = f.read(16 * 1024)
-                    while x:
-                        output.write(x)
+                    try:
                         x = f.read(16 * 1024)
-                except Exception as e:
-                    logger.error("Unable to read file: {}: {}".format(i, repr(e)))
-                    raise
-                finally:
-                    f.close()
-                    if output is not sys.stdout:
-                        output.close()
+                        while x:
+                            output.write(x)
+                            if hasher:
+                                hasher.update(x)
+                            x = f.read(16 * 1024)
+                    except Exception as e:
+                        logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                        raise
+                    finally:
+                        f.close()
+                        if output is not sys.stdout:
+                            output.close()
+                    if args.auth:
+                        logger.debug("Checking authentication")
+                        outname = doAuthenticate(outname, i, hasher.hexdigest())
             except Exception as e:
                 #logger.exception(e)
                 retcode += 1
+
     else:
         for i in args.files:
             i = os.path.abspath(i)
@@ -573,7 +618,7 @@ def main():
                 actualPath = path
             info = tardis.getFileInfoByPath(actualPath, bset)
             if info:
-                retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname)
+                retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
             else:
                 logger.error("Could not recover info for %s", i)
                 retcode += 1

@@ -248,7 +248,12 @@ def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
 
     return password
 
-def chunks(stream, chunksize):
+
+"""
+Data transmission functions
+"""
+
+def _chunks(stream, chunksize):
     last = ''
     for chunk in iter(partial(stream.read, chunksize), ''):
         if last:
@@ -256,8 +261,7 @@ def chunks(stream, chunksize):
         last = chunk
     yield (last, True)
 
-
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), checksum=False, compress=False, stats=None, signature=False):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -269,12 +273,12 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
     sig = None
 
     if compress:
-        stream = CompressedBuffer.CompressedBufferedReader(data, checksum=checksum, signature=signature)
+        stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature)
     else:
-        stream = CompressedBuffer.BufferedReader(data, checksum=checksum, signature=signature)
+        stream = CompressedBuffer.BufferedReader(data, hasher=hasher, signature=signature)
 
     try:
-        for chunk, eof in chunks(stream, chunksize):
+        for chunk, eof in _chunks(stream, chunksize):
             if eof:
                 chunk = pad(chunk)
             #print len(chunk), eof
@@ -296,7 +300,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         if stats and 'dataSent' in stats:
             stats['dataSent'] += size
         message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
-        if checksum:
+        if hasher:
             ck = stream.checksum()
             message["checksum"] = ck
         if signature:
@@ -431,8 +435,6 @@ class HelpFormatter(argparse.HelpFormatter):
         #print "Got ", ret
         return ret
 
-
-
 """
 Class to have a two directional dictionary.
 """
@@ -452,6 +454,15 @@ class bidict(dict):
         if self[key] in self.inverse and not self.inverse[self[key]]: 
             del self.inverse[self[key]]
         super(bidict, self).__delitem__(key)
+
+"""
+Get a hash function.  Configurable.
+"""
+def getHash(crypt=None, func=hashlib.md5):
+    if crypt:
+        return crypt.getHash()
+    else:
+        return func()
 
 """
 'Test' code

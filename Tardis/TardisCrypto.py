@@ -33,6 +33,7 @@ from Crypto.Protocol.KDF import PBKDF2
 import Crypto.Random
 import socket
 import hashlib
+import hmac
 import os
 import os.path
 import base64
@@ -70,6 +71,9 @@ class TardisCrypto:
     def getFilenameCipher(self):
         #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
         return self._filenameEnc
+
+    def getHash(self):
+        return hmac.new(self._contentKey)
 
     def getIV(self):
         iv = self._random.read(self.ivLength)

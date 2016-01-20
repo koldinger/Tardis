@@ -38,12 +38,12 @@ import librsync
 _defaultChunksize = 128 * 1024
 
 class BufferedReader(object):
-    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, signature=False):
+    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, signature=False):
         self.stream = stream
         self.chunksize = chunksize
         self.numbytes = 0
         self.buffer = ""
-        self.md5 = hashlib.md5() if checksum else None
+        self.hasher = hasher
         self.sig = librsync.SignatureJob() if signature else None
 
     def _get(self):
@@ -52,8 +52,8 @@ class BufferedReader(object):
         #print "back from stream read: {}", buf
         if buf:
             self.numbytes += len(buf)
-            if self.md5:
-                self.md5.update(buf)
+            if self.hasher:
+                self.hasher.update(buf)
         # Always send the buffer, even if it's null at eof.  Will cause the signature job to clean up.
         if self.sig:
             self.sig.step(buf)
@@ -86,7 +86,7 @@ class BufferedReader(object):
         return out
 
     def checksum(self):
-        return self.md5.hexdigest() if self.md5 else None
+        return self.hasher.hexdigest() if self.hasher else None
 
     def signatureFile(self):
         return self.sig.sigfile() if self.sig else None
@@ -101,8 +101,8 @@ class BufferedReader(object):
         return False
 
 class CompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize, checksum=False, threshold=0.80, signature=False):
-        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, checksum=checksum, signature=signature)
+    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False):
+        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
         self.compressor = None
         self.compressed = 0
         self.uncompressed = 0
@@ -116,8 +116,8 @@ class CompressedBufferedReader(BufferedReader):
             while not ret:
                 buffer = self.stream.read(self.chunksize)
                 self.uncompressed += len(buffer)
-                if self.md5:
-                    self.md5.update(buffer)
+                if self.hasher:
+                    self.hasher.update(buffer)
                 if self.sig:
                     self.sig.step(buffer)
                 # First time around, create a compressor and check the compression ratio
