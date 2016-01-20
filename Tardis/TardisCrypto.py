@@ -72,8 +72,8 @@ class TardisCrypto:
         #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
         return self._filenameEnc
 
-    def getHash(self):
-        return hmac.new(self._contentKey)
+    def getHash(self, func=hashlib.md5):
+        return hmac.new(self._contentKey, digestmod=func)
 
     def getIV(self):
         iv = self._random.read(self.ivLength)

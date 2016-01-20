@@ -460,7 +460,7 @@ Get a hash function.  Configurable.
 """
 def getHash(crypt=None, func=hashlib.md5):
     if crypt:
-        return crypt.getHash()
+        return crypt.getHash(func)
     else:
         return func()
 

@@ -293,7 +293,7 @@ def processDelta(inode):
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
-                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), checksum=True, signature=makeSig)
+                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt), signature=makeSig)
                 # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
                 reader.seek = lambda x, y: 0
 
@@ -312,7 +312,8 @@ def processDelta(inode):
                 delta.seek(0)
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-                #logger.exception(e)
+                if args.exceptions:
+                    logger.exception(e)
                 sendContent(inode, 'Full')
                 return
 
