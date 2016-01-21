@@ -192,19 +192,32 @@ def checkOverwrite(name, info):
         return True
 
 def doAuthenticate(outname, checksum, digest):
+    """
+    Check that the recorded checksum of the file, and the digest of the generated file match.
+    Perform the expected action if they don't.  Return the name of the file that's being generated.
+    """
     logger.debug("File: %s Expected Hash: %s Hash: %s", outname, checksum, digest)
+    # should use hmac.compare_digest() here, but it's not working for some reason.  Probably different types
     if checksum != digest:
-        if args.authfailaction == 'keep':
-            action = 'Keeping'
-            target = outname
-        elif args.authfailaction == 'rename':
-            target = outname + '-CORRUPT'
-            action = 'Renaming to ' + target
-            os.rename(outname, target)
-        elif args.authfailaction == 'delete':
-            action = 'Deleting'
-            os.unlink(outname)
-            target = None
+        if outname:
+            if args.authfailaction == 'keep':
+                action = ''
+                target = outname
+            elif args.authfailaction == 'rename':
+                target = outname + '-CORRUPT-' + str(digest)
+                action = 'Renaming to ' + target + '.'
+                try:
+                    os.rename(outname, target)
+                except:
+                    action = "Unable to rename to " + target + ".  File saved as " + outname + "."
+            elif args.authfailaction == 'delete':
+                action = 'Deleting.'
+                os.unlink(outname)
+                target = None
+        else:
+            action = ''
+        if outname is None:
+            outname = ''
         logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s", 
                         outname, checksum, digest, action)
         return target
