@@ -251,7 +251,7 @@ def handleAckSum(response):
         delInode(i)
 
 def makeEncryptor():
-    if crypt:
+    if args.crypt and crypt:
         iv = crypt.getIV()
         encryptor = crypt.getContentCipher(iv)
         func = lambda x: encryptor.encrypt(x)
@@ -289,7 +289,7 @@ def processDelta(inode):
                 sigfile.seek(0)
 
                 # If we're encrypted, we need to generate a new signature, and send it along
-                makeSig = True if crypt else False
+                makeSig = True if args.crypt and crypt else False
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
@@ -401,12 +401,12 @@ def sendContent(inode, reportType):
             sig = None
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                makeSig = True if crypt else False
+                makeSig = True if args.crypt and crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, hasher=Util.getHash(crypt), chunksize=args.chunksize, compress=compress, signature=makeSig, stats=stats)
 
-                if crypt:
+                if args.crypt and crypt:
                     sig.seek(0)
                     message = {
                         "message" : "SIG",
@@ -542,7 +542,7 @@ def mkFileInfo(dir, name):
     s = os.lstat(pathname)
     mode = s.st_mode
     if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
-        if crypt:
+        if args.crypt and crypt:
             name = crypt.encryptFilename(name)
         finfo =  {
             'name':   name,
@@ -1347,8 +1347,8 @@ def main():
     if verbosity or args.stats:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
 
-    if not args.crypt:
-        crypt = None
+    #if not args.crypt:
+    #crypt = None
 
     if crypt:
         (f, c) = (None, None)
