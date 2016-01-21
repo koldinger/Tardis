@@ -819,7 +819,7 @@ class TardisDB(object):
     def commit(self):
         self.conn.commit()
 
-    def close(self, completeBackup=True):
+    def close(self, completeBackup=False):
         self.logger.debug("Closing DB: {}".format(self.dbName))
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
