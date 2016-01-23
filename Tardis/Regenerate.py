@@ -42,6 +42,7 @@ import RemoteDB
 import Util
 import CompressedBuffer
 import Defaults
+import binascii
 
 import logging
 import subprocess
@@ -85,21 +86,57 @@ class Regenerator:
         self.tempdir = tempdir
         self.crypt = crypt
 
-    def decryptFile(self, filename, size, iv=None):
+    def decryptFile(self, filename, size, iv=None, authenticate=True):
         self.logger.debug("Decrypting %s", filename)
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
         infile = self.cacheDir.open(filename, 'rb')
-        if not iv:
-            iv = infile.read(self.crypt.ivLength)
+        hmac = crypt.getHash(func=hashlib.sha512)
+
+        # Get the HMAC
+        infile.seek(-hmac.digest_size, os.SEEK_END)
+        codeSize = infile.tell()
+        digest = infile.read(hmac.digest_size)
+        self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
+
+        # Get the IV, if it's not specified.
+        infile.seek(0, os.SEEK_SET)
+        iv = infile.read(self.crypt.ivLength)
+
+        self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))
+
+        codeSize -= self.crypt.ivLength
+        self.logger.debug("Computed Size: %d.  Specified size: %d", codeSize, size)
+
+        if authenticate:
+            hmac.update(iv)
+
+        # Create the cypher
         cipher = self.crypt.getContentCipher(iv)
+
         outfile = tempfile.TemporaryFile()
-        outfile.write(cipher.decrypt(infile.read()))
-        outfile.truncate(size)
+
+        rem = codeSize
+        blocksize = 64 * 1024
+        while rem > 0:
+            readsize = blocksize if rem > blocksize else rem
+            ct = infile.read(readsize)
+            if authenticate:
+                hmac.update(ct)
+            pt = cipher.decrypt(ct)
+            if rem <= blocksize:
+                # ie, we're the last block
+                if digest != hmac.digest():
+                    raise RegenerateException("HMAC did not authenticate. Found %s, Expected %s" % (hmac.hexdigest(), binascii.hexlify(digest)))
+                pt = crypt.unpad(pt)
+            outfile.write(pt)
+            rem -= readsize
+
+        outfile.truncate(size)      # Shouldn't be necessary
         outfile.seek(0)
         return outfile
 
-    def recoverChecksum(self, cksum):
+    def recoverChecksum(self, cksum, authenticate=True):
         self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = self.db.getChecksumInfo(cksum)
         if cksInfo is None:
@@ -110,10 +147,10 @@ class Regenerator:
 
         try:
             if cksInfo['basis']:
-                basis = self.recoverChecksum(cksInfo['basis'])
+                basis = self.recoverChecksum(cksInfo['basis'], authenticate)
 
                 if cksInfo['iv']:
-                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'])
+                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], authenticate)
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
 
@@ -153,7 +190,7 @@ class Regenerator:
             self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
-    def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None):
+    def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
         self.logger.info("Recovering file: {}".format(filename))
         name = filename
         if self.crypt and not nameEncrypted:
@@ -161,7 +198,7 @@ class Regenerator:
         try:
             cksum = self.db.getChecksumByPath(name, bset, permchecker=permchecker)
             if cksum:
-                return self.recoverChecksum(cksum)
+                return self.recoverChecksum(cksum, authenticate)
             else:
                 self.logger.error("Could not locate file: %s ", filename)
                 return None
@@ -235,7 +272,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
         logger.info("Recovering object %s", path)
         if info:
             realname = info['name']
-            if crypt:
+            if args.crypt and crypt:
                 realname = crypt.decryptFilename(realname)
 
             if name:
@@ -246,7 +283,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             if outname and not checkOverwrite(outname, info):
                 skip = True
-                logger.info("Skipping existing file: %s", path)
+                logger.warning("Skipping existing file: %s", path)
 
             # First, determine if we're in a linking situation
             if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
@@ -269,7 +306,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 for i in contents:
                     name = i['name']
                     childInfo = tardis.getFileInfoByName(name, dirInode, bset)
-                    if crypt:
+                    if args.crypt and crypt:
                         name = crypt.decryptFilename(name)
                     if childInfo:
                         recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
@@ -277,7 +314,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         retCode += 1
             elif not skip:
                 checksum = info['checksum']
-                i = regenerator.recoverChecksum(checksum)
+                i = regenerator.recoverChecksum(checksum, authenticate)
 
                 if i:
                     if authenticate:
@@ -329,7 +366,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     logger.warning("Unable to set owner and group of %s", outname)
             if outname and args.setattrs and info['attr']:
                 try:
-                    f = regenerator.recoverChecksum(info['attr'])
+                    f = regenerator.recoverChecksum(info['attr'], authenticate)
                     xattrs = json.loads(f.read())
                     x = xattr.xattr(outname)
                     for attr in xattrs.keys():
@@ -342,7 +379,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     logger.warning("Unable to process extended attributes for %s", outname)
             if outname and args.setacl and info['acl']:
                try:
-                   f = regenerator.recoverChecksum(info['acl'])
+                   f = regenerator.recoverChecksum(info['acl'], authenticate)
                    acl = json.loads(f.read())
                    a = posix1e.ACL(text=acl)
                    a.applyto(outname)
@@ -392,7 +429,7 @@ def findLastPath(tardis, path, reduce):
         logger.debug("Checking for path %s in %s (%d)", path, bset['name'], bset['backupset'])
         tmp = Util.reducePath(tardis, bset['backupset'], os.path.abspath(path), reduce, crypt)
         tmp2 = tmp
-        if crypt:
+        if args.crypt and crypt:
             tmp2 = crypt.encryptPath(tmp)
         info = tardis.getFileInfoByPath(tmp2, bset['backupset'])
         if info:
@@ -504,9 +541,6 @@ def main():
         #logger.exception(e)
         sys.exit(1)
 
-    if not args.crypt:
-        crypt = None
-
     if crypt:
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
@@ -572,8 +606,7 @@ def main():
             try:
                 if args.auth:
                     hasher = Util.getHash(crypt)
-                    logger.debug("Authenticating")
-                f = r.recoverChecksum(i)
+                f = r.recoverChecksum(i, authenticate)
                 if f:
                 # Generate an output name
                     if outname:
@@ -625,7 +658,7 @@ def main():
             else:
                 path = i
 
-            if crypt:
+            if args.crypt and crypt:
                 actualPath = crypt.encryptPath(path)
             else:
                 actualPath = path
