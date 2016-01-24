@@ -48,7 +48,8 @@ Future Releases
 ===============
 Several releases will be coming soon:
   * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
-  * 0.25 Improved HTTP filesystem, allowing incremental retrieval of files, rather than having to retrieve full files on any access.
+  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.
+  * 0.26 Improved HTTP filesystem, allowing incremental retrieval of files, rather than having to retrieve full files on any access.
   
 Installation
 ============
@@ -116,6 +117,9 @@ Simply add the --local option to your tardis client, and it will invoke a server
 Ex:
     tardis --local ~
 Will backup your home directory.
+
+When running locally, Tardis will start a local server running for the duration of the backup job.  The server can be configured via a configuration file specified in the TARDIS_LOCAL_CONFIG
+variable/configuration argument.  See below for details.
 
 Listing Versions of Files Available
 ===================================
@@ -262,6 +266,9 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
   <tr> <td> LogFile
    <td> None
    <td> Filename for logging.  stderr if not specified.
+  <tr> <td> JournalFile
+   <td> tardis.journal
+   <td> Journal file for logging which files are dependent on others.  Stored in the DB directory for each client.
   <tr> <td> Profile
    <td> False
    <td> If true, a profile of each session will be generated and printed to stdout
@@ -271,6 +278,9 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
   <tr> <td> RequirePassword
    <td> False
    <td> Require all backups to have a password.
+  <tr> <td> LogExceptions
+   <td> False
+   <td> Log full detail of all exceptions, including call chain.
   <tr> <td> MaxDeltaChain
    <td> 5
    <td> Maximum number of delta's to request before requesting an entire new copy of a file.
@@ -369,10 +379,25 @@ Also, post 0.21 I've introduced checking in the Daemon to make sure you have the
 
 0.22 Changes the database functionality in an attempt to make things a bit faster, and to fix an issue with encrypted backups, have added some new information to the database.  You don't need to do anything to deal with this, but it will cause a couple of backups after you upgrade to be significantly slower.  You can run the setDirHashes script in the tools directory.  This takes same sort of arguments as tardis, and will automatically generate the correct hash values.   Should only take a few minutes, depending on the speed of the machine you're running on, and the speed of the disk drive.
 
-Note on 0.24 Release
-====================
+Note on 0.24 and 0.25 Releases
+==============================
 The 0.24 release changes the format of the encrypted files.  The goal is to make the encrypted files easier to recover should the database become damaged.  No longer will the file's initialization vector be stored in the database.  Instead, it will be stored as the first 16 bytes of the file.  In addition, the padding will be compatible with PKCS#7, ie padding with the number of bytes to delete.  As a result, files which are a multiple of the blocksize will be padded with an additional block.  Thus, files may increase by up to 32 bytes in practice, 16 for the init vector, and 16 for the padding.
 
 The result of this is that encrypted backups with 0.24 and later are not compatible with files from 0.23 and earlier.  I am working on a script, but just need to find some time to complete it, hopefully in the next few days.
 
-0.24 also introduces a new way to store keys.   Keys are normally stored in encrypted format in the database.  As of 0.24, keys can be stored independently in a user controlled file.  They still remain encrypted.  This key database is accessed via the --keys option to the client and regenerate, and the "keys=filename" option to tardisfs.
+The 0.25 release again changes the format of the encrypted files, as well as the naming convention, adding an HMAC at the end of the files for authentication.  Prior to 0.25, all database files were name based on
+the MD5 checksum of the original file.  Starting in 0.25, if a password is added, these files will be named using the HMAC-MD5 of the original file, or the MD5 checksum if no password is used.
+This is regardless of the setting of the --crypt flag to tardis.
+
+Correspondingly, the 0.25 release adds a --authenticate/--noauthenticate switch to the regenerate program. This authenticates both the components of the files, and the fully recovered output. 
+When converting to a 0.25 from a previous version, the --noauthenticate switch may be needed for regenerate to correctly regenerate data files.
+
+0.24 also introduces a new way to store keys.   Keys are normally stored in encrypted format in the database.  As of 0.24, keys can be stored independently in a user controlled file.  They still remain encrypted.
+This key database is accessed via the --keys option to the client and regenerate, and the "keys=filename" option to tardisfs.
+
+The "keys" file can support multiple backup targets in a single file. 
+
+If this file is used, it must NOT be lost.  If you lose the keys file, there is no way to reconstruct it.  Even if you back it up into tardis, once lost, you will not be
+able to recover it.
+
+The contents of this file are kept encrypted.
