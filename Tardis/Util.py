@@ -261,7 +261,7 @@ def _chunks(stream, chunksize):
         last = chunk
     yield (last, True)
 
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -278,15 +278,23 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         stream = CompressedBuffer.BufferedReader(data, hasher=hasher, signature=signature)
 
     try:
+        if iv:
+            sender.sendMessage(iv, raw=True)
+            if hmac:
+                hmac.update(iv)
         for chunk, eof in _chunks(stream, chunksize):
             if eof:
                 chunk = pad(chunk)
             #print len(chunk), eof
             data = sender.encode(encrypt(chunk))
+            if hmac:
+                hmac.update(data)
             #chunkMessage = { "chunk" : num, "data": data }
             if data:
                 sender.sendMessage(data, raw=True)
             #num += 1
+        if hmac:
+            sender.sendMessage(hmac.digest(), raw=True)
     except Exception as e:
         status = "Fail"
         #logger = logging.getLogger('Data')

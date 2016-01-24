@@ -528,8 +528,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "wb")
 
-        if iv:
-            output.write(base64.b64decode(iv))
+        #if iv:
+        #    output.write(base64.b64decode(iv))
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
@@ -670,7 +670,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         if 'iv' in message:
             iv = message['iv']
-            output.write(base64.b64decode(iv))
+            #output.write(base64.b64decode(iv))
         else:
             iv = None
 
@@ -763,7 +763,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
         if 'iv' in message:
             iv = message['iv']
-            output.write(base64.b64decode(iv))
+            #output.write(base64.b64decode(iv))
         else:
             iv = None
 
