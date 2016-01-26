@@ -727,13 +727,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # has changed, and a directory which is older than the last completed backup is added to the backup.
                 info = self.db.getFileInfoByInodeFromPartial((inode, device))
 
-            if info and info['size'] is not None and info['checksum'] is not None:
-                logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
-                if (info['size'] == d['numfiles']) and (info['checksum'] == d['cksum']):
-                    rows = self.db.cloneDir((inode, device))
-                    done.append([inode, device])
+            if info and info['checksum'] is not None:
+                numFiles = self.db.getDirectorySize((inode, device))
+                if numFiles is not None:
+                    logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
+                    if (numFiles == d['numfiles']) and (info['checksum'] == d['cksum']):
+                        rows = self.db.cloneDir((inode, device))
+                        done.append([inode, device])
+                    else:
+                        self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
+                        content.append([inode, device])
                 else:
-                    self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
+                    self.logger.debug("Unable to get number of files to process clone (%d %d)", inode, device)
                     content.append([inode, device])
             else:
                 self.logger.debug("No info available to process clone (%d %d)", inode, device)

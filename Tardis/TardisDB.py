@@ -577,6 +577,19 @@ class TardisDB(object):
             for row in batch:
                 yield row
 
+    def getDirectorySize(self, dirNode, current=False):
+        (inode, device) = dirNode
+        backupset = self._bset(current)
+        row = self.getResult("SELECT COUNT(*) FROM Files "
+                             "WHERE Parent = :parent AND ParentDev = :parentDev AND "
+                             ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
+                             "(Dir = 1 OR ChecksumId IS NOT NULL)",
+                             { "parent": inode, "parentDev": device, "backup": backupset })
+        if row:
+            return row[0]
+        else:
+            return 0
+
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
@@ -632,7 +645,6 @@ class TardisDB(object):
         return row
 
     def getBackupSetDetails(self, bset):
-
         row = self.getResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
         files = row[0]
         size = row[1] if row[1] else 0
