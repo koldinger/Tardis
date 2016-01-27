@@ -113,6 +113,36 @@ def flushLine():
         print line.rstrip()     # clear out any trailing spaces
         line=''
 
+def makeFakeRootInfo():
+    fInfos = {}
+    fSet = backupSets[0]
+    lSet = backupSets[-1]
+    for bset in backupSets:
+        fInfos[bset['backupset']] = {
+            "name"          : '',
+            "inode"         : 0,
+            "device"        : 0,
+            "dir"           : 1,
+            "link"          : 0,
+            "parent"        : 0,
+            "parentdev"     : 0,
+            "size"          : 0,
+            "mtime"         : 0,
+            "ctime"         : 0,
+            "atime"         : 0,
+            "mode"          : 0755,
+            "uid"           : 0,
+            "gid"           : 0,
+            "nlinks"        : 1,
+            "firstset"      : fSet['backupset'],
+            "lastset"       : lSet['backupset'],
+            "checksum"      : None,
+            "chainlength"   : 0,
+            "xattrs"        : None,
+            "acl"           : None
+        }
+    return fInfos
+
 def collectFileInfo(filename, tardis, crypt):
     """
     Collect information about a file in all the backupsets
@@ -123,15 +153,20 @@ def collectFileInfo(filename, tardis, crypt):
 
     fInfos = {}
     lInfo = None
-    for bset in backupSets:
-        temp = lookup
-        if args.reduce:
-            temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
-        if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
-            fInfos[bset['backupset']] = lInfo
-        else:
-            lInfo = tardis.getFileInfoByPath(temp, bset['backupset'])
-            fInfos[bset['backupset']] = lInfo
+    if filename == '/':
+        fInfos = makeFakeRootInfo()
+    else:
+        for bset in backupSets:
+            temp = lookup
+            if args.reduce:
+                temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
+
+            if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
+                fInfos[bset['backupset']] = lInfo
+            else:
+                lInfo = tardis.getFileInfoByPath(temp, bset['backupset'])
+                fInfos[bset['backupset']] = lInfo
+
     return fInfos
 
 def collectDirContents(tardis, dirlist, crypt):
