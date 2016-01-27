@@ -341,7 +341,7 @@ def parseArgs():
 
     passgroup = common.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
+    pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
