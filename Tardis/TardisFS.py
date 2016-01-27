@@ -116,18 +116,19 @@ class TardisFS(fuse.Fuse):
             current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
             # Parameters
-            self.database   = database
-            self.client     = client
-            self.repoint    = False
-            self.password   = None
-            self.pwfile     = None
-            self.pwurl      = None
-            self.pwprog     = None
-            self.keys       = None
-            self.dbname     = dbname
-            self.cachetime  = 60
-            self.nocrypt    = True
-            self.current    = current
+            self.database       = database
+            self.client         = client
+            self.repoint        = False
+            self.password       = None
+            self.pwfile         = None
+            self.pwurl          = None
+            self.pwprog         = None
+            self.keys           = None
+            self.dbname         = dbname
+            self.cachetime      = 60
+            self.nocrypt        = True
+            self.current        = current
+            self.authenticate   = True
 
             self.crypt      = None
             #logging.basicConfig(level=logging.INFO)
@@ -144,6 +145,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="dbname",       help="Database Name")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
+            self.parser.add_option(mountopt='noauth',       help="Disable authentication")
             self.parser.add_option(mountopt='current',      help="Name to use for most recent complete backup")
 
             res = self.parse(values=self, errex=1)
@@ -519,7 +521,7 @@ class TardisFS(fuse.Fuse):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
-            f = self.regenerator.recoverFile(subpath, b['backupset'], True)
+            f = self.regenerator.recoverFile(subpath, b['backupset'], True, authenticate=self.authenticate)
             if f:
                 try:
                     f.flush()
@@ -573,7 +575,7 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                f = self.regenerator.recoverFile(parts[1], b['backupset'], True)
+                f = self.regenerator.recoverFile(parts[1], b['backupset'], True, authenticate=self.authenticate)
                 f.flush()
                 link = f.readline()
                 f.close()
@@ -683,7 +685,7 @@ class TardisFS(fuse.Fuse):
                     attrs = ['user.tardis_checksum', 'user.tardis_since', 'user.tardis_chain']
                     self.log.info("xattrs: %s", info['xattrs'])
                     if info['xattrs']:
-                        f = self.regenerator.recoverChecksum(info['xattrs'])
+                        f = self.regenerator.recoverChecksum(info['xattrs'], authenticate=self.authenticate)
                         xattrs = json.loads(f.read())
                         self.log.debug("Xattrs: %s", str(xattrs))
                         attrs += map(str, xattrs.keys())
@@ -743,7 +745,7 @@ class TardisFS(fuse.Fuse):
                 # Must be an imported value.  Let's generate it.
                 info = self.getFileInfoByPath(path)
                 if info['xattrs']:
-                    f = self.regenerator.recoverChecksum(info['xattrs'])
+                    f = self.regenerator.recoverChecksum(info['xattrs'], authenticate=self.authenticate)
                     xattrs = json.loads(f.read())
                     if attr in xattrs:
                         value = base64.b64decode(xattrs[attr])
