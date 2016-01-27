@@ -65,8 +65,8 @@ class Connection(object):
         else:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             if timeout:
-                sock.settimeout(timeout)
-            self.sock.connect(port, timeout)
+                self.sock.settimeout(timeout)
+            self.sock.connect(port)
 
         try:
             # Receive a string.  TARDIS proto=1.0
