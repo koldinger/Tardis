@@ -392,8 +392,8 @@ class StoreBoolean(argparse.Action):
     def __init__(self, option_strings, dest, negate="no", nargs=0, **kwargs):
         if nargs is not 0:
             raise ValueError("nargs not allowed")
-        if len(option_strings) > 1:
-            raise ValueError("Multiple option strings not allowed")
+        #if len(option_strings) > 1:
+        #    raise ValueError("Multiple option strings not allowed")
         self.negative_option = "--" + negate + option_strings[0][2:]
         self.help_option = "--[" + negate + "]" + option_strings[0][2:]
         option_strings.append(self.negative_option)
