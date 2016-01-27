@@ -47,6 +47,7 @@ import tempfile
 import cStringIO
 import pycurl
 import shlex
+import magic
 
 from functools import partial
 
@@ -99,6 +100,7 @@ batchMsgs           = []
 metaCache           = Util.bidict()
 newmeta             = []
 
+nocompress          = None
 
 crypt               = None
 logger              = None
@@ -403,6 +405,13 @@ def sendContent(inode, reportType):
             sig = None
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                # Check if it's a file type we don't want to compress
+                if compress and nocompress:
+                    mimeType = magic.from_buffer(data.read(128), mime=True)
+                    data.seek(0)
+                    if mimeType in nocompress:
+                        logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
+                        compress = False
                 makeSig = True if args.crypt and crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
@@ -1139,6 +1148,7 @@ def processCommandLine():
 
     parser.add_argument('--compress-data',  dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files')
     parser.add_argument('--compress-min',   dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress')
+    parser.add_argument('--nocompress-types', dest='nocompress', default=Defaults.getDefault('TARDIS_NOCOMPRESS'),   help='File containing a list of MIME types to not compress.  Default: %(default)s')
     if support_xattr:
         parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
     if support_acl:
@@ -1275,7 +1285,7 @@ def printReport():
             logger.log(logging.STATS, "  %-53s %-6s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts))
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt
+    global starttime, args, config, conn, verbosity, crypt, nocompress
     # Read the command line arguments.
     args = processCommandLine()
 
@@ -1322,6 +1332,13 @@ def main():
             crypt = TardisCrypto.TardisCrypto(password, args.client)
             token = crypt.createToken()
         password = None
+
+        if args.nocompress:
+            try:
+                nocompress = map(str.strip, file(args.nocompress, 'r').readlines())
+            except Exception as e:
+                logger.error("Could not load nocompress types list: %s", args.nocompress)
+                raise e
 
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
