@@ -1,0 +1,37 @@
+# File formats that can't be compressed easily
+# Compressed Video formats
+video/mp4
+video/x-matroska
+video/x-msvideo
+video/3gpp
+
+# Compressed Image formats
+image/jpeg
+
+# Compressed Audio
+audio/mpeg3
+audio/x-flac
+audio/mp4
+
+# Compressed file and archive formats
+application/x-bzip2
+application/x-gzip
+application/x-lzip
+application/x-lzma
+application/x-lzop
+application/x-xz
+application/x-compress
+application/x-7z-compressed
+application/x-ace-compressed
+application/x-rar-compressed
+application/x-alz-compressed
+application/x-cfs-compressed
+application/vnd.android.package-archive
+application/x-astrotite-afa
+application/x-arj
+application/x-b1
+application/vnd.ms-cab-compressed
+application/x-dar
+application/x-stuffit
+application/x-stuffitx
+application/zip
