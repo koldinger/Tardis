@@ -1335,7 +1335,9 @@ def main():
 
         if args.nocompress:
             try:
-                noCompTypes = map(str.strip, file(args.nocompress, 'r').readlines())
+                data = map(Util.stripComments, file(args.nocompress, 'r').readlines())
+                data = [x for x in data if len(x)]
+                logger.debug("Ignoring types: %s", data)
             except Exception as e:
                 logger.error("Could not load nocompress types list: %s", args.nocompress)
                 raise e

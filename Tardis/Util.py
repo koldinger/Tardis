@@ -74,6 +74,9 @@ def getIntOrNone(config, section, name):
     except:
         return None
 
+def stripComments(line):
+    return line.partition('#')[0].strip()
+
 def shortPath(path, width=80):
     """
     Compress a path to only show the last elements if it's wider than specified.
