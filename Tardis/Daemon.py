@@ -1371,7 +1371,7 @@ def processArgs():
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ , help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ + ' ' + Tardis.__buildversion__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     args = parser.parse_args(remaining)

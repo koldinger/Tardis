@@ -371,7 +371,7 @@ def parseArgs():
     cp.add_argument('--schema',                 dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
 
     #parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Be verbose')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ , help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ + ' ' + Tardis.__buildversion__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     args = parser.parse_args(remaining)

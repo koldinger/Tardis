@@ -86,7 +86,7 @@ def parseArgs():
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version', action='version', version='%(prog)s ' + Tardis.__version__, help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ + ' ' + Tardis.__buildversion__,    help='Show the version')
     parser.add_argument('files',    nargs='+', default=None,                 help="File to diff")
 
     args = parser.parse_args()

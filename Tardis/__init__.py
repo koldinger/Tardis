@@ -32,6 +32,13 @@ import os
 
 __version__ = "0.24"
 
+try:
+    import TardisVersion
+    __buildversion__ = TardisVersion.buildVersion
+except:
+    import subprocess
+    __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'])
+
 def __check_features():
     xattr_pkg = 'xattr'
     acl_pkg   = 'pylibacl'
