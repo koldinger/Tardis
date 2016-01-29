@@ -3,12 +3,9 @@
 from setuptools import setup, find_packages
 import sys, os
 import subprocess
-try:
-    from Tardis import TardisVersion
-    buildVersion = TardisVersion.buildVersion
-except:
-    buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
-    file('Tardis/TardisVersion.py', 'w').write("buildVersion = '" + buildVersion + "'\n")
+    
+buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
+file('tardisversion', 'w').write(buildVersion + "\n")
 
 import Tardis
 
@@ -26,6 +23,7 @@ setup(  name                    = 'Tardis-Backup',
         install_requires = ['msgpack-python', 'daemonize', 'parsedatetime', 'pycrypto', 'pycurl', 'requests', 'flask', 'tornado', 'termcolor', 'python-magic' ] + add_pkgs,
         data_files = [( root + '/etc/tardis',              [ 'tardisd.cfg', 'types.ignore' ]),
                       ( 'schema',                   [ 'schema/tardis.sql' ]),
+                      ( 'info',                        [ 'tardisversion' ]),
                       ( root + '/etc/init.d',              [ 'init/tardisd', 'init/tardisremote' ]),
                       ( root + '/usr/lib/systemd/system',  [ 'init/tardisd.service', 'init/tardisremote.service' ]),
                       ( root + '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ]),
