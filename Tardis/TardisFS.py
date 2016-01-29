@@ -48,6 +48,7 @@ import urlparse
 import json
 import base64
 
+import Tardis
 import TardisDB
 import RemoteDB
 import CacheDir
@@ -126,7 +127,8 @@ class TardisFS(fuse.Fuse):
             self.keys           = None
             self.dbname         = dbname
             self.cachetime      = 60
-            self.nocrypt        = True
+            self.nocrypt        = False
+            self.noauth         = False
             self.current        = current
             self.authenticate   = True
 
@@ -157,6 +159,9 @@ class TardisFS(fuse.Fuse):
             self.log.info("Repoint Links: %s", self.repoint)
             self.log.info("MountPoint: %s", self.mountpoint)
             self.log.info("DBName: %s", self.dbname)
+            self.log.info("TardsFS Version: %s", Tardis.__versionstring__)
+
+            self.log.info("%s %s", self.nocrypt, self.noauth)
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
@@ -175,8 +180,11 @@ class TardisFS(fuse.Fuse):
                 token = self.crypt.createToken()
 
             # Remove the crypto object if not encyrpting files.
-            if self.nocrypt is None:
+            if self.nocrypt or self.nocrypt is None:
                 self.crypt = None
+
+            if self.noauth or self.noauth is None:
+                self.authenticate = False
 
             try:
                 loc = urlparse.urlparse(self.database)
