@@ -1193,7 +1193,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("TCP Server %s Running: %s", Tardis.__version__, self.dbname)
+        logger.info("TCP Server %s Running: %s", Tardis.__versionstring__, self.dbname)
 
 class TardisDomainSocketServer(SocketServer.UnixStreamServer):
     def __init__(self, args, config):
@@ -1201,7 +1201,7 @@ class TardisDomainSocketServer(SocketServer.UnixStreamServer):
         self.args = args
         SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("Unix Domain Socket %s Server Running: %s", Tardis.__version__, self.dbname)
+        logger.info("Unix Domain Socket %s Server Running: %s", Tardis.__versionstring__, self.dbname)
 
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
@@ -1371,7 +1371,7 @@ def processArgs():
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ + ' ' + Tardis.__buildversion__,    help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     args = parser.parse_args(remaining)

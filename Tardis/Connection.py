@@ -183,21 +183,23 @@ class ProtocolConnection(Connection):
     def decode(self, string):
         return self.sender.decode(string)
 
+_defaultVersion = Tardis.__buildversion__  or Tardis.__version__
+
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=Tardis.__version__):
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=_defaultVersion):
         ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=Tardis.__version__):
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion):
         ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=Tardis.__version__):
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion):
         ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)

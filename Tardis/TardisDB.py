@@ -223,7 +223,7 @@ class TardisDB(object):
                       "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
                       {"name": name, "now": now, "session": session, "priority": priority,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
-                       "serverversion": Tardis.__buildversion__})
+                       "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
 

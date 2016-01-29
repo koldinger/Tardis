@@ -698,7 +698,7 @@ def processArgs():
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
     passgroup.add_argument('--keys',        dest='keys', default=None,                                  help='Load keys from file.')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__ + ' ' + Tardis.__buildversion__,    help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
 
     parser.add_argument('directories', nargs='*', default='.',                                          help='List of directories/files to list')
 

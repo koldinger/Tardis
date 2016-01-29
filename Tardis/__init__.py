@@ -41,12 +41,12 @@ try:
 except:
     try:
         import subprocess
-        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT)
+        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip()
     except:
         pass
 
 if __buildversion__:
-    __versionstring__ = __version__ + ' (' + __buildversion__.strip() + ')'
+    __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
 
 def __check_features():
     xattr_pkg = 'xattr'
