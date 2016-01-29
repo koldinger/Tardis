@@ -46,9 +46,10 @@ def main():
     conn = db.conn
     dirs = conn.execute("SELECT Name as name, Inode AS inode, Device AS device, FirstSet as firstset, LastSet AS lastset FROM Files JOIN Names ON Files.NameId = Names.NameId WHERE Dir = 1")
     while True:
-        batch = dirs.fetchmany()
+        batch = dirs.fetchmany(1000)
         if not batch:
             break
+
         for d in batch:
             name     = d['name']
             inode    = d['inode']
@@ -58,20 +59,26 @@ def main():
 
             files = db.readDirectory((inode, device), current=lastset)
             names = [x['name'] for x in files]
-            if crypto:
-                names = map(crypto.decryptFilename, names)
-                name = crypto.decryptFilename(name)
-            names = sorted(names)
-            m = hashlib.md5()
-            for f in names:
-                m.update(f)
-            checksum = m.hexdigest()
-            print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, len(names))
+            nfiles = len(names)
+            if nfiles:
+                if crypto:
+                    names = map(crypto.decryptFilename, names)
+                    name = crypto.decryptFilename(name)
+
+                    names = sorted(names)
+                    m = hashlib.md5()
+                    for f in names:
+                        m.update(f)
+                    checksum = m.hexdigest()
+            else:
+                checksum = 'd41d8cd98f00b204e9800998ecf8427e'
+
+            print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, nfiles)
             ckinfo = db.getChecksumInfo(checksum)
             if ckinfo:
                 cksid = ckinfo['checksumid']
             else:
-                cksid = db.insertChecksumFile(checksum, size=len(names), isFile=False)
+                cksid = db.insertChecksumFile(checksum, size=nfiles, isFile=False)
 
             db.updateDirChecksum((inode, device), cksid, current=lastset)
         conn.commit()
