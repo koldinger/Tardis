@@ -328,7 +328,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                             hasher.update(x)
                         pass
                     else:
-                        if outputdir:
+                        if outname:
                             # Generate an output name
                             logger.debug("Writing output to %s", outname)
                             output = file(outname,  "wb")
