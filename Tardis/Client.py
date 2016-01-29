@@ -1209,7 +1209,7 @@ def processCommandLine():
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__version__,    help='Show the version')
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--report',             action='store_true', dest='report',                 help='Print a report on all files transferred')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')

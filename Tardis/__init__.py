@@ -31,6 +31,22 @@
 import os
 
 __version__ = "0.24"
+__buildversion__ = ''
+__versionstring__ = __version__
+
+try:
+    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    versionFile   = os.path.join(parentDir, 'tardisversion')
+    __buildversion__ = file(versionFile, 'r').readline().strip()
+except:
+    try:
+        import subprocess
+        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip()
+    except:
+        pass
+
+if __buildversion__:
+    __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
 
 def __check_features():
     xattr_pkg = 'xattr'

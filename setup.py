@@ -2,7 +2,14 @@
 
 from setuptools import setup, find_packages
 import sys, os
+import subprocess
+    
+buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
+file('tardisversion', 'w').write(buildVersion + "\n")
+
 import Tardis
+
+root = os.environ.setdefault('VIRTUAL_ENV', '')
 
 version = Tardis.__version__
 add_pkgs = Tardis.__check_features()
@@ -14,11 +21,12 @@ setup(  name                    = 'Tardis-Backup',
         include_package_data    = True,
         zip_safe                = False,
         install_requires = ['msgpack-python', 'daemonize', 'parsedatetime', 'pycrypto', 'pycurl', 'requests', 'flask', 'tornado', 'termcolor', 'python-magic' ] + add_pkgs,
-        data_files = [( '/etc/tardis',              [ 'tardisd.cfg', 'types.ignore' ]),
+        data_files = [( root + '/etc/tardis',              [ 'tardisd.cfg', 'types.ignore' ]),
                       ( 'schema',                   [ 'schema/tardis.sql' ]),
-                      ( '/etc/init.d',              [ 'init/tardisd', 'init/tardisremote' ]),
-                      ( '/usr/lib/systemd/system',  [ 'init/tardisd.service', 'init/tardisremote.service' ]),
-                      ( '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ]),
+                      ( 'info',                        [ 'tardisversion' ]),
+                      ( root + '/etc/init.d',              [ 'init/tardisd', 'init/tardisremote' ]),
+                      ( root + '/usr/lib/systemd/system',  [ 'init/tardisd.service', 'init/tardisremote.service' ]),
+                      ( root + '/etc/logrotate.d',         [ 'logrotate/tardisd', 'logrotate/tardisremote' ]),
                       #( '/etc/logwatch/conf/services', [ 'logwatch/tardisd.conf' ]),
                       #( '/etc/logwatch/scripts/services', [ 'logwatch/tardisd.pl' ]),
                      ],

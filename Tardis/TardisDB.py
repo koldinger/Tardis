@@ -223,7 +223,7 @@ class TardisDB(object):
                       "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
                       {"name": name, "now": now, "session": session, "priority": priority,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
-                       "serverversion": Tardis.__version__})
+                       "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))
 
@@ -232,7 +232,7 @@ class TardisDB(object):
         self.conn.commit()
         self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
         if self.journal:
-            self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__version__))
+            self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__buildversion__))
 
         return self.currBackupSet
 
