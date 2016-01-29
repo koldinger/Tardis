@@ -32,6 +32,7 @@ import os
 
 __version__ = "0.24"
 __buildversion__ = ''
+__versionstring__ = __version__
 
 try:
     parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -40,9 +41,12 @@ try:
 except:
     try:
         import subprocess
-        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'])
+        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT)
     except:
         pass
+
+if __buildversion__:
+    __versionstring__ = __version__ + ' (' + __buildversion__.strip() + ')'
 
 def __check_features():
     xattr_pkg = 'xattr'
