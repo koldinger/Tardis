@@ -275,6 +275,14 @@ def getFileData(checksum):
     except:
         abort(404)
 
+@app.route('/getConfigValue/<name>')
+def getConfigValue(name):
+    db = getDB()
+    #app.logger.info("getConfigValue Invoked: %s", name)
+    return  json.dumps(db.getConfigValue(name))
+    
+
+
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
 

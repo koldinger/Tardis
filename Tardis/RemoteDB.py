@@ -182,6 +182,17 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+    def getConfigValue(self, name):
+        r = self.session.get(self.baseURL + "getConfigValue/" + name, verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    def getKeys(self):
+        fnKey = self.getConfigValue('FilenameKey')
+        cnKey = self.getConfigValue('ContentKey')
+        #self.logger.info("Got keys: %s %s", fnKey, cnKey)
+        return (fnKey, cnKey)
+
     def open(self, checksum, mode):
         temp = tempfile.SpooledTemporaryFile("wb")
         r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify)
