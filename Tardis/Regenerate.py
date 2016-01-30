@@ -364,7 +364,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     os.chown(outname, info['uid'], -1)
                 except Exception as e:
                     logger.warning("Unable to set owner and group of %s", outname)
-            if outname and args.setattrs and info['attr']:
+            if outname and args.setattrs and 'attr' in info and info['attr']:
                 try:
                     f = regenerator.recoverChecksum(info['attr'], authenticate)
                     xattrs = json.loads(f.read())
@@ -377,7 +377,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                             logger.warning("Unable to set extended attribute %s on %s", attr, outname)
                 except Exception as e:
                     logger.warning("Unable to process extended attributes for %s", outname)
-            if outname and args.setacl and info['acl']:
+            if outname and args.setacl and 'acl' in info and info['acl']:
                try:
                    f = regenerator.recoverChecksum(info['acl'], authenticate)
                    acl = json.loads(f.read())
@@ -387,7 +387,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                    logger.warning("Unable to process extended attributes for %s", outname)
 
     except Exception as e:
-        #logger.exception(e)
+        logger.exception(e)
         retCode += 1
 
     return retCode
