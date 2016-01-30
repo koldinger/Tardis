@@ -187,7 +187,7 @@ def getFileInfoByPathRoot(backupset):
 def getFileInfoByPath(backupset, pathname):
     #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
-    return json.dumps(makeDict(db.getFileInfoByPath(pathname, backupset)))
+    return json.dumps(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
 @app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
 def getFileInfoForPath(backupset, pathname):
@@ -274,6 +274,14 @@ def getFileData(checksum):
         return send_file(ckfile)
     except:
         abort(404)
+
+@app.route('/getConfigValue/<name>')
+def getConfigValue(name):
+    db = getDB()
+    #app.logger.info("getConfigValue Invoked: %s", name)
+    return  json.dumps(db.getConfigValue(name))
+    
+
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
