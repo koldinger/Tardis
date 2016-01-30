@@ -36,7 +36,7 @@ __versionstring__ = __version__
 
 try:
     parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    versionFile   = os.path.join(parentDir, 'tardisversion')
+    versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
     __buildversion__ = file(versionFile, 'r').readline().strip()
 except:
     try:
