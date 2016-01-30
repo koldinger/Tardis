@@ -161,8 +161,6 @@ class TardisFS(fuse.Fuse):
             self.log.info("DBName: %s", self.dbname)
             self.log.info("TardsFS Version: %s", Tardis.__versionstring__)
 
-            self.log.info("%s %s", self.nocrypt, self.noauth)
-
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
             password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog, prompt="Password for %s: " % (self.client))
