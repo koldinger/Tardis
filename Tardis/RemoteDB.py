@@ -32,6 +32,7 @@ import requests
 import logging
 import tempfile
 import sys
+import urllib
 
 import ConnIdLogAdapter
 
@@ -118,6 +119,7 @@ class RemoteDB(object):
     def getFileInfoByName(self, name, parent, current=True):
         bset = self._bset(current)
         (inode, device) = parent
+        name = urllib.quote_plus(name, '/')
         r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
@@ -126,6 +128,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
+        path = urllib.quote_plus(path, '/')
         r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, verify=self.verify)
         r.raise_for_status()
         return r.json()
@@ -162,6 +165,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
+        path = urllib.quote_plus(path, '/')
         r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, verify=self.verify)
         r.raise_for_status()
         return r.json()

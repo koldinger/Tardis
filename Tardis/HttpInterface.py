@@ -187,7 +187,7 @@ def getFileInfoByPathRoot(backupset):
 def getFileInfoByPath(backupset, pathname):
     #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
-    return json.dumps(makeDict(db.getFileInfoByPath(pathname, backupset)))
+    return json.dumps(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
 @app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
 def getFileInfoForPath(backupset, pathname):
