@@ -245,15 +245,6 @@ class TardisFS(fuse.Fuse):
         self.cache.insert(key, backupset)
         return backupset
 
-    def decryptNames(self, files):
-        outfiles = []
-        for x in files:
-            y = dict(zip(x.keys(), x))
-            y['name'] = self.crypt.decryptFilename(x['name'])
-            outfiles.append(y)
-
-        return outfiles
-
     def getDirInfo(self, path):
         """ Return the inode and backupset of a directory """
         #self.log.info("getDirInfo: %s", path)
@@ -450,14 +441,17 @@ class TardisFS(fuse.Fuse):
                 else:
                     (b, parent) = self.getDirInfo(path)
                     entries = self.tardis.readDirectory((parent["inode"], parent["device"]), b['backupset'])
-                if self.crypt:
-                    entries = self.decryptNames(entries)
+                #if self.crypt:
+                    #entries = self.decryptNames(entries)
 
                 # For each entry, cache it, so a later getattr() call can use it.
                 # Get attr will typically be called promptly after a call to 
                 now = time()
                 for e in entries:
-                    name = self.fsEncodeName(e['name'])
+                    name  = e['name']
+                    if self.crypt:
+                        name = self.crypt.decryptFilename(name)
+                    name = self.fsEncodeName(name)
                     p = os.path.join(path, name)
                     self.fileCache.insert(p, e, now=now)
                     dirents.append((name, e['mode']))
@@ -468,7 +462,7 @@ class TardisFS(fuse.Fuse):
         # Now, return each entry in the list.
         for e in dirents:
             (name, mode) = e
-            #self.log.debug("readdir %s yielding dir entry for %s", path, e)
+            #self.log.debug("readdir %s yielding dir entry for %s.  Mode: %s. Type: %s ", path, e, mode, type(mode))
             yield fuse.Direntry(name, type=stat.S_IFMT(mode))
 
     @tracer
