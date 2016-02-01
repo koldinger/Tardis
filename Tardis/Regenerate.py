@@ -91,7 +91,7 @@ class Regenerator:
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
         infile = self.cacheDir.open(filename, 'rb')
-        hmac = crypt.getHash(func=hashlib.sha512)
+        hmac = self.crypt.getHash(func=hashlib.sha512)
 
         # Get the HMAC
         infile.seek(-hmac.digest_size, os.SEEK_END)
@@ -128,7 +128,7 @@ class Regenerator:
                 # ie, we're the last block
                 if digest != hmac.digest():
                     raise RegenerateException("HMAC did not authenticate. Found %s, Expected %s" % (hmac.hexdigest(), binascii.hexlify(digest)))
-                pt = crypt.unpad(pt)
+                pt = self.crypt.unpad(pt)
             outfile.write(pt)
             rem -= readsize
 
