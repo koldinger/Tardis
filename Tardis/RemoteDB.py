@@ -36,6 +36,27 @@ import urllib
 
 import ConnIdLogAdapter
 
+# Define a decorator that will wrap our functions in a retry mechanism
+# so that if the connection to the server fails, we can automatically
+# reconnect.
+def reconnect(func):
+    #print "Decorating ", str(func)
+    def doit(self, *args, **kwargs):
+        try:
+            # Try the original function
+            return func(self, *args, **kwargs)
+        except requests.HTTPError as e:
+            # Got an exception.  If it's ' 401 (not authorized)
+            # reconnecton, and try it again
+            logger=logging.getLogger('Reconnect')
+            logger.info("Got HTTPError: %s", e)
+            if e.response.status_code == 401:
+                logger.info("Reconnecting")
+                self.connect()
+                logger.info("Retrying %s(%s %s)", str(func), str(args), str(kwargs))
+                return func(self, *args, **kwargs)
+            raise e
+    return doit
 
 def fs_encode(val):
     """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
@@ -50,23 +71,18 @@ class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
 
+
     def __init__(self, url, host, prevSet=None, extra=None, token=None, verify=False):
         self.logger=logging.getLogger('Remote')
-        self.session = requests.Session()
         self.baseURL = url
         if not url.endswith('/'):
             self.baseURL += '/'
 
         self.verify = verify
+        self.token = token
+        self.host = host
 
-        postData = { 'host': host }
-        if token:
-            postData['token'] = token
-        self.loginData = postData
-
-        response = self.session.post(self.baseURL + "login", data=postData)
-        if response.status_code != requests.codes.ok:
-            response.raise_for_status()
+        self.connect()
 
         if prevSet:
             f = self.getBackupSetInfo(prevSet)
@@ -75,7 +91,6 @@ class RemoteDB(object):
                 self.prevBackupDate = f['starttime']
                 self.lastClientTime = f['clienttime']
                 self.prevBackupName = prevSet
-            #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
             b = self.lastBackupSet()
             self.prevBackupName = b['name']
@@ -83,6 +98,19 @@ class RemoteDB(object):
             self.prevBackupDate = b['starttime']
             self.lastClientTime = b['clienttime']
         self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
+
+    def connect(self):
+        self.logger.info("Creating new connection to %s for %s", self.baseURL, self.host)
+        self.session = requests.Session()
+
+        postData = { 'host': self.host }
+        if self.token:
+            postData['token'] = self.token
+        self.loginData = postData
+
+        response = self.session.post(self.baseURL + "login", data=postData)
+        if response.status_code != requests.codes.ok:
+            response.raise_for_status()
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
@@ -93,6 +121,7 @@ class RemoteDB(object):
         else:
             return str(current)
 
+    @reconnect
     def listBackupSets(self):
         r = self.session.get(self.baseURL + "listBackupSets", verify=self.verify)
         r.raise_for_status()
@@ -101,21 +130,25 @@ class RemoteDB(object):
             i['name'] = fs_encode(i['name'])
             yield i
 
+    @reconnect
     def lastBackupSet(self, completed=True):
         r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getBackupSetInfo(self, name):
         r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getBackupSetInfoForTime(self, time):
         r = self.session.get(self.baseURL + "getBackupSetForTime/" + str(time), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getFileInfoByName(self, name, parent, current=True):
         bset = self._bset(current)
         (inode, device) = parent
@@ -124,6 +157,7 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getFileInfoByPath(self, path, current=False):
         bset = self._bset(current)
         if not path.startswith('/'):
@@ -133,6 +167,7 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         bset = self._bset(current)
@@ -142,6 +177,7 @@ class RemoteDB(object):
             i['name'] = fs_encode(i['name'])
             yield i
 
+    @reconnect
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
         r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last), verify=self.verify)
@@ -150,6 +186,7 @@ class RemoteDB(object):
             i['name'] = fs_encode(i['name'])
             yield i
 
+    @reconnect
     def checkPermissions(self, path, checker, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path, verify=self.verify)
@@ -161,6 +198,7 @@ class RemoteDB(object):
         return True
 
 
+    @reconnect
     def getChecksumByPath(self, path, current=False, permchecker=None):
         bset = self._bset(current)
         if not path.startswith('/'):
@@ -170,33 +208,39 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getChecksumInfo(self, checksum):
         r = self.session.get(self.baseURL + "getChecksumInfo/" + checksum, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getFirstBackupSet(self, name, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getChainLength(self, checksum):
         r = self.session.get(self.baseURL + "getChainLength/" + checksum, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getConfigValue(self, name):
         r = self.session.get(self.baseURL + "getConfigValue/" + name, verify=self.verify)
         r.raise_for_status()
         return r.json()
 
+    @reconnect
     def getKeys(self):
         fnKey = self.getConfigValue('FilenameKey')
         cnKey = self.getConfigValue('ContentKey')
         #self.logger.info("Got keys: %s %s", fnKey, cnKey)
         return (fnKey, cnKey)
 
+    @reconnect
     def open(self, checksum, mode):
         temp = tempfile.SpooledTemporaryFile("wb")
         r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify)
