@@ -606,7 +606,7 @@ def main():
             try:
                 if args.auth:
                     hasher = Util.getHash(crypt)
-                f = r.recoverChecksum(i, authenticate)
+                f = r.recoverChecksum(i, args.auth)
                 if f:
                 # Generate an output name
                     if outname:
@@ -634,6 +634,7 @@ def main():
                         logger.debug("Checking authentication")
                         outname = doAuthenticate(outname, i, hasher.hexdigest())
             except Exception as e:
+                logger.error("Could not recover: %s: %s", i, e)
                 #logger.exception(e)
                 retcode += 1
 
