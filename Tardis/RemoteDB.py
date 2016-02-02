@@ -109,8 +109,7 @@ class RemoteDB(object):
         self.loginData = postData
 
         response = self.session.post(self.baseURL + "login", data=postData)
-        if response.status_code != requests.codes.ok:
-            response.raise_for_status()
+        response.raise_for_status()
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
@@ -139,6 +138,12 @@ class RemoteDB(object):
     @reconnect
     def getBackupSetInfo(self, name):
         r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def getBackupSetDetails(self, name):
+        r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
@@ -239,6 +244,47 @@ class RemoteDB(object):
         cnKey = self.getConfigValue('ContentKey')
         #self.logger.info("Got keys: %s %s", fnKey, cnKey)
         return (fnKey, cnKey)
+
+    @reconnect
+    def setKeys(self, token, fKey, cKey):
+        postData = { 'token': token, 'FilenameKey': fKey, 'ContentKey': cKey }
+        response = self.session.post(self.baseURL + "setKeys", data=postData)
+        response.raise_for_status()
+
+    @reconnect
+    def setToken(self, token):
+        postData = { 'token': token }
+        self.token = token
+        response = self.session.post(self.baseURL + "setToken", data=postData)
+        response.raise_for_status()
+
+    @reconnect
+    def listPurgeSets(self, priority, timestamp, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "listPurgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def listPurgeIncomplete(self, priority, timestamp, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "listPurgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def purgeSets(self, priority, timestamp, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "purgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def purgeIncomplete(self, priority, timestamp, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "purgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify)
+        r.raise_for_status()
+        return r.json()
 
     @reconnect
     def open(self, checksum, mode):

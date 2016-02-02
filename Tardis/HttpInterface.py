@@ -136,7 +136,6 @@ def login():
         except Exception as e:
             app.logger.exception(e)
             abort(401)
-
     return '''
         <form action="" method="post">
             <p><input type=text name=host>
@@ -158,6 +157,11 @@ def getBackupSetInfo(backupset):
     #app.logger.info("getBackupSetInfo Invoked: %s", backupset)
     db = getDB()
     return json.dumps(makeDict(db.getBackupSetInfo(backupset)))
+
+@app.route('/getBackupSetDetails/<backupset>')
+def getBackupSetDetails(backupset):
+    db = getDB()
+    return json.dumps(db.getBackupSetDetails(backupset))
 
 # lastBackupSet
 @app.route('/lastBackupSet/<int:completed>')
@@ -279,9 +283,63 @@ def getFileData(checksum):
 def getConfigValue(name):
     db = getDB()
     #app.logger.info("getConfigValue Invoked: %s", name)
-    return  json.dumps(db.getConfigValue(name))
-    
+    return json.dumps(db.getConfigValue(name))
 
+@app.route('/setKeys', methods=['POST'])
+def setKeys():
+    try:
+        db = getDB()
+        token = request.form['token']
+        fKey  = request.form['FilenameKey']
+        cKey  = request.form['ContentKey']
+        if (db.setKeys(token, fKey, cKey) == False):
+            raise Exception("Unable to set keys")
+    except Exception as e:
+        abort(403)
+
+@app.route('/setToken', methods=['POST'])
+def setToken():
+    try:
+        db = getDB()
+        token = request.form['token']
+        if (db.setToken(token, fKey, cKey) == False):
+            raise Exception("Unable to set keys")
+    except Exception as e:
+        abort(403)
+
+@app.route('/listPurgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
+def listPurgeSets(backupset, priority, timestamp):
+    db = getDB()
+    sets = []
+    for x in db.listPurgeSets(priority, timestamp, backupset):
+        sets.append(makeDict(x))
+    return json.dumps(sets)
+
+@app.route('/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
+def listPurgeIncomplete(backupset, priority, timestamp):
+    db = getDB()
+    sets = []
+    for x in db.listPurgeIncomplete(priority, timestamp, backupset):
+        sets.append(makeDict(x))
+    return json.dumps(sets)
+
+@app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
+def purgeSets(backupset, priority, timestamp):
+    db = getDB()
+    return json.dumps(db.purgeSets(priority, timestamp, backupset))
+    
+@app.route('/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
+def purgeIncomplete(backupset, priority, timestamp):
+    db = getDB()
+    return json.dumps(db.purgeIncomplete(priority, timestamp, backupset))
+
+@app.route('/listOrphanChecksums')
+def listOprhanChecksums():
+    db = getDB()
+    orphans = []
+    for i in db.listOrphanChecksums():
+        orphans.append(i)
+    return json.dumps(orphans)
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)

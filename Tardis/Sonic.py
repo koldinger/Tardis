@@ -36,6 +36,7 @@ import sys
 import time
 import datetime
 import pprint
+import urlparse
 
 import parsedatetime
 
@@ -45,6 +46,7 @@ import Defaults
 import TardisDB
 import TardisCrypto
 import CacheDir
+import RemoteDB
 
 
 databaseName = Defaults.getDefault('TARDIS_DBNAME')
@@ -63,15 +65,22 @@ configDefaults = {
 logger = None
 
 def getDB(crypt, new=False, keyfile=None):
-    basedir = os.path.join(args.database, args.client)
-    dbfile = os.path.join(basedir, args.dbname)
-    if new and os.path.exists(dbfile):
-        raise Exception("Database for client %s already exists." % (args.client))
-
-    cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
     token = crypt.createToken() if crypt else None
-    schema = args.schema if new else None
-    tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, token=token)
+    loc = urlparse.urlparse(args.database)
+    if (loc.scheme == 'http') or (loc.scheme == 'https'):
+        if (new):
+            raise Exception("New clients cannot be created over HTTP/HTTPS.  Must be created locally on the server")
+        tardisdb = RemoteDB.RemoteDB(args.database, args.client, token=token)
+        cache = tardisdb
+    else:
+        basedir = os.path.join(args.database, args.client)
+        dbfile = os.path.join(basedir, args.dbname)
+        if new and os.path.exists(dbfile):
+            raise Exception("Database for client %s already exists." % (args.client))
+
+        cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
+        schema = args.schema if new else None
+        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, token=token)
 
     return (tardisdb, cache)
 
@@ -92,8 +101,10 @@ def setToken(crypt):
         (f, c) = crypt.getKeys()
         token = crypt.createToken()
         if args.keys:
-            db.setToken(token)
+            db.beginTransaction()
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+            db.setToken(token)
+            db.commit()
         else:
             db.setKeys(token, f, c)
         db.close()
@@ -120,8 +131,10 @@ def changePassword(crypt, crypt2):
         # Now get the encrypted versions
         (f, c) = crypt2.getKeys()
         if args.keys:
-            db.setToken(crypt2.createToken())
+            db.beginTransaction()
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+            db.setToken(crypt2.createToken())
+            db.commit()
         else:
             db.setKeys(crypt2.createToken(), f, c)
         db.close()
@@ -478,6 +491,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
+        logger.exception(e)
 
 if __name__ == "__main__":
     main()
