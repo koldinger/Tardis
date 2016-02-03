@@ -322,8 +322,12 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
                     if info['link']:
                         # read and make a link
+                        i.seek(0)
                         x = i.read(16 * 1024)
-                        os.symlink(x, outname)
+                        if outname:
+                            os.symlink(x, outname)
+                        else:
+                            logger.warning("No name specified for link: %s", x)
                         if hasher:
                             hasher.update(x)
                         pass
