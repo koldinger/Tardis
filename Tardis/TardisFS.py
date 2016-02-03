@@ -521,7 +521,7 @@ class TardisFS(fuse.Fuse):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
-            f = self.regenerator.recoverFile(subpath, b['backupset'], True, authenticate=self.authenticate)
+            f = self.regenerator.recoverFile(subpath, b['backupset'], nameEncrypted=True, authenticate=self.authenticate)
             if f:
                 try:
                     f.flush()
@@ -575,7 +575,10 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                f = self.regenerator.recoverFile(parts[1], b['backupset'], True, authenticate=self.authenticate)
+                subpath = parts[1]
+                if self.crypt:
+                    subpath = self.crypt.encryptPath(subpath)
+                f = self.regenerator.recoverFile(subpath, b['backupset'], nameEncrypted=True, authenticate=self.authenticate)
                 f.flush()
                 link = f.readline()
                 f.close()
