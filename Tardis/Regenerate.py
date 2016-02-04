@@ -48,7 +48,6 @@ import logging
 import subprocess
 import time
 import base64
-import urlparse
 
 import librsync
 import tempfile
@@ -464,13 +463,13 @@ def parseArgs():
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
 
-    parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
+    parser.add_argument("--database", "-D", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
-    bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
+    bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
     bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"), 
 
     pwgroup = parser.add_mutually_exclusive_group()
@@ -523,38 +522,7 @@ def main():
 
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
     args.password = None
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password, args.client)
-    password = None
-
-    token = None
-    if crypt:
-        token = crypt.createToken()
-
-    owMode = overwriteNames[args.overwrite]
-
-    try:
-        loc = urlparse.urlparse(args.database)
-        if (loc.scheme == 'http') or (loc.scheme == 'https'):
-            tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-            cache = tardis
-        else:
-            #print args.database, loc.path, args.client
-            baseDir = os.path.join(loc.path, args.client)
-            cache = CacheDir.CacheDir(baseDir, create=False)
-            dbPath = os.path.join(baseDir, args.dbname)
-            tardis = TardisDB.TardisDB(dbPath, token=token)
-    except Exception as e:
-        logger.critical("Unable to connect to database: %s", str(e))
-        #logger.exception(e)
-        sys.exit(1)
-
-    if crypt:
-        if args.keys:
-            (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
-        else:
-            (f, c) = tardis.getKeys()
-        crypt.setKeys(f, c)
+    (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
 
     r = Regenerator(cache, tardis, crypt=crypt)
 
@@ -646,7 +614,7 @@ def main():
                 #logger.exception(e)
                 retcode += 1
 
-    else:
+    else: # Not checksum, but acutal pathnames
         for i in args.files:
             i = os.path.abspath(i)
             logger.info("Processing %s", i)

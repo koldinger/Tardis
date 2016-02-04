@@ -44,7 +44,6 @@ import os.path
 import logging
 import tempfile
 import socket
-import urlparse
 import json
 import base64
 
@@ -172,10 +171,7 @@ class TardisFS(fuse.Fuse):
             if password:
                 self.crypt = TardisCrypto.TardisCrypto(password, self.client)
             password = None
-
-            token = None
-            if self.crypt:
-                token = self.crypt.createToken()
+            (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname)
 
             # Remove the crypto object if not encyrpting files.
             if self.nocrypt or self.nocrypt is None:
@@ -184,29 +180,9 @@ class TardisFS(fuse.Fuse):
             if self.noauth or self.noauth is None:
                 self.authenticate = False
 
-            try:
-                loc = urlparse.urlparse(self.database)
-                if (loc.scheme == 'http') or (loc.scheme == 'https'):
-                    self.tardis = RemoteDB.RemoteDB(self.database, self.client, token=token)
-                    self.cacheDir = self.tardis
-                    self.path = None
-                else:
-                   self.path = os.path.join(loc.path, self.client)
-                   self.cacheDir = CacheDir.CacheDir(self.path, create=False)
-                   dbPath = os.path.join(self.path, self.dbname)
-                   self.tardis = TardisDB.TardisDB(dbPath, token=token)
-
-                # Insert the retrieved keys from the DB
-                if self.crypt:
-                    if self.keys:
-                        (f, c) = Util.loadKeys(args.keys, self.tardis.getConfigValue('ClientID'))
-                    else:
-                        (f, c) = self.tardis.getKeys()
-                    self.crypt.setKeys(f, c)
-
-                # Create a regenerator.
-                self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
-                self.files = {}
+            # Create a regenerator.
+            self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
+            self.files = {}
 
             except Exception as e:
                 self.log.critical("Could not initialize: %s", str(e))

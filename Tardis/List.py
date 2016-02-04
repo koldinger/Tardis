@@ -40,7 +40,6 @@ import pwd
 import grp
 import time
 import parsedatetime
-import urlparse
 
 import Tardis
 import TardisDB
@@ -607,7 +606,7 @@ def computeColumnWidth(names):
 """
 Calculate display parameters, including creating the list of backupsets that we want to process
 """
-def setupDisplay(tardis, crypt):
+def setupDisplay(tardis):
     global columns, columnfmt
     global backupSets
 
@@ -720,35 +719,9 @@ def main():
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
 
-        token = None
-        crypt = None
-        if password:
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
-            token = crypt.createToken()
-        password = None
+        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
 
-        try:
-            loc = urlparse.urlparse(args.database)
-            if (loc.scheme == 'http') or (loc.scheme == 'https'):
-                tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-            else:
-                dbfile = os.path.join(loc.path, args.client, args.dbname)
-                tardis = TardisDB.TardisDB(dbfile, token=token)
-        except Exception as e:
-            logger.critical(e)
-            sys.exit(1)
-
-        if not args.crypt:
-            crypt = None
-
-        if crypt:
-            if args.keys:
-                (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
-            else:
-                (f, c) = tardis.getKeys()
-            crypt.setKeys(f, c)
-
-        setupDisplay(tardis, crypt)
+        setupDisplay(tardis)
 
         if args.headers:
             doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)

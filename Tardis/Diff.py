@@ -33,7 +33,6 @@ import sys
 import difflib
 import argparse
 import logging
-import urlparse
 import time
 
 import termcolor
@@ -184,41 +183,10 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        crypt = None
         password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
-        if password:
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
+        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
         password = None
-
-        token = None
-        if crypt:
-            token = crypt.createToken()
-        if not args.crypt:
-            crypt = None
-
-        try:
-            loc = urlparse.urlparse(args.database)
-            if (loc.scheme == 'http') or (loc.scheme == 'https'):
-                tardis = RemoteDB.RemoteDB(args.database, args.client, token=token)
-                cache = tardis
-            else:
-                #print args.database, loc.path, args.client
-                baseDir = os.path.join(loc.path, args.client)
-                cache = CacheDir.CacheDir(baseDir, create=False)
-                dbPath = os.path.join(baseDir, args.dbname)
-                tardis = TardisDB.TardisDB(dbPath, token=token)
-        except Exception as e:
-            logger.critical("Unable to connect to database: %s", str(e))
-            logger.exception(e)
-            sys.exit(1)
-
-        if crypt:
-            if args.keys:
-                (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
-            else:
-                (f, c) = tardis.getKeys()
-                crypt.setKeys(f, c)
 
         bsets = []
         for i in args.backup:

@@ -51,8 +51,10 @@ import Tardis
 
 import TardisDB
 import TardisCrypto
+import CacheDir
 
 import pycurl
+import urlparse
 
 #logger = logging.getLogger('UTIL')
 
@@ -251,6 +253,37 @@ def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
 
     return password
 
+
+"""
+Get the database, cachedir, and crypto object.
+"""
+def setupDataConnection(dbLoc, client, password, keyFile, dbName):
+    crypt = None
+    if password:
+        crypt = TardisCrypto.TardisCrypto(password, client)
+    password = None
+    token = None
+    if crypt:
+        token = crypt.createToken()
+
+    loc = urlparse.urlparse(dbLoc)
+    if (loc.scheme == 'http') or (loc.scheme == 'https'):
+        tardis = RemoteDB.RemoteDB(dbLoc, client, token=token)
+        cache = tardis
+    else:
+        baseDir = os.path.join(loc.path, client)
+        cache = CacheDir.CacheDir(baseDir, create=False)
+        dbPath = os.path.join(baseDir, dbName)
+        tardis = TardisDB.TardisDB(dbPath, token=token)
+
+    if crypt:
+        if keyFile:
+            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
+        else:
+            (f, c) = tardis.getKeys()
+        crypt.setKeys(f, c)
+
+    return (tardis, cache, crypt)
 
 """
 Data transmission functions
