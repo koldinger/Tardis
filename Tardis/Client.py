@@ -45,7 +45,6 @@ import hashlib
 import hmac
 import tempfile
 import cStringIO
-import pycurl
 import shlex
 import magic
 
