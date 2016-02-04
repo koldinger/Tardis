@@ -77,7 +77,7 @@ def tracer(func):
         except Exception as e:
             logger.error("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
             logger.error("%s raised exception %s: %s", func.__name__, e.__class__.__name__, str(e))
-            logger.exception(e)
+            #logger.exception(e)
             raise e
     return trace
 
@@ -170,8 +170,8 @@ class TardisFS(fuse.Fuse):
 
             if password:
                 self.crypt = TardisCrypto.TardisCrypto(password, self.client)
-            password = None
             (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname)
+            password = None
 
             # Remove the crypto object if not encyrpting files.
             if self.nocrypt or self.nocrypt is None:
@@ -183,11 +183,6 @@ class TardisFS(fuse.Fuse):
             # Create a regenerator.
             self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
-
-            except Exception as e:
-                self.log.critical("Could not initialize: %s", str(e))
-                self.log.exception(e)
-                sys.exit(1)
 
             self.log.debug('Init complete.')
         except Exception as e:
