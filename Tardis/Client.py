@@ -1371,22 +1371,28 @@ def main():
     #if not args.crypt:
     #crypt = None
 
-    if crypt:
+    # Set up the encryption, if needed.
+    if args.crypt and crypt:
         (f, c) = (None, None)
-        if args.keys:
-            (f, c) = Util.loadKeys(args.keys, conn.getClientId())
-        else:
-            (f, c) = conn.getKeys()
 
-        if f and c:
-            crypt.setKeys(f, c)
-        else:
+        if conn.isNew():
+            # if new DB, generate new keys, and save them appropriately.
+            logger.debug("Generating new keys")
             crypt.genKeys()
             if args.keys:
                 (f, c) = crypt.getKeys()
                 Util.saveKeys(args.keys, conn.getClientId(), f, c)
             else:
                 sendKeys(crypt)
+        else:
+            # Otherwise, load the keys from the appropriate place
+            if args.keys:
+                (f, c) = Util.loadKeys(args.keys, conn.getClientId())
+            else:
+                (f, c) = conn.getKeys()
+            if not (f and c):
+                raise Exception("Key values not available")
+            crypt.setKeys(f, c)
 
     # Now, do the actual work here.
     try:
