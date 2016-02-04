@@ -102,8 +102,8 @@ def setToken(crypt):
         token = crypt.createToken()
         if args.keys:
             db.beginTransaction()
-            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.setToken(token)
+            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.commit()
         else:
             db.setKeys(token, f, c)
@@ -132,8 +132,8 @@ def changePassword(crypt, crypt2):
         (f, c) = crypt2.getKeys()
         if args.keys:
             db.beginTransaction()
-            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.setToken(crypt2.createToken())
+            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.commit()
         else:
             db.setKeys(crypt2.createToken(), f, c)
@@ -153,17 +153,23 @@ def moveKeys(db, crypt):
         (db, cache) = getDB(crypt)
         if args.extract:
             (f, c) = db.getKeys()
+            if not (f and c):
+                raise Exception("Unable to retrieve keys from server.  Aborting.")
             Util.saveKeys(args.keys, clientId, f, c)
             if args.deleteKeys:
                 db.setKeys(token, None, None)
         elif args.insert:
             (f, c) = Util.loadKeys(args.keys, clientId)
+            logger.info("Keys: F: %s C: %s", f, c)
+            if not (f and c):
+                raise Exception("Unable to retrieve keys from key database.  Aborting.")
             db.setKeys(token, f, c)
             if args.deleteKeys:
                 Util.saveKeys(args.keys, clientId, None, None)
         return 0
     except Exception as e:
         logger.error(e)
+        logger.exception(e)
         return 1
 
 def listBSets(db, crypt):

@@ -374,16 +374,25 @@ def loadKeys(name, client):
     config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
     config.add_section(client)
     config.read(name)
-    contentKey = _updateLen(config.get(client, 'ContentKey'), 32)
-    nameKey = _updateLen(config.get(client, 'FilenameKey'), 32)
+    contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
+    nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
     return (nameKey, contentKey)
 
 def saveKeys(name, client, nameKey, contentKey):
     config = ConfigParser.ConfigParser()
     config.add_section(client)
     config.read(name)
-    config.set(client, 'ContentKey', contentKey)
-    config.set(client, 'FilenameKey', nameKey)
+
+    if contentKey:
+        config.set(client, 'ContentKey', contentKey)
+    else:
+        config.remove_option(client, 'ContentKey')
+
+    if nameKey:
+        config.set(client, 'FilenameKey', nameKey)
+    else:
+        config.remove_option(client, 'FilenameKey')
+
     with open(name, 'wb') as configfile:
         config.write(configfile)
 
