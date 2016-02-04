@@ -62,19 +62,21 @@ def parseArgs():
 
     #parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
 
-    parser.add_argument("--database", "-d", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
+    parser.add_argument("--database", "-D", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
     parser.add_argument("--backup",       nargs='+', dest='backup', default=[current], help="Backup set(s) to use")
 
     pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password',      dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
+    pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
     pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
+    parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
+
     parser.add_argument('--color',          dest='color', default=isatty, action=Util.StoreBoolean, help='Use colors')
 
     diffgroup = parser.add_mutually_exclusive_group()
@@ -211,6 +213,13 @@ def main():
             logger.exception(e)
             sys.exit(1)
 
+        if crypt:
+            if args.keys:
+                (f, c) = Util.loadKeys(args.keys, tardis.getConfigValue('ClientID'))
+            else:
+                (f, c) = tardis.getKeys()
+                crypt.setKeys(f, c)
+
         bsets = []
         for i in args.backup:
             bset = getBackupSet(tardis, i)
@@ -260,7 +269,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        #logger.exception(e)
+        logger.exception(e)
 
 if __name__ == "__main__":
     main()
