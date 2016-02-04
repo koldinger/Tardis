@@ -95,7 +95,7 @@ class Regenerator:
 
         # Get the HMAC
         infile.seek(-hmac.digest_size, os.SEEK_END)
-        codeSize = infile.tell()
+        #ctSize = infile.tell()
         digest = infile.read(hmac.digest_size)
         self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
 
@@ -105,9 +105,6 @@ class Regenerator:
 
         self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))
 
-        codeSize -= self.crypt.ivLength
-        self.logger.debug("Computed Size: %d.  Specified size: %d", codeSize, size)
-
         if authenticate:
             hmac.update(iv)
 
@@ -116,7 +113,10 @@ class Regenerator:
 
         outfile = tempfile.TemporaryFile()
 
-        rem = codeSize
+        ctSize = size - self.crypt.ivLength - hmac.digest_size
+        #self.logger.info("Computed Size: %d.  Specified size: %d.  Diff: %d", ctSize, size, (ctSize - size))
+
+        rem = ctSize
         blocksize = 64 * 1024
         while rem > 0:
             readsize = blocksize if rem > blocksize else rem
@@ -126,13 +126,17 @@ class Regenerator:
             pt = cipher.decrypt(ct)
             if rem <= blocksize:
                 # ie, we're the last block
+                digest = infile.read(hmac.digest_size)
+                readsize += len(digest)
                 if digest != hmac.digest():
+                    self.logger.info("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), hmac.hexdigest())
                     raise RegenerateException("HMAC did not authenticate. Found %s, Expected %s" % (hmac.hexdigest(), binascii.hexlify(digest)))
                 pt = self.crypt.unpad(pt)
             outfile.write(pt)
             rem -= readsize
 
-        outfile.truncate(size)      # Shouldn't be necessary
+
+        #outfile.truncate(size)      # Shouldn't be necessary
         outfile.seek(0)
         return outfile
 
@@ -150,7 +154,7 @@ class Regenerator:
                 basis = self.recoverChecksum(cksInfo['basis'], authenticate)
 
                 if cksInfo['iv']:
-                    patchfile = self.decryptFile(cksum, cksInfo['deltasize'], authenticate)
+                    patchfile = self.decryptFile(cksum, cksInfo['disksize'], authenticate)
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
 
@@ -171,7 +175,7 @@ class Regenerator:
                 return output
             else:
                 if cksInfo['iv']:
-                    output =  self.decryptFile(cksum, cksInfo['size'])
+                    output =  self.decryptFile(cksum, cksInfo['disksize'])
                 else:
                     output =  self.cacheDir.open(cksum, "rb")
 
