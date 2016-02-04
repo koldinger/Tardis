@@ -37,7 +37,6 @@ import hmac
 import os
 import os.path
 import base64
-import struct
 import binascii
 
 import Defaults
@@ -91,14 +90,14 @@ class TardisCrypto:
     def unpad(self, data, validate=True):
         #if validate:
             #self.checkpad(data)
-        l = struct.unpack('B', data[-1])[0]            # Grab the last byte
+        l = ord(data[-1])
         x = len(data) - l
         return data[:x]
 
     def checkpad(self, data):
-        l = struct.unpack('B', data[-1])[0]            # Grab the last byte
+        l = ord(data[-1])
         # Make sure last L bytes are all set to L
-        pad = str(l) * l
+        pad = chr(l) * l
         if data[-l:] != pad:
             raise Exception("Invalid padding: %s (%d)", binascii.hexlify(data[-l:]), l)
 
