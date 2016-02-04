@@ -257,6 +257,7 @@ class RemoteDB(object):
         self.token = token
         response = self.session.post(self.baseURL + "setToken", data=postData)
         response.raise_for_status()
+        return response.json()
 
     @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
