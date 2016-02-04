@@ -109,6 +109,7 @@ class Connection(object):
             self.clientId       = uuid.UUID(fields['clientid'])
             self.lastTimestamp  = float(fields['prevDate'])
             self.name           = fields['name']
+            self.new            = fields['new']
             if 'filenameKey' in fields:
                 self.filenameKey = fields['filenameKey']
             if 'contentKey' in fields:
@@ -155,6 +156,9 @@ class Connection(object):
 
     def getKeys(self):
         return (self.filenameKey, self.contentKey)
+
+    def isNew(self):
+        return self.new == 'NEW'
 
     def getStats(self):
         return self.stats
