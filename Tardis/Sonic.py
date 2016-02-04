@@ -337,7 +337,7 @@ def parseArgs():
     bsetParser = argparse.ArgumentParser(add_help=False)
     bsetgroup = bsetParser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
-    bsetgroup.add_argument("--date", "-D",   help="Regenerate as of date", dest='date', default=None)
+    bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
     #bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"),
 
     purgeParser= argparse.ArgumentParser(add_help=False)
@@ -356,7 +356,7 @@ def parseArgs():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     common.add_argument('--client',             dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
-    common.add_argument('--database',           dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
+    common.add_argument('--database', '-D',     dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
 
     passgroup = common.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
@@ -374,7 +374,6 @@ def parseArgs():
     npwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                        help='Read new password from file')
     npwgroup.add_argument('--newpassword-url',  dest='newpwu', default=None,                        help='Retrieve new password from the specified URL')
     npwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                        help='Use the specified command to generate the new password on stdout')
-
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     cp = subs.add_parser('create',       parents=[common], help='Create a client database')
