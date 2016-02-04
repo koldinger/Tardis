@@ -290,8 +290,10 @@ class RemoteDB(object):
     @reconnect
     def open(self, checksum, mode):
         temp = tempfile.SpooledTemporaryFile("wb")
-        r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify)
+        r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify, stream=True)
         r.raise_for_status()
+        #self.logger.debug("%s", str(r.headers))
+
         for chunk in r.iter_content(chunk_size=64 * 1024):
             temp.write(chunk)
 
