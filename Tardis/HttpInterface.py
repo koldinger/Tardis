@@ -234,7 +234,7 @@ def getChecksumByPath(backupset, pathname):
     #app.logger.info("getChecksumByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
-    app.logger.info("Checksum: %s", cksum)
+    #app.logger.info("Checksum: %s", cksum)
     return json.dumps(cksum)
 
 # getChecksumInfo
@@ -287,14 +287,17 @@ def getConfigValue(name):
 
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
+    #app.logger.info("Form: %s", str(request.form))
     try:
         db = getDB()
         token = request.form['token']
-        fKey  = request.form['FilenameKey']
-        cKey  = request.form['ContentKey']
+        fKey  = request.form.get('FilenameKey')
+        cKey  = request.form.get('ContentKey')
         if (db.setKeys(token, fKey, cKey) == False):
             raise Exception("Unable to set keys")
+        return "OK"
     except Exception as e:
+        app.logger.exception(e)
         abort(403)
 
 @app.route('/setToken', methods=['POST'])
