@@ -17,6 +17,7 @@ Tardis consists of several components:
 * tardisfs (TardisFS.py): A FUSE based file system which provides views of the various backup sets.
 * regenerate (Regenerate.py): A program to retrieve an individual verson of the file without using the TardisFS
 * lstardis (List.py): List versions of files and directories in the database.
+* tardiff (Diff.py): Show the differences between versions of backed up files, and the current version.
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
@@ -48,8 +49,8 @@ Future Releases
 ===============
 Several releases will be coming soon:
   * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
-  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.
-  * 0.26 Improved HTTP filesystem, allowing incremental retrieval of files, rather than having to retrieve full files on any access.
+  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.  Fixes for bugs.  
+  * 0.26 Improvements to all tools to bring compatibility together.  Functioning version of tardisremote.
   
 Installation
 ============
