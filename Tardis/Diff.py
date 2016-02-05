@@ -167,7 +167,7 @@ def getBackupSet(db, bset):
                     logger.debug("Using backupset: %s %d for %s", bsetInfo['name'], bsetInfo['backupset'], bset)
                 else:
                     # Weed out the ".Initial" set
-                    logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
+                    logger.critical("No backupset at date: %s (%s)", bset, time.asctime(then))
                     bsetInfo = None
             else:
                 logger.critical("Could not parse string: %s", bset)
@@ -202,9 +202,9 @@ def main():
             bsets.append(None)
 
         r = Regenerate.Regenerator(cache, tardis, crypt)
-        then = time.asctime(time.localtime(float(bsets[0]['starttime'])))
+        then = time.asctime(time.localtime(float(bsets[0]['starttime']))) + '  (' + bsets[0]['name'] + ')'
         if bsets[1]:
-            now = time.asctime(time.localtime(float(bsets[1]['starttime'])))
+            now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'
         else:
             now = time.asctime()
 
