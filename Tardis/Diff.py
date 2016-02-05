@@ -86,18 +86,21 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
-    parser.add_argument('files',    nargs='+', default=None,                 help="File to diff")
+    parser.add_argument('--verbose', '-v',  action='count', dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
+
+    parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
 
     args = parser.parse_args()
 
     #print args
     return args
 
-def setupLogging():
+def setupLogging(verbosity):
     global logger
-    logging.basicConfig(level=logging.WARNING)
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logging.basicConfig(level=loglevel)
     logger = logging.getLogger('')
     pass
 
@@ -173,10 +176,72 @@ def getBackupSet(db, bset):
                 logger.critical("Could not parse string: %s", bset)
     return bsetInfo
 
+def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, now, then):
+    """
+    Diff two files, either both from the database, or one from the database, and one from the 
+    actual filesystem
+    """
+    path = os.path.abspath(fName)
+
+    # Process the first file
+    p1 = Util.reducePath(tardis, bsets[0]['backupset'], path, reducePath, crypt)
+    logger.debug("Path 1: %s => %s", path, p1)
+
+    e1 = crypt.encryptPath(p1) if crypt else p1
+    info1 = tardis.getFileInfoByPath(e1, bsets[0]['backupset'])
+    if info1:
+        dir1 = info1['dir']
+    else:
+        logger.error("%s does not exist in backupset %s", path, bsets[0]['name'])
+        return
+
+    if bsets[1] is not None:
+        #  if bsets[1], then we're looking into two in the backup.
+        #  Process the second one
+        p2 = Util.reducePath(tardis, bsets[1]['backupset'], path, reducePath, crypt)
+        logger.debug("Path 2: %s => %s", path, p2)
+        e2 = crypt.encryptPath(p2) if crypt else p2
+        info2 = tardis.getFileInfoByPath(e2, bsets[1]['backupset'])
+        if info2:
+            dir2 = info1['dir']
+        else:
+            logger.error("%s does not exist in backupset %s", path, bsets[1]['name'])
+            return
+    else:
+        dir2 = os.path.isdir(path)
+
+    if dir1 != dir2:
+        logger.error("%s Is directory in one, but not other", path)
+        return
+    elif dir1:
+        logger.error("%s is a directory", path)
+    else:
+        logger.debug("Recovering %d %s", bsets[0]['backupset'], p1)
+        f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
+        if not f1:
+            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+            return
+
+        if bsets[1] is not None:
+            logger.debug("Recovering %d %s", bsets[1]['backupset'], p2)
+            f2 = regenerator.recoverFile(p2, bsets[1]['backupset'])
+            if not f1:
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                return
+        else:
+            logger.debug("Opening %s", path)
+            try:
+                f2 = file(path, "rb")
+            except IOError as e:
+                logger.error("Could not open %s: %s", path, str(e))
+                return
+
+    runDiff(f1, f2, fName, then, now)
+
 def main():
     try:
         parseArgs()
-        setupLogging()
+        setupLogging(args.verbose)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
@@ -209,30 +274,7 @@ def main():
             now = time.asctime()
 
         for f in args.files:
-            path = os.path.abspath(f)
-            p1 = Util.reducePath(tardis, bsets[0]['backupset'], path, args.reduce, crypt)
-            logger.debug("Recovering %d %s", bsets[0]['backupset'], p1)
-            f1 = r.recoverFile(p1, bsets[0]['backupset'])
-            if not f1:
-                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
-                continue
-
-            if bsets[1] is not None:
-                p2 = Util.reducePath(tardis, bsets[1]['backupset'], path, args.reduce, crypt)
-                logger.debug("Recovering %d %s", bsets[1]['backupset'], p2)
-                f2 = r.recoverFile(p2, bsets[1]['backupset'])
-                if not f1:
-                    logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
-                    continue
-            else:
-                logger.debug("Opening %s", path)
-                try:
-                    f2 = file(path, "rb")
-                except IOError as e:
-                    logger.error("Could not open %s: %s", path, str(e))
-                    continue
-
-            runDiff(f1, f2, f, then, now)
+            diffFile(f, r, bsets, tardis, crypt, args.reduce, now, then)
     except KeyboardInterrupt:
         pass
     except Exception as e:
