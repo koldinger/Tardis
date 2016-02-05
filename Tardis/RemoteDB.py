@@ -100,7 +100,7 @@ class RemoteDB(object):
         self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
 
     def connect(self):
-        self.logger.info("Creating new connection to %s for %s", self.baseURL, self.host)
+        self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
         self.session = requests.Session()
 
         postData = { 'host': self.host }
@@ -149,7 +149,7 @@ class RemoteDB(object):
 
     @reconnect
     def getBackupSetInfoForTime(self, time):
-        r = self.session.get(self.baseURL + "getBackupSetForTime/" + str(time), verify=self.verify)
+        r = self.session.get(self.baseURL + "getBackupSetInfoForTime/" + str(time), verify=self.verify)
         r.raise_for_status()
         return r.json()
 
@@ -284,6 +284,12 @@ class RemoteDB(object):
     def purgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "purgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def listOrphanChecksums(self):
+        r = self.session.get(self.baseURL + "listOrphanChecksums", verify=self.verify)
         r.raise_for_status()
         return r.json()
 
