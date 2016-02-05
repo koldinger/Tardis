@@ -86,18 +86,23 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
-    parser.add_argument('files',    nargs='+', default=None,                 help="File to diff")
+    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories');
+
+    parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
+    parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
+
+    parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
 
     args = parser.parse_args()
 
     #print args
     return args
 
-def setupLogging():
+def setupLogging(verbosity):
     global logger
-    logging.basicConfig(level=logging.WARNING)
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logging.basicConfig(level=loglevel)
     logger = logging.getLogger('')
     pass
 
@@ -160,23 +165,119 @@ def getBackupSet(db, bset):
             (then, success) = cal.parse(bset)
             if success:
                 timestamp = time.mktime(then)
-                logger.info("Using time: %s", time.asctime(then))
+                logger.debug("Using time: %s", time.asctime(then))
                 bsetInfo = db.getBackupSetInfoForTime(timestamp)
                 if bsetInfo and bsetInfo['backupset'] != 1:
                     bset = bsetInfo['backupset']
                     logger.debug("Using backupset: %s %d for %s", bsetInfo['name'], bsetInfo['backupset'], bset)
                 else:
                     # Weed out the ".Initial" set
-                    logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
+                    logger.critical("No backupset at date: %s (%s)", bset, time.asctime(then))
                     bsetInfo = None
             else:
                 logger.critical("Could not parse string: %s", bset)
     return bsetInfo
 
+def getFileInfo(path, bset, tardis, crypt, reducePath):
+    p = Util.reducePath(tardis, bset, path, reducePath, crypt)
+    e = crypt.encryptPath(p) if crypt else p
+    info = tardis.getFileInfoByPath(e, bset)
+    return info, p
+
+
+def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
+    # Collect the first directory contents
+    (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+    entries1 = tardis.readDirectory((info1['inode'], info1['device']))
+    names1 = ([x['name'] for x in entries1])
+    if crypt:
+        names1 = map(crypt.decryptFilename, names1)
+    names1 = sorted(names1)
+
+    if bsets[1]:
+        (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
+        entries2 = tardis.readDirectory((info2['inode'], info2['device']))
+        names2 = [x['name'] for x in entries2]
+        if crypt:
+            names2 = map(crypt.decryptFilename, names2)
+        names2 = sorted(names2)
+    else:
+        names2 = sorted(os.listdir(path))
+
+    for i in names1:
+        if i in names2:
+            logger.info('Diffing %s', os.path.join(path, i))
+            diffFile(os.path.join(path, i), regenerator, bsets, tardis, crypt, reducePath, True, now, then)
+        else:
+            logger.info('%s in %s, not in %s', os.path.join(path, i), bsets[0]['name'], 'other')
+
+    for i in names2:
+        if i not in names1:
+            logger.info('%s in %s, not in %s', os.path.join(path, i), 'other', bsets[0]['name'])
+
+def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now, then):
+    """
+    Diff two files, either both from the database, or one from the database, and one from the 
+    actual filesystem
+    """
+    path = os.path.abspath(fName)
+
+    # Process the first file
+    (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+    if info1:
+        dir1 = info1['dir']
+    else:
+        logger.error("%s does not exist in backupset %s", path, bsets[0]['name'])
+        return
+
+    if bsets[1] is not None:
+        #  if bsets[1], then we're looking into two in the backup.
+        #  Process the second one
+        (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
+        if info2:
+            dir2 = info1['dir']
+        else:
+            logger.error("%s does not exist in backupset %s", path, bsets[1]['name'])
+            return
+    else:
+        dir2 = os.path.isdir(path)
+
+    if dir1 != dir2:
+        logger.error("%s Is directory in one, but not other", path)
+        return
+    elif dir1:
+        logger.info("%s is a directory", path)
+        if args.recurse:
+            diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
+        return
+    else:
+        logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
+        #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
+        f1 = regenerator.recoverChecksum(info1['checksum'])
+        if not f1:
+            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+            return
+
+        if bsets[1] is not None:
+            logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
+            f2 = regenerator.recoverChecksum(info2['checksum'])
+            if not f2:
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                return
+        else:
+            logger.debug("Opening %s", path)
+            try:
+                f2 = file(path, "rb")
+            except IOError as e:
+                logger.error("Could not open %s: %s", path, str(e))
+                return
+
+    runDiff(f1, f2, fName, then, now)
+
 def main():
     try:
         parseArgs()
-        setupLogging()
+        setupLogging(args.verbose)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
@@ -202,37 +303,14 @@ def main():
             bsets.append(None)
 
         r = Regenerate.Regenerator(cache, tardis, crypt)
-        then = time.asctime(time.localtime(float(bsets[0]['starttime'])))
+        then = time.asctime(time.localtime(float(bsets[0]['starttime']))) + '  (' + bsets[0]['name'] + ')'
         if bsets[1]:
-            now = time.asctime(time.localtime(float(bsets[1]['starttime'])))
+            now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'
         else:
             now = time.asctime()
 
         for f in args.files:
-            path = os.path.abspath(f)
-            p1 = Util.reducePath(tardis, bsets[0]['backupset'], path, args.reduce, crypt)
-            logger.debug("Recovering %d %s", bsets[0]['backupset'], p1)
-            f1 = r.recoverFile(p1, bsets[0]['backupset'])
-            if not f1:
-                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
-                continue
-
-            if bsets[1] is not None:
-                p2 = Util.reducePath(tardis, bsets[1]['backupset'], path, args.reduce, crypt)
-                logger.debug("Recovering %d %s", bsets[1]['backupset'], p2)
-                f2 = r.recoverFile(p2, bsets[1]['backupset'])
-                if not f1:
-                    logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
-                    continue
-            else:
-                logger.debug("Opening %s", path)
-                try:
-                    f2 = file(path, "rb")
-                except IOError as e:
-                    logger.error("Could not open %s: %s", path, str(e))
-                    continue
-
-            runDiff(f1, f2, f, then, now)
+            diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
         pass
     except Exception as e:

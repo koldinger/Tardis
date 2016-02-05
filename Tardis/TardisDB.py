@@ -45,7 +45,7 @@ import Rotator
 
 # Utility functions
 
-_fieldInfoFields = "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
+_fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                    "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                    "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
                    "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, " \
@@ -260,7 +260,7 @@ class TardisDB(object):
         #self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
         c = self.cursor
         c.execute("SELECT " +
-                  _fieldInfoFields +
+                  _fileInfoFields +
                   #"FROM Files "
                   #"JOIN Names ON Files.NameId = Names.NameId "
                   #"LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
@@ -315,7 +315,7 @@ class TardisDB(object):
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         c = self.cursor
         c.execute("SELECT " +
-                  _fieldInfoFields + _fileInfoJoin +
+                  _fileInfoFields + _fileInfoJoin +
                   "WHERE Inode = :inode AND Device = :device AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"inode": inode, "device": device, "backup": backupset})
@@ -328,7 +328,7 @@ class TardisDB(object):
         temp = fileInfo.copy()
         temp["backup"] = backupset
         c = self.cursor.execute("SELECT " + 
-                                _fieldInfoFields + _fileInfoJoin +
+                                _fileInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 temp)
@@ -341,7 +341,7 @@ class TardisDB(object):
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         #self.logger.info("getFileFromPartialBackup: %s", str(fileInfo))
         c = self.cursor.execute("SELECT " +
-                                _fieldInfoFields + _fileInfoJoin +
+                                _fileInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
@@ -351,7 +351,7 @@ class TardisDB(object):
     def getFileInfoByInodeFromPartial(self, inode):
         (ino, dev) = inode
         c = self.cursor.execute("SELECT " +
-                                _fieldInfoFields + _fileInfoJoin +
+                                _fileInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Device = :device AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
@@ -565,7 +565,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
 
-        c = self.execute("SELECT " + _fieldInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
+        c = self.execute("SELECT " + _fileInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
                          _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
@@ -593,7 +593,7 @@ class TardisDB(object):
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
-        c = self.execute("SELECT " + _fieldInfoFields + ", "
+        c = self.execute("SELECT " + _fileInfoFields + ", "
                          "C1.Basis AS basis, C1.InitVector AS iv " + 
                          _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "

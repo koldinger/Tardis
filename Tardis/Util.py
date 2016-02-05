@@ -52,6 +52,7 @@ import Tardis
 import TardisDB
 import TardisCrypto
 import CacheDir
+import RemoteDB
 
 import pycurl
 import urlparse
