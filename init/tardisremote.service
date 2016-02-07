@@ -1,10 +1,12 @@
 [Unit]
-Description=Tardis Backup Server
+Description=Tardis HTTP File Server
 After=syslog.target
 
 [Service]
 ExecStart=/usr/bin/tardisremote --daemon
 ExecStop=/usr/bin/killall tardisremote
+Type=forking
+PIDFile=/var/run/tardisremote.pid
 
 [Install]
 WantedBy=multi-user.target
