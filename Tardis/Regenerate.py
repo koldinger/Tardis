@@ -92,12 +92,6 @@ class Regenerator:
         infile = self.cacheDir.open(filename, 'rb')
         hmac = self.crypt.getHash(func=hashlib.sha512)
 
-        # Get the HMAC
-        infile.seek(-hmac.digest_size, os.SEEK_END)
-        #ctSize = infile.tell()
-        digest = infile.read(hmac.digest_size)
-        self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
-
         # Get the IV, if it's not specified.
         infile.seek(0, os.SEEK_SET)
         iv = infile.read(self.crypt.ivLength)
@@ -126,6 +120,7 @@ class Regenerator:
             if rem <= blocksize:
                 # ie, we're the last block
                 digest = infile.read(hmac.digest_size)
+                self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
                 readsize += len(digest)
                 if digest != hmac.digest():
                     self.logger.info("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), hmac.hexdigest())
