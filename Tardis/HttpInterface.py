@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from flask import Flask, session, request, url_for, escape, abort, redirect, send_file
+from flask import Flask, session, request, url_for, escape, abort, redirect, send_file, make_response
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -99,18 +99,24 @@ def makeDict(row):
 def compressMsg(string, threshold=1024):
     if len(string) > threshold:
         comp = base64.b64encode(zlib.compress(string))
+        comp = zlib.compress(string)
         if len(comp) < len(string):
             return (comp, True)
     return (string, False)
 
 def createResponse(string, compress=True):
     if compress:
+        #app.logger.debug("Attempting to compress: %d", len(string))
         (data, compressed) = compressMsg(string)
-        response = flask.make_response(data)
-        response.headers['X-TardisCompressed'] = str(compressed)
+        response = make_response(data)
+        if compressed:
+            #app.logger.debug("Compressed to %d", len(data))
+            response.headers['content-encoding'] = 'deflate'
+        #response.headers['X-TardisCompressed'] = str(compressed)
     else:
-        response = flask.make_response(string)
-        response.headers['X-TardisCompressed'] = str(False)
+        response = make_response(string)
+        #response.headers['X-TardisCompressed'] = str(False)
+    #app.logger.debug("Headers: %s", str(response.headers))
     return response
 
 @app.route('/')
@@ -156,18 +162,18 @@ def logout():
 def getBackupSetInfo(backupset):
     #app.logger.info("getBackupSetInfo Invoked: %s", backupset)
     db = getDB()
-    return json.dumps(makeDict(db.getBackupSetInfo(backupset)))
+    return createResponse(json.dumps(makeDict(db.getBackupSetInfo(backupset))))
 
 @app.route('/getBackupSetDetails/<backupset>')
 def getBackupSetDetails(backupset):
     db = getDB()
-    return json.dumps(db.getBackupSetDetails(backupset))
+    return createResponse(json.dumps(db.getBackupSetDetails(backupset)))
 
 # lastBackupSet
 @app.route('/lastBackupSet/<int:completed>')
 def lastBackupSet(completed):
     db = getDB()
-    return json.dumps(makeDict(db.lastBackupSet(bool(completed))))
+    return createResponse(json.dumps(makeDict(db.lastBackupSet(bool(completed)))))
 
 # listBackupSets
 @app.route('/listBackupSets')
@@ -180,7 +186,7 @@ def listBackupSets():
         sets.append(makeDict(backup))
 
     app.logger.debug(str(sets))
-    return json.dumps(sets)
+    return createResponse(json.dumps(sets))
 
 @app.route('/getFileInfoByPath/<int:backupset>')
 def getFileInfoByPathRoot(backupset):
@@ -191,7 +197,7 @@ def getFileInfoByPathRoot(backupset):
 def getFileInfoByPath(backupset, pathname):
     #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
-    return json.dumps(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
+    return createResponse(json.dumps(makeDict(db.getFileInfoByPath(str(pathname), backupset))))
 
 @app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
 def getFileInfoForPath(backupset, pathname):
@@ -199,14 +205,14 @@ def getFileInfoForPath(backupset, pathname):
     pathinfo = []
     for i in db.getFileInfoForPath(pathname, backupset):
         pathinfo.append(makeDict(i))
-    return json.dumps(pathinfo)
+    return createResponse(json.dumps(pathinfo))
 
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
     #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
-    return json.dumps(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
+    return createResponse(json.dumps(makeDict(db.getFileInfoByName(name, (inode, device), backupset))))
 
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
@@ -216,7 +222,7 @@ def readDirectory(backupset, device, inode):
     directory = []
     for x in db.readDirectory((inode, device), backupset):
         directory.append(makeDict(x))
-    return json.dumps(directory)
+    return createResponse(json.dumps(directory))
 
 
 @app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
@@ -226,7 +232,7 @@ def readDirectoryForRange(device, inode, first, last):
     directory = []
     for x in db.readDirectoryForRange((inode, device), first, last):
         directory.append(makeDict(x))
-    return json.dumps(directory)
+    return createResponse(json.dumps(directory))
 
 # getChecksumByPath
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
@@ -235,29 +241,29 @@ def getChecksumByPath(backupset, pathname):
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
     #app.logger.info("Checksum: %s", cksum)
-    return json.dumps(cksum)
+    return createResponse(json.dumps(cksum))
 
 # getChecksumInfo
 @app.route('/getChecksumInfo/<checksum>')
 def getChecksumInfo(checksum):
     #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
-    return json.dumps(makeDict(db.getChecksumInfo(checksum)))
+    return createResponse(json.dumps(makeDict(db.getChecksumInfo(checksum))))
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
     #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
     db = getDB()
-    return json.dumps(makeDict(db.getBackupSetInfoForTime(time)))
+    return createResponse(json.dumps(makeDict(db.getBackupSetInfoForTime(time))))
 
-# getFirstBackkupSet
+# getFirstBackupSet
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
 def getFirstBackupSet(backupset, pathname):
     #app.logger.info("getFirstBackupSet Invoked: %d %s", backupset, pathname)
     db = getDB()
     if not pathname.startswith('/'):
         pathname = '/' + pathname
-    return json.dumps(db.getFirstBackupSet(pathname, backupset))
+    return createResponse(json.dumps(db.getFirstBackupSet(pathname, backupset)))
 
 # getChainLength
 @app.route('/getChainLength/<checksum>')
@@ -316,7 +322,7 @@ def listPurgeSets(backupset, priority, timestamp):
     sets = []
     for x in db.listPurgeSets(priority, timestamp, backupset):
         sets.append(makeDict(x))
-    return json.dumps(sets)
+    return createResponse(json.dumps(sets))
 
 @app.route('/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def listPurgeIncomplete(backupset, priority, timestamp):
@@ -324,25 +330,25 @@ def listPurgeIncomplete(backupset, priority, timestamp):
     sets = []
     for x in db.listPurgeIncomplete(priority, timestamp, backupset):
         sets.append(makeDict(x))
-    return json.dumps(sets)
+    return createResponse(json.dumps(sets))
 
 @app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeSets(backupset, priority, timestamp):
     db = getDB()
-    return json.dumps(db.purgeSets(priority, timestamp, backupset))
+    return createResponse(json.dumps(db.purgeSets(priority, timestamp, backupset)))
     
 @app.route('/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeIncomplete(backupset, priority, timestamp):
     db = getDB()
-    return json.dumps(db.purgeIncomplete(priority, timestamp, backupset))
+    return createResponse(json.dumps(db.purgeIncomplete(priority, timestamp, backupset)))
 
 @app.route('/listOrphanChecksums')
-def listOprhanChecksums():
+def listOrphanChecksums():
     db = getDB()
     orphans = []
     for i in db.listOrphanChecksums():
         orphans.append(i)
-    return json.dumps(orphans)
+    return createResponse(json.dumps(orphans))
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
@@ -402,7 +408,7 @@ def setupLogging():
 
 def setup():
     global args, config, logger
-    logging.basicConfig(loglevel=logging.DEBUG)
+    logging.basicConfig(loglevel=logging.INFO)
     (args, config) = processArgs()
     logger = setupLogging()
 
@@ -417,6 +423,8 @@ def run_server():
             "certfile": args.certfile,
             "keyfile" : args.keyfile
         }
+
+    logger.info("Tornado server starting: %s", Tardis.__versionstring__)
 
     http_server = HTTPServer(WSGIContainer(app), ssl_options = sslOptions)
     http_server.listen(args.port)
