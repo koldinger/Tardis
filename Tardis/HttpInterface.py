@@ -69,7 +69,7 @@ configDefaults = {
     'CertFile'          : None,
     'KeyFile'           : None,
     'PidFile'           : pidFile,
-    'Compress'          : str(False)
+    'Compress'          : str(True)
 }
 
 app = Flask(__name__)
@@ -77,6 +77,8 @@ app.secret_key = os.urandom(24)
 
 dbs = {}
 caches= {}
+
+allowCompress = False
 
 args = None
 config = None
@@ -98,25 +100,21 @@ def makeDict(row):
 
 def compressMsg(string, threshold=1024):
     if len(string) > threshold:
-        comp = base64.b64encode(zlib.compress(string))
         comp = zlib.compress(string)
         if len(comp) < len(string):
+            app.logger.debug("Compressed %d to %d", len(string), len(comp))
             return (comp, True)
     return (string, False)
 
 def createResponse(string, compress=True):
-    if compress:
-        #app.logger.debug("Attempting to compress: %d", len(string))
+    if compress and allowCompress:
+        app.logger.debug("Attempting to compress: %d", len(string))
         (data, compressed) = compressMsg(string)
         response = make_response(data)
         if compressed:
-            #app.logger.debug("Compressed to %d", len(data))
-            response.headers['content-encoding'] = 'deflate'
-        #response.headers['X-TardisCompressed'] = str(compressed)
+            response.headers['Content-Encoding'] = 'deflate'
     else:
         response = make_response(string)
-        #response.headers['X-TardisCompressed'] = str(False)
-    #app.logger.debug("Headers: %s", str(response.headers))
     return response
 
 @app.route('/')
@@ -182,10 +180,10 @@ def listBackupSets():
     db = getDB()
     sets = []
     for backup in db.listBackupSets():
-        app.logger.debug(str(backup))
+        #app.logger.debug(str(backup))
         sets.append(makeDict(backup))
 
-    app.logger.debug(str(sets))
+    #app.logger.debug(str(sets))
     return createResponse(json.dumps(sets))
 
 @app.route('/getFileInfoByPath/<int:backupset>')
@@ -378,6 +376,8 @@ def processArgs():
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
+    parser.add_argument('--compress',           dest='compress',        default=config.getboolean(t, 'Compress'), help='Compress data going out')
+
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,   help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
@@ -407,10 +407,12 @@ def setupLogging():
     return logger
 
 def setup():
-    global args, config, logger
+    global args, config, logger, allowCompress
     logging.basicConfig(loglevel=logging.INFO)
     (args, config) = processArgs()
     logger = setupLogging()
+    if args.compress:
+        allowCompress = True
 
 def main_flask():
     setup()
