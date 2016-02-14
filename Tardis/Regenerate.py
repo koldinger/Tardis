@@ -185,7 +185,7 @@ class Regenerator:
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            self.logger.exception(e)
+            # self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
@@ -272,6 +272,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             realname = info['name']
             if args.crypt and crypt:
                 realname = crypt.decryptFilename(realname)
+            realname = realname.decode('utf-8')
 
             if name:
                 # This should only happen only one file specified.
@@ -306,6 +307,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     childInfo = tardis.getFileInfoByName(name, dirInode, bset)
                     if args.crypt and crypt:
                         name = crypt.decryptFilename(name)
+                    name = name.decode('utf-8')
                     if childInfo:
                         recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     else:
@@ -389,7 +391,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                    logger.warning("Unable to process extended attributes for %s", outname)
 
     except Exception as e:
-        logger.exception(e)
+        logger.error("Recovery of %s failed. %s", outname, e)
+        #logger.exception(e)
         retCode += 1
 
     return retCode
@@ -572,74 +575,81 @@ def main():
     retcode = 0
     hasher = None
     # do the work here
-    if args.cksum:
-        for i in args.files:
-            try:
-                if args.auth:
-                    hasher = Util.getHash(crypt)
-                f = r.recoverChecksum(i, args.auth)
-                if f:
-                # Generate an output name
-                    if outname:
-                        # Note, this should ONLY be true if only one file
-                        output = file(outname,  "wb")
-                    elif outputdir:
-                        outname = os.path.join(outputdir, i)
-                        logger.debug("Writing output to %s", outname)
-                        output = file(outname,  "wb")
-                    try:
-                        x = f.read(16 * 1024)
-                        while x:
-                            output.write(x)
-                            if hasher:
-                                hasher.update(x)
-                            x = f.read(16 * 1024)
-                    except Exception as e:
-                        logger.error("Unable to read file: {}: {}".format(i, repr(e)))
-                        raise
-                    finally:
-                        f.close()
-                        if output is not sys.stdout:
-                            output.close()
+    try:
+        if args.cksum:
+            for i in args.files:
+                try:
                     if args.auth:
-                        logger.debug("Checking authentication")
-                        outname = doAuthenticate(outname, i, hasher.hexdigest())
-            except Exception as e:
-                logger.error("Could not recover: %s: %s", i, e)
-                #logger.exception(e)
-                retcode += 1
+                        hasher = Util.getHash(crypt)
+                    f = r.recoverChecksum(i, args.auth)
+                    if f:
+                    # Generate an output name
+                        if outname:
+                            # Note, this should ONLY be true if only one file
+                            output = file(outname,  "wb")
+                        elif outputdir:
+                            outname = os.path.join(outputdir, i)
+                            logger.debug("Writing output to %s", outname)
+                            output = file(outname,  "wb")
+                        try:
+                            x = f.read(16 * 1024)
+                            while x:
+                                output.write(x)
+                                if hasher:
+                                    hasher.update(x)
+                                x = f.read(16 * 1024)
+                        except Exception as e:
+                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                            raise
+                        finally:
+                            f.close()
+                            if output is not sys.stdout:
+                                output.close()
+                        if args.auth:
+                            logger.debug("Checking authentication")
+                            outname = doAuthenticate(outname, i, hasher.hexdigest())
+                except Exception as e:
+                    logger.error("Could not recover: %s: %s", i, e)
+                    #logger.exception(e)
+                    retcode += 1
 
-    else: # Not checksum, but acutal pathnames
-        for i in args.files:
-            i = os.path.abspath(i)
-            logger.info("Processing %s", i)
-            path = None
-            f = None
-            if args.last:
-                (bset, path, name) = findLastPath(tardis, i, args.reduce)
-                if bset is None:
-                    logger.error("Unable to find a latest version of %s", i)
-                    raise Exception("Unable to find a latest version of " + i)
-                logger.info("Found %s in backup set %s", i, name)
-            elif args.reduce:
-                path = Util.reducePath(tardis, bset, i, args.reduce, crypt)
-                logger.debug("Reduced path %s to %s", path, i)
-                if not path:
-                    logger.error("Unable to find a compute path for %s", i)
-                    raise Exception("Unable to compute path for " + i)
-            else:
-                path = i
+        else: # Not checksum, but acutal pathnames
+            for i in args.files:
+                try:
+                    i = os.path.abspath(i)
+                    logger.info("Processing %s", i)
+                    path = None
+                    f = None
+                    if args.last:
+                        (bset, path, name) = findLastPath(tardis, i, args.reduce)
+                        if bset is None:
+                            logger.error("Unable to find a latest version of %s", i)
+                            raise Exception("Unable to find a latest version of " + i)
+                        logger.info("Found %s in backup set %s", i, name)
+                    elif args.reduce:
+                        path = Util.reducePath(tardis, bset, i, args.reduce, crypt)
+                        logger.debug("Reduced path %s to %s", path, i)
+                        if not path:
+                            logger.error("Unable to find a compute path for %s", i)
+                            raise Exception("Unable to compute path for " + i)
+                    else:
+                        path = i
 
-            if args.crypt and crypt:
-                actualPath = crypt.encryptPath(path)
-            else:
-                actualPath = path
-            info = tardis.getFileInfoByPath(actualPath, bset)
-            if info:
-                retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
-            else:
-                logger.error("Could not recover info for %s", i)
-                retcode += 1
+                    if args.crypt and crypt:
+                        actualPath = crypt.encryptPath(path)
+                    else:
+                        actualPath = path
+                    info = tardis.getFileInfoByPath(actualPath, bset)
+                    if info:
+                        retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
+                    else:
+                        logger.error("Could not recover info for %s", i)
+                        retcode += 1
+                except Exception as e:
+                    logger.error("Could not recover: %s: %s", i, e)
+                    #logger.exception(e)
+    except KeyboardInterrupt:
+        logger.error("Recovery interupted")
 
     return retcode
 

@@ -153,12 +153,12 @@ class TardisFS(fuse.Fuse):
 
             self.mountpoint = res.mountpoint
 
+            self.log.info("TardsFS Version: %s", Tardis.__versionstring__)
             self.log.info("Database: %s", self.database)
             self.log.info("Client: %s", self.client)
-            self.log.info("Repoint Links: %s", self.repoint)
             self.log.info("MountPoint: %s", self.mountpoint)
             self.log.info("DBName: %s", self.dbname)
-            self.log.info("TardsFS Version: %s", Tardis.__versionstring__)
+            self.log.info("Repoint Links: %s", self.repoint)
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
@@ -585,9 +585,9 @@ class TardisFS(fuse.Fuse):
     @tracer
     def statfs ( self ):
         """ StatFS """
-        #self.log.info('CALL statfs')
-        if self.path:
-            fs = os.statvfs(self.path)
+        #self.log.info('CALL statfs: %s', self.path)
+        if isinstance(self.cacheDir, CacheDir):
+            fs = os.statvfs(self.cacheDir.root)
 
             st = fuse.Stat()
             st.f_bsize   = fs.f_bsize
