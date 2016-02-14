@@ -272,6 +272,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             realname = info['name']
             if args.crypt and crypt:
                 realname = crypt.decryptFilename(realname)
+            realname = realname.decode('utf-8')
 
             if name:
                 # This should only happen only one file specified.
@@ -306,6 +307,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     childInfo = tardis.getFileInfoByName(name, dirInode, bset)
                     if args.crypt and crypt:
                         name = crypt.decryptFilename(name)
+                    name = name.decode('utf-8')
                     if childInfo:
                         recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     else:

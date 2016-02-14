@@ -67,6 +67,8 @@ colors = {
     'default'   :  None
 }
 
+fsEncoding = sys.getfilesystemencoding()
+
 def setColors(s):
     global colors
     groups = s.split(':')
@@ -182,6 +184,7 @@ def collectDirContents(tardis, dirlist, crypt):
         dirInfo = {}
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
+            name = name.decode(fsEncoding)
             dirInfo[name] = y
             names.add(name)
         contents[bset['backupset']] = dirInfo
@@ -196,6 +199,7 @@ def collectDirContents2(tardis, dirList, crypt):
     query any directory entries that exist in here, and span each one over the approriate portions of the
     range.  Repeat for each range.
     """
+
     contents = {}
     for (x, y) in dirList:
         contents[x['backupset']] = {}
@@ -228,6 +232,7 @@ def collectDirContents2(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
+            name = name.decode(fsEncoding)
             names.add(name)
             for bset in r:
                 if (y['firstset'] <= bset['backupset'] <= y['lastset']):
