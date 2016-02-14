@@ -192,7 +192,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
     names1 = ([x['name'] for x in entries1])
     if crypt:
         names1 = map(crypt.decryptFilename, names1)
-    names1 = map(lambda x: x.decode('utf-c'), names1)
+    names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
     if bsets[1]:
@@ -201,7 +201,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
         names2 = [x['name'] for x in entries2]
         if crypt:
             names2 = map(crypt.decryptFilename, names2)
-        names2 = map(lambda x: x.decode('utf-c'), names2)
+        names2 = map(lambda x: x.decode('utf-8'), names2)
         names2 = sorted(names2)
     else:
         names2 = sorted(os.listdir(path))
