@@ -667,7 +667,7 @@ def processArgs():
     parser.add_argument('--long', '-l',     dest='long',     default=False, action='store_true',        help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',   default=False, action='store_true',        help='Show hidden files.')
     parser.add_argument('--reverse', '-r',   dest='reverse',   default=False, action='store_true',      help='Reverse the sort order')
-    parser.add_argument('--annotate', '-F', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
+    parser.add_argument('--annotate', '-f', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
@@ -695,8 +695,7 @@ def processArgs():
     passgroup= parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,       help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                          help='Read password from file')
-    pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                           help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=True,        help='Encrypt data.  Only valid if password is set')
@@ -721,7 +720,7 @@ def main():
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
 
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)

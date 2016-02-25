@@ -54,8 +54,9 @@ import TardisCrypto
 import CacheDir
 import RemoteDB
 
-import pycurl
+#import pycurl
 import urlparse
+import urllib
 
 #logger = logging.getLogger('UTIL')
 
@@ -213,17 +214,16 @@ def getTerminalSize():
 
 """
 Retrieve a password.
-Either takes a URL, a program name, a file, or a plain password string.
+Either takes a URL, a program name, a plain password string.
 Only one can be valid.
 Retrieves from the URL, program, or file if so specified.
 If a string is passed in, returns it.
 If the string is True or empty (''), it will use the getpass function to prompt on the
 terminal.
 """
-def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
+def getPassword(password, pwurl, pwprog, prompt='Password: '):
     methods = 0
     if password: methods += 1
-    if pwfile:   methods += 1
     if pwurl:    methods += 1
     if pwprog:   methods += 1
 
@@ -234,26 +234,17 @@ def getPassword(password, pwfile, pwurl, pwprog, prompt='Password: '):
         password = getpass.getpass(prompt=prompt)
         password.rstrip()       # Delete trailing characters
 
-    if pwfile:
-        with open(pwfile, "r") as f:
-            password = f.readline().rstrip()
-
     if pwurl:
-        buffer = StringIO.StringIO()
-        c = pycurl.Curl()
-        c.setopt(c.URL, pwurl)
-        c.setopt(c.WRITEDATA, buffer)
-        c.perform()
-        c.close()
-        password = buffer.getvalue().rstrip()
+        pwf = urllib.urlopen(pwurl)
+        password = pwf.readline().rstrip()
+        pwf.close()
 
     if pwprog:
         args = shlex.split(pwprog)
-        output =subprocess.check_output(args)
+        output = subprocess.check_output(args)
         password = output.split('\n')[0].rstrip()
 
     return password
-
 
 """
 Get the database, cachedir, and crypto object.
