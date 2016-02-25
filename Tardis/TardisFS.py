@@ -121,7 +121,6 @@ class TardisFS(fuse.Fuse):
             self.repoint        = False
             self.password       = None
             self.pwfile         = None
-            self.pwurl          = None
             self.pwprog         = None
             self.keys           = None
             self.dbname         = dbname
@@ -138,8 +137,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
             self.parser.add_option(mountopt="client",       help="Client to load database for")
             self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
-            self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file")
-            self.parser.add_option(mountopt="pwurl",        help="Read password from the specified URL")
+            self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file.  Can be a URL (HTTP/HTTPS or FTP)")
             self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
             self.parser.add_option(mountopt="keys",         help="Load keys from the specified file")
             self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
@@ -162,7 +160,7 @@ class TardisFS(fuse.Fuse):
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
-            password = Util.getPassword(self.password, self.pwfile, self.pwurl, self.pwprog, prompt="Password for %s: " % (self.client))
+            password = Util.getPassword(self.password, self.pwfile, self.pwprog, prompt="Password for %s: " % (self.client))
             self.password = None
 
             self.cache      = Cache.Cache(0, float(self.cachetime))
