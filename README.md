@@ -36,10 +36,10 @@ Features currently planned to be implemented:
 9. Space management.  ~~Multiple purge schedules for different priorities.~~  On demand purging when low on space.
 10. ~~Client side configuration files.~~ (as argument files)
 11. ~~Stand alone execution (no need for separate server)~~
-12. Remote access to data and files.
+12. ~~Remote access to data and files.~~
 13. ~~Read password without echo.~~
 
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, pycurl, requests, and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
