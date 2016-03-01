@@ -1,11 +1,11 @@
 ### BEGIN INIT INFO
-# Provides:          tardisd
+# Provides:          tardisremote
 # Required-Start:    networking
 # Required-Stop:     networking
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Tardis backup daemon
-# Description:       This fires up the tardis backup daemon
+# Short-Description: Tardis HTTP File Server
+# Description:       This fires up the tardis HTTP File Server
 ### END INIT INFO
 
 # Using the lsb functions to perform the operations.
