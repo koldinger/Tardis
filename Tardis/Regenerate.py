@@ -649,6 +649,8 @@ def main():
                     #logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
+    except Exception as e:
+        logger.error("Regeneration failed: %s", e)
 
     return retcode
 
