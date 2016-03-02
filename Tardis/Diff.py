@@ -85,7 +85,8 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories');
+    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s');
+    parser.add_argument('--list', '-l',         dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
@@ -118,7 +119,7 @@ def setcolor(line):
                 color = 'green'
             elif c == '!':
                 color = 'yellow'
-            elif c == '?':
+            elif c == '?' or c == '*':
                 color = 'cyan'
             else:
                 color = 'white'
@@ -143,6 +144,10 @@ def runDiff(f1, f2, name, then, now):
         diffs = difflib.context_diff(l1, l2, name, name, then, now, n = args.context)
 
     for line in diffs:
+        if args.list:
+            color = 'yellow' if args.color else 'white'
+            termcolor.cprint('File {} (versions {} and {}) differ.'.format(name, then, now), color)
+            break
         line = line.rstrip()
         termcolor.cprint(line, setcolor(line))
 
@@ -308,7 +313,7 @@ def main():
         if bsets[1]:
             now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'
         else:
-            now = time.asctime()
+            now = time.asctime() + '  (filesystem)'
 
         for f in args.files:
             diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
