@@ -30,7 +30,7 @@
 
 import os
 
-__version__ = "0.25"
+__version__ = "0.26"
 __buildversion__ = ''
 __versionstring__ = __version__
 

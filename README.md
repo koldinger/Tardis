@@ -17,6 +17,7 @@ Tardis consists of several components:
 * tardisfs (TardisFS.py): A FUSE based file system which provides views of the various backup sets.
 * regenerate (Regenerate.py): A program to retrieve an individual verson of the file without using the TardisFS
 * lstardis (List.py): List versions of files and directories in the database.
+* tardiff (Diff.py): Show the differences between versions of backed up files, and the current version.
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
@@ -36,10 +37,10 @@ Features currently planned to be implemented:
 9. Space management.  ~~Multiple purge schedules for different priorities.~~  On demand purging when low on space.
 10. ~~Client side configuration files.~~ (as argument files)
 11. ~~Stand alone execution (no need for separate server)~~
-12. Remote access to data and files.
+12. ~~Remote access to data and files.~~
 13. ~~Read password without echo.~~
 
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, pycurl, requests, and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
@@ -48,8 +49,8 @@ Future Releases
 ===============
 Several releases will be coming soon:
   * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
-  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.
-  * 0.26 Improved HTTP filesystem, allowing incremental retrieval of files, rather than having to retrieve full files on any access.
+  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.  Fixes for bugs.  
+  * 0.26 Improvements to all tools to bring compatibility together.  Functioning version of tardisremote.
   
 Installation
 ============

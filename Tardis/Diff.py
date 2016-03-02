@@ -68,10 +68,9 @@ def parseArgs():
     parser.add_argument("--backup",       nargs='+', dest='backup', default=[current], help="Backup set(s) to use")
 
     pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,      help='Read password from file')
-    pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,       help='Retrieve password from the specified URL')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,      help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                      help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
 
     parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
     parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
@@ -86,7 +85,8 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories');
+    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s');
+    parser.add_argument('--list', '-l',         dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
@@ -119,7 +119,7 @@ def setcolor(line):
                 color = 'green'
             elif c == '!':
                 color = 'yellow'
-            elif c == '?':
+            elif c == '?' or c == '*':
                 color = 'cyan'
             else:
                 color = 'white'
@@ -144,6 +144,10 @@ def runDiff(f1, f2, name, then, now):
         diffs = difflib.context_diff(l1, l2, name, name, then, now, n = args.context)
 
     for line in diffs:
+        if args.list:
+            color = 'yellow' if args.color else 'white'
+            termcolor.cprint('File {} (versions {} and {}) differ.'.format(name, then, now), color)
+            break
         line = line.rstrip()
         termcolor.cprint(line, setcolor(line))
 
@@ -192,6 +196,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
     names1 = ([x['name'] for x in entries1])
     if crypt:
         names1 = map(crypt.decryptFilename, names1)
+    names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
     if bsets[1]:
@@ -200,6 +205,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
         names2 = [x['name'] for x in entries2]
         if crypt:
             names2 = map(crypt.decryptFilename, names2)
+        names2 = map(lambda x: x.decode('utf-8'), names2)
         names2 = sorted(names2)
     else:
         names2 = sorted(os.listdir(path))
@@ -284,7 +290,7 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
         password = None
@@ -307,7 +313,7 @@ def main():
         if bsets[1]:
             now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'
         else:
-            now = time.asctime()
+            now = time.asctime() + '  (filesystem)'
 
         for f in args.files:
             diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
