@@ -32,9 +32,9 @@ def main():
             dbfiles = getdbfiles(conn, i + j)
             if os.path.isdir(path):
                 contents = os.listdir(path)
-                sigfiles = [x for x in contents if x.endswith(".sig")]
-                datafiles = [x for x in contents if not x.endswith(".sig")]
-
+                sigfiles  = set([x for x in contents if x.endswith(".sig")])
+                datafiles = set([x for x in contents if not x.endswith(".sig")])
+                
                 #print path, " :: ", len(contents), len(sigfiles), len(datafiles)
                 for sig in sigfiles:
                     data = sig[:-4]

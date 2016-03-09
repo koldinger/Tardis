@@ -65,7 +65,7 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
-    parser.add_argument("--backup",       nargs='+', dest='backup', default=[current], help="Backup set(s) to use")
+    parser.add_argument("--backup", '-B',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
 
     pwgroup = parser.add_mutually_exclusive_group()
     pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
@@ -189,7 +189,7 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
     return info, p
 
 
-def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then):
+def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
     # Collect the first directory contents
     (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
     entries1 = tardis.readDirectory((info1['inode'], info1['device']))
@@ -316,7 +316,10 @@ def main():
             now = time.asctime() + '  (filesystem)'
 
         for f in args.files:
-            diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
+            if bsets[1] is None and os.path.isdir(f):
+                diffDir(f, r, bsets, tardis, crypt, reducePath, now, then, recurse=args.recurse)
+            else:
+                diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
         pass
     except Exception as e:

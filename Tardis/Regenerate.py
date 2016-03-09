@@ -517,11 +517,16 @@ def main():
     args = parseArgs()
     logger = setupLogging(args)
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
-    args.password = None
-    (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
+    try:
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
+        args.password = None
+        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
 
-    r = Regenerator(cache, tardis, crypt=crypt)
+        r = Regenerator(cache, tardis, crypt=crypt)
+    except Exception as e:
+        logger.error("Regeneration failed: %s", e)
+        sys.exit(1)
+
 
     bset = False
 
