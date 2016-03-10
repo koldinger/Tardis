@@ -48,6 +48,7 @@ import Messages
 import Connection
 import CompressedBuffer
 import Tardis
+import Defaults
 
 import TardisDB
 import TardisCrypto
@@ -260,6 +261,11 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
 
     loc = urlparse.urlparse(dbLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
+        # If no port specified, insert the port
+        if loc.port is None:
+            netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
+            dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+        # get the RemoteURL object
         tardis = RemoteDB.RemoteDB(dbLoc, client, token=token)
         cache = tardis
     else:

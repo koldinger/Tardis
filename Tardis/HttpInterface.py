@@ -49,11 +49,11 @@ import CacheDir
 import Defaults
 
 
-basedir = Defaults.getDefault('TARDIS_DB')
-dbname  = Defaults.getDefault('TARDIS_DBNAME')
-port    = Defaults.getDefault('TARDIS_REMOTEPORT')
-configName = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
-pidFile = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
+basedir     = Defaults.getDefault('TARDIS_DB')
+dbname      = Defaults.getDefault('TARDIS_DBNAME')
+port        = Defaults.getDefault('TARDIS_REMOTE_PORT')
+configName  = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
+pidFile     = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
 
 configDefaults = {
     'Port'              : port,
