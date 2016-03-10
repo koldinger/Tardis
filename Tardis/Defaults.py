@@ -50,7 +50,7 @@ _defaults = {
                 'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
                 'TARDIS_JOURNAL'        : 'tardis.journal',
                 'TARDIS_SCHEMA'         : 'schema/tardis.sql',
-                'TARDIS_REMOTEPORT'	    : '7430',
+                'TARDIS_REMOTE_PORT'	: '7430',
                 'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
                 'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
                 'TARDIS_LS_COLORS'      : "gone=red:changed=cyan:moved=blue:header=green:name=white:error=red:default=white",
