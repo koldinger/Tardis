@@ -111,6 +111,10 @@ There is no mechanism for recovering a lost password.  If you lose it, you're do
 
 Passwords can be changed with the sonic utility.
 
+All client tools take a couple of password options.  `--password` or `-P` will allow you to specify a password on the command line, or if no password is specified, it will prompt you to enter one.  The second option is `--password-file` or `-F`, in which case you can specify a path to the file containing the password in plaintext.  The path can be either a file path (relative or absolute) on the current system, or a URL of a remote file (file:, http:, https:  or ftp:).  A third option is `--password-prog`, after which you can specify a program command line to generate a password.  The program should output the password to standard output, and the first line will be read and used as the password.
+
+Tardisfs supports all the same options, with slightly different syntax.  All are specified via the -o syntax to fuse mount.  `-o password=*password*` will use *password* as the password, `-o password=` will prompt for a password, `-o pwfile=*path*` will read the password from *path* (which accepts the same options as `--password-file` above), and `-o pwprog=*program*` will run *program*, same as `--password-prog` above.
+
 Running the Client without a Server locally
 ===========================================
 It is possible to run the tardis client without connecting to a remote server.  When doing this, the server is run as a subprocess under the client.
