@@ -156,87 +156,99 @@ Environment Variables
         <th>Variable
         <th>Description
         <th>Default
-        <th>tardis
-        <th>tardisd
-        <th>tardisfs
-        <th>regenerate
-        <th>lstardis
+        <th>tardis <th>tardisd <th>tardisfs <th>regenerate <th>lstardis <th> tardiff <th> tardisremote
     </tr>
     <tr>
         <td>TARDIS_DB
         <td>Location of the tardis database
         <td>/srv/tardis
-        <td>No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes
+        <td> No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_PORT
         <td>Port to use to connect to the Tardis Daemon
         <td> 7420
-        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No
+        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_DBNAME
         <td> Name of the database file containing tardis information
         <td> tardis.db
-        <td> No <td> Yes <td> Yes <td> Yes <td> Yes
+        <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_SERVER
         <td> Name (or IP address) of the tardis server
         <td> localhost
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_CLIENT
         <td> Name of the backup client.
         <td> Current hostname (essentialy output of /usr/bin/hostname)
-        <td> Yes <td> No <td> Yes <td> Yes <td> Yes
+        <td> Yes <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> No
     <tr>
         <td> TARDIS_DAEMON_CONFIG
         <td> Name of the file containing the daemon configuration
         <td> /etc/tardis/tardisd.cfg
-        <td> No (except in local case) <td> Yes <td> No <td> No <td> No
+        <td> No (except in local case) <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_CONFIG
         <td> Name of the file containing the configuration when running the daemon in local mode
         <td> /etc/tardis/tardisd.local.cfg
-        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No
+        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No <td> No <td> No
     <tr> 
         <td> TARDIS_EXCLUDES
         <td> Name of the file containing patterns to exclude below the current directory.
         <td> .tardis-excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_EXCLUDES
         <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
         <td> .tardis-local-excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_GLOBAL_EXCLUDES
         <td> Name of the file containing patterns to exclude globally
         <td> /etc/tardis/excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SKIPFILE
         <td> Name of a file whose presence excludes a current directory (and all directories below)
         <td> .tardis-skip
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_PIDFILE
         <td> File to indicate that the daemon is running.
         <td> /var/run/tardisd.pid
-        <td> No <td> Yes <td> No <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SCHEMA
         <td> File containing the schema for the database.
         <td> schema/tardis.sql
-        <td> No <td> Yes <td> No <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
        <td> TARDIS_LS_COLORS
        <td> Description of colors for lstardis
        <td> 
-       <td> No <td> No <td> No <td> No <td> Yes
+       <td> No <td> No <td> No <td> No <td> Yes <td> No <td> No
+
+    <tr>
+        <td> TARDIS_REMOTE_PORT
+        <td> Port used for the HTTP Remote interface
+        <td> 7430
+        <td> No <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
+    <tr>
+        <td> TARDIS_REMOTE_CONFIG
+        <td> Configuration file for tardisremote
+        <td> /etc/tardis/tardisremote.cfg
+        <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
+    <tr>
+        <td> TARDIS_REMOTE_PIDFILE
+        <td> Path to the pidfile for tardisremote daemon.
+        <td> /var/run/tardisremote.pid
+        <td> No <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
     <tr>
        <td> TARDIS_DEFAULTS
        <td> Location of a defaults file.
        <td> /etc/tardis/system.defaults
-       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
+       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
 </table>
 
 System Defaults
