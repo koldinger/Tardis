@@ -214,7 +214,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             #self.logger.debug("Is a directory: %s", name)
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
-                    self.db.extendFile(parent, f['name'])
+                    self.db.extendFileInode(parent, (inode, device))
                 else:
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
@@ -243,7 +243,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 fsize = f['size']
                 osize = old['size']
 
-                if (old["inode"] == inode) and (osize == fsize) and (old["mtime"] == f["mtime"]):
+                if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                     if not (old["checksum"] is None):
@@ -251,7 +251,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
-                            self.db.extendFile(parent, f['name'], old=fromPartial)
+                            self.db.extendFileInode(parent, (inode, device), old=fromPartial)
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             #self.logger.debug("Inserting new version %s", name)
@@ -1242,10 +1242,11 @@ def setConfig(self, args, config):
     # If the User or Group is set, attempt to determine the users
     # Note, these will throw exeptions if the User or Group is unknown.  Will get
     # passed up.
-    if args.user:
-        self.user = pwd.getpwnam(args.user).pw_uid
-    if args.group:
-        self.group = grp.getgrnam(args.group).gr_gid
+    if args.daemon:
+        if args.user:
+            self.user = pwd.getpwnam(args.user).pw_uid
+        if args.group:
+            self.group = grp.getgrnam(args.group).gr_gid
 
     # Get SSL set up, if it's been requested.
     self.ssl            = args.ssl

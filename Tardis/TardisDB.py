@@ -220,7 +220,7 @@ class TardisDB(object):
         now = time.time()
         try:
             c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
-                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
+                      "             VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
                       {"name": name, "now": now, "session": session, "priority": priority,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
                        "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
@@ -470,13 +470,26 @@ class TardisDB(object):
 
     def extendFile(self, parent, name, old=False, current=True):
         old = self._bset(old)
-        (parIno, parDev) = parent
         current = self._bset(current)
+        (parIno, parDev) = parent
         cursor = self.execute("UPDATE FILES "
                               "SET LastSet = :new "
                               "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
                               ":old BETWEEN FirstSet AND LastSet",
                               { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
+        return cursor.rowcount
+
+    def extendFileInode(self, parent, inode, old=False, current=True):
+        old = self._bset(old)
+        current = self._bset(current)
+        (parIno, parDev) = parent
+        (ino, dev) = inode
+        #self.logger.debug("ExtendFileInode: %s %s %s %s", parent, inode, current, old)
+        cursor = self.execute("UPDATE FILES "
+                              "SET LastSet = :new "
+                              "WHERE Parent = :parent AND ParentDev = :parentDev AND Inode = :inode AND Device = :device AND "
+                              ":old BETWEEN FirstSet AND LastSet",
+                              { "parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current })
         return cursor.rowcount
 
     def cloneDir(self, parent, new=True, old=False):
