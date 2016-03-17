@@ -37,6 +37,10 @@ import urllib
 import Tardis
 import ConnIdLogAdapter
 
+import requests_cache
+
+requests_cache.install_cache(backend='memory', expire_after=30.0)
+
 # Define a decorator that will wrap our functions in a retry mechanism
 # so that if the connection to the server fails, we can automatically
 # reconnect.
