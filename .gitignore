@@ -13,3 +13,6 @@ Tardis.egg-info/
 Tardis_Backup.egg-info/
 build/
 dist/
+cache/
+cache2/
+tmp/
