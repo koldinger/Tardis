@@ -303,8 +303,7 @@ def _removeOrphans(db, cache):
         except OSError:
             logger.warning("No checksum file for checksum %s", c)
         except Exception as e:
-            if server.exceptions:
-                logger.exception(e)
+            logger.error("Error purging orphans: %s", e)
         db.deleteChecksum(c)
     return (count, size)
 
@@ -473,7 +472,13 @@ def main():
             args.newpw = None
             return changePassword(crypt, crypt2)
 
-        (db, cache) = getDB(crypt)
+        db = None
+        cache = None
+        try:
+            (db, cache) = getDB(crypt)
+        except Exception as e:
+            logger.critical("Unable to connect to database: %s", e)
+            sys.exit(1)
 
         if args.command == 'keys':
             return moveKeys(db, crypt)
