@@ -67,10 +67,17 @@ logger = None
 def getDB(crypt, new=False, keyfile=None):
     token = crypt.createToken() if crypt else None
     loc = urlparse.urlparse(args.database)
+    # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
         if (new):
             raise Exception("New clients cannot be created over HTTP/HTTPS.  Must be created locally on the server")
-        tardisdb = RemoteDB.RemoteDB(args.database, args.client, token=token)
+        # If no port specified, insert the port
+        if loc.port is None:
+            netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
+            dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+        else:
+            dbLoc = args.database
+        tardisdb = RemoteDB.RemoteDB(dbLoc, args.client, token=token)
         cache = tardisdb
     else:
         basedir = os.path.join(args.database, args.client)
