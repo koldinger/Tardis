@@ -759,7 +759,7 @@ class TardisDB(object):
 
     def listPurgeSets(self, priority, timestamp, current=False):
         backupset = self._bset(current)
-        # First, purge out the backupsets that don't match
+        # Select all sets that are purgeable.
         c = self.cursor.execute("SELECT " + _backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
@@ -767,10 +767,12 @@ class TardisDB(object):
 
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         backupset = self._bset(current)
-        # First, purge out the backupsets that don't match
+        # Select all sets that are both purgeable and incomplete
+        # Note: For some reason that I don't understand, the timestamp must be cast into a string here, to work with the coalesce operator
+        # If it comes from the HTTPInterface as a string, the <= timestamp doesn't seem to work.
         c = self.cursor.execute("SELECT " + _backupSetInfoFields +
                                 " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+                            {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield(row)
 
