@@ -30,12 +30,14 @@
 
 import collections
 import time
+import logging
 
 class Cache(object):
-    def __init__(self, size, timeout):
+    def __init__(self, size, timeout, name='Cache'):
         self.size = size
         self.timeout = timeout
         self.cache = collections.OrderedDict()
+        self.logger = logging.getLogger(name)
 
     def insert(self, key, value, now=None, timeout=None):
         # Use the regular timeout if it's specified
@@ -49,17 +51,23 @@ class Cache(object):
             timeout += now
 
         self.cache[key] = (value, timeout)
+        self.logger.debug("Inserting key %s", key)
         if self.size != 0 and len(self.cache) > self.size:
-            self.cache.popitem(False)
+            self.cache.flush()
+            if len(self.cache) > self.size:
+                self.cache.popitem(False)
         
     def retrieve(self, key):
         if not key in self.cache:
+            self.logger.debug("Retrieving key %s failed", key)
             return None
         (value, timeout) = self.cache[key]
         if timeout and timeout < time.time():
+            self.logger.debug("Removing timedout key %s", key)
             del self.cache[key]
             self.flush()
             return None
+        self.logger.debug("Retrieving key %s", key)
         return value
 
     def delete(self, key):
