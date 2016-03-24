@@ -40,7 +40,7 @@ Features currently planned to be implemented:
 12. ~~Remote access to data and files.~~
 13. ~~Read password without echo.~~
 
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
@@ -111,6 +111,10 @@ There is no mechanism for recovering a lost password.  If you lose it, you're do
 
 Passwords can be changed with the sonic utility.
 
+All client tools take a couple of password options.  `--password` or `-P` will allow you to specify a password on the command line, or if no password is specified, it will prompt you to enter one.  The second option is `--password-file` or `-F`, in which case you can specify a path to the file containing the password in plaintext.  The path can be either a file path (relative or absolute) on the current system, or a URL of a remote file (file:, http:, https:  or ftp:).  A third option is `--password-prog`, after which you can specify a program command line to generate a password.  The program should output the password to standard output, and the first line will be read and used as the password.
+
+Tardisfs supports all the same options, with slightly different syntax.  All are specified via the -o syntax to fuse mount.  `-o password=*password*` will use *password* as the password, `-o password=` will prompt for a password, `-o pwfile=*path*` will read the password from *path* (which accepts the same options as `--password-file` above), and `-o pwprog=*program*` will run *program*, same as `--password-prog` above.
+
 Running the Client without a Server locally
 ===========================================
 It is possible to run the tardis client without connecting to a remote server.  When doing this, the server is run as a subprocess under the client.
@@ -152,87 +156,99 @@ Environment Variables
         <th>Variable
         <th>Description
         <th>Default
-        <th>tardis
-        <th>tardisd
-        <th>tardisfs
-        <th>regenerate
-        <th>lstardis
+        <th>tardis <th>tardisd <th>tardisfs <th>regenerate <th>lstardis <th> tardiff <th> tardisremote
     </tr>
     <tr>
         <td>TARDIS_DB
         <td>Location of the tardis database
         <td>/srv/tardis
-        <td>No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes
+        <td> No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_PORT
         <td>Port to use to connect to the Tardis Daemon
         <td> 7420
-        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No
+        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_DBNAME
         <td> Name of the database file containing tardis information
         <td> tardis.db
-        <td> No <td> Yes <td> Yes <td> Yes <td> Yes
+        <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
     <tr>
         <td> TARDIS_SERVER
         <td> Name (or IP address) of the tardis server
         <td> localhost
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_CLIENT
         <td> Name of the backup client.
         <td> Current hostname (essentialy output of /usr/bin/hostname)
-        <td> Yes <td> No <td> Yes <td> Yes <td> Yes
+        <td> Yes <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> No
     <tr>
         <td> TARDIS_DAEMON_CONFIG
         <td> Name of the file containing the daemon configuration
         <td> /etc/tardis/tardisd.cfg
-        <td> No (except in local case) <td> Yes <td> No <td> No <td> No
+        <td> No (except in local case) <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_CONFIG
         <td> Name of the file containing the configuration when running the daemon in local mode
         <td> /etc/tardis/tardisd.local.cfg
-        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No
+        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No <td> No <td> No
     <tr> 
         <td> TARDIS_EXCLUDES
         <td> Name of the file containing patterns to exclude below the current directory.
         <td> .tardis-excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_LOCAL_EXCLUDES
         <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
         <td> .tardis-local-excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_GLOBAL_EXCLUDES
         <td> Name of the file containing patterns to exclude globally
         <td> /etc/tardis/excludes
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SKIPFILE
         <td> Name of a file whose presence excludes a current directory (and all directories below)
         <td> .tardis-skip
-        <td> Yes <td> No <td> No <td> No <td> No
+        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_PIDFILE
         <td> File to indicate that the daemon is running.
         <td> /var/run/tardisd.pid
-        <td> No <td> Yes <td> No <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
         <td> TARDIS_SCHEMA
         <td> File containing the schema for the database.
         <td> schema/tardis.sql
-        <td> No <td> Yes <td> No <td> No <td> No
+        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
     <tr>
        <td> TARDIS_LS_COLORS
        <td> Description of colors for lstardis
        <td> 
-       <td> No <td> No <td> No <td> No <td> Yes
+       <td> No <td> No <td> No <td> No <td> Yes <td> No <td> No
+
+    <tr>
+        <td> TARDIS_REMOTE_PORT
+        <td> Port used for the HTTP Remote interface
+        <td> 7430
+        <td> No <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
+    <tr>
+        <td> TARDIS_REMOTE_CONFIG
+        <td> Configuration file for tardisremote
+        <td> /etc/tardis/tardisremote.cfg
+        <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
+    <tr>
+        <td> TARDIS_REMOTE_PIDFILE
+        <td> Path to the pidfile for tardisremote daemon.
+        <td> /var/run/tardisremote.pid
+        <td> No <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
     <tr>
        <td> TARDIS_DEFAULTS
        <td> Location of a defaults file.
        <td> /etc/tardis/system.defaults
-       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
+       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
 </table>
 
 System Defaults

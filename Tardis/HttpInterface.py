@@ -49,11 +49,11 @@ import CacheDir
 import Defaults
 
 
-basedir = Defaults.getDefault('TARDIS_DB')
-dbname  = Defaults.getDefault('TARDIS_DBNAME')
-port    = Defaults.getDefault('TARDIS_REMOTEPORT')
-configName = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
-pidFile = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
+basedir     = Defaults.getDefault('TARDIS_DB')
+dbname      = Defaults.getDefault('TARDIS_DBNAME')
+port        = Defaults.getDefault('TARDIS_REMOTE_PORT')
+configName  = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
+pidFile     = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
 
 configDefaults = {
     'Port'              : port,
@@ -69,7 +69,8 @@ configDefaults = {
     'CertFile'          : None,
     'KeyFile'           : None,
     'PidFile'           : pidFile,
-    'Compress'          : str(True)
+    'Compress'          : str(True),
+    'AllowCache'        : str(True)
 }
 
 app = Flask(__name__)
@@ -79,6 +80,7 @@ dbs = {}
 caches= {}
 
 allowCompress = False
+allowCache = False
 
 args = None
 config = None
@@ -106,7 +108,7 @@ def compressMsg(string, threshold=1024):
             return (comp, True)
     return (string, False)
 
-def createResponse(string, compress=True):
+def createResponse(string, compress=True, cacheable=True):
     if compress and allowCompress:
         app.logger.debug("Attempting to compress: %d", len(string))
         (data, compressed) = compressMsg(string)
@@ -115,6 +117,9 @@ def createResponse(string, compress=True):
             response.headers['Content-Encoding'] = 'deflate'
     else:
         response = make_response(string)
+    if cacheable and allowCache:
+        response.headers['Cache-Control'] = 'max-age=300'
+    app.logger.debug("Response: %s", str(response.headers))
     return response
 
 @app.route('/')
@@ -222,7 +227,6 @@ def readDirectory(backupset, device, inode):
         directory.append(makeDict(x))
     return createResponse(json.dumps(directory))
 
-
 @app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
 def readDirectoryForRange(device, inode, first, last):
     #app.logger.info("readDirectoryForRange Invoked: %d (%d,%d) %d %d", inode, device, first, last)
@@ -268,7 +272,7 @@ def getFirstBackupSet(backupset, pathname):
 def getChainLength(checksum):
     #app.logger.info("getChainLength Invoked: d %s", checksum)
     db = getDB()
-    return json.dumps(db.getChainLength(checksum))
+    return createResponse(json.dumps(db.getChainLength(checksum)))
 
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
@@ -287,7 +291,7 @@ def getFileData(checksum):
 def getConfigValue(name):
     db = getDB()
     #app.logger.info("getConfigValue Invoked: %s", name)
-    return json.dumps(db.getConfigValue(name))
+    return createResponse(json.dumps(db.getConfigValue(name)))
 
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
@@ -376,7 +380,8 @@ def processArgs():
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
-    parser.add_argument('--compress',           dest='compress',        default=config.getboolean(t, 'Compress'), help='Compress data going out')
+    parser.add_argument('--compress',           dest='compress',        action=Util.StoreBoolean, default=config.getboolean(t, 'Compress'), help='Compress data going out')
+    parser.add_argument('--cache',              dest='cache',           action=Util.StoreBoolean, default=config.getboolean(t, 'AllowCache'), help='Allow caching')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,   help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -407,12 +412,14 @@ def setupLogging():
     return logger
 
 def setup():
-    global args, config, logger, allowCompress
+    global args, config, logger, allowCompress, allowCache
     logging.basicConfig(loglevel=logging.INFO)
     (args, config) = processArgs()
     logger = setupLogging()
     if args.compress:
         allowCompress = True
+    if args.cache:
+        allowCache = True
 
 def main_flask():
     setup()

@@ -61,7 +61,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
 
-_schemaVersion = 5
+_schemaVersion = 6
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -220,7 +220,7 @@ class TardisDB(object):
         now = time.time()
         try:
             c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
-                      "            VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
+                      "             VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
                       {"name": name, "now": now, "session": session, "priority": priority,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
                        "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
@@ -470,13 +470,26 @@ class TardisDB(object):
 
     def extendFile(self, parent, name, old=False, current=True):
         old = self._bset(old)
-        (parIno, parDev) = parent
         current = self._bset(current)
+        (parIno, parDev) = parent
         cursor = self.execute("UPDATE FILES "
                               "SET LastSet = :new "
                               "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
                               ":old BETWEEN FirstSet AND LastSet",
                               { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
+        return cursor.rowcount
+
+    def extendFileInode(self, parent, inode, old=False, current=True):
+        old = self._bset(old)
+        current = self._bset(current)
+        (parIno, parDev) = parent
+        (ino, dev) = inode
+        #self.logger.debug("ExtendFileInode: %s %s %s %s", parent, inode, current, old)
+        cursor = self.execute("UPDATE FILES "
+                              "SET LastSet = :new "
+                              "WHERE Parent = :parent AND ParentDev = :parentDev AND Inode = :inode AND Device = :device AND "
+                              ":old BETWEEN FirstSet AND LastSet",
+                              { "parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current })
         return cursor.rowcount
 
     def cloneDir(self, parent, new=True, old=False):
@@ -746,7 +759,7 @@ class TardisDB(object):
 
     def listPurgeSets(self, priority, timestamp, current=False):
         backupset = self._bset(current)
-        # First, purge out the backupsets that don't match
+        # Select all sets that are purgeable.
         c = self.cursor.execute("SELECT " + _backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                             {"priority": priority, "timestamp": timestamp, "backupset": backupset})
         for row in c:
@@ -754,10 +767,12 @@ class TardisDB(object):
 
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         backupset = self._bset(current)
-        # First, purge out the backupsets that don't match
+        # Select all sets that are both purgeable and incomplete
+        # Note: For some reason that I don't understand, the timestamp must be cast into a string here, to work with the coalesce operator
+        # If it comes from the HTTPInterface as a string, the <= timestamp doesn't seem to work.
         c = self.cursor.execute("SELECT " + _backupSetInfoFields +
                                 " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+                            {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield(row)
 

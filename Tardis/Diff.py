@@ -65,22 +65,22 @@ def parseArgs():
     parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
     parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
-    parser.add_argument("--backup", '-B',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
+    parser.add_argument("--backup", '-b',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
 
     pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                      help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,       help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                          help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean, help='Are files encyrpted, if password is specified. Default: %(default)s')
-    parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
+    parser.add_argument('--crypt',                  dest='crypt',   default=True, action=Util.StoreBoolean,     help='Are files encrypted, if password is specified. Default: %(default)s')
+    parser.add_argument('--keys',                   dest='keys',    default=None,                               help='Load keys from file.')
 
-    parser.add_argument('--color',          dest='color', default=isatty, action=Util.StoreBoolean, help='Use colors')
+    parser.add_argument('--color',                  dest='color',   default=isatty, action=Util.StoreBoolean,   help='Use colors')
 
     diffgroup = parser.add_mutually_exclusive_group()
-    diffgroup.add_argument('--unified', '-u',  dest='unified', type=int, default=0, nargs='?', const=3,          help='Generate unified diff')
-    diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,          help='Generate context diff')
-    diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',               help='Generate NDiff style diff')
+    diffgroup.add_argument('--unified', '-u',  dest='unified', type=int, default=0, nargs='?', const=3,         help='Generate unified diff')
+    diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,         help='Generate context diff')
+    diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',              help='Generate NDiff style diff')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')

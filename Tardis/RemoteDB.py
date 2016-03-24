@@ -37,6 +37,10 @@ import urllib
 import Tardis
 import ConnIdLogAdapter
 
+import requests_cache
+
+requests_cache.install_cache(backend='memory', expire_after=30.0)
+
 # Define a decorator that will wrap our functions in a retry mechanism
 # so that if the connection to the server fails, we can automatically
 # reconnect.
@@ -71,9 +75,9 @@ def fs_encode(val):
 class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
-    headers = { "Accept-Encoding": "deflate", "user-agent": "TardisDB," + Tardis.__versionstring__ }
+    headers = {}
 
-    def __init__(self, url, host, prevSet=None, extra=None, token=None, verify=False):
+    def __init__(self, url, host, prevSet=None, extra=None, token=None, compress=True, verify=False):
         self.logger=logging.getLogger('Remote')
         self.baseURL = url
         if not url.endswith('/'):
@@ -82,6 +86,10 @@ class RemoteDB(object):
         self.verify = verify
         self.token = token
         self.host = host
+        self.headers = { "user-agent": "TardisDB-" + Tardis.__versionstring__ }
+
+        if compress:
+            self.headers['Accept-Encoding'] = "deflate"
 
         self.connect()
 
@@ -158,7 +166,7 @@ class RemoteDB(object):
     def getFileInfoByName(self, name, parent, current=True):
         bset = self._bset(current)
         (inode, device) = parent
-        name = urllib.quote_plus(name, '/')
+        name = urllib.quote(name, '/')
         r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -168,7 +176,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        path = urllib.quote_plus(path, '/')
+        path = urllib.quote(path, '/')
         r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -209,7 +217,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        path = urllib.quote_plus(path, '/')
+        path = urllib.quote(path, '/')
         r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()

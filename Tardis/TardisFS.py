@@ -93,6 +93,7 @@ def getDepth(path):
 def getParts(path):
     """
     Return the slash-separated parts of a given path as a list
+    Namely, the backupset and the path within the set
     """
     if path == '/':
         return [['/']]
@@ -131,7 +132,7 @@ class TardisFS(fuse.Fuse):
             self.authenticate   = True
 
             self.crypt      = None
-            #logging.basicConfig(level=logging.INFO)
+            logging.basicConfig(level=logging.WARNING)
             self.log = logging.getLogger("TardisFS")
 
             self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
@@ -164,10 +165,10 @@ class TardisFS(fuse.Fuse):
             self.password = None
 
             self.cache      = Cache.Cache(0, float(self.cachetime))
-            self.fileCache  = Cache.Cache(0, float(self.cachetime))
+            self.fileCache  = Cache.Cache(0, float(self.cachetime), 'FileCache')
 
-            if password:
-                self.crypt = TardisCrypto.TardisCrypto(password, self.client)
+            #if password:
+            #    self.crypt = TardisCrypto.TardisCrypto(password, self.client)
             (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname)
             password = None
 
@@ -253,7 +254,7 @@ class TardisFS(fuse.Fuse):
         # Not in the cache, look things up
         #self.log.debug("File info for %s not in cache", path)
         (head, tail) = os.path.split(path)
-        data = (bsInfo, dInfo) = self.getDirInfo(head)
+        data = self.getDirInfo(head)
         if data:
             bsInfo, dInfo = data
         else:

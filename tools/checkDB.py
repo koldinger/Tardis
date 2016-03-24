@@ -15,8 +15,14 @@ def hexcount(lower, upper, digits):
 
 def getdbfiles(conn, prefix):
     prefix += "%"
+    ret = set()
     cur = conn.execute('SELECT Checksum FROM Checksums WHERE Checksum LIKE :prefix AND IsFile = 1', {"prefix": prefix})
-    ret = [i[0] for i in cur.fetchall()]
+    while true:
+        batch = cur.fetchmany()
+        if not batch:
+            break
+        for i in batch:
+            ret.add(i[0])
     return ret
 
 def main():
