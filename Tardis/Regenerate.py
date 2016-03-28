@@ -527,7 +527,6 @@ def main():
         logger.error("Regeneration failed: %s", e)
         sys.exit(1)
 
-
     bset = False
 
     if args.date:
@@ -558,6 +557,8 @@ def main():
     output    = sys.stdout
     outname   = None
     linkDB    = None
+
+    owMode    = overwriteNames[args.overwrite]
 
     if args.output:
         if len(args.files) > 1:
