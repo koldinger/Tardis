@@ -509,8 +509,8 @@ class bidict(dict):
 """
 Get a hash function.  Configurable.
 """
-def getHash(crypt=None, func=hashlib.md5):
-    if crypt:
+def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
+    if crypt and doCrypt:
         return crypt.getHash(func)
     else:
         return func()
