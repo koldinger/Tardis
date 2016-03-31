@@ -123,8 +123,8 @@ class Regenerator:
                 self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
                 readsize += len(digest)
                 if digest != hmac.digest():
-                    self.logger.info("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), hmac.hexdigest())
-                    raise RegenerateException("HMAC did not authenticate. Found %s, Expected %s" % (hmac.hexdigest(), binascii.hexlify(digest)))
+                    self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), hmac.hexdigest())
+                    raise RegenerateException("HMAC did not authenticate.")
                 pt = self.crypt.unpad(pt)
             outfile.write(pt)
             rem -= readsize
