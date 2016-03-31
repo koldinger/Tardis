@@ -80,7 +80,7 @@ class Connection(object):
                 raise Exception("Unknown protocol: {}".format(message))
 
             # Create a BACKUP message
-            data = {
+            message = {
                 'message'   : 'BACKUP',
                 'host'      : client,
                 'encoding'  : encoding,
@@ -93,10 +93,9 @@ class Connection(object):
                 'compress'  : compress
             }
             if token:
-                data['token'] = token
+                message['token'] = token
             # BACKUP { json message }
-            message = json.dumps(data)
-            self.put(message)
+            self.put(json.dumps(message))
 
             message = self.sock.recv(1024).strip()
             fields = json.loads(message)
