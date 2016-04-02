@@ -34,6 +34,8 @@ import tempfile
 import sys
 import urllib
 
+import os, os.path
+
 import Tardis
 import ConnIdLogAdapter
 
@@ -146,12 +148,14 @@ class RemoteDB(object):
 
     @reconnect
     def getBackupSetInfo(self, name):
+        name = urllib.quote(name, '')
         r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getBackupSetDetails(self, name):
+        name = urllib.quote(name, '')
         r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
