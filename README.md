@@ -418,3 +418,20 @@ If this file is used, it must NOT be lost.  If you lose the keys file, there is 
 able to recover it.
 
 The contents of this file are kept encrypted.
+
+Notes on Data Storage
+=====================
+Data is stored in a database directory on the backup server.  There is one directory for each client backedup, and named based on the client name.
+
+Within this directory are several files:
+*  tardis.db - A SQLite3 database containing the metadata of all the files.
+*  tardis.db.{date}-{time}.gz - Several backup databases containing the last few database snapshots, in case the main database becomes corrupted.
+*  tardis.journal - A text file containing enough information to recover the contents of various files, namely the hash value of the file, it's basis file (None if it is not a delta, otherwise the hash of the delta file), and finally it's initialization vector.
+
+There are also up to 256 subdirectories, number in hex from 00-ff, containing the data.  Within these are a second level of subdirectories, which then contain the actual data.  The actual data for each individual file is stored in named with the hash value (either the MD5, or the HMAC-MD5, if a password is set) of the contents of the file.  The contents is the fully reconstructed contents, not the actual contents of the current file.
+
+If the data is unencrypted, it is stored directly in the file, as either the raw data of the file (possibly compressed, if the client so specified) or as an rdiff delta.
+
+If the data is encrypted, the above data is encapsulated in the following format: the first 16 bytes (128 bits) are the initilization vector for the encryption, currently AES-256-CBC.  After this comes the data, as above, encrypted.  This data is padded ala PKCS#7, in binary.  The last 64 bytes (512 bits) of the file contain an HMAC of the data (including the PAD) using HMAC-SHA512.
+
+Along with each file xxx, there is a corresponding file xxx.sig, containing the rdiff signature of the file.
