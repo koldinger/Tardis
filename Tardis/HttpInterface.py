@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from flask import Flask, session, request, url_for, escape, abort, redirect, send_file, make_response
+from flask import Flask, Response, session, request, url_for, escape, abort, redirect, send_file, make_response
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
@@ -274,16 +274,32 @@ def getChainLength(checksum):
     db = getDB()
     return createResponse(json.dumps(db.getChainLength(checksum)))
 
+_blocksize = 127 * 1024
+def _stream(f):
+    try:
+        r = f.read(_blocksize)
+        while (r):
+            yield r
+            r = f.read(_blocksize)
+    except Exception as e:
+        app.logger.exception(e)
+    finally:
+        f.close()
+
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
     #app.logger.info("getFileData Invoked: %s", checksum)
-    if not 'host' in session:
-        abort(401)
+    db = getDB()
     host = session['host']
     cache = caches[host]
     try:
+        ckinfo = db.getChecksumInfo(checksum)
         ckfile = cache.open(checksum, "rb")
-        return send_file(ckfile)
+        #ckfile = os.path.abspath(cache.path(checksum))
+        #return send_file(ckfile)
+        resp = Response(_stream(ckfile))
+        resp.headers['Content-Length'] = ckinfo['disksize']
+        return resp
     except:
         abort(404)
 

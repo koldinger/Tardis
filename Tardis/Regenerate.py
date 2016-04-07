@@ -71,6 +71,9 @@ OW_OLDER = 3
 overwriteNames = { 'never': OW_NEVER, 'always': OW_ALWAYS, 'newer': OW_NEWER, 'older': OW_OLDER }
 owMode = OW_NEVER
 
+errors = 0
+
+
 class RegenerateException(Exception):
     def __init__(self, value):
         self.value = value
@@ -189,6 +192,7 @@ class Regenerator:
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
+        global errors
         self.logger.info("Recovering file: {}".format(filename))
         name = filename
         if self.crypt and not nameEncrypted:
@@ -206,6 +210,7 @@ class Regenerator:
         except Exception as e:
             #logger.exception(e)
             self.logger.error("Error recovering file: %s: %s", filename, str(e))
+            errors += 1
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
 
@@ -267,7 +272,6 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     skip = False
     hasher = None
     try:
-        logger.info("Recovering object %s", path)
         if info:
             realname = info['name']
             if args.crypt and crypt:
@@ -284,6 +288,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 skip = True
                 logger.warning("Skipping existing file: %s", path)
 
+
             # First, determine if we're in a linking situation
             if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
                 key = (info['inode'], info['device'])
@@ -295,9 +300,10 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     linkDB[key] = outname
 
             if info['dir']:
+                logger.info("Processing directory %s", path)
                 contents = tardis.readDirectory((info['inode'], info['device']), bset)
                 if not outname:
-                    logger.error("Cannot regenerate directory %s without outputdir specified", path)
+                    #logger.error("Cannot regenerate directory %s without outputdir specified", path)
                     raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
                 if not os.path.exists(outname):
                     os.mkdir(outname)
@@ -313,6 +319,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     else:
                         retCode += 1
             elif not skip:
+                logger.info("Recovering file %s", path)
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum, authenticate)
 
@@ -487,7 +494,8 @@ def parseArgs():
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file. Default: %(default)s')
     parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
     parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file. Default: %(default)s')
-    parser.add_argument('--overwrite-mode', '-M', dest='overwrite', default='never', choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files. Default: %(default)s')
+    parser.add_argument('--overwrite', '-O', dest='overwrite', default='never', const='always', nargs='?',
+                        choices=['always', 'newer', 'older', 'never'], help='Mode for handling existing files. Default: %(default)s')
 
     parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
@@ -657,6 +665,9 @@ def main():
         logger.error("Recovery interupted")
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
+
+    if errors:
+        logger.warning("%d files could not be recovered.")
 
     return retcode
 
