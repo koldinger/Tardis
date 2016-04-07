@@ -71,6 +71,9 @@ OW_OLDER = 3
 overwriteNames = { 'never': OW_NEVER, 'always': OW_ALWAYS, 'newer': OW_NEWER, 'older': OW_OLDER }
 owMode = OW_NEVER
 
+errors = 0
+
+
 class RegenerateException(Exception):
     def __init__(self, value):
         self.value = value
@@ -189,6 +192,7 @@ class Regenerator:
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
+        global errors
         self.logger.info("Recovering file: {}".format(filename))
         name = filename
         if self.crypt and not nameEncrypted:
@@ -206,6 +210,7 @@ class Regenerator:
         except Exception as e:
             #logger.exception(e)
             self.logger.error("Error recovering file: %s: %s", filename, str(e))
+            errors += 1
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
 
@@ -660,6 +665,9 @@ def main():
         logger.error("Recovery interupted")
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
+
+    if errors:
+        logger.warning("%d files could not be recovered.")
 
     return retcode
 
