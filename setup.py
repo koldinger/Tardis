@@ -58,4 +58,16 @@ setup(  name                    = 'Tardis-Backup',
                     'tardisremote = Tardis.HttpInterface:tornado',
                 ],
         },
+        classifiers = [
+                'License :: OSI Approved :: MIT License',
+                'Development Status :: 4 - Beta',
+                'Intended Audience :: Developers',
+                'Intended Audience :: System Administrators',
+                'Topic :: System :: Archiving :: Backup',
+                'Programming Language :: Python',
+                'Programming Language :: Python :: 2.7'
+                'Operating System :: MacOS :: MacOS X',
+                'Operating System :: POSIX',
+                'Operating System :: POSIX :: Linux',
+        ]
     )
