@@ -28,9 +28,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Crypto.Cipher import AES, Blowfish
-from Crypto.Protocol.KDF import PBKDF2
-import Crypto.Random
+from Cryptodome.Cipher import AES, Blowfish
+from Cryptodome.Protocol.KDF import PBKDF2
+import Cryptodome.Random
 import socket
 import hashlib
 import hmac
@@ -55,7 +55,7 @@ class TardisCrypto:
     ivLength    = _blocksize
 
     def __init__(self, password, client=None):
-        self._random = Crypto.Random.new()
+        self._random = Cryptodome.Random.new()
         if client == None:
             client = Defaults.getDefault('TARDIS_CLIENT')
 

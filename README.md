@@ -40,7 +40,7 @@ Features currently planned to be implemented:
 12. ~~Remote access to data and files.~~
 13. ~~Read password without echo.~~
 
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycrypto, daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, and termcolor packages.
 Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
@@ -56,8 +56,8 @@ Installation
 ============
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python development
-    * Fedora: yum install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools
-    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools
+    * Fedora: yum install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp
+    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools gmp
   * Run the python setup:
     * python setup.py install
 
