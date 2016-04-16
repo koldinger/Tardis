@@ -42,7 +42,7 @@ import Tardis
 import Util
 import TardisDB
 import TardisCrypto
-import Regenerate
+import Regenerator
 import CacheDir
 import Defaults
 
@@ -308,7 +308,7 @@ def main():
         if len(bsets) == 1:
             bsets.append(None)
 
-        r = Regenerate.Regenerator(cache, tardis, crypt)
+        r = Regenerator.Regenerator(cache, tardis, crypt)
         then = time.asctime(time.localtime(float(bsets[0]['starttime']))) + '  (' + bsets[0]['name'] + ')'
         if bsets[1]:
             now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'

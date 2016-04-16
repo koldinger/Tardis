@@ -51,7 +51,7 @@ import Tardis
 import TardisDB
 import RemoteDB
 import CacheDir
-import Regenerate
+import Regenerator
 import TardisCrypto
 import Util
 import Cache
@@ -180,7 +180,7 @@ class TardisFS(fuse.Fuse):
                 self.authenticate = False
 
             # Create a regenerator.
-            self.regenerator = Regenerate.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
+            self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
 
             self.log.debug('Init complete.')

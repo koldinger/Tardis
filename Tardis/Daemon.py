@@ -64,7 +64,7 @@ import ConnIdLogAdapter
 import Messages
 import CacheDir
 import TardisDB
-import Regenerate
+import Regenerator
 import Util
 import Defaults
 import Connection
@@ -466,7 +466,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             outfile.write(sig)
                             outfile.close()
 
-                        except (librsync.LibrsyncError, Regenerate.RegenerateException) as e:
+                        except (librsync.LibrsyncError, Regenerator.RegenerateException) as e:
                             self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
                 # TODO: Break the signature out of here.
                 response = {
@@ -906,7 +906,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                     numbackups=self.server.dbbackups,
                                     journal=journal)
 
-        self.regenerator = Regenerate.Regenerator(self.cache, self.db)
+        self.regenerator = Regenerator.Regenerator(self.cache, self.db)
         return ret
 
     def startSession(self, name, force):
