@@ -343,8 +343,7 @@ def parseArgs():
     bsetParser = argparse.ArgumentParser(add_help=False)
     bsetgroup = bsetParser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
-    bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
-    #bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"),
+    bsetgroup.add_argument("--date", "-d",   help="Use last backupset before date", dest='date', default=None)
 
     purgeParser= argparse.ArgumentParser(add_help=False)
     purgeParser.add_argument('--priority',       dest='priority',   default=0, type=int,                   help='Maximum priority backupset to purge')
