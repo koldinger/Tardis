@@ -763,7 +763,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        #logger.exception(e)
 
 if __name__ == "__main__":
     main()
