@@ -40,8 +40,10 @@ Features currently planned to be implemented:
 12. ~~Remote access to data and files.~~
 13. ~~Read password without echo.~~
 
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, and termcolor packages.
-Tardis uses the librsync package, but since that is not current on pypi, it's copied in here.  When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, 
+and termcolor packages.
+Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
+When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
 

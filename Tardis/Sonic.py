@@ -39,6 +39,7 @@ import pprint
 import urlparse
 
 import parsedatetime
+import passwordmeter
 
 import Tardis
 import Util
@@ -48,20 +49,22 @@ import TardisCrypto
 import CacheDir
 import RemoteDB
 
-
 databaseName = Defaults.getDefault('TARDIS_DBNAME')
 schemaName   = Defaults.getDefault('TARDIS_SCHEMA')
 configName   = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir      = Defaults.getDefault('TARDIS_DB')
 client       = Defaults.getDefault('TARDIS_CLIENT')
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
+pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
 
 configDefaults = {
     'BaseDir'           : baseDir,
     'DBName'            : databaseName,
     'Schema'            : schemaName,
+    'PwStrMin'          : pwStrMin,
 }
 
+minPwStrength = 0
 logger = None
 
 def getDB(crypt, new=False, keyfile=None):
@@ -93,8 +96,10 @@ def getDB(crypt, new=False, keyfile=None):
 
 def createClient(crypt):
     try:
-        (db, cache) = getDB(crypt, True)
+        (db, cache) = getDB(None, True)
         db.close()
+        if crypt:
+            setToken(crypt)
         return 0
     except Exception as e:
         logger.error(e)
@@ -328,7 +333,7 @@ def removeOrphans(db, cache):
     print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
 def parseArgs():
-    global args
+    global args, minPwStrength
 
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', formatter_class=Util.HelpFormatter, add_help=False)
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
@@ -359,9 +364,12 @@ def parseArgs():
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean,     help='Delete keys from server or database')
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    common.add_argument('--client',             dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
+    common.add_argument('--dbname', '-N',       dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
+    common.add_argument('--client', '-C',       dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
     common.add_argument('--database', '-D',     dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
+
+    create = argparse.ArgumentParser(add_help=False)
+    create.add_argument('--schema',                 dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
 
     passgroup = common.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
@@ -377,27 +385,26 @@ def parseArgs():
     npwgroup = newpassgrp.add_mutually_exclusive_group()
     npwgroup.add_argument('--newpassword',      dest='newpw', default=None, nargs='?', const=True,  help='Change to this password')
     npwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                        help='Read new password from file')
-    npwgroup.add_argument('--newpassword-url',  dest='newpwu', default=None,                        help='Retrieve new password from the specified URL')
     npwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                        help='Use the specified command to generate the new password on stdout')
 
     subs = parser.add_subparsers(help="Commands", dest='command')
-    cp = subs.add_parser('create',       parents=[common], help='Create a client database')
+    cp = subs.add_parser('create',       parents=[common, create], help='Create a client database')
     sp = subs.add_parser('setpass',      parents=[common], help='Set a password')
-    cp = subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
+    hp = subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
     kp = subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
     lp = subs.add_parser('list',         parents=[common],                                      help='List backup sets')
     ip = subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
     pp = subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
-    dp = subs.add_parser('delete',       parents=[common, bsetParser, cnfParser],               help='Delete an old backupset')
     op = subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
-
-    cp.add_argument('--schema',                 dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
 
     #parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Be verbose')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     args = parser.parse_args(remaining)
+
+    # And load the required strength for new passwords.  NOT specifiable on the command line.
+    minPwStrength = config.getfloat(t, 'PwStrMin')
     return args
 
 def getBackupSet(db, defaultCurrent=False):
@@ -432,6 +439,16 @@ def getBackupSet(db, defaultCurrent=False):
         bsetInfo = db.lastBackupSet()
     return bsetInfo
 
+def checkPasswordStrength(password):
+    strength, improvements = passwordmeter.test(password)
+    if strength < minPwStrength:
+        logger.error("Password too weak: %f", strength)
+        for i in improvements:
+            logger.info("    %s", improvements[i])
+        return False
+    else:
+        return True
+
 def setupLogging():
     global logger
     logging.basicConfig(level=logging.INFO)
@@ -443,13 +460,17 @@ def main():
 
     try:
         crypt = None
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
-        if args.command == 'setpass' and args.password:
-            pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt='Confirm Password: ')
-            if pw2 != password:
-                logger.error("Passwords don't match")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=(args.command != 'setPass'))
+        if args.command in ['setpass', 'create']:
+            if password and not checkPasswordStrength(password):
                 return -1
-            pw2 = None
+
+            if args.password:
+                pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt='Confirm Password: ')
+                if pw2 != password:
+                    logger.error("Passwords don't match")
+                    return -1
+                pw2 = None
 
         if password:
             crypt = TardisCrypto.TardisCrypto(password, args.client)
@@ -466,13 +487,17 @@ def main():
             return setToken(crypt)
 
         if args.command == 'chpass':
-            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
-            if args.newpw:
-                newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwu, args.newpwp, prompt="New Password for %s: " % (args.client))
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
+            if not checkPasswordStrength(newpw):
+                return -1
+
+            if args.newpw == True:
+                newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
                 if newpw2 != newpw:
                     logger.error("Passwords don't match")
                     return -1
                 newpw2 = None
+
             crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
             newpw = None
             args.newpw = None
