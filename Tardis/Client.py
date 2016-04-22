@@ -47,7 +47,7 @@ import tempfile
 import cStringIO
 import shlex
 import magic
-
+import urlparse
 from functools import partial
 
 import librsync
@@ -1085,10 +1085,8 @@ def makePrefix(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
-def runServer(args, tempfile):
-    server_cmd = shlex.split(args.serverprog) + ['--single', '--local', tempfile]
-    #if args.serverargs:
-        #server_cmd = server_cmd + args.serverargs
+def runServer(cmd, tempfile):
+    server_cmd = shlex.split(cmd) + ['--single', '--local', tempfile]
     logger.debug("Invoking server: " + str(server_cmd))
     subp = subprocess.Popen(server_cmd)
     # Wait until the subprocess has created the domain socket.
@@ -1104,15 +1102,15 @@ def runServer(args, tempfile):
     subp.term()
     return None
 
-def getConnection(name, priority, auto, token):
+def getConnection(server, port, client, name, priority, auto, token):
     if args.protocol == 'json':
-        conn = Connection.JsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, force=args.force, timeout=args.timeout)
+        conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = Connection.BsonConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
+        conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
         setEncoder("bin")
     elif args.protocol == 'msgp':
-        conn = Connection.MsgPackConnection(args.server, args.port, name, priority, args.client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
+        conn = Connection.MsgPackConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
         setEncoder("bin")
     return conn
 
@@ -1219,6 +1217,26 @@ def processCommandLine():
 
     return parser.parse_args()
 
+def parseServerInfo(args):
+    serverStr = args.server
+    logger.debug("Got server string: %s", serverStr)
+    if not serverStr.startswith('tardis://'):
+        serverStr = 'tardis://' + serverStr
+    try:
+        info = urlparse.urlparse(serverStr)
+        sServer = info.hostname
+        sPort   = info.port
+        sClient = info.path.lstrip('/')
+    except Exception as e:
+        logger.exception(e)
+        raise Exception("Invalid URL: {}".format(args.server))
+
+    server = sServer or args.server
+    port = sPort or args.port
+    client = sClient or args.client
+
+    return (server, port, client)
+
 def setupLogging(logfiles, verbosity):
     global logger
 
@@ -1301,6 +1319,9 @@ def main():
     subserver = None
 
     try:
+        # Get the actual names we're going to use
+        (server, port, client) = parseServerInfo(args)
+
         # Figure out the name and the priority of this backupset
         (name, priority, auto) = setBackupName(args)
 
@@ -1323,12 +1344,12 @@ def main():
             rootdir = None
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client))
         args.password = None
 
         token = None
         if password:
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
+            crypt = TardisCrypto.TardisCrypto(password, client)
             token = crypt.createToken()
         password = None
 
@@ -1349,23 +1370,23 @@ def main():
     # Open the connection
     if args.local:
         tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
-        args.port = tempsocket
-        args.server = None
-        subserver = runServer(args, tempsocket)
+        port = tempsocket
+        server = None
+        subserver = runServer(args.serverprog, tempsocket)
         if subserver is None:
             logger.critical("Unable to create server")
             sys.exit(1)
 
     try:
-        conn = getConnection(name, priority, auto, token)
+        conn = getConnection(server, port, client, name, priority, auto, token)
     except Exception as e:
-        logger.critical("Unable to start session with %s:%s: %s", args.server, args.port, str(e))
+        logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         if args.exceptions:
             logger.exception(e)
         sys.exit(1)
 
     if verbosity or args.stats:
-        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), args.server, args.port, conn.getSessionId()))
+        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), server, port, conn.getSessionId()))
 
     #if not args.crypt:
     #crypt = None
