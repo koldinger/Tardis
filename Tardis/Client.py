@@ -1224,12 +1224,14 @@ def parseServerInfo(args):
         serverStr = 'tardis://' + serverStr
     try:
         info = urlparse.urlparse(serverStr)
+        if info.scheme != 'tardis':
+            raise Exception("Invalid URL scheme: {}".format(info.scheme)
+
         sServer = info.hostname
         sPort   = info.port
         sClient = info.path.lstrip('/')
     except Exception as e:
-        logger.exception(e)
-        raise Exception("Invalid URL: {}".format(args.server))
+        raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
 
     server = sServer or args.server
     port = sPort or args.port
