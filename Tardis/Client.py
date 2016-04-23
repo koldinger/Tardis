@@ -782,6 +782,8 @@ def makeMetaMessage():
     newmeta = []
     return message
 
+processedDirs = set()
+
 def recurseTree(dir, top, depth=0, excludes=[]):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
     newdepth = 0
@@ -793,6 +795,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     try:
+        # Mark that we've processed it before attempting to determine if we actually should
+        processedDirs.add(dir)
+
         if os.path.abspath(dir) in excludeDirs:
             logger.debug("%s excluded.  Skipping", dir)
             return
@@ -1065,11 +1070,10 @@ def splitDirs(x):
         ret = [rest]
     return ret
 
-sentDirs = {}
-
-def makePrefix(root, path):
+def createPrefixPath(root, path):
     """ Create common path directories.  Will be empty, except for path elements to the repested directories. """
     rPath     = os.path.relpath(path, root)
+    logger.debug("Making prefix path for: %s as %s", path, rPath)
     pathDirs  = splitDirs(rPath)
     parent    = 0
     parentDev = 0
@@ -1078,9 +1082,10 @@ def makePrefix(root, path):
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(current, d)
-        if dirPath not in sentDirs:
+        if dirPath not in processedDirs:
+            logger.debug("Sending dir entry for: %s", dirPath)
             sendDirEntry(parent, parentDev, [f])
-            sentDirs[dirPath] = parent
+            processedDirs.add(dirPath)
         parent    = st.st_ino
         parentDev = st.st_dev
         current   = dirPath
@@ -1338,12 +1343,6 @@ def main():
         #   logger.error("Must specify purge days with this option set")
         #   args.purge=False
 
-        if args.basepath == 'common':
-            rootdir = os.path.commonprefix(map(os.path.realpath, args.directories))
-        elif args.basepath == 'full':
-            rootdir = '/'
-        else:
-            rootdir = None
 
         # Load any password info
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client))
@@ -1387,11 +1386,9 @@ def main():
             logger.exception(e)
         sys.exit(1)
 
+
     if verbosity or args.stats:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), server, port, conn.getSessionId()))
-
-    #if not args.crypt:
-    #crypt = None
 
     # Set up the encryption, if needed.
     if args.crypt and crypt:
@@ -1418,23 +1415,33 @@ def main():
 
     # Now, do the actual work here.
     try:
-        # First, send any fake directories
-        for x in map(os.path.realpath, args.directories):
-            if rootdir:
-                makePrefix(rootdir, x)
-            else:
-                (d, name) = os.path.split(x)
-                f = mkFileInfo(d, name)
-                sendDirEntry(0, 0, [f])
+        # Calculate the base directories
+        directories = map(os.path.realpath, args.directories)
+        if args.basepath == 'common':
+            rootdir = os.path.commonprefix(directories)
+            # If the rootdir is actually one of the directories, back off one directory
+            if rootdir in directories:
+                rootdir  = os.path.split(rootdir)[0]
+        elif args.basepath == 'full':
+            rootdir = '/'
+        else:
+            rootdir = None
+        logger.debug("Rootdir is: %s", rootdir)
 
         # Now, process all the actual directories
-        for x in map(os.path.realpath, args.directories):
+        for directory in directories:
+            if directory in processedDirs:
+                continue
+            # Make sure a path exists for this
             if rootdir:
+                createPrefixPath(rootdir, directory)
                 root = rootdir
             else:
-                (d, name) = os.path.split(x)
-                root = d
-            recurseTree(x, root, depth=args.maxdepth, excludes=globalExcludes)
+                root =  os.path.split(directory)[0]
+                f = mkFileInfo(root, name)
+                sendDirEntry(0, 0, [f])
+                # Figure the root directory.  Either rootdir, or ..
+            recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
 
         # If any clone or batch requests still lying around, send them
         flushClones()
