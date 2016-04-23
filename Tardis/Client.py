@@ -1225,7 +1225,7 @@ def parseServerInfo(args):
     try:
         info = urlparse.urlparse(serverStr)
         if info.scheme != 'tardis':
-            raise Exception("Invalid URL scheme: {}".format(info.scheme)
+            raise Exception("Invalid URL scheme: {}".format(info.scheme))
 
         sServer = info.hostname
         sPort   = info.port
