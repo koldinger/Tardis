@@ -455,7 +455,7 @@ def printVersions(fInfos, filename):
 
     flushLine()
 
-def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', eol=True):
+def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=False, first=True, fmt='%s', eol=True):
     """
     Collect information about a file, across all the backup sets
     Print a header for the file.
@@ -476,23 +476,43 @@ def processFile(filename, fInfos, tardis, crypt, depth=0, first=True, fmt='%s', 
     if args.versions:
         printVersions(fInfos, filename)
 
-    if depth < args.maxdepth:
+    # Figure out which versions of the file are directories
+
+    if printContents:
         dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
         if len(dirs):
             (contents, names) = collectDirContents2(tardis, dirs, crypt)
             if not args.hidden:
                 names = [n for n in names if not n.startswith('.')]
             (numCols, fmt) = computeColumnWidth(names)
-            #(contents, names) = collectDirContents(tardis, dirs, crypt)
-            #names = getFileNames(contents)
             column = 0
-            #for name in sorted(names, key=str.lower, reverse=args.reverse):
+
             for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
                 fInfo = getInfoByName(contents, name)
                 column += 1
                 eol = True if ((column % numCols) == 0) else False
-                processFile(name, fInfo, tardis, crypt, depth+1, first=False, fmt=fmt, eol=eol)
+                processFile(name, fInfo, tardis, crypt, printContents=False, recurse=False, first=False, fmt=fmt, eol=eol)
             flushLine()
+
+    if recurse:
+        # This is inefficient.  We're recalculating info we grabbed above.  But recursion should be minimal
+        dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
+        if len(dirs):
+            (contents, names) = collectDirContents2(tardis, dirs, crypt)
+            if not args.hidden:
+                names = [n for n in names if not n.startswith('.')]
+            (numCols, fmt) = computeColumnWidth(names)
+            column = 0
+
+            for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
+                fInfos = getInfoByName(contents, name)
+                dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
+                if len(dirs):
+                    print
+                    processFile(os.path.join(filename, name), fInfos, tardis, crypt, printContents=printContents, recurse=recurse, first=True, fmt=fmt, eol=True)
+                    flushLine()
+
+
 
 def findSet(name):
     for i in backupSets:
@@ -682,11 +702,11 @@ def processArgs():
     parser.add_argument('--annotate', '-f', dest='annotate',    default=False, action='store_true',         help='Annotate files based on type.')
     parser.add_argument('--size', '-s',     dest='size',        default=False, action='store_true',         help='Show file sizes')
     parser.add_argument('--human', '-H',    dest='human',       default=False, action='store_true',         help='Format sizes for easy reading')
-    parser.add_argument('--maxdepth', '-d', dest='maxdepth',    type=int, default=1, nargs='?', const=0,    help='Maxdepth to recurse directories.  0 for none')
+    parser.add_argument('--dirinfo', '-d',  dest='dirinfo',     default=False, action='store_true',         help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',      default=False, action='store_true',         help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
-    parser.add_argument('--versions',       dest='versions',    default=True,  action=Util.StoreBoolean,    help='Display versions of files.')
+    parser.add_argument('--versions',       dest='versions',    default=True,  action=Util.StoreBoolean,    help='Display versions of files.  Default: %(default)s')
     parser.add_argument('--all',            dest='all',         default=False, action='store_true',         help='Show all versions of a file. Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
     parser.add_argument('--times',          dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
@@ -695,6 +715,9 @@ def processArgs():
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
     parser.add_argument('--dbname',         dest='dbname',      default=Defaults.getDefault('TARDIS_DBNAME'), 
                                                                                                             help="Name of the database file. Default: %(default)s")
+
+    parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
+    #parser.add_argument('--recurse', '-R',   dest='recurse',     default=0, nargs='?', type=int, const=sys.maxint, help='List Directories Recurively')
     parser.add_argument('--recent',         dest='recent',      default=False, action=Util.StoreBoolean,    help='Show only the most recent version of a file. Default: %(default)s')
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
@@ -727,7 +750,7 @@ def main():
         args = processArgs()
 
         FORMAT = "%(levelname)s : %(message)s"
-        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
         logger = logging.getLogger("")
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
@@ -757,8 +780,8 @@ def main():
             d = os.path.abspath(d)
             if args.realpath:
                 d = os.path.realpath(d)
-            fInfo = collectFileInfo(d, tardis, crypt)
-            processFile(d, fInfo, tardis, crypt)
+            fInfos = collectFileInfo(d, tardis, crypt)
+            processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=args.recurse)
     except KeyboardInterrupt:
         pass
     except Exception as e:
