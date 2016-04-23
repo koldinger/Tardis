@@ -666,40 +666,41 @@ def globPath(path, tardis, crypt, first=0):
             for j in globbed:
                 results += globPath(j, tardis, crypt, i + 1)
             break
-
     return  results
 
 def processArgs():
     isatty = os.isatty(sys.stdout.fileno())
 
     parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter)
-    parser.add_argument('--database', '-D', dest='database', default=Defaults.getDefault('TARDIS_DB'),      help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',   default=Defaults.getDefault('TARDIS_CLIENT'),  help="Client to list on.  Default: %(default)s")
+    parser.add_argument('--database', '-D', dest='database',    default=Defaults.getDefault('TARDIS_DB'),   help="Database to use.  Default: %(default)s")
+    parser.add_argument('--client', '-C',   dest='client',      default=Defaults.getDefault('TARDIS_CLIENT'), 
+                                                                                                            help="Client to list on.  Default: %(default)s")
 
-    parser.add_argument('--long', '-l',     dest='long',     default=False, action='store_true',        help='Use long listing format.')
-    parser.add_argument('--hidden', '-a',   dest='hidden',   default=False, action='store_true',        help='Show hidden files.')
-    parser.add_argument('--reverse', '-r',  dest='reverse',  default=False, action='store_true',        help='Reverse the sort order')
-    parser.add_argument('--annotate', '-f', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
-    parser.add_argument('--size', '-s',     dest='size',     default=False, action='store_true',        help='Show file sizes')
-    parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
-    parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
-    parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
-    parser.add_argument('--chainlen', '-L', dest='chnlen',   default=False, action='store_true',        help='Print chainlengths.')
-    parser.add_argument('--inode', '-i',    dest='inode',    default=False, action='store_true',        help='Print inode numbers')
-    #parser.add_argument('--full',           dest='full',     default=False, action=Util.StoreBoolean,   help='Use full pathnames in listing. Default: %(default)s')
-    parser.add_argument('--versions',       dest='versions', default=True,  action=Util.StoreBoolean,   help='Display versions of files.')
-    parser.add_argument('--all',            dest='all',      default=False, action='store_true',        help='Show all versions of a file. Default: %(default)s')
-    parser.add_argument('--deletions',      dest='deletions',default=True,  action=Util.StoreBoolean,   help='Show deletions. Default: %(default)s')
-    parser.add_argument('--times',          dest='checktimes', default=False, action=Util.StoreBoolean, help='Use file time changes when determining diffs. Default: %(default)s')
-    parser.add_argument('--headers',        dest='headers',  default=True,  action=Util.StoreBoolean,   help='Show headers. Default: %(default)s')
-    parser.add_argument('--colors',         dest='colors',   default=isatty, action=Util.StoreBoolean,  help='Use colors. Default: %(default)s')
-    parser.add_argument('--columns',        dest='columns',  type=int, default=None ,                   help='Number of columns to display')
-    parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
-    parser.add_argument('--recent',         dest='recent',   default=False, action=Util.StoreBoolean,   help='Show only the most recent version of a file. Default: %(default)s')
-    parser.add_argument('--glob',           dest='glob',    default=False, action=Util.StoreBoolean,    help='Glob filenames')
+    parser.add_argument('--long', '-l',     dest='long',        default=False, action='store_true',         help='Use long listing format.')
+    parser.add_argument('--hidden', '-a',   dest='hidden',      default=False, action='store_true',         help='Show hidden files.')
+    parser.add_argument('--reverse', '-r',   dest='reverse',    default=False, action='store_true',         help='Reverse the sort order')
+    parser.add_argument('--annotate', '-f', dest='annotate',    default=False, action='store_true',         help='Annotate files based on type.')
+    parser.add_argument('--size', '-s',     dest='size',        default=False, action='store_true',         help='Show file sizes')
+    parser.add_argument('--human', '-H',    dest='human',       default=False, action='store_true',         help='Format sizes for easy reading')
+    parser.add_argument('--maxdepth', '-d', dest='maxdepth',    type=int, default=1, nargs='?', const=0,    help='Maxdepth to recurse directories.  0 for none')
+    parser.add_argument('--checksums', '-c',dest='cksums',      default=False, action='store_true',         help='Print checksums.')
+    parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
+    parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
+    parser.add_argument('--versions',       dest='versions',    default=True,  action=Util.StoreBoolean,    help='Display versions of files.')
+    parser.add_argument('--all',            dest='all',         default=False, action='store_true',         help='Show all versions of a file. Default: %(default)s')
+    parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
+    parser.add_argument('--times',          dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
+    parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
+    parser.add_argument('--colors',         dest='colors',      default=isatty, action=Util.StoreBoolean,   help='Use colors. Default: %(default)s')
+    parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
+    parser.add_argument('--dbname',         dest='dbname',      default=Defaults.getDefault('TARDIS_DBNAME'), 
+                                                                                                            help="Name of the database file. Default: %(default)s")
+    parser.add_argument('--recent',         dest='recent',      default=False, action=Util.StoreBoolean,    help='Show only the most recent version of a file. Default: %(default)s')
+    parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
-    parser.add_argument('--reduce',         dest='reduce',  default=0,type=int, const=sys.maxint, nargs='?',    help='Reduce paths by N directories.  No value for smart reduction')
-    parser.add_argument('--realpath',       dest='realpath', default=True, action=Util.StoreBoolean,    help='Use the full path, expanding symlinks to their actual path components')
+    parser.add_argument('--reduce',         dest='reduce',      default=0,type=int, const=sys.maxint, nargs='?',
+                                                                                                            help='Reduce paths by N directories.  No value for smart reduction')
+    parser.add_argument('--realpath',       dest='realpath',    default=True, action=Util.StoreBoolean,     help='Use the full path, expanding symlinks to their actual path components')
 
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
@@ -719,7 +720,6 @@ def processArgs():
     parser.add_argument('directories', nargs='*', default='.',                                          help='List of directories/files to list')
 
     return parser.parse_args()
-
 
 def main():
     global args, logger
