@@ -455,7 +455,7 @@ def printVersions(fInfos, filename):
 
     flushLine()
 
-def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=False, first=True, fmt='%s', eol=True):
+def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, first=True, fmt='%s:', eol=True):
     """
     Collect information about a file, across all the backup sets
     Print a header for the file.
@@ -491,7 +491,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=Fal
                 fInfo = getInfoByName(contents, name)
                 column += 1
                 eol = True if ((column % numCols) == 0) else False
-                processFile(name, fInfo, tardis, crypt, printContents=False, recurse=False, first=False, fmt=fmt, eol=eol)
+                processFile(name, fInfo, tardis, crypt, printContents=False, recurse=0, first=False, fmt=fmt, eol=eol)
             flushLine()
 
     if recurse:
@@ -509,10 +509,8 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=Fal
                 dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
                 if len(dirs):
                     print
-                    processFile(os.path.join(filename, name), fInfos, tardis, crypt, printContents=printContents, recurse=recurse, first=True, fmt=fmt, eol=True)
-                    flushLine()
-
-
+                    processFile(os.path.join(filename, name), fInfos, tardis, crypt, printContents=printContents, recurse=recurse-1, first=True, eol=True)
+                flushLine()
 
 def findSet(name):
     for i in backupSets:
@@ -717,7 +715,8 @@ def processArgs():
                                                                                                             help="Name of the database file. Default: %(default)s")
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
-    #parser.add_argument('--recurse', '-R',   dest='recurse',     default=0, nargs='?', type=int, const=sys.maxint, help='List Directories Recurively')
+    parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxint, type=int,               help='Maximum depth to recurse directories')
+
     parser.add_argument('--recent',         dest='recent',      default=False, action=Util.StoreBoolean,    help='Show only the most recent version of a file. Default: %(default)s')
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
@@ -750,7 +749,7 @@ def main():
         args = processArgs()
 
         FORMAT = "%(levelname)s : %(message)s"
-        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
         logger = logging.getLogger("")
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
@@ -781,7 +780,8 @@ def main():
             if args.realpath:
                 d = os.path.realpath(d)
             fInfos = collectFileInfo(d, tardis, crypt)
-            processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=args.recurse)
+            recurse = args.maxdepth if args.recurse else 0
+            processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=recurse)
     except KeyboardInterrupt:
         pass
     except Exception as e:
