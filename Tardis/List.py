@@ -350,6 +350,14 @@ def printit(info, name, color, gone):
             inode = "%8d" % int(info['inode'])
         else:
             inode = ''
+    if args.size:
+        if info and info['size'] is not None:
+            if args.human:
+                fsize = "%8s" % Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
+            else:
+                fsize = "%8d" % int(info['size'])
+        else:
+            fsize = ''
 
     if args.long:
         if gone:
@@ -367,6 +375,8 @@ def printit(info, name, color, gone):
             else:
                 size = ''
             doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
+            if args.size:
+                doprint(' %8s ' % (fsize))
             if args.inode:
                 doprint(' %8s ' % (inode))
             if args.cksums:
@@ -374,8 +384,10 @@ def printit(info, name, color, gone):
             if args.chnlen:
                 doprint(' %-3s ' % (chnlen))
             doprint('%s' % (name), color, eol=True)
-    elif args.cksums or args.chnlen or args.inode:
+    elif args.cksums or args.chnlen or args.inode or args.size:
         doprint(columnfmt % name, color)
+        if args.size:
+            doprint(' ' + fsize, color=colors['name'])
         if args.inode:
             doprint(' ' + inode, color=colors['name'])
         if args.cksums:
@@ -666,8 +678,9 @@ def processArgs():
 
     parser.add_argument('--long', '-l',     dest='long',     default=False, action='store_true',        help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',   default=False, action='store_true',        help='Show hidden files.')
-    parser.add_argument('--reverse', '-r',   dest='reverse',   default=False, action='store_true',      help='Reverse the sort order')
+    parser.add_argument('--reverse', '-r',  dest='reverse',  default=False, action='store_true',        help='Reverse the sort order')
     parser.add_argument('--annotate', '-f', dest='annotate', default=False, action='store_true',        help='Annotate files based on type.')
+    parser.add_argument('--size', '-s',     dest='size',     default=False, action='store_true',        help='Show file sizes')
     parser.add_argument('--human', '-H',    dest='human',    default=False, action='store_true',        help='Format sizes for easy reading')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', type=int, default=1, nargs='?', const=0,   help='Maxdepth to recurse directories.  0 for none')
     parser.add_argument('--checksums', '-c',dest='cksums',   default=False, action='store_true',        help='Print checksums.')
@@ -750,7 +763,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        #logger.exception(e)
 
 if __name__ == "__main__":
     main()

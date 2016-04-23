@@ -517,9 +517,11 @@ class TardisDB(object):
     def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
+        def _xstr(x):
+            return x if x is not None else ''
 
         if self.journal:
-            self.journal.write("{}:{}:{}\n".format(checksum, basis, iv))
+            self.journal.write("{}:{}:{}\n".format(checksum, _xstr(basis), _xstr(iv)))
 
         if basis is None:
             chainlength = 0
