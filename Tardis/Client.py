@@ -1343,7 +1343,6 @@ def main():
         #   logger.error("Must specify purge days with this option set")
         #   args.purge=False
 
-
         # Load any password info
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client))
         args.password = None
@@ -1354,6 +1353,7 @@ def main():
             token = crypt.createToken()
         password = None
 
+        # If no compression types are specified, load the list
         if args.nocompress:
             try:
                 data = map(Util.stripComments, file(args.nocompress, 'r').readlines())
@@ -1369,6 +1369,8 @@ def main():
         sys.exit(1)
 
     # Open the connection
+
+    # If we're using a local connection, create the domain socket, and start the server running.
     if args.local:
         tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
         port = tempsocket
@@ -1378,6 +1380,7 @@ def main():
             logger.critical("Unable to create server")
             sys.exit(1)
 
+    # Get the connection object
     try:
         conn = getConnection(server, port, client, name, priority, auto, token)
     except Exception as e:
@@ -1430,17 +1433,18 @@ def main():
 
         # Now, process all the actual directories
         for directory in directories:
+            # skip if already processed.
             if directory in processedDirs:
                 continue
-            # Make sure a path exists for this
+            # Create the fake directory entry(s) for this.
             if rootdir:
                 createPrefixPath(rootdir, directory)
                 root = rootdir
             else:
-                root =  os.path.split(directory)[0]
-                f = mkFileInfo(root, directory)
+                (root, name) = os.path.split(directory)
+                f = mkFileInfo(root, name)
                 sendDirEntry(0, 0, [f])
-                # Figure the root directory.  Either rootdir, or ..
+            # And run the directory
             recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
 
         # If any clone or batch requests still lying around, send them
@@ -1458,6 +1462,7 @@ def main():
                 #(info, path) = inodeDB[key]
                 #print "{}:: {}".format(key, path)
 
+        # Send a purge command, if requested.
         if args.purge:
             if args.purgetime:
                 sendPurge(False)
