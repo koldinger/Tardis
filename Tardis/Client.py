@@ -1438,7 +1438,7 @@ def main():
                 root = rootdir
             else:
                 root =  os.path.split(directory)[0]
-                f = mkFileInfo(root, name)
+                f = mkFileInfo(root, directory)
                 sendDirEntry(0, 0, [f])
                 # Figure the root directory.  Either rootdir, or ..
             recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
