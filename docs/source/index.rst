@@ -11,7 +11,15 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+   installation
+   quickstart
 
+Overview
+========
+Tardis is a backup system, similar in concept to Apple's TimeMachine.
+
+Tardis supports incremental backups, with optional encryption, compression, and file deduplication.  Tardis supports multiple methods of recovery,
+including a filesystem based system, and command line utility.
 
 Indices and tables
 ==================
