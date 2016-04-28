@@ -174,7 +174,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         name = crypt.decryptFilename(name)
                     name = name.decode('utf-8')
                     if childInfo:
-                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                        if args.recurse or not childInfo['dir']:
+                            recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     else:
                         retCode += 1
             elif not skip:
@@ -344,6 +345,8 @@ def parseArgs():
     parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
     parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
 
+    parser.add_argument('--recurse',        dest='recurse', default=True, action=Util.StoreBoolean, help='Recurse directory trees.  Default: %(default)s')
+
     parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
     parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
 
@@ -392,7 +395,6 @@ def main():
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        #logger.error("Regeneration failed: %s", e)
         sys.exit(1)
 
     bset = False
