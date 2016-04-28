@@ -1203,7 +1203,7 @@ def processCommandLine():
 
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,    help='If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s')
 
-    purgegroup = parser.add_argument_group("Options for purging old backup sets:")
+    purgegroup = parser.add_argument_group("Options for purging old backup sets")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=False,  help='Purge old backup sets when backup complete')
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
     prggroup = purgegroup.add_mutually_exclusive_group()
