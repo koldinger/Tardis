@@ -342,15 +342,16 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
   <tr> <td> KeyFile
    <td> None
    <td> Path to the key file for SSL communications.  Must be set if SSL is true
-  <tr> <td> MonthFmt, WeekFmt, DayFmt
+  <tr> <td> Formats
    <td> Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d
-   <td> Formats for the names of backup sets for Monthly, Weekly and Daily backups, when the client doesn't set a backup set name.  In a format accepted by Python's datetime.strftime() function
+   <td> Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same
+           type as used by pythons time.strptime() function.  Each name will be checked in order.
   <tr> <td> MonthPrio, WeekPrio, DayPrio
    <td> 40, 20, 10
-   <td> Priority value for Monthly, Weekly, and Daily backups, when the client doesn't provide one.
-  <tr> <td> MonthKeep, WeekKeep, DayKeep
+   <td> Priority value corresponding to the names in the Formats value.
+  <tr> <td> KeepPeriods
    <td> 0, 180, 30
-   <td> Number of days to keep for Monthly, Weekly, and Daily backups.  0 indicates keep forever.
+   <td> Number of days to keep for each backup type, corresponding to the names in the Formats value.
   <tr> <td> DBBackups
    <td> 5
    <td> Number of backup iterations of the database to keep.

@@ -31,6 +31,7 @@
 import os
 import types
 import sys
+import string
 import pwd, grp
 import argparse
 import uuid
@@ -124,12 +125,9 @@ configDefaults = {
     'KeyFile'           : None,
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
-    'MonthFmt'          : 'Monthly-%Y-%m',
-    'WeekFmt'           : 'Weekly-%Y-%U',
-    'DayFmt'            : 'Daily-%Y-%m-%d',
-    'MonthPrio'         : '40',
-    'WeekPrio'          : '30',
-    'DayPrio'           : '20',
+    'Formats'           : 'Monthy-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
+    'Priorities'        : '40, 30, 20',
+    'KeepPeriods'       : '0, 180, 30',
     'MonthKeep'         : '0',
     'WeekKeep'          : '180',
     'DayKeep'           : '30',
@@ -973,21 +971,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def calcAutoInfo(self, clienttime):
         """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
-        # Figure out if a monthly set has been made.
-        name = starttime.strftime(self.server.monthfmt)
-        if (self.db.checkBackupSetName(name)):
-            return (name, self.server.monthprio, self.server.monthkeep)
-
-        # Figure out if we've tried something this week
-        name = starttime.strftime(self.server.weekfmt)
-        if (self.db.checkBackupSetName(name)):
-            return (name, self.server.weekprio, self.server.weekkeep)
-
-        # Must be daily
-        #name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
-        name = starttime.strftime(self.server.dayfmt)
-        if (self.db.checkBackupSetName(name)):
-            return (name, self.server.dayprio, self.server.daykeep)
+        # Walk the automatic naming formats until we find one that's free
+        for (fmt, prio, keep) in zip(self.server.formats, self.server.priorities, self.server.keep):
+            name = starttime.strftime(fmt)
+            if (self.db.checkBackupSetName(name)):
+                return (name, prio, keep)
 
         # Oops, nothing worked.  Didn't change the name.
         return (None, None, None)
@@ -1220,15 +1208,9 @@ def setConfig(self, args, config):
 
     self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
 
-    self.monthfmt       = config.get('Tardis', 'MonthFmt')
-    self.monthprio      = config.getint('Tardis', 'MonthPrio')
-    self.monthkeep      = Util.getIntOrNone(config, 'Tardis', 'MonthKeep')
-    self.weekfmt        = config.get('Tardis', 'WeekFmt')
-    self.weekprio       = config.getint('Tardis', 'WeekPrio')
-    self.weekkeep       = Util.getIntOrNone(config, 'Tardis', 'WeekKeep')
-    self.dayfmt         = config.get('Tardis', 'DayFmt')
-    self.dayprio        = config.getint('Tardis', 'DayPrio')
-    self.daykeep        = Util.getIntOrNone(config, 'Tardis', 'DayKeep')
+    self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
+    self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
+    self.keep           = map(int, config.get('Tardis', 'KeepPeriods').split(','))
 
     self.dbbackups      = config.getint('Tardis', 'DBBackups')
 

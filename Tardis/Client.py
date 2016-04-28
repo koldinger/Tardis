@@ -881,25 +881,7 @@ def setBackupName(args):
     global purgeTime, purgePriority, starttime
     name = args.name
     priority = args.priority
-    keepdays = None
     auto = True
-
-    # If auto is set, pick based on the day of the month, week, or just a daily
-    if args.hourly:
-        name = 'Hourly-{}'.format(starttime.strftime("%Y-%m-%d:%H:%M"))
-        priority = 10
-        keepdays = 1
-    elif args.daily:
-        name = 'Daily-{}'.format(starttime.strftime("%Y-%m-%d"))
-        priority = 20
-        keepdays = 30
-    elif args.weekly:
-        name = 'Weekly-{}'.format(starttime.strftime("%Y-%U"))
-        priority = 30
-        keepdays = 180
-    elif args.monthly:
-        name = 'Monthly-{}'.format(starttime.strftime("%Y-%m"))
-        priority = 40
 
     # If a name has been specified, we're not an automatic set.
     if name:
@@ -912,8 +894,6 @@ def setBackupName(args):
         purgePriority = priority
         if args.purgeprior:
             purgePriority = args.purgeprior
-        if keepdays:
-            purgeTime = keepdays * 3600 * 24        # seconds in days
         if args.purgedays:
             purgeTime = args.purgedays * 3600 * 24
         if args.purgehours:
@@ -1137,6 +1117,8 @@ def processCommandLine():
     parser.add_argument('--client',                 dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
 
+    parser.add_argument('--name',   '-n',           dest='name', default=None,                  help='Set the backup name.  No name to assign name automatically')
+
     parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,      help='Set the timeout to N seconds.  Default: %(default)s')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
@@ -1166,14 +1148,6 @@ def processCommandLine():
     locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,  help='Local server program to run')
     #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
-    # Create a group of mutually exclusive options for naming the backup set
-    namegroup = parser.add_argument_group("Backup naming options.  If nothing is explicitly set, the name will be chosen automatically")
-    namegroup = namegroup.add_mutually_exclusive_group()
-    namegroup.add_argument('--name',   '-n',    dest='name', default=None,                  help='Set the backup name.')
-    namegroup.add_argument('--hourly', '-H',    dest='hourly', action='store_true',         help='Run an hourly backup')
-    namegroup.add_argument('--daily',  '-D',    dest='daily', action='store_true',          help='Run a daily backup')
-    namegroup.add_argument('--weekly', '-W',    dest='weekly', action='store_true',         help='Run a weekly backup')
-    namegroup.add_argument('--monthly','-M',    dest='monthly', action='store_true',        help='Run a monthly backup')
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
