@@ -87,7 +87,8 @@ purgeTime           = None
 globalExcludes      = []
 cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
-                       "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".svn/", ".git/", ".hg/", ".bzr/"]
+                       "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".*.swp", ".*.swo",
+                       ".svn", ".git", ".hg", ".bzr"]
 verbosity           = 0
 
 conn                = None
@@ -518,11 +519,17 @@ def handleAckDir(message):
         delInode(i)
 
     for i in [tuple(x) for x in delta]:
-        if logger.isEnabledFor(logging.FILES):
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
-        processDelta(i)
+        # If doing a full backup, send the full file, else just a delta.
+        if args.full:
+            if logger.isEnabledFor(logging.FILES):
+                logFileInfo(i, 'N')
+            sendContent(i, 'Full')
+        else:
+            if logger.isEnabledFor(logging.FILES):
+                if i in inodeDB:
+                    (x, name) = inodeDB[i]
+                    logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
+            processDelta(i)
         delInode(i)
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
@@ -1089,13 +1096,13 @@ def runServer(cmd, tempfile):
 
 def getConnection(server, port, client, name, priority, auto, token):
     if args.protocol == 'json':
-        conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout)
+        conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout, full=args.full)
         setEncoder("base64")
     elif args.protocol == 'bson':
-        conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
+        conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
         setEncoder("bin")
     elif args.protocol == 'msgp':
-        conn = Connection.MsgPackConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout)
+        conn = Connection.MsgPackConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
         setEncoder("bin")
     return conn
 
@@ -1114,60 +1121,60 @@ def processCommandLine():
     parser.add_argument('--port', '-p',             dest='port', type=int, default=Defaults.getDefault('TARDIS_PORT'),  help='Set the destination server port. Default: %(default)s')
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=[], nargs="?", const=sys.stderr,  help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
-    parser.add_argument('--client',                 dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),    help='Set the client name.  Default: %(default)s')
-    parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=False,      help='Force the backup to take place, even if others are currently running')
+    parser.add_argument('--client',                 dest='client', default=Defaults.getDefault('TARDIS_CLIENT'),        help='Set the client name.  Default: %(default)s')
+    parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=False,              help='Force the backup to take place, even if others are currently running')
+    parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=False,               help='Perform a full backup, with no delta information. Default: %(default)s')
 
-    parser.add_argument('--name',   '-n',           dest='name', default=None,                  help='Set the backup name.  No name to assign name automatically')
+    parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  No name to assign name automatically')
 
-    parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,      help='Set the timeout to N seconds.  Default: %(default)s')
+    parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  Default: %(default)s')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                      help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,               help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                                  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                                  help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',               dest='crypt',action=Util.StoreBoolean, default=True, help='Encrypt data.  Only valid if password is set')
-    passgroup.add_argument('--keys',                dest='keys', default=None,                           help='Load keys from file.  Keys are not stored in database')
+    passgroup.add_argument('--crypt',               dest='crypt',action=Util.StoreBoolean, default=True,                help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',                dest='keys', default=None,                                          help='Load keys from file.  Keys are not stored in database')
 
-    parser.add_argument('--compress-data',  '-Z',   dest='compress', default=False, action=Util.StoreBoolean,   help='Compress files.  Default: %(default)s')
-    parser.add_argument('--compress-min',           dest='mincompsize', type=int,default=4096,                  help='Minimum size to compress.  Default: %(default)d')
-    parser.add_argument('--nocompress-types',       dest='nocompress', default=Defaults.getDefault('TARDIS_NOCOMPRESS'),   help='File containing a list of MIME types to not compress.  Default: %(default)s')
+    parser.add_argument('--compress-data',  '-Z',   dest='compress', default=False, action=Util.StoreBoolean,           help='Compress files.  Default: %(default)s')
+    parser.add_argument('--compress-min',           dest='mincompsize', type=int,default=4096,                          help='Minimum size to compress.  Default: %(default)d')
+    parser.add_argument('--nocompress-types',       dest='nocompress', default=Defaults.getDefault('TARDIS_NOCOMPRESS'),help='File containing a list of MIME types to not compress.  Default: %(default)s')
     if support_xattr:
-        parser.add_argument('--xattr',          dest='xattr', default=True, action=Util.StoreBoolean,       help='Backup file extended attributes')
+        parser.add_argument('--xattr',              dest='xattr', default=True, action=Util.StoreBoolean,               help='Backup file extended attributes')
     if support_acl:
-        parser.add_argument('--acl',            dest='acl', default=True, action=Util.StoreBoolean,         help='Backup file access control lists')
+        parser.add_argument('--acl',                dest='acl', default=True, action=Util.StoreBoolean,                 help='Backup file access control lists')
 
     """
-    parser.add_argument('--compress-ignore-types',  dest='ignoretypes', default=None,                   help='File containing a list of types to ignore')
-    parser.add_argument('--comprress-threshold',    dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
+    parser.add_argument('--compress-threshold',     dest='compthresh', type=float, default=0.9,         help='Maximum compression ratio to allow')
     """
 
     locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
-    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,          help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,  help='Local server program to run')
+    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,                  help='Run server as a local client')
+    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,          help='Local server program to run')
     #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
 
-    parser.add_argument('--priority',           dest='priority', type=int, default=None,    help='Set the priority of this backup')
-    parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,       help='Maximum depth to search')
-    parser.add_argument('--crossdevice',        dest='crossdev', action=Util.StoreBoolean,  help='Cross devices')
+    parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
+    parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
+    parser.add_argument('--crossdevice',        dest='crossdev', action=Util.StoreBoolean,                              help='Cross devices')
 
-    parser.add_argument('--basepath',           dest='basepath', default='none', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
+    parser.add_argument('--basepath',           dest='basepath', default='full', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
-    excgrp.add_argument('--cvs-ignore',                 dest='cvs', action=Util.StoreBoolean,       help='Ignore files like CVS')
-    excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append',           help='Patterns to exclude globally (may be repeated)')
-    excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',       help='Load patterns from exclude file (may be repeated)')
-    excgrp.add_argument('--exclude-file-name',          dest='excludefilename', default=excludeFile,help='Load recursive exclude files from this.  Default: %(default)s')
-    excgrp.add_argument('--exclude-dir',                dest='excludedirs', action='append',        help='Exclude certain directories by path')
-    excgrp.add_argument('--local-exclude-file-name',    dest='localexcludefilename', default=localExcludeFile,            help='Load local exclude files from this.  Default: %(default)s')
-    excgrp.add_argument('--skip-file-name',             dest='skipfilename', default=skipFile,      help='File to indicate to skip a directory.  Default: %(default)s')
-    excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action='store_true', default=False,  help='Ignore the global exclude file')
+    excgrp.add_argument('--cvs-ignore',                 dest='cvs', action=Util.StoreBoolean,                           help='Ignore files like CVS')
+    excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append',                               help='Patterns to exclude globally (may be repeated)')
+    excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',                           help='Load patterns from exclude file (may be repeated)')
+    excgrp.add_argument('--exclude-file-name',          dest='excludefilename', default=excludeFile,                    help='Load recursive exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--exclude-dir',                dest='excludedirs', action='append',                            help='Exclude certain directories by path')
+    excgrp.add_argument('--local-exclude-file-name',    dest='localexcludefilename', default=localExcludeFile,          help='Load local exclude files from this.  Default: %(default)s')
+    excgrp.add_argument('--skip-file-name',             dest='skipfilename', default=skipFile,                          help='File to indicate to skip a directory.  Default: %(default)s')
+    excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action='store_true', default=False,help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
-    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', default=False, action=Util.StoreBoolean,   help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',            dest='ckscontent', default=0, type=int, nargs='?', const=4096,   help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
+    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', default=False, action=Util.StoreBoolean,       help='Compress messages.  Default: %(default)s')
+    comgrp.add_argument('--cks-content',            dest='ckscontent', default=0, type=int, nargs='?', const=4096,      help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=100,               help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help='Maximum number of small dirs to batch together.  Default: %(default)s')

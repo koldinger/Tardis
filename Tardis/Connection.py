@@ -49,7 +49,7 @@ class Connection(object):
     filenameKey = None
     contentKey = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True, timeout=None):
+    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True, timeout=None, full=False):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         if client is None:
@@ -90,7 +90,8 @@ class Connection(object):
                 'force'     : force,
                 'time'      : time.time(),
                 'version'   : version,
-                'compress'  : compress
+                'compress'  : compress,
+                'full'      : full
             }
             if token:
                 message['token'] = token
@@ -164,8 +165,8 @@ class Connection(object):
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version, timeout):
-        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version, timeout=timeout)
+    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version, timeout, full):
+        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version, timeout=timeout, full=full)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -190,20 +191,20 @@ _defaultVersion = Tardis.__buildversion__  or Tardis.__version__
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=_defaultVersion):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version, timeout)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=_defaultVersion, full=False):
+        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version, timeout, full)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version, timeout)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion, full=False):
+        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version, timeout, full)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion):
-        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version, timeout)
+    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion, full=False):
+        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version, timeout, full)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
