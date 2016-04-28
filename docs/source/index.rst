@@ -13,6 +13,15 @@ Contents:
 
    installation
    quickstart
+   components
+       tardis
+       regenerate
+       lstardis
+       tardiff
+       sonic
+       tardisfs
+       tardisd
+       tardisremote
 
 Overview
 ========

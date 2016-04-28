@@ -22,7 +22,7 @@ Note, if you don't specify a password on the command line, you must either have 
 add the -- to separate the directory list from the options.  If not, you may end up with the first directory specified as the password.
 
 If you wish to have compressed backups, add the --compress-data (or -Z) option:
-    tardis --local [--password [password]] --compress-data [minimum_size] [--]
+    tardis --local [--password [password]] --compress-data [--]
 
 Note that the password must be specified the first time you attempt to backup, or you must add it later with the :ref:'sonic' command.
 
@@ -98,7 +98,7 @@ Backup to Remote Server
 ^^^^^^^^^^^^^^^^^^^^^^^
 Backup to a remote server works exactly like backing up to a local server, except you specify the --server/-s option instead of the --local
 option.
-    tardis --server servername [--password [password]] [--compress-data [minimum_size]] [--] directory [directories]
+    tardis --server servername [--password [password]] [--compress-data] [--] directory [directories]
 servername is either the DNS name of the server, or it's IP address.
 
 Recovery from Remote Server
