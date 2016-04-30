@@ -61,7 +61,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
 
-_schemaVersion = 6
+_schemaVersion = 7
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -71,6 +71,15 @@ def splitpath(path):
     """ Split a path into chunks, recursively """
     (head, tail) = os.path.split(path)
     return splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
+
+def fetchEm(cursor):
+    while True:
+        batch = cursor.fetchmany()
+        if not batch:
+            break
+        for row in batch:
+            yield row
+
 
 # Class TardisDB
 
@@ -214,14 +223,14 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None):
+    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None, full=False):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         now = time.time()
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, ClientTime, ClientVersion, ServerVersion, ClientIP) "
-                      "             VALUES (:name, 0, :now, :session, :priority, :clienttime, :clientversion, :serverversion, :clientip)",
-                      {"name": name, "now": now, "session": session, "priority": priority,
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, ClientIP) "
+                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :clientip)",
+                      {"name": name, "now": now, "session": session, "priority": priority, "full": full,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
                        "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
         except sqlite3.IntegrityError as e:
@@ -585,12 +594,28 @@ class TardisDB(object):
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                          {"parent": inode, "parentDev": device, "backup": backupset})
-        while True:
-            batch = c.fetchmany(self.chunksize)
-            if not batch:
-                break
-            for row in batch:
-                yield row
+        return fetchEm(c)
+        #while True:
+        #    batch = c.fetchmany(self.chunksize)
+        #    if not batch:
+        #        break
+        #    for row in batch:
+        #        yield row
+
+    def getNumDeltaFilesInDirectory(self, dirNode, current=False):
+        (inode, device) = dirNode
+        backupset = self._bset(current)
+        row = self.getResult("SELECT COUNT(*) FROM Files " \
+                             "JOIN Names ON Files.NameId = Names.NameId " \
+                             "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
+                             "WHERE Parent = :parent AND ParentDev = :parentDev AND "
+                             ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
+                             "C1.ChainLength != 0",
+                             {"parent": inode, "parentDev": device, "backup": backupset})
+        if row:
+            return row[0]
+        else:
+            return 0
 
     def getDirectorySize(self, dirNode, current=False):
         (inode, device) = dirNode
