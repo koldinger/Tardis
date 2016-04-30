@@ -267,6 +267,9 @@ def makeEncryptor():
 
 def processDelta(inode):
     """ Generate a delta and send it """
+    if args.progress:
+        printProgress()
+
     if inode in inodeDB:
         (fileInfo, pathname) = inodeDB[inode]
         message = {
@@ -369,6 +372,9 @@ def processDelta(inode):
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
+    if args.progress:
+        printProgress()
+
     if inode in inodeDB:
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
@@ -782,6 +788,18 @@ def makeMetaMessage():
     newmeta = []
     return message
 
+_cwd = None
+_ansiClearEol = '\x1b[K'
+_startOfLine = '\r'
+def printProgress(cwd=None):
+    global _cwd
+    if cwd:
+        _cwd = cwd
+    bar = ('Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | Dir: %s' + _ansiClearEol + _startOfLine ) % \
+        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), Util.shortPath(_cwd))
+    print bar,
+    sys.stdout.flush()
+
 processedDirs = set()
 
 def recurseTree(dir, top, depth=0, excludes=[]):
@@ -794,6 +812,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
     if not S_ISDIR(s.st_mode):
         return
 
+    if args.progress:
+        printProgress(dir)
     try:
         # Mark that we've processed it before attempting to determine if we actually should
         processedDirs.add(dir)
@@ -1189,6 +1209,7 @@ def processCommandLine():
     parser.add_argument('--stats',              action='store_true', dest='stats',                  help='Print stats about the transfer')
     parser.add_argument('--report',             action='store_true', dest='report',                 help='Print a report on all files transferred')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
+    parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
     parser.add_argument('--log-exceptions',     dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
 
