@@ -194,8 +194,9 @@ def listBSets(db, crypt):
             else:
                 duration = ''
             completed = 'Comp' if i['completed'] else 'Incomp'
+            full      = 'Full' if i['full'] else 'Delta'
             isCurrent = current if i['backupset'] == last['backupset'] else ''
-            print "%-40s %-4d %-6s %3d  %s  %s %s" % (i['name'], i['backupset'], completed, i['priority'], t, duration, isCurrent)
+            print "%-40s %-4d %-6s %3d  %-5s  %s  %s %s" % (i['name'], i['backupset'], completed, i['priority'], full, t, duration, isCurrent)
     except Exception as e:
         logger.error(e)
         return 1

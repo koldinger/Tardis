@@ -59,7 +59,7 @@ _fileInfoJoin =    "FROM Files " \
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
-                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion "
+                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full as full "
 
 _schemaVersion = 7
 
