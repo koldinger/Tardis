@@ -542,15 +542,15 @@ class TardisDB(object):
                              "compressed": int(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return self.cursor.lastrowid
 
-    def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None):
+    def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, chainlength=0):
         self.logger.debug("Updating checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
         self.cursor.execute("UPDATE CheckSums SET "
-                            "Size = :size, InitVector = :iv, Basis = :basis, DeltaSize = :deltasize, "
+                            "Size = :size, InitVector = :iv, Basis = :basis, DeltaSize = :deltasize, ChainLength = :chainlength, "
                             "Compressed = :compressed, DiskSize = :disksize "
                             "WHERE Checksum = :checksum",
                             {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
-                             "compressed": int(compressed), "disksize": disksize})
+                             "compressed": int(compressed), "chainlength": chainlength, "disksize": disksize})
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)

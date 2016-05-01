@@ -156,6 +156,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     cache   = None
     db      = None
     purged  = False
+    full    = False
     statNewFiles = 0
     statUpdFiles = 0
     statDirs     = 0
@@ -220,7 +221,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.insertFile(f, parent)
                 self.setXattrAcl(inode, device, xattr, acl)
             retVal = DONE
-        else:
+        else:       # Not a directory, it's a file
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
             if old:
@@ -256,7 +257,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             self.db.insertFile(f, parent)
                             self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
-                        retVal = DONE       # we're done either way
+                        if self.full and old['chainlength'] != 0:
+                            retVal = CONTENT
+                        else:
+                            retVal = DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
                         #self.logger.debug("No checksum: Get new file %s", name)
@@ -287,7 +291,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = DELTA
+                    if self.full:
+                        # Full backup, request the full version anyhow.
+                        retVal = CONTENT
+                    else:
+                        retVal = DELTA
             else:
                 # Create a new record for this file
                 #self.logger.debug("No file found: %s", name)
@@ -717,30 +725,41 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         for d in message['clones']:
             inode = d['inode']
             device = d['dev']
-            info = self.db.getFileInfoByInode((inode, device), current=False)
+            inoDev = (inode, device)
+            info = self.db.getFileInfoByInode(inoDev, current=False)
 
             if not info and not self.lastCompleted:
                 # Check for copies in a partial directory backup, if some exist and we didn't find one here..
                 # This should only happen in rare circumstances, namely if the list of directories to backup
                 # has changed, and a directory which is older than the last completed backup is added to the backup.
-                info = self.db.getFileInfoByInodeFromPartial((inode, device))
+                info = self.db.getFileInfoByInodeFromPartial(inoDev)
 
             if info and info['checksum'] is not None:
-                numFiles = self.db.getDirectorySize((inode, device))
+                numFiles = self.db.getDirectorySize(inoDev)
                 if numFiles is not None:
-                    logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
+                    #logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
                     if (numFiles == d['numfiles']) and (info['checksum'] == d['cksum']):
-                        rows = self.db.cloneDir((inode, device))
-                        done.append([inode, device])
+                        rows = self.db.cloneDir(inoDev)
+                        if self.full:
+                            numDeltas = self.db.getNumDeltaFilesInDirectory(inoDev, current=False)
+                            if numDeltas > 0:
+                                # Oops, there's a delta file in here on a full backup.
+                                self.logger.debug("Inode %d contains %d deltas on full backup.  Requesting refresh.", inode, numDeltas)
+                                content.append(inoDev)
+                            else:
+                                # No delta files for full backup.  We're done
+                                done.append(inoDev)
+                        else:
+                            done.append(inoDev)
                     else:
-                        self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
-                        content.append([inode, device])
+                        #self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
+                        content.append(inoDev)
                 else:
-                    self.logger.debug("Unable to get number of files to process clone (%d %d)", inode, device)
-                    content.append([inode, device])
+                    #self.logger.debug("Unable to get number of files to process clone (%d %d)", inode, device)
+                    content.append(inoDev)
             else:
-                self.logger.debug("No info available to process clone (%d %d)", inode, device)
-                content.append([inode, device])
+                #self.logger.debug("No info available to process clone (%d %d)", inode, device)
+                content.append(inoDev)
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
 
@@ -778,8 +797,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         try:
             if temp:
                 if self.cache.exists(checksum):
-                    self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-                    os.remove(temp.name)
+                    if self.full:
+                        self.logger.debug("Replacing existing checksum file for %s", checksum)
+                        self.cache.insert(checksum, temp.name)
+                        self.db.updateChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+                    else:
+                        self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+                        os.remove(temp.name)
                 else:
                     #self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                     #self.cache.mkdir(checksum)
@@ -794,7 +818,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
             self.db.setChecksum(inode, dev, checksum)
             self.statNewFiles += 1
-
         except Exception as e:
             logger.error("Could insert checksum %s info: %s", checksum, str(e))
             if self.server.exceptions:
@@ -1035,6 +1058,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 autoname    = fields['autoname']
                 compress    = fields['compress']
                 version     = fields['version']
+                full        = fields['full']
                 if 'token' in fields:
                     token = fields['token']
                 else:
@@ -1051,7 +1075,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.startSession(name, force)
                 if priority is None:
                     priority = 0
-                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address)
+                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address, full)
                 if autoname:
                     (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
                     self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))
@@ -1061,6 +1085,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     else:
                         self.serverKeepTime = None
                         self.serverPriority = None
+
+                self.full = full
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 sock.sendall(json.dumps(message))
