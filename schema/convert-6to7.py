@@ -18,7 +18,7 @@ if int(t[0]) != version:
     print("Invalid database schema version: {}".format(t[0]))
     sys.exit(1)
 
-#conn.execute("ALTER TABLE Backups ADD COLUMN Full INTEGER DEFAULT 0")
+conn.execute("ALTER TABLE Backups ADD COLUMN Full INTEGER DEFAULT 0")
 
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", ?)', str(version + 1))
 
