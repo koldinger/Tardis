@@ -268,8 +268,6 @@ def makeEncryptor():
 
 def processDelta(inode):
     """ Generate a delta and send it """
-    if args.progress:
-        printProgress()
 
     if inode in inodeDB:
         (fileInfo, pathname) = inodeDB[inode]
@@ -277,6 +275,8 @@ def processDelta(inode):
             "message" : "SGR",
             "inode" : inode
         }
+        if args.progress:
+            printProgress("File:", pathname)
         setMessageID(message)
 
         ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
@@ -373,13 +373,13 @@ def processDelta(inode):
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
-    if args.progress:
-        printProgress()
 
     if inode in inodeDB:
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
+            if args.progress:
+                printProgress("File:", pathname)
             mode = fileInfo["mode"]
             filesize = fileInfo["size"]
             if S_ISDIR(mode):
@@ -795,15 +795,11 @@ def makeMetaMessage():
     newmeta = []
     return message
 
-_cwd = None
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
-def printProgress(cwd=None):
-    global _cwd
-    if cwd:
-        _cwd = cwd
-    bar = ('Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | Dir: %s' + _ansiClearEol + _startOfLine ) % \
-        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), Util.shortPath(_cwd))
+def printProgress(header, name):
+    bar = ('Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s %s' + _ansiClearEol + _startOfLine ) % \
+        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header, Util.shortPath(name))
     print bar,
     sys.stdout.flush()
 
@@ -820,7 +816,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         return
 
     if args.progress:
-        printProgress(dir)
+        printProgress("Dir:", dir)
     try:
         # Mark that we've processed it before attempting to determine if we actually should
         processedDirs.add(dir)
@@ -1392,7 +1388,7 @@ def main():
         sys.exit(1)
 
 
-    if verbosity or args.stats:
+    if verbosity or args.stats or args.report:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), server, port, conn.getSessionId()))
 
     # Set up the encryption, if needed.
@@ -1485,6 +1481,8 @@ def main():
     endtime = datetime.datetime.now()
 
     # Print stats and files report
+    if args.progress:
+        print _ansiClearEol,
     if args.stats:
         printStats(starttime, endtime)
     if args.report:
