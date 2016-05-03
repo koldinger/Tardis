@@ -125,7 +125,7 @@ configDefaults = {
     'KeyFile'           : None,
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
-    'Formats'           : 'Monthy-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
+    'Formats'           : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
     'Priorities'        : '40, 30, 20',
     'KeepPeriods'       : '0, 180, 30',
     'MonthKeep'         : '0',
