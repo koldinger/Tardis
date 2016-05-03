@@ -835,7 +835,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         batch = message['batch']
         responses = []
         for mess in batch:
-            (response, flush) = self.processMessage(mess)
+            (response, flush) = self.processMessage(mess, transaction=False)
             responses.append(response)
 
         response = { 
@@ -856,11 +856,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, True)
 
-    def processMessage(self, message):
+    def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """
         messageType = message['message']
         # Stats
         self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
+
+        if transaction:
+            self.db.beginTransaction()
 
         if messageType == "DIR":
             (response, flush) = self.processDir(message)
@@ -893,6 +896,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         if response and 'msgid' in message:
             response['respid'] = message['msgid']
+        self.db.commit()
 
         return (response, flush)
 
@@ -1209,6 +1213,20 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
         setConfig(self, args, config)
         logger.info("TCP Server %s Running: %s", Tardis.__versionstring__, self.dbname)
 
+
+class TardisSingleThreadedSocketServer(SocketServer.TCPServer):
+    def __init__(self, args, config):
+        self.config = config
+        self.args = args
+
+        if args.reuseaddr:
+            # Allow reuse of the address before timeout if requested.
+            self.allow_reuse_address = True
+
+        SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
+        setConfig(self, args, config)
+        logger.info("Single Threaded TCP Server %s Running: %s", Tardis.__versionstring__, self.dbname)
+
 class TardisDomainSocketServer(SocketServer.UnixStreamServer):
     def __init__(self, args, config):
         self.config = config
@@ -1307,9 +1325,12 @@ def run_server():
         if args.local:
             logger.info("Starting server Socket: %s", args.local);
             server = TardisDomainSocketServer(args, config)
-        else:
+        elif args.threaded:
             logger.info("Starting server Port: %d", config.getint('Tardis', 'Port'));
             server = TardisSocketServer(args, config)
+        else:
+            logger.info("Starting Single Threaded server Port: %d", config.getint('Tardis', 'Port'));
+            server = TardisSingleThreadedSocketServer(args, config)
 
         if args.single:
             server.handle_request()
@@ -1363,6 +1384,7 @@ def processArgs():
                                                                         help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                                                                         help='Run as a Unix Domain Socket Server on the specified filename')
+    parser.add_argument('--threads',            dest='threaded',        action=Util.StoreBoolean, default=True, help='Run a threaded server.  Default: %(default)s')
 
     parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
     parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')

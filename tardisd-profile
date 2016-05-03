@@ -1,0 +1,11 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+from Tardis import Daemon
+import sys
+import cProfile
+import time
+
+name = 'tardisd.profile.' + str(int(time.time()))
+
+cProfile.run('Daemon.main()', name)

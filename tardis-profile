@@ -1,0 +1,12 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+from Tardis import Client
+import sys
+
+import cProfile
+import time
+name = 'tardis.profile.' + str(int(time.time()))
+
+#sys.exit(Client.main())
+cProfile.run('Client.main()', name)
