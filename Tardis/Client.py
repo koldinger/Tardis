@@ -1482,7 +1482,8 @@ def main():
 
     # Print stats and files report
     if args.progress:
-        print _ansiClearEol,
+        print ' ' +  _startOfLine + _ansiClearEol + _startOfLine
+
     if args.stats:
         printStats(starttime, endtime)
     if args.report:
