@@ -127,7 +127,8 @@ configDefaults = {
     'ReuseAddr'         : str(False),
     'Formats'           : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
     'Priorities'        : '40, 30, 20',
-    'KeepPeriods'       : '0, 180, 30',
+    'KeepDays'          : '0, 180, 30',
+    'ForceFull'         : '0, 0, 0',
     'MonthKeep'         : '0',
     'WeekKeep'          : '180',
     'DayKeep'           : '30',
@@ -999,13 +1000,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
         # Walk the automatic naming formats until we find one that's free
-        for (fmt, prio, keep) in zip(self.server.formats, self.server.priorities, self.server.keep):
+        for (fmt, prio, keep, full) in zip(self.server.formats, self.server.priorities, self.server.keep, self.server.forceFull):
             name = starttime.strftime(fmt)
             if (self.db.checkBackupSetName(name)):
-                return (name, prio, keep)
+                return (name, prio, keep, full)
 
         # Oops, nothing worked.  Didn't change the name.
-        return (None, None, None)
+        return (None, None, None, None)
 
     def confirmToken(self, token):
         dbToken = self.db.getToken()
@@ -1077,11 +1078,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             try:
                 new = self.getDB(host, token)
                 self.startSession(name, force)
-                if priority is None:
-                    priority = 0
-                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address, full)
+
+                # Create a name
                 if autoname:
-                    (serverName, serverPriority, serverKeepDays) = self.calcAutoInfo(clienttime)
+                    (serverName, serverPriority, serverKeepDays, serverForceFull) = self.calcAutoInfo(clienttime)
                     self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))
                     if serverName:
                         self.serverKeepTime = serverKeepDays * 3600 * 24
@@ -1090,7 +1090,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.serverKeepTime = None
                         self.serverPriority = None
 
-                self.full = full
+                # Either the server or the client can specify a full backup.
+                self.full = full or serverForceFull
+
+                if priority is None:
+                    priority = 0
+
+                # Create the actual backup set
+                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address, self.full)
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 sock.sendall(json.dumps(message))
@@ -1254,7 +1261,13 @@ def setConfig(self, args, config):
 
     self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
     self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
-    self.keep           = map(int, config.get('Tardis', 'KeepPeriods').split(','))
+    self.keep           = map(int, config.get('Tardis', 'KeepDays').split(','))
+    self.forceFull      = map(int, config.get('Tardis', 'ForceFull').split(','))
+
+    numFormats = len(self.formats)
+    if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
+        logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
+                        len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
     self.dbbackups      = config.getint('Tardis', 'DBBackups')
 
