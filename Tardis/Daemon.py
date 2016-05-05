@@ -764,10 +764,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
 
+    sequenceNumber = 0
+
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
         self.logger.debug("Processing content message: %s", message)
-        temp = None
+        tempName = None
         checksum = None
         if "checksum" in message:
             checksum = message["checksum"]
@@ -777,9 +779,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 output = self.cache.open(checksum, "w")
         else:
-            temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
-            self.logger.debug("Sending output to temporary file %s", temp.name)
-            output = temp.file
+            #temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
+            tempName = os.path.join(self.tempdir, self.tempPrefix + str(self.sequenceNumber))
+            self.sequenceNumber += 1
+            self.logger.debug("Sending output to temporary file %s", tempName)
+            output = file(tempName, 'wb')
 
         # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
         # Would be more compact to store the blob, but we're not doing that now
@@ -796,23 +800,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         output.close()
 
         try:
-            if temp:
+            if tempName:
                 if self.cache.exists(checksum):
                     if self.full:
                         self.logger.debug("Replacing existing checksum file for %s", checksum)
-                        self.cache.insert(checksum, temp.name)
+                        self.cache.insert(checksum, tempName)
                         self.db.updateChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
                     else:
                         self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-                        os.remove(temp.name)
+                        os.remove(tempName)
                 else:
                     #self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
                     #self.cache.mkdir(checksum)
                     #os.rename(temp.name, self.cache.path(checksum))
-                    self.cache.insert(checksum, temp.name)
+                    self.cache.insert(checksum, tempName)
                     self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
             else:
-                self.db.insertChecksumFile(checksum, iv, size, basis=basis, compressed=compressed, disksize=bytesReceived)
+                self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
 
             (inode, dev) = message['inode']
 
