@@ -252,6 +252,12 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def setConfigValue(self, name, value):
+        r = self.session.get(self.baseURL + "setConfigValue/" + name + "/" + value, verify=self.verify, headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def getKeys(self):
         fnKey = self.getConfigValue('FilenameKey')
         cnKey = self.getConfigValue('ContentKey')

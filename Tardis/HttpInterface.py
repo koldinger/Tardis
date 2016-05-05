@@ -309,6 +309,12 @@ def getConfigValue(name):
     #app.logger.info("getConfigValue Invoked: %s", name)
     return createResponse(json.dumps(db.getConfigValue(name)))
 
+@app.route('/setConfigValue/<name>/<value>')
+def setConfigValue(name, value):
+    db = getDB()
+    app.logger.info("setConfigValue Invoked: %s %s", name, value)
+    return createResponse(json.dumps(db.setConfigValue(name, value)))
+
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
     #app.logger.info("Form: %s", str(request.form))

@@ -64,6 +64,9 @@ configDefaults = {
     'PwStrMin'          : pwStrMin,
 }
 
+# Config keys which can be gotten or set.
+configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval']
+
 minPwStrength = 0
 logger = None
 
@@ -333,6 +336,24 @@ def removeOrphans(db, cache):
         size   += lSize
     print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
+def _printConfigKey(db, key):
+    value = db.getConfigValue(key)
+    print "%-18s: %s" % (key, value)
+
+
+def getConfig(db):
+    keys = args.configKeys
+    if keys is None:
+        keys = configKeys
+
+    for i in keys:
+        _printConfigKey(db, i)
+
+def setConfig(db):
+    print "Old Value: ",
+    _printConfigKey(db, args.key)
+    db.setConfigValue(args.key, args.value)
+
 def parseArgs():
     global args, minPwStrength
 
@@ -365,6 +386,7 @@ def parseArgs():
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean,     help='Delete keys from server or database')
 
     common = argparse.ArgumentParser(add_help=False)
+    #common = parser.add_argument_group('Global options')
     common.add_argument('--dbname', '-N',       dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     common.add_argument('--client', '-C',       dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
     common.add_argument('--database', '-D',     dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
@@ -388,15 +410,24 @@ def parseArgs():
     npwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                        help='Read new password from file')
     npwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                        help='Use the specified command to generate the new password on stdout')
 
+    configKeyParser = argparse.ArgumentParser(add_help=False)
+    configKeyParser.add_argument('--key',       dest='configKeys', choices=configKeys, action='append',    help='Configuration key to retrieve.  None for all keys')
+
+    configValueParser = argparse.ArgumentParser(add_help=False)
+    configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
+    configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
+
     subs = parser.add_subparsers(help="Commands", dest='command')
-    cp = subs.add_parser('create',       parents=[common, create], help='Create a client database')
-    sp = subs.add_parser('setpass',      parents=[common], help='Set a password')
-    hp = subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
-    kp = subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
-    lp = subs.add_parser('list',         parents=[common],                                      help='List backup sets')
-    ip = subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
-    pp = subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
-    op = subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
+    subs.add_parser('create',       parents=[common, create], help='Create a client database')
+    subs.add_parser('setpass',      parents=[common], help='Set a password')
+    subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
+    subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
+    subs.add_parser('list',         parents=[common],                                      help='List backup sets')
+    subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
+    subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
+    subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
+    subs.add_parser('getconfig',    parents=[common, configKeyParser],                     help='Get Config Value')
+    subs.add_parser('setconfig',    parents=[common, configValueParser],                   help='Set Config Value')
 
     #parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Be verbose')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
@@ -526,6 +557,12 @@ def main():
 
         if args.command == 'delete':
             return deleteBset(db, cache)
+
+        if args.command == 'getconfig':
+            return getConfig(db)
+
+        if args.command == 'setconfig':
+            return setConfig(db)
 
         if args.command == 'orphans':
             return removeOrphans(db, cache)
