@@ -635,6 +635,7 @@ def computeColumnWidth(names):
     else:
         if os.isatty(sys.stdout.fileno()):
             height, width = Util.getTerminalSize()
+            width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
             columns = width / (longestName + 4)
         else:
             columns = 1
