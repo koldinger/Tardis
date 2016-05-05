@@ -61,6 +61,7 @@ colors = {
     'gone'      :  'red',
     'changed'   :  'cyan',
     'moved'     :  'blue',
+    'full'      :  'cyan,,bold',
     'header'    :  'green',
     'name'      :  None,
     'error'     :  'red',
@@ -81,6 +82,7 @@ def setColors(s):
         if len(c) == 1:
             colors[name] = c[0]
         else:
+            c = [None if i == '' else i for i in c]
             colors[name] = tuple(c)
 
 def doprint(string='', color=None, eol=False):
@@ -430,7 +432,10 @@ def printVersions(fInfos, filename):
             gone = True
         elif (pInfo is None) or (info['checksum'] != pInfo['checksum']) or \
             (args.checktimes and (info['mtime'] != pInfo['mtime'] or info['ctime'] != pInfo['ctime'])):
-            color = colors['changed']
+            if info['chainlength'] == 0 and not info['dir']:
+                color = colors['full']
+            else:
+                color = colors['changed']
             new = True
         elif (info['inode'] != pInfo['inode']):
             color = colors['moved']

@@ -53,7 +53,7 @@ _defaults = {
                 'TARDIS_REMOTE_PORT'	: '7430',
                 'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
                 'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
-                'TARDIS_LS_COLORS'      : "gone=red:changed=cyan:moved=blue:header=green:name=white:error=red:default=white",
+                'TARDIS_LS_COLORS'      : "gone=red:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=white:error=red:default=white",
                 'TARDIS_NOCOMPRESS'     : None,
                 'TARDIS_RECENT_SET'     : 'Current',
                 'TARDIS_PW_STRENGTH'    : '0.75',
