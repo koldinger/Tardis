@@ -129,13 +129,11 @@ configDefaults = {
     'Priorities'        : '40, 30, 20',
     'KeepDays'          : '0, 180, 30',
     'ForceFull'         : '0, 0, 0',
-    'MonthKeep'         : '0',
-    'WeekKeep'          : '180',
-    'DayKeep'           : '30',
     'MaxDeltaChain'     : '5',
     'MaxChangePercent'  : '50',
     'SaveFull'          : str(False),
-    'DBBackups'         : '3'
+    'DBBackups'         : '3',
+    'AllowClientOverrides'  :  str(True)
 }
 
 server = None
@@ -167,8 +165,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def setup(self):
         self.sessionid = str(uuid.uuid1())
-        logger = logging.getLogger('Tardis')
-        self.idstr= self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
+        logger      = logging.getLogger('Tardis')
+        self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.idstr})
         if self.client_address:
             self.address = self.client_address[0]
@@ -276,8 +274,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.setXattrAcl(inode, device, xattr, acl)
                     retVal = CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
-                     not ((old['size'] * self.server.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.server.deltaPercent))) or \
-                     ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.server.maxChain)):
+                     not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
+                     ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.maxChain)):
                     #self.logger.debug("Third case.  Weirdos: %s", name)
                     # Couple conditions that can cause it to always load
                     # File is less than 4K
@@ -525,7 +523,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             if not savefull and iv is None:
                 chainLength = self.db.getChainLength(basis)
-                if chainLength >= self.server.maxChain:
+                if chainLength >= self.maxChain:
                     self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
                     savefull = True
             if savefull:
@@ -905,13 +903,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return (response, flush)
 
-    def getDB(self, host, token):
+    def getDB(self, client, token):
         script = None
         ret = "EXISTING"
         journal = None
-        self.basedir = os.path.join(self.server.basedir, host)
-        self.cache = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
-        self.dbfile = os.path.join(self.basedir, self.server.dbname)
+        self.client     = client
+        self.basedir    = os.path.join(self.server.basedir, client)
+        self.cache      = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
+        self.dbfile     = os.path.join(self.basedir, self.server.dbname)
 
         if self.server.journal:
             journal = os.path.join(self.basedir, self.server.journal)
@@ -922,7 +921,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if self.server.requirePW and token is None:
                 self.logger.warning("No password specified.  Cannot create")
                 raise InitFailedException("Password required for creation")
-            self.logger.debug("Initializing database for %s with file %s", host, schemaFile)
+            self.logger.debug("Initializing database for %s with file %s", client, schemaFile)
             script = schemaFile
             ret = "NEW"
 
@@ -938,6 +937,57 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.regenerator = Regenerator.Regenerator(self.cache, self.db)
         return ret
+
+    def setConfig(self):
+        self.formats        = self.server.formats
+        self.priorities     = self.server.priorities
+        self.keep           = self.server.keep
+        self.forceFull      = self.server.forceFull
+
+        self.savefull       = self.server.savefull
+        self.maxChain       = self.server.maxChain
+        self.deltaPercent   = self.server.deltaPercent
+
+        if self.server.allowOverrides:
+            try:
+                formats     = self.db.getConfigValue('Formats')
+                priorities  = self.db.getConfigValue('Priorities')
+                keepDays    = self.db.getConfigValue('KeepDays')
+                forceFull   = self.db.getConfigValue('ForceFull')
+
+                if formats:
+                    self.logger.debug("Overriding global name formats: %s", formats)
+                    self.formats        = map(string.strip, formats.split(','))
+                if priorities:
+                    self.logger.debug("Overriding global priorities: %s", priorities)
+                    self.priorities     = map(int, priorities.split(','))
+                if keepDays:
+                    self.logger.debug("Overriding global keep days: %s", keepDays)
+                    self.keep           = map(int, keepDays.split(','))
+                if forceFull:
+                    self.logger.debug("Overriding global force full: %s", forceFull)
+                    self.forceFull      = map(int, forceFull.split(','))
+
+                numFormats = len(self.formats)
+                if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
+                    self.logger.warning("Client %s has different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
+                                        self.client, len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
+
+                savefull       = self.db.getConfigValue('SaveFull')
+                maxChain       = self.db.getConfigValue('MaxDeltaChain')
+                deltaPercent   = self.db.getConfigValue('MaxChangePercent')
+
+                if savefull is not None:
+                    self.logger.debug("Overriding global save full: %s", savefull)
+                    self.savefull = bool(savefull)
+                if maxChain is not None:
+                    self.logger.debug("Overriding global max chain length: %s", maxChain)
+                    self.maxChain = int(maxChain)
+                if deltaPercent is not None:
+                    self.logger.debug("Overriding global max change percentage: %s", deltaPercent)
+                    self.deltaPercent = float(deltaPercent) / 100.0
+            except Exception as e:
+                self.logger.error("Client %s: Unable to override global configuration: %s", self.client, str(e))
 
     def startSession(self, name, force):
         self.name = name
@@ -1004,7 +1054,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
         # Walk the automatic naming formats until we find one that's free
-        for (fmt, prio, keep, full) in zip(self.server.formats, self.server.priorities, self.server.keep, self.server.forceFull):
+        for (fmt, prio, keep, full) in zip(self.formats, self.priorities, self.keep, self.forceFull):
             name = starttime.strftime(fmt)
             if (self.db.checkBackupSetName(name)):
                 return (name, prio, keep, full)
@@ -1031,7 +1081,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         started   = False
         completed = False
         starttime = datetime.now()
-        host = ""
+        client = ""
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -1057,7 +1107,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if not messType == 'BACKUP':
                     raise InitFailedException("Unknown message type: {}".format(messType))
 
-                host        = fields['host']
+                client      = fields['host']            # TODO: Change at client as well.
                 encoding    = fields['encoding']
                 name        = fields['name']
                 priority    = fields['priority']
@@ -1072,7 +1122,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     token = fields['token']
                 else:
                     token = None
-                self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", host, name, str(autoname), version, clienttime)
+                self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
             except KeyError as e:
@@ -1080,7 +1130,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             serverName = None
             try:
-                new = self.getDB(host, token)
+                new = self.getDB(client, token)
+
+                self.setConfig()
+
                 self.startSession(name, force)
 
                 # Create a name
@@ -1208,7 +1261,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if self.db:
                 self.db.close(started)
 
-        self.logger.info("Session from %s {%s} Ending: %s: %s", host, self.sessionid, str(completed), str(datetime.now() - starttime))
+        self.logger.info("Session from %s {%s} Ending: %s: %s", client, self.sessionid, str(completed), str(datetime.now() - starttime))
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
@@ -1262,6 +1315,8 @@ def setConfig(self, args, config):
     self.timeout        = args.timeout
 
     self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
+
+    self.allowOverrides = config.getboolean('Tardis', 'AllowClientOverrides')
 
     self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
     self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
