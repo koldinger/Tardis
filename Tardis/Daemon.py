@@ -1010,7 +1010,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 return (name, prio, keep, full)
 
         # Oops, nothing worked.  Didn't change the name.
-        return (None, None, None, None)
+        return (None, None, None, False)
 
     def confirmToken(self, token):
         dbToken = self.db.getToken()
