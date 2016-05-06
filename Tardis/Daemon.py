@@ -1108,20 +1108,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     raise InitFailedException("Unknown message type: {}".format(messType))
 
                 client      = fields['host']            # TODO: Change at client as well.
-                encoding    = fields['encoding']
                 name        = fields['name']
-                priority    = fields['priority']
-                force       = fields['force']
-                version     = fields['version']
+                encoding    = fields['encoding']
                 clienttime  = fields['time']
-                autoname    = fields['autoname']
-                compress    = fields['compress']
                 version     = fields['version']
-                full        = fields['full']
-                if 'token' in fields:
-                    token = fields['token']
-                else:
-                    token = None
+
+                autoname    = fields.setdefault('autoname', True)
+                compress    = fields.setdefault('compress', False)
+                full        = fields.setdefault('full', False)
+                token       = fields.setdefault('token', None)
+                priority    = fields.setdefault('priority', 0)
+                force       = fields.setdefault('force', False)
+
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
