@@ -133,6 +133,7 @@ configDefaults = {
     'MaxChangePercent'  : '50',
     'SaveFull'          : str(False),
     'DBBackups'         : '3',
+    'AutoPurge'         : str(False),
     'AllowClientOverrides'  :  str(True)
 }
 
@@ -691,7 +692,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return (None, False)
 
-    def processPurge(self, message):
+    def processPurge(self, message = {}):
         self.logger.debug("Processing purge message: {}".format(str(message)))
         prevTime = None
         if 'time' in message:
@@ -947,6 +948,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.savefull       = self.server.savefull
         self.maxChain       = self.server.maxChain
         self.deltaPercent   = self.server.deltaPercent
+        self.autoPurge      = self.server.autoPurge
 
         if self.server.allowOverrides:
             try:
@@ -973,9 +975,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.warning("Client %s has different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
                                         self.client, len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
-                savefull       = self.db.getConfigValue('SaveFull')
-                maxChain       = self.db.getConfigValue('MaxDeltaChain')
-                deltaPercent   = self.db.getConfigValue('MaxChangePercent')
+                savefull        = self.db.getConfigValue('SaveFull')
+                maxChain        = self.db.getConfigValue('MaxDeltaChain')
+                deltaPercent    = self.db.getConfigValue('MaxChangePercent')
+                autoPurge       = self.db.getConfigValue('AutoPurge')
 
                 if savefull is not None:
                     self.logger.debug("Overriding global save full: %s", savefull)
@@ -986,6 +989,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if deltaPercent is not None:
                     self.logger.debug("Overriding global max change percentage: %s", deltaPercent)
                     self.deltaPercent = float(deltaPercent) / 100.0
+                if autoPurge is not None:
+                    self.logger.debug("Overriding global autopurge value: %s", bool(autoPurge))
+                    self.autoPurge = bool(autoPurge)
             except Exception as e:
                 self.logger.error("Client %s: Unable to override global configuration: %s", self.client, str(e))
 
@@ -1220,6 +1226,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
+
+                # Autopurge if it's set.
+                if self.autoPurge and not self.purged:
+                    self.processPurge({})       # Send it a fake null message
+
             completed = True
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
@@ -1331,6 +1342,8 @@ def setConfig(self, args, config):
     self.exceptions     = args.exceptions
 
     self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
+
+    self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
 
     self.user = None
     self.group = None
