@@ -276,7 +276,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     retVal = CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
-                     ((old["basis"] is not None) and (self.db.getChainLength(old["checksum"]) >= self.maxChain)):
+                     ((old["basis"] is not None) and (old["chainlength"]) >= self.maxChain):
                     #self.logger.debug("Third case.  Weirdos: %s", name)
                     # Couple conditions that can cause it to always load
                     # File is less than 4K
@@ -621,14 +621,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             # Check to see if the checksum exists
             # TODO: Is this faster than checking if the file exists?  Probably, but should test.
             info = self.db.getChecksumInfo(cksum)
-            if info and info['size'] != -1:
+            if info and info['isfile'] and info['size'] >= 0:
                 self.db.setChecksum(inode, dev, cksum)
                 done.append(f['inode'])
             else:
                 # FIXME: TODO: If no checksum, should we request a delta???
-                #old = self.db.getFileInfoByInode(inode)
-                #if old:
-                content.append(f['inode'])
+                old = self.db.getFileInfoByInode((inode, dev))
+                if old and old['chainlength'] < self.maxChain:
+                    delta.append(f['inode'])
+                else:
+                    content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",

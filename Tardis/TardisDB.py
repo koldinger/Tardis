@@ -556,7 +556,7 @@ class TardisDB(object):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.execute("SELECT "
                          "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, "
-                         "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, Compressed as compressed, ChainLength as chainlength "
+                         "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
                          "FROM Checksums WHERE CheckSum = :checksum",
                          {"checksum": checksum})
         row = c.fetchone()
