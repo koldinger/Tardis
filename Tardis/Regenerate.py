@@ -323,7 +323,7 @@ def parseArgs():
     hostname = Defaults.getDefault('TARDIS_CLIENT')
     dbname   = Defaults.getDefault('TARDIS_DBNAME')
 
-    parser = argparse.ArgumentParser(description="Regenerate a Tardis backed file", formatter_class=Util.HelpFormatter)
+    parser = argparse.ArgumentParser(description="Regenerate a Tardis backed file", fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter)
 
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)

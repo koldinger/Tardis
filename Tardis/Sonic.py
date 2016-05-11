@@ -357,7 +357,7 @@ def setConfig(db):
 def parseArgs():
     global args, minPwStrength
 
-    parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
 
