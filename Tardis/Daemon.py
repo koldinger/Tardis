@@ -1231,7 +1231,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 # Autopurge if it's set.
                 if self.autoPurge and not self.purged:
-                    self.processPurge({})       # Send it a fake null message
+                    self.processPurge()
 
             completed = True
         except InitFailedException as e:
