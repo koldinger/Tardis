@@ -274,9 +274,10 @@ def getChainLength(checksum):
     db = getDB()
     return createResponse(json.dumps(db.getChainLength(checksum)))
 
-_blocksize = 127 * 1024
+_blocksize = (64 * 1024)
 def _stream(f):
     try:
+        f.seek(0)
         r = f.read(_blocksize)
         while (r):
             yield r
@@ -299,6 +300,7 @@ def getFileData(checksum):
         #return send_file(ckfile)
         resp = Response(_stream(ckfile))
         resp.headers['Content-Length'] = ckinfo['disksize']
+        resp.headers['Content-Type'] = 'application/octet-stream'
         return resp
     except:
         abort(404)
