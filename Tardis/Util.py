@@ -104,8 +104,6 @@ def shortPath(path, width=80):
         else:
             main = namecomps[0]
             suffix = ''
-        print main
-        print suffix
         length = len(main) - len(suffix) - 5
         length = min(length, width - 10)
         path   = main[0:length/2] + "..." + main[-(length/2):]
