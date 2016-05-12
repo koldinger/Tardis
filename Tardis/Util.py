@@ -96,6 +96,22 @@ def shortPath(path, width=80):
             head, path = str.split(path, os.sep, 1)
         except:
             break
+    # if still longer, really 
+    if len(path) > width:
+        namecomps = path.rsplit('.', 1)
+        if len(namecomps) == 2:
+            main, suffix = namecomps
+        else:
+            main = namecomps[0]
+            suffix = ''
+        print main
+        print suffix
+        length = len(main) - len(suffix) - 5
+        length = min(length, width - 10)
+        path   = main[0:length/2] + "..." + main[-(length/2):]
+        if suffix:
+            path = '.'.join([path, suffix])
+
     return ".../" + path
 
 """
