@@ -276,7 +276,7 @@ def processDelta(inode):
             "inode" : inode
         }
         if args.progress:
-            printProgress("File:", pathname)
+            printProgress("File [D]:", pathname)
         setMessageID(message)
 
         ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
@@ -379,7 +379,7 @@ def sendContent(inode, reportType):
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
             if args.progress:
-                printProgress("File:", pathname)
+                printProgress("File [N]:", pathname)
             mode = fileInfo["mode"]
             filesize = fileInfo["size"]
             if S_ISDIR(mode):
