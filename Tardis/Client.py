@@ -189,6 +189,9 @@ def processChecksums(inodes):
     for inode in inodes:
         if inode in inodeDB:
             (fileInfo, pathname) = inodeDB[inode]
+            if args.progress:
+                printProgress("File [C]:", pathname)
+
             m = Util.getHash(crypt, args.crypt)
             s = os.lstat(pathname)
             mode = s.st_mode
