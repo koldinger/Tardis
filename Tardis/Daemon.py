@@ -938,7 +938,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                     numbackups=self.server.dbbackups,
                                     journal=journal)
 
-        if self.db.getConfigValue('Disabled'):
+        disabled = self.db.getConfigValue('Disabled')
+        if disabled is not None and int(disabled) != 0:
             raise InitFailedException("Client %s is currently disabled." % client)
 
         self.regenerator = Regenerator.Regenerator(self.cache, self.db)
