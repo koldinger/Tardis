@@ -588,22 +588,14 @@ def mkFileInfo(dir, name):
 
         if support_xattr and args.xattr:
             attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
-            items = attrs.items()
-            if items:
+            #items = attrs.items()
+            if len(attrs):
                 # Convert to a set of readable string tuples
                 # We base64 encode the data chunk, as it's often binary
                 # Ugly, but unfortunately necessary
-                attr_string = json.dumps(dict(map(lambda x: (str(x[0]), base64.b64encode(x[1])), sorted(items))))
+                attr_string = json.dumps(dict(map(lambda x: (str(x[0]), base64.b64encode(x[1])), sorted(attrs.iteritems()))))
                 cks = addMeta(attr_string)
                 finfo['xattr'] = cks
-            #xattrs = {}
-            #attrs = xattr.listxattr(pathname, nofollow=True)
-            #if len(attrs):
-            #    for i in sorted(attrs):
-            #        xattrs[i] = base64.b64encode(xattr.getxattr(pathname, i, nofollow=True))
-            #    attrString= json.dumps(xattrs)
-            ##    cks = addMeta(attr_string)
-            #    finfo['xattr'] = cks
 
         if support_acl and args.acl and (not S_ISLNK(mode)):
             # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
