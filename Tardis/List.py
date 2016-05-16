@@ -152,7 +152,7 @@ def collectFileInfo(filename, tardis, crypt):
     Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
     by directory basis.
     """
-    lookup = crypt.encryptPath(filename) if crypt else filename
+    lookup = crypt.encryptPath(filename.encode()) if crypt else filename
 
     fInfos = {}
     lInfo = None
@@ -675,17 +675,23 @@ def globPath(path, tardis, crypt, first=0):
             currentPath = os.path.join('/', *comps[:i])
             pattern = comps[i]
             logger.debug("Globbing in component %d of %s: %s %s", i, path, currentPath, pattern)
+
             # Collect info about the current path (without the globb pattern)
             fInfos = collectFileInfo(currentPath, tardis, crypt)
+
             # Collect any directories in that poth
             dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
+
             # And cons up the names which are in those directories
             (data, names) = collectDirContents2(tardis, dirs, crypt)
+
             # Filter down any that match
             matches = fnmatch.filter(names, pattern)
+
             # Put the paths back together
             globbed = sorted([os.path.join('/', currentPath, match, *comps[i+1:]) for match in matches])
             logger.debug("Globbed %s: %s", path, globbed)
+
             # And repeat.
             for j in globbed:
                 results += globPath(j, tardis, crypt, i + 1)
@@ -792,7 +798,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        #logger.exception(e)
+        logger.exception(e)
 
 if __name__ == "__main__":
     main()
