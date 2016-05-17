@@ -1185,7 +1185,8 @@ def processCommandLine():
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.  Mostly for debugging')
     comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', default=False, action=Util.StoreBoolean,       help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',            dest='ckscontent', default=0, type=int, nargs='?', const=4096,      help='Checksum files before sending.  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
+    comgrp.add_argument('--cks-content',            dest='ckscontent', default=0, type=int, nargs='?', const=4096,     
+                                                    help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=100,               help='Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s')
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help='Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s')
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help='Maximum number of small dirs to batch together.  Default: %(default)s')
