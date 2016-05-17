@@ -308,19 +308,25 @@ def _removeOrphans(db, cache):
                 count += 1
                 size += s.st_size
             cache.remove(c)
+
             sig = c + ".sig"
-            sigpath = cache.path(sig)
-            if os.path.exists(sigpath):
-                s = os.stat(cache.path(sig))
-                if s:
-                    count += 1
-                    size += s.st_size
-                cache.remove(sig)
+            s = os.stat(cache.path(sig))
+            if s:
+                size += s.st_size
+            cache.remove(sig)
+
+            # Delete the basis file, if it exists.
+            # Don't count it's stats, as this is actually a link
+            # to another file
+            basis = c + ".basis"
+            cache.remove(basis)
+
+            db.deleteChecksum(c)
         except OSError:
             logger.warning("No checksum file for checksum %s", c)
-        except Exception as e:
+         except Exception as e:
             logger.error("Error purging orphans: %s", e)
-        db.deleteChecksum(c)
+
     return (count, size)
 
 def removeOrphans(db, cache):

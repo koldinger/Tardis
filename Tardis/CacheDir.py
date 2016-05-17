@@ -91,6 +91,11 @@ class CacheDir:
         if self.chown:
             os.chown(path, self.user, self.group)
 
+    def link(self, source, dest):
+        dstpath = self.path(dest)
+        srcpath = os.path.relpath(self.path(source), self.dir(dest))
+        os.symlink(srcpath, dstpath)
+
     def remove(self, name):
         try:
             os.remove(self.path(name))

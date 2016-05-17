@@ -109,6 +109,7 @@ configDefaults = {
     'Profile'           : str(False),
     'LogFile'           : None,
     'JournalFile'       : journalName,
+    'LinkBasis'         : str(True),
     'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
@@ -572,6 +573,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                     self.db.insertChecksumFile(checksum, iv, size=size, disksize=bytesReceived)
                 else:
+                    if self.server.linkBasis:
+                        self.cache.link(basis, checksum + ".basis")
                     self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
 
                 self.statUpdFiles += 1
@@ -1031,33 +1034,38 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Now remove any leftover orphans
         size = 0
         count = 0
-        if self.db:
-            # Get a list of orphan'd files
-            orphans = self.db.listOrphanChecksums()
-            self.logger.debug("Attempting to remove orphans")
-            for c in orphans:
-                # And remove them each....
-                try:
-                    path = self.cache.path(c)
-                    if os.path.exists(path):
-                        s = os.stat(self.cache.path(c))
-                        count += 1
-                        size += s.st_size
-                        self.cache.remove(c)
-                    sig = c + ".sig"
-                    sigpath = self.cache.path(sig)
-                    if os.path.exists(sigpath):
-                        s = os.stat(self.cache.path(sig))
-                        if s:
-                            count += 1
-                            size += s.st_size
-                        self.cache.remove(sig)
-                    self.db.deleteChecksum(c)
-                except OSError:
-                    self.logger.warning("Unable to remove checksum %s", c)
-                except Exception as e:
-                    if self.server.exceptions:
-                        self.logger.exception(e)
+
+        # Get a list of orphan'd files
+        orphans = self.db.listOrphanChecksums()
+        self.logger.debug("Attempting to remove orphans")
+        for c in orphans:
+            # And remove them each....
+            try:
+                s = os.stat(self.cache.path(c))
+                if s:
+                    count += 1
+                    size += s.st_size
+                self.cache.remove(c)
+
+                sig = c + ".sig"
+                s = os.stat(self.cache.path(sig))
+                if s:
+                    size += s.st_size
+                self.cache.remove(sig)
+
+                # Delete the basis file, if it exists.  
+                # Don't count it's stats, as this is actually a link 
+                # to another file
+                basis = c + ".basis"
+                self.cache.remove(basis)
+
+                self.db.deleteChecksum(c)
+            except OSError:
+                self.logger.warning("Unable to remove checksum %s", c)
+            except Exception as e:
+                if self.server.exceptions:
+                    self.logger.exception(e)
+
             if count:
                 self.purged = True
             return (count, size)
@@ -1327,6 +1335,8 @@ def setConfig(self, args, config):
     self.schemaFile     = args.schema
     self.journal        = args.journal
 
+    self.linkBasis      = config.getboolean('Tardis', 'LinkBasis')
+
     self.timeout        = args.timeout
 
     self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
@@ -1478,7 +1488,7 @@ def processArgs():
     parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
     parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')
 
-    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean,default=config.getboolean(t, 'ReuseAddr'),
+    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean, default=config.getboolean(t, 'ReuseAddr'),
                                                                         help='Reuse the socket address immediately')
 
     parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
