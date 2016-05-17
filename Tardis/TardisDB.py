@@ -302,6 +302,11 @@ class TardisDB(object):
                 break
         return info
 
+    def getFileInfoByPathForRange(self, path, first, last, permchecker=None):
+        sets = self.execute('SELECT BackupSet FROM Backups WHERE BackupSet BETWEEN :first AND :last ORDER BY BackupSet ASC', {'first': first, 'last': last})
+        for row in sets.fetchall():
+           yield (row[0], self.getFileInfoByPath(path, row[0], permchecker))
+
     def getFileInfoForPath(self, path, current=False):
         """ Return the FileInfo structures for each file along a path """
         backupset = self._bset(current)

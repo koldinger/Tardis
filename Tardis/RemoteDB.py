@@ -186,6 +186,16 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def getFileInfoByPathForRange(self, path, first, last, permchecker=None):
+        if not path.startswith('/'):
+            path = '/' + path
+        path = urllib.quote(path, '/')
+        r = self.session.get(self.baseURL + "getFileInfoByPathForRange/" + str(first) + '/' + str(last) + path, verify=self.verify, headers=self.headers)
+        r.raise_for_status()
+        for i in r.json():
+            yield i
+
+    @reconnect
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         bset = self._bset(current)

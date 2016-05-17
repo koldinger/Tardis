@@ -210,6 +210,16 @@ def getFileInfoForPath(backupset, pathname):
         pathinfo.append(makeDict(i))
     return createResponse(json.dumps(pathinfo))
 
+
+@app.route('/getFileInfoByPathForRange/<int:first>/<int:last>/<path:pathname>')
+def getFileInfoByPathForRange(first, last, pathname):
+    db = getDB()
+    fInfos = []
+    #return createResponse(json.dumps(makeDict(db.getFileInfoByPathForRange(str(pathname), first, last))))
+    for (bset, info) in db.getFileInfoByPathForRange(str(pathname), first, last):
+        fInfos.append((bset, makeDict(info)))
+    return createResponse(json.dumps(fInfos))
+
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):

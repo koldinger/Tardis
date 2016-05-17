@@ -158,17 +158,21 @@ def collectFileInfo(filename, tardis, crypt):
     lInfo = None
     if filename == '/':
         fInfos = makeFakeRootInfo()
-    else:
+    elif args.reduce:
         for bset in backupSets:
             temp = lookup
-            if args.reduce:
-                temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
+            temp = Util.reducePath(tardis, bset['backupset'], temp, args.reduce)     # No crypt, as we've already run that to get to lookup
 
             if lInfo and lInfo['firstset'] <= bset['backupset'] <= lInfo['lastset']:
                 fInfos[bset['backupset']] = lInfo
             else:
                 lInfo = tardis.getFileInfoByPath(temp, bset['backupset'])
                 fInfos[bset['backupset']] = lInfo
+    else:
+        fSet = backupSets[0]['backupset']
+        lSet = backupSets[-1]['backupset']
+        for (bset, info) in tardis.getFileInfoByPathForRange(lookup, fSet, lSet):
+            fInfos[bset] = info
 
     return fInfos
 
