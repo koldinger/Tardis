@@ -324,7 +324,7 @@ def _removeOrphans(db, cache):
             db.deleteChecksum(c)
         except OSError:
             logger.warning("No checksum file for checksum %s", c)
-         except Exception as e:
+        except Exception as e:
             logger.error("Error purging orphans: %s", e)
 
     return (count, size)
