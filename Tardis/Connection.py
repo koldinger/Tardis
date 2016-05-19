@@ -121,7 +121,6 @@ class Connection(object):
     def put(self, message):
         self.sock.sendall(message)
         self.stats['messagesSent'] += 1
-        #self.stats['bytesSent'] += len(message)
         return
 
     def recv(n):
@@ -136,7 +135,6 @@ class Connection(object):
     def get(self, size):
         message = self.sock.recv(size).strip()
         self.stats['messagesRecvd'] += 1
-        #self.stats['bytesRecvd'] += len(message)
         return message
 
     def close(self):
