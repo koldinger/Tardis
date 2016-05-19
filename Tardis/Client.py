@@ -105,9 +105,14 @@ noCompTypes         = None
 crypt               = None
 logger              = None
 
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataRecvd': 0 , 'new': 0, 'delta': 0}
+# Stats block.
+# dirs/files/links  == Number of directories/files/links backed up total
+# new/delta         == Number of new/delta sets sent
+# dataSent          == Number of data bytes sent this run (not including messages)
+# dataBacked        == Number of bytes backed up this run
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0}
+
 report = {}
-responseTimes       = []
 
 inodeDB             = {}
 dirHashes           = {
@@ -329,7 +334,7 @@ def processDelta(inode):
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
                 (encrypt, pad, iv, hmac) = makeEncryptor()
-                stats['delta'] += 1
+                Util.accumulateStat(stats, 'delta')
                 message = {
                     "message": "DEL",
                     "inode": inode,
@@ -344,7 +349,7 @@ def processDelta(inode):
 
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv)
+                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=printProgress)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -356,7 +361,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=printProgress)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -424,7 +429,15 @@ def sendContent(inode, reportType):
                 makeSig = True if args.crypt and crypt else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, data, encrypt, pad, hasher=Util.getHash(crypt, args.crypt), chunksize=args.chunksize, compress=compress, signature=makeSig, hmac=hmac, iv=iv, stats=stats)
+                (size, checksum, sig) = Util.sendData(conn.sender, data,
+                                        encrypt, pad, hasher=Util.getHash(crypt, args.crypt),
+                                        chunksize=args.chunksize,
+                                        compress=compress,
+                                        signature=makeSig,
+                                        hmac=hmac,
+                                        iv=iv,
+                                        stats=stats,
+                                        progress=printProgress)
 
                 if args.crypt and crypt:
                     sig.seek(0)
@@ -434,7 +447,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=printProgress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 if args.exceptions:
@@ -445,7 +458,7 @@ def sendContent(inode, reportType):
                     data.close()
                 if sig is not None:
                     sig.close()
-            stats['new'] += 1
+            Util.accumulateStat(stats, 'new')
             if args.report:
                 repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
                 if sig:
@@ -473,7 +486,7 @@ def handleAckMeta(message):
 
         sendMessage(message)
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
-        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv)
+        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=printProgress)
 
 def sendDirHash(inode):
     i = tuple(inode)
@@ -617,7 +630,7 @@ def getDirContents(dir, dirstat, excludes=[]):
         of the files, a list of sub directories, and the new list of excluded patterns """
 
     #logger.debug("Processing directory : %s", dir)
-    stats['dirs'] += 1;
+    Util.accumulateStat(stats, 'dir')
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
@@ -635,14 +648,14 @@ def getDirContents(dir, dirstat, excludes=[]):
     try:
         for f in filelist(dir, localExcludes):
             try:
-                file = mkFileInfo(dir, f)
-                if file and (args.crossdev or device == file['dev']):
-                    mode = file["mode"]
+                fInfo = mkFileInfo(dir, f)
+                if fInfo and (args.crossdev or device == fInfo['dev']):
+                    mode = fInfo["mode"]
                     if S_ISLNK(mode):
-                        stats['links'] += 1
+                        Util.accumulateStat(stats, 'links')
                     elif S_ISREG(mode):
-                        stats['files'] += 1
-                        stats['backed'] += file["size"]
+                        Util.accumulateStat(stats, 'files')
+                        Util.accumulateStat(stats, 'backed', fInfo['size'])
 
                     if S_ISDIR(mode):
                         sub = os.path.join(dir, f)
@@ -652,7 +665,7 @@ def getDirContents(dir, dirstat, excludes=[]):
                         else:
                             subdirs.append(sub)
 
-                    files.append(file)
+                    files.append(fInfo)
             except (IOError, OSError) as e:
                 logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
             except Exception as e:
@@ -792,10 +805,17 @@ def makeMetaMessage():
 
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
-def printProgress(header, name):
+
+_lastInfo = (None, None)                # STATIC for printProgress
+
+def printProgress(header=None, name=None):
+    global _lastInfo
     bar = ('Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s %s' + _ansiClearEol + _startOfLine ) % \
-        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header, Util.shortPath(name))
+        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0], Util.shortPath(name or _lastInfo[1]))
     print bar,
+    if header or name:
+        #update the last info
+        _lastInfo = (header or _lastInfo[0], name or _lastInfo[1])
     sys.stdout.flush()
 
 processedDirs = set()
@@ -970,11 +990,8 @@ def receiveMessage():
     return response
 
 def sendAndReceive(message):
-    global responseTimes
-    sendTime = time.time()
     sendMessage(message)
     response = receiveMessage()
-    responseTimes.append(time.time() - sendTime)
     return response
 
 def sendKeys(crypt):
@@ -1276,12 +1293,13 @@ def setupLogging(logfiles, verbosity):
     return logger
 
 def printStats(starttime, endtime):
+    connstats = conn.getStats()
+
     logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
     logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
     logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-    if conn is not None:
-        connstats = conn.getStats()
-        logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+    logger.log(logging.STATS, "Data Sent:   Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
+    logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
     logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
 
 

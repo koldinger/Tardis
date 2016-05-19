@@ -112,6 +112,10 @@ def shortPath(path, width=80):
 
     return ".../" + path
 
+def accumulateStat(stats, stat, amount=1):
+    if stats:
+        stats[stat] = stats.setdefault(stat, 0) + amount
+
 """
 Functions for reducing a path.
 """
@@ -313,7 +317,7 @@ def _chunks(stream, chunksize):
         last = chunk
     yield (last, True)
 
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=1024*1024):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -324,6 +328,11 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
     ck = None
     sig = None
 
+    if progress:
+        # Set the chunksize
+        if progressPeriod % chunksize != 0:
+            progressPeriod -= progressPeriod % chunksize
+
     if compress:
         stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature)
     else:
@@ -332,6 +341,8 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
     try:
         if iv:
             sender.sendMessage(iv, raw=True)
+            accumulateStat(stats, 'dataSent', len(iv))
+            size += len(iv)
             if hmac:
                 hmac.update(iv)
         for chunk, eof in _chunks(stream, chunksize):
@@ -344,9 +355,16 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
             #chunkMessage = { "chunk" : num, "data": data }
             if data:
                 sender.sendMessage(data, raw=True)
+                accumulateStat(stats, 'dataSent', len(data))
+                size += len(data)
+                if progress:
+                    if (size % progressPeriod) == 0:
+                        progress()
+                    
             #num += 1
         if hmac:
             sender.sendMessage(hmac.digest(), raw=True)
+            accumulateStat(stats, 'dataSent', hmac.digest_size)
     except Exception as e:
         status = "Fail"
         #logger = logging.getLogger('Data')
@@ -357,8 +375,8 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         compressed = stream.isCompressed()
         size = stream.size()
 
-        if stats and 'dataSent' in stats:
-            stats['dataSent'] += size
+        accumulateStat(stats, 'dataBacked', size)
+
         message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
         if hasher:
             ck = stream.checksum()
