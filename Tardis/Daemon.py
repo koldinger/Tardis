@@ -672,7 +672,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message['checksum']
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists", checksum)
-            # Abort read
+            output = StringIO.StringIO()        # Accumulate into a throwaway string
         else:
             output = self.cache.open(checksum, "w")
 
