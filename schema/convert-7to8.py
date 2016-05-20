@@ -19,7 +19,7 @@ if int(t[0]) != version:
     sys.exit(1)
 
 conn.execute("ALTER TABLE Backups ADD COLUMN FilesFull INTEGER")
-conn.execute("ALTER TABLE Backups ADD COLUMN FilesData INTEGER")
+conn.execute("ALTER TABLE Backups ADD COLUMN FilesDelta INTEGER")
 conn.execute("ALTER TABLE Backups ADD COLUMN BytesReceived INTEGER")
 
 conn.execute("ALTER TABLE CheckSums ADD COLUMN Encrypted INTEGER")
