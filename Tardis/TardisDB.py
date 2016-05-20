@@ -529,39 +529,40 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
+    def insertChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
         def _xstr(x):
             return x if x is not None else ''
 
         if self.journal:
-            self.journal.write("{}:{}:{}\n".format(checksum, _xstr(basis), _xstr(iv)))
+            self.journal.write("{}:{}:{}\n".format(checksum, _xstr(basis), int(encrypted)))
 
         if basis is None:
             chainlength = 0
         else:
             chainlength = self.getChainLength(basis) + 1
-        self.cursor.execute("INSERT INTO CheckSums (CheckSum, Size, Basis, InitVector, DeltaSize, Compressed, DiskSize, ChainLength, Added, IsFile) "
-                            "VALUES                (:checksum, :size, :basis, :iv, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
-                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
+
+        self.cursor.execute("INSERT INTO CheckSums (CheckSum,  Size,  Basis,  Encrypted,  DeltaSize,  Compressed,  DiskSize,  ChainLength,  Added,  IsFile) "
+                            "VALUES                (:checksum, :size, :basis, :encrypted, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
+                            {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
                              "compressed": int(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return self.cursor.lastrowid
 
-    def updateChecksumFile(self, checksum, iv=None, size=0, basis=None, deltasize=None, compressed=False, disksize=None, chainlength=0):
+    def updateChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed=False, disksize=None, chainlength=0):
         self.logger.debug("Updating checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
         self.cursor.execute("UPDATE CheckSums SET "
-                            "Size = :size, InitVector = :iv, Basis = :basis, DeltaSize = :deltasize, ChainLength = :chainlength, "
+                            "Size = :size, Encrypted = :encrypted, Basis = :basis, DeltaSize = :deltasize, ChainLength = :chainlength, "
                             "Compressed = :compressed, DiskSize = :disksize "
                             "WHERE Checksum = :checksum",
-                            {"checksum": checksum, "size": size, "basis": basis, "iv": iv, "deltasize": deltasize,
+                            {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
                              "compressed": int(compressed), "chainlength": chainlength, "disksize": disksize})
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self.execute("SELECT "
-                         "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, InitVector AS iv, "
+                         "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, "
                          "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
                          "FROM Checksums WHERE CheckSum = :checksum",
                          {"checksum": checksum})
@@ -595,7 +596,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
 
-        c = self.execute("SELECT " + _fileInfoFields + ", C1.Basis AS basis, C1.InitVector AS iv " +
+        c = self.execute("SELECT " + _fileInfoFields + ", C1.Basis AS basis, C1.Encrypted AS encrypted " +
                          _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
@@ -640,7 +641,7 @@ class TardisDB(object):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
         c = self.execute("SELECT " + _fileInfoFields + ", "
-                         "C1.Basis AS basis, C1.InitVector AS iv " + 
+                         "C1.Basis AS basis, C1.Encrypted AS encrypted " + 
                          _fileInfoJoin +
                          "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                          "Files.LastSet >= :first AND Files.FirstSet <= :last",

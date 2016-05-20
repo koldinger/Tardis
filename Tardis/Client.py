@@ -341,11 +341,9 @@ def processDelta(inode):
                     "size": filesize,
                     "checksum": checksum,
                     "basis": oldchksum,
-                    "encoding": encoding
+                    "encoding": encoding,
+                    "encrypted": (iv is not None)
                 }
-                if iv:
-                    #message["iv"] = conn.encode(iv)
-                    message["iv"] = base64.b64encode(iv)
 
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
@@ -397,11 +395,9 @@ def sendContent(inode, reportType):
             message = {
                 "message" : "CON",
                 "inode" : inode,
-                "encoding" : encoding
-                #"pathname" : pathname
+                "encoding" : encoding,
+                "encrypted": (iv is not None)
                 }
-            if iv:
-                message["iv"] = base64.b64encode(iv)
 
             # Attempt to open the data source
             # Punt out if unsuccessful
@@ -481,10 +477,9 @@ def handleAckMeta(message):
         (encrypt, pad, iv, hmac) = makeEncryptor()
         message = {
             "message": "METADATA",
-            "checksum": cks
+            "checksum": cks,
+            "encrypted": (iv is not None)
         }
-        if iv:
-            message["iv"] = base64.b64encode(iv)
 
         sendMessage(message)
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False

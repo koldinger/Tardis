@@ -68,7 +68,7 @@ class Regenerator:
         self.tempdir = tempdir
         self.crypt = crypt
 
-    def decryptFile(self, filename, size, iv=None, authenticate=True):
+    def decryptFile(self, filename, size, authenticate=True):
         self.logger.debug("Decrypting %s", filename)
         if self.crypt == None:
             raise Exception("Encrypted file.  No password specified")
@@ -89,10 +89,10 @@ class Regenerator:
 
         outfile = tempfile.TemporaryFile()
 
-        ctSize = size - self.crypt.ivLength - hmac.digest_size
+        contentSize = size - self.crypt.ivLength - hmac.digest_size
         #self.logger.info("Computed Size: %d.  Specified size: %d.  Diff: %d", ctSize, size, (ctSize - size))
 
-        rem = ctSize
+        rem = contentSize
         blocksize = 64 * 1024
         while rem > 0:
             readsize = blocksize if rem > blocksize else rem
@@ -112,8 +112,6 @@ class Regenerator:
             outfile.write(pt)
             rem -= readsize
 
-
-        #outfile.truncate(size)      # Shouldn't be necessary
         outfile.seek(0)
         return outfile
 
@@ -130,7 +128,7 @@ class Regenerator:
             if cksInfo['basis']:
                 basis = self.recoverChecksum(cksInfo['basis'], authenticate)
 
-                if cksInfo['iv']:
+                if cksInfo['encrypted']:
                     patchfile = self.decryptFile(cksum, cksInfo['disksize'], authenticate)
                 else:
                     patchfile = self.cacheDir.open(cksum, 'rb')
@@ -151,7 +149,7 @@ class Regenerator:
                 #output.seek(0)
                 return output
             else:
-                if cksInfo['iv']:
+                if cksInfo['encrypted']:
                     output =  self.decryptFile(cksum, cksInfo['disksize'])
                 else:
                     output =  self.cacheDir.open(cksum, "rb")

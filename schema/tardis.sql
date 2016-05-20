@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     DeltaSize   INTEGER,
     DiskSize    INTEGER,
     Compressed  INTEGER,            -- Boolean
+    Encrypted   INTEGER,            -- Boolean
     ChainLength INTEGER,
-    InitVector  BLOB,
     Added       INTEGER,            -- References BackupSet, but not foreign key, as sets can be deleted.
     IsFile      INTEGER,            -- Boolean, is there a file backing this checksum
     FOREIGN KEY(Basis) REFERENCES CheckSums(Checksum)

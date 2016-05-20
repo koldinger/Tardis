@@ -429,7 +429,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if ckinfo:
             cksid = ckinfo['checksumid']
         else:
-            cksid = self.db.insertChecksumFile(checksum, size=message['size'], isFile=False)
+            cksid = self.db.insertChecksumFile(checksum, encrypted=False, size=message['size'], isFile=False)
         self.db.updateDirChecksum(inode, cksid)
         response = {
             "message" : "ACKDHSH",
@@ -512,13 +512,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         (inode, dev)    = message["inode"]
 
         deltasize = message['deltasize'] if 'deltasize' in message else None
-        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        if 'iv' in message:
-            iv = message['iv']
-        else:
-            iv = None
+        encrypted = message.get('encrypted', False)
 
-        savefull = self.server.savefull and iv is None
+        savefull = self.server.savefull and not encrypted
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
@@ -571,11 +567,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                    self.db.insertChecksumFile(checksum, iv, size=size, disksize=bytesReceived)
+                    self.db.insertChecksumFile(checksum, encrypted, size=size, disksize=bytesReceived)
                 else:
                     if self.server.linkBasis:
                         self.cache.link(basis, checksum + ".basis")
-                    self.db.insertChecksumFile(checksum, iv, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
+                    self.db.insertChecksumFile(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
 
                 self.statUpdFiles += 1
 
@@ -647,6 +643,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processMeta(self, message):
         """ Check metadata messages """
         metadata = message['metadata']
+        encrypted = message.get('encrypted', False)
         done = []
         content = []
         for cksum in metadata:
@@ -657,7 +654,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # Insert a placeholder with a negative size
                 # But only if we don't already have one, left over from a previous failing build.
                 if not info:
-                    self.db.insertChecksumFile(cksum, None, -1)
+                    self.db.insertChecksumFile(cksum, encrypted, -1)
                 content.append(cksum)
         message = {
             'message': 'ACKMETA',
@@ -676,21 +673,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             output = self.cache.open(checksum, "w")
 
-        # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
-        # Would be more compact to store the blob, but we're not doing that now
-        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        if 'iv' in message:
-            iv = message['iv']
-            #output.write(base64.b64decode(iv))
-        else:
-            iv = None
+        encrypted = message.get('encrypted', False)
 
         (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
 
-        self.db.updateChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+        self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
         self.statNewFiles += 1
 
         self.statBytesReceived += bytesReceived
@@ -789,14 +779,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Sending output to temporary file %s", tempName)
             output = file(tempName, 'wb')
 
-        # Removed the below, as we're always sending the base64 encoded string, and storing that in the DB.
-        # Would be more compact to store the blob, but we're not doing that now
-        #iv = self.messenger.decode(message['iv']) if 'iv' in message else None
-        if 'iv' in message:
-            iv = message['iv']
-            #output.write(base64.b64decode(iv))
-        else:
-            iv = None
+        encrypted = message.get('encrypted', False)
 
         (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
@@ -809,7 +792,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     if self.full:
                         self.logger.debug("Replacing existing checksum file for %s", checksum)
                         self.cache.insert(checksum, tempName)
-                        self.db.updateChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+                        self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                     else:
                         self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
                         os.remove(tempName)
@@ -818,9 +801,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     #self.cache.mkdir(checksum)
                     #os.rename(temp.name, self.cache.path(checksum))
                     self.cache.insert(checksum, tempName)
-                    self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+                    self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
             else:
-                self.db.insertChecksumFile(checksum, iv, size, compressed=compressed, disksize=bytesReceived)
+                self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
 
             (inode, dev) = message['inode']
 
@@ -1133,12 +1116,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 clienttime  = fields['time']
                 version     = fields['version']
 
-                autoname    = fields.setdefault('autoname', True)
-                compress    = fields.setdefault('compress', False)
-                full        = fields.setdefault('full', False)
-                token       = fields.setdefault('token', None)
-                priority    = fields.setdefault('priority', 0)
-                force       = fields.setdefault('force', False)
+                autoname    = fields.get('autoname', True)
+                compress    = fields.get('compress', False)
+                full        = fields.get('full', False)
+                token       = fields.get('token', None)
+                priority    = fields.get('priority', 0)
+                force       = fields.get('force', False)
 
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
@@ -1552,4 +1535,3 @@ if __name__ == "__main__":
         sys.exit(main())
     except Exception as e:
         traceback.print_exc()
-

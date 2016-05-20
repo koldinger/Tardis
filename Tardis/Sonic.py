@@ -66,6 +66,8 @@ configDefaults = {
 
 # Config keys which can be gotten or set.
 configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled']
+# Extra keys that we print when everything is requested
+sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 
 minPwStrength = 0
 logger = None
@@ -354,6 +356,8 @@ def getConfig(db):
     keys = args.configKeys
     if keys is None:
         keys = configKeys
+        if args.sysKeys:
+            keys = sysKeys + keys
 
     for i in keys:
         _printConfigKey(db, i)
@@ -421,6 +425,7 @@ def parseArgs():
 
     configKeyParser = argparse.ArgumentParser(add_help=False)
     configKeyParser.add_argument('--key',       dest='configKeys', choices=configKeys, action='append',    help='Configuration key to retrieve.  None for all keys')
+    configKeyParser.add_argument('--sys',       dest='sysKeys', default=False, action=Util.StoreBoolean,   help='List System Keys as well as configurable ones')
 
     configValueParser = argparse.ArgumentParser(add_help=False)
     configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')

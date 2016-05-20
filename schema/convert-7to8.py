@@ -22,6 +22,11 @@ conn.execute("ALTER TABLE Backups ADD COLUMN FilesFull INTEGER")
 conn.execute("ALTER TABLE Backups ADD COLUMN FilesData INTEGER")
 conn.execute("ALTER TABLE Backups ADD COLUMN BytesReceived INTEGER")
 
+conn.execute("ALTER TABLE CheckSums ADD COLUMN Encrypted INTEGER")
+
+conn.execute("UPDATE CheckSums SET Encrypted = 1 WHERE InitVector IS NOT NULL")
+conn.execute("UPDATE CheckSums SET Encrypted = 0 WHERE InitVector IS NULL")
+
 conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", ?)', str(version + 1))
 
 conn.commit()
