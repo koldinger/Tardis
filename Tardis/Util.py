@@ -63,6 +63,8 @@ import urllib
 
 def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     fmt = "%d %s"
+    if num is None:
+        return 'None'
     num = float(num)
     for x in formats:
         #if num < base and num > -base:

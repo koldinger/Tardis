@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS Backups (
     Full            INTEGER DEFAULT 0,
     ClientVersion   CHARACTER,
     ServerVersion   CHARACTER,
-    ClientIP        CHARACTER
+    ClientIP        CHARACTER,
+    FilesFull       INTEGER,
+    FilesDelta      INTEGER,
+    BytesReceived   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (
@@ -76,8 +79,8 @@ CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, La
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, Device ASC, Parent ASC, ParentDev ASC, FirstSet ASC, LastSet ASC);
 
-INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority) VALUES (".Initial", 0, 0, 0, 1, 0);
-
+INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority, FilesFull, FilesDelta, BytesReceived) VALUES (".Initial", 0, 0, 0, 1, 0, 0, 0, 0);
+    
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
     FROM Files
@@ -85,5 +88,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "7");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "8");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

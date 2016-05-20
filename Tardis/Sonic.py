@@ -199,9 +199,12 @@ def listBSets(db, crypt):
             completed = 'Comp' if i['completed'] else 'Incomp'
             full      = 'Full' if i['full'] else 'Delta'
             isCurrent = current if i['backupset'] == last['backupset'] else ''
-            print "%-40s %-4d %-6s %3d  %-5s  %s  %s %s" % (i['name'], i['backupset'], completed, i['priority'], full, t, duration, isCurrent)
+            size = Util.fmtSize(i['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
+
+            print "%-32s %-4d %-6s %3d  %-5s  %s  %s %5s %5s %8s  %s" % (i['name'], i['backupset'], completed, i['priority'], full, t, duration, i['filesfull'], i['filesdelta'], size, isCurrent)
     except Exception as e:
         logger.error(e)
+        logger.exception(e)
         return 1
 
 def _bsetInfo(db, crypt, info):

@@ -1258,6 +1258,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             sock.close()
             if started:
                 self.endSession()
+                self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
+
             endtime = datetime.now()
 
             if self.server.profiler:

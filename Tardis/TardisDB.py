@@ -59,9 +59,10 @@ _fileInfoJoin =    "FROM Files " \
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
-                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full as full "
+                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
+                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 7
+_schemaVersion = 8
 
 def addFields(x, y):
     """ Add fields to the end of a dict """
@@ -723,6 +724,12 @@ class TardisDB(object):
         endSpace = row[2] if row[2] else 0
 
         return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
+
+    def setStats(self, newFiles, deltaFiles, bytesReceived, current=True):
+        bset = self._bset(current)
+        c = self.execute("UPDATE Backups SET FilesFull = :full, FilesDelta = :delta, BytesReceived = :bytes WHERE BackupSet = :bset",
+                         {"bset": bset, "full": newFiles, "delta": deltaFiles, "bytes": bytesReceived})
+
 
     def getConfigValue(self, key):
         c = self.execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
