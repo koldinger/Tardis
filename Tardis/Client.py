@@ -349,7 +349,8 @@ def processDelta(inode):
 
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
-                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=printProgress)
+                progress = printProgress if args.progress else None
+                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -361,7 +362,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=printProgress)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -419,6 +420,7 @@ def sendContent(inode, reportType):
             sig = None
             try:
                 compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                progress = printProgress if args.progress else None
                 # Check if it's a file type we don't want to compress
                 if compress and noCompTypes:
                     mimeType = magic.from_buffer(data.read(128), mime=True)
@@ -437,7 +439,7 @@ def sendContent(inode, reportType):
                                         hmac=hmac,
                                         iv=iv,
                                         stats=stats,
-                                        progress=printProgress)
+                                        progress=progress)
 
                 if args.crypt and crypt:
                     sig.seek(0)
@@ -447,7 +449,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=printProgress)            # Don't bother to encrypt the signature
+                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 if args.exceptions:
@@ -486,7 +488,8 @@ def handleAckMeta(message):
 
         sendMessage(message)
         compress = True if (args.compress and (len(data) > args.mincompsize)) else False
-        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=printProgress)
+        progress = printProgress if args.progress else None
+        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
 def sendDirHash(inode):
     i = tuple(inode)

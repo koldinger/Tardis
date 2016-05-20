@@ -317,7 +317,7 @@ def _chunks(stream, chunksize):
         last = chunk
     yield (last, True)
 
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=1024*1024):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
     """ Send a block of data, optionally encrypt and/or compress it before sending """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -360,7 +360,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
                 if progress:
                     if (size % progressPeriod) == 0:
                         progress()
-                    
+
             #num += 1
         if hmac:
             sender.sendMessage(hmac.digest(), raw=True)
@@ -534,7 +534,7 @@ class bidict(dict):
 
     def __setitem__(self, key, value):
         super(bidict, self).__setitem__(key, value)
-        self.inverse.setdefault(value,[]).append(key)        
+        self.inverse.setdefault(value,[]).append(key)
 
     def __delitem__(self, key):
         self.inverse.setdefault(self[key],[]).remove(key)
