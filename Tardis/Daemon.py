@@ -519,7 +519,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Checksum file %s already exists", checksum)
             # Abort read
         else:
-            if not savefull and iv is None:
+            if not savefull:
                 chainLength = self.db.getChainLength(basis)
                 if chainLength >= self.maxChain:
                     self.logger.debug("Chain length %d.  Converting %s (%s) to full save", chainLength, basis, inode)
@@ -530,9 +530,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
             else:
                 output = self.cache.open(checksum, "wb")
-
-        #if iv:
-        #    output.write(base64.b64decode(iv))
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
         logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
