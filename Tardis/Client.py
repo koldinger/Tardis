@@ -628,7 +628,7 @@ def getDirContents(dir, dirstat, excludes=[]):
         of the files, a list of sub directories, and the new list of excluded patterns """
 
     #logger.debug("Processing directory : %s", dir)
-    Util.accumulateStat(stats, 'dir')
+    Util.accumulateStat(stats, 'dirs')
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
