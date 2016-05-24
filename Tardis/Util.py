@@ -344,7 +344,6 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         if iv:
             sender.sendMessage(iv, raw=True)
             accumulateStat(stats, 'dataSent', len(iv))
-            size += len(iv)
             if hmac:
                 hmac.update(iv)
         for chunk, eof in _chunks(stream, chunksize):

@@ -1178,7 +1178,7 @@ def processCommandLine():
 
     locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
     locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,                  help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,          help='Local server program to run')
+    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,          help='Local server program to run.  Default: %(default)s')
     #locgrp.add_argument('--local-server-arg', '-Y',     dest='serverargs', action='append', default=None,       help='Arguments to add to the server')
 
 
