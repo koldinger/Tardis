@@ -48,6 +48,8 @@ import cStringIO
 import shlex
 import magic
 import urlparse
+import fcntl
+import errno
 from functools import partial
 
 import librsync
@@ -456,6 +458,7 @@ def sendContent(inode, reportType):
                     data.close()
                 if sig is not None:
                     sig.close()
+
             Util.accumulateStat(stats, 'new')
             if args.report:
                 repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
@@ -1225,6 +1228,8 @@ def processCommandLine():
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
+    parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. Default: %(default)s')
+
     parser.add_argument('--log-exceptions',     dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
 
     parser.add_argument('directories',          nargs='*', default='.', help="List of directories to sync")
@@ -1318,6 +1323,22 @@ def printReport():
         else:
             logger.log(logging.STATS, "  %-53s %-6s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts))
 
+def lockRun(server, port, client):
+    lockName = os.path.join(tempfile.gettempdir(), 'tardis_lock_' + str(server) + '_' + str(port) + '_' + str(client))
+    try:
+        lockFile = file(lockName, 'wb')
+        fcntl.flock(lockFile, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lockFile.seek(0)
+        lockFile.write(str(os.getpid()) + "\n")
+        lockFile.flush()
+        # Make the file world accessible, so if somebody else runs this, they get the same data
+        os.chmod(lockName, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
+    except IOError as e:
+        if e.errno == errno.EWOULDBLOCK:
+            pid = lockFile.readline().strip()
+            logger.warning("Tardis is currently running (PID: %s). Aborting.", pid)
+        raise e
+
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes
     # Read the command line arguments.
@@ -1338,6 +1359,9 @@ def main():
     try:
         # Get the actual names we're going to use
         (server, port, client) = parseServerInfo(args)
+
+        if args.exclusive:
+            lockRun(server, port, client)
 
         # Figure out the name and the priority of this backupset
         (name, priority, auto) = setBackupName(args)
@@ -1486,16 +1510,18 @@ def main():
         if args.exceptions:
             logger.exception(e)
 
+    if args.progress:
+        print ' ' +  _startOfLine + _ansiClearEol + _startOfLine,
+
     if args.local:
         logger.info("Waiting for server to complete")
         subserver.wait()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
 
-    # Print stats and files report
-    if args.progress:
-        print ' ' +  _startOfLine + _ansiClearEol + _startOfLine
+    # Note, we SHOULD unlock the lock file, but it automatically be unlocked when this program completes.
 
+    # Print stats and files report
     if args.stats:
         printStats(starttime, endtime)
     if args.report:
