@@ -62,7 +62,7 @@ class CacheDir:
         return os.path.join(self.dir(name), name)
 
     def exists(self, name):
-        return os.path.exists(self.path(name))
+        return os.path.lexists(self.path(name))
 
     def mkdir(self, name):
         dir = self.dir(name)

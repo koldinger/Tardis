@@ -1021,23 +1021,26 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         for c in orphans:
             # And remove them each....
             try:
-                s = os.stat(self.cache.path(c))
-                if s:
-                    count += 1
-                    size += s.st_size
-                self.cache.remove(c)
+                if self.cache.exists(c):
+                    s = os.stat(self.cache.path(c))
+                    if s:
+                        count += 1
+                        size += s.st_size
+                    self.cache.remove(c)
 
                 sig = c + ".sig"
-                s = os.stat(self.cache.path(sig))
-                if s:
-                    size += s.st_size
-                self.cache.remove(sig)
+                if self.cache.exists(sig):
+                    s = os.stat(self.cache.path(sig))
+                    if s:
+                        size += s.st_size
+                    self.cache.remove(sig)
 
                 # Delete the basis file, if it exists.  
                 # Don't count it's stats, as this is actually a link 
                 # to another file
                 basis = c + ".basis"
-                self.cache.remove(basis)
+                if self.cache.exists(basis):
+                    self.cache.remove(basis)
 
                 self.db.deleteChecksum(c)
             except OSError:
