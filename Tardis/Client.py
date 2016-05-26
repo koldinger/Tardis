@@ -203,7 +203,7 @@ def processChecksums(inodes):
             s = os.lstat(pathname)
             mode = s.st_mode
             if S_ISLNK(mode):
-                chunk = os.readlink(pathname)
+                m.update(os.readlink(pathname))
             else:
                 with open(pathname, "rb") as file:
                     for chunk in iter(partial(file.read, args.chunksize), ''):
@@ -406,7 +406,6 @@ def sendContent(inode, reportType):
             try:
                 if S_ISLNK(mode):
                     # It's a link.  Send the contents of readlink
-                    #chunk = os.readlink(pathname)
                     data = cStringIO.StringIO(os.readlink(pathname))
                 else:
                     data = open(pathname, "rb")
