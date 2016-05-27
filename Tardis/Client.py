@@ -1235,8 +1235,9 @@ def processCommandLine():
         parser.add_argument('--acl',                dest='acl', default=True, action=Util.StoreBoolean,                 help='Backup file access control lists')
 
     locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
-    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=False,                  help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default='tardisd --config ' + local_config,          help='Local server program to run.  Default: %(default)s')
+    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=c.getboolean(t, 'Local'),
+                        help='Run server as a local client')
+    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default=c.get(t, 'LocalServerCmd'),                  help='Local server program to run.  Default: %(default)s')
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
@@ -1450,7 +1451,7 @@ def main():
         try:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client))
         except Exception as e:
-            log.critical("Could not retrieve password.")
+            logger.critical("Could not retrieve password.")
             sys.exit(1)
         args.password = None
 
@@ -1472,7 +1473,8 @@ def main():
 
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
-        #logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         sys.exit(1)
 
     # Open the connection
