@@ -1288,9 +1288,9 @@ def processCommandLine():
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
     parser.add_argument('--stats',              action=Util.StoreBoolean, dest='stats', default=c.getboolean(t, 'Stats'),
-                        help='Print stats about the transfer')
+                        help='Print stats about the transfer.  Default=%(default)s')
     parser.add_argument('--report',             action=Util.StoreBoolean, dest='report', default=c.getboolean(t, 'Report'),
-                        help='Print a report on all files transferred')
+                        help='Print a report on all files transferred.  Default=%(default)s')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
@@ -1510,17 +1510,18 @@ def main():
             crypt.genKeys()
             if args.keys:
                 (f, c) = crypt.getKeys()
-                Util.saveKeys(args.keys, conn.getClientId(), f, c)
+                Util.saveKeys(fullPath(args.keys), conn.getClientId(), f, c)
             else:
                 sendKeys(crypt)
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
-                (f, c) = Util.loadKeys(args.keys, conn.getClientId())
+                (f, c) = Util.loadKeys(fullPath(args.keys), conn.getClientId())
             else:
                 (f, c) = conn.getKeys()
             if not (f and c):
-                raise Exception("Key values not available")
+                logger.critical("Unable to load keyfile: %s", args.keys)
+                sys.exit(1)
             crypt.setKeys(f, c)
 
     # Now, do the actual work here.
