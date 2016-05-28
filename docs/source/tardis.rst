@@ -1,8 +1,8 @@
-Tardis
+tardis
 ======
-Tardis is the main program used to backup data to the database.  Normally tardis will be run on a daily basis via a cron job.
+tardis is the main program used to backup data to the database.  Normally tardis will be run on a daily basis via a cron job.
 
-Tardis walks the list of backedup directories, and determines which data has changed, and pushes the data to the backup server.
+tardis walks the list of backedup directories, and determines which data has changed, and pushes the data to the backup server.
 
 Backup Sets
 -----------
