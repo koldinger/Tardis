@@ -23,6 +23,7 @@ Contents:
    tardisd
    tardisremote
    configuration
+   encryption
 
 Overview
 ========
