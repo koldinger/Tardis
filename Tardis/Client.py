@@ -1378,20 +1378,29 @@ def printStats(starttime, endtime):
 
 def printReport():
     lastDir = ''
-    fmts = ['','KB','MB','GB', 'TB', 'PB']
+    length = 0
     logger.log(logging.STATS, "")
-    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", "FileName", "Type", "Size", "Sig Size")
-    logger.log(logging.STATS, "%-55s %-6s %-10s %-10s", '-' * 50, '-' * 6, '-' * 10, '-' * 10)
-    for i in sorted(report):
-        r = report[i]
-        (d, f) = os.path.split(i)
-        if d != lastDir:
-            logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
-            lastDir = d
-        if r['sigsize']:
-            logger.log(logging.STATS, "  %-53s %-6s %-10s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
-        else:
-            logger.log(logging.STATS, "  %-53s %-6s %-10s", f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+    if report:
+        length = reduce(max, map(len, map(os.path.basename, report)))
+        length = max(length, 50)
+        fmts = ['','KB','MB','GB', 'TB', 'PB']
+        fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 2)
+        fmt2 = '  %-{}s %-6s %-10s -10s'.format(length)
+        fmt3 = '  %-{}s %-6s %-10s'.format(length)
+        logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
+        logger.log(logging.STATS, fmt, '-' * (length + 2), '-' * 6, '-' * 10, '-' * 10)
+        for i in sorted(report):
+            r = report[i]
+            (d, f) = os.path.split(i)
+            if d != lastDir:
+                logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
+                lastDir = d
+            if r['sigsize']:
+                logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+            else:
+                logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+    else:
+        logger.log(logging.STATS, "No files backed up")
 
 def lockRun(server, port, client):
     lockName = os.path.join(tempfile.gettempdir(), 'tardis_lock_' + str(server) + '_' + str(port) + '_' + str(client))
