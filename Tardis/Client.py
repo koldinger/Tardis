@@ -49,9 +49,9 @@ import cStringIO
 import shlex
 import magic
 import urlparse
-import fcntl
-import errno
 from functools import partial
+
+import pid
 
 import librsync
 
@@ -1309,20 +1309,26 @@ def processCommandLine():
     return (parser.parse_args(remaining), c)
 
 def parseServerInfo(args):
-    serverStr = args.server
-    logger.debug("Got server string: %s", serverStr)
-    if not serverStr.startswith('tardis://'):
-        serverStr = 'tardis://' + serverStr
-    try:
-        info = urlparse.urlparse(serverStr)
-        if info.scheme != 'tardis':
-            raise Exception("Invalid URL scheme: {}".format(info.scheme))
+    """ Break up the server info passed in into useable chunks """
+    if args.local:
+        sServer = 'localhost'
+        sPort   = 'local'
+    else:
+        serverStr = args.server
+        #logger.debug("Got server string: %s", serverStr)
+        if not serverStr.startswith('tardis://'):
+            serverStr = 'tardis://' + serverStr
+        try:
+            info = urlparse.urlparse(serverStr)
+            if info.scheme != 'tardis':
+                raise Exception("Invalid URL scheme: {}".format(info.scheme))
 
-        sServer = info.hostname
-        sPort   = info.port
-        sClient = info.path.lstrip('/')
-    except Exception as e:
-        raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
+            sServer = info.hostname
+            sPort   = info.port
+            sClient = info.path.lstrip('/')
+
+        except Exception as e:
+            raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
 
     server = sServer or args.server
     port = sPort or args.port
@@ -1351,7 +1357,12 @@ def setupLogging(logfiles, verbosity):
         logfiles.append(sys.stderr)
     for logfile in logfiles:
         if type(logfile) == str:
-            handler = logging.handlers.WatchedFileHandler(fullPath(logfile))
+            if logfile == ':STDERR:':
+                handler = logging.StreamHandler(sys.stderr)
+            elif logfile == ':STDOUT:':
+                handler = logging.StreamHandler(sys.stdout)
+            else:
+                handler = logging.handlers.WatchedFileHandler(fullPath(logfile))
         else:
             handler = logging.StreamHandler(logfile)
 
@@ -1405,20 +1416,16 @@ def printReport():
         logger.log(logging.STATS, "No files backed up")
 
 def lockRun(server, port, client):
-    lockName = os.path.join(tempfile.gettempdir(), 'tardis_lock_' + str(server) + '_' + str(port) + '_' + str(client))
+    lockName = 'tardis_' + str(server) + '_' + str(port) + '_' + str(client)
+
+    # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by 
+    # the superuser (ie, can't write to /var/run)
+    pid = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
+
     try:
-        lockFile = file(lockName, 'wb')
-        fcntl.flock(lockFile, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        lockFile.seek(0)
-        lockFile.write(str(os.getpid()) + "\n")
-        lockFile.flush()
-        # Make the file world accessible, so if somebody else runs this, they get the same data
-        os.chmod(lockName, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
-    except IOError as e:
-        if e.errno == errno.EWOULDBLOCK:
-            pid = lockFile.readline().strip()
-            logger.warning("Tardis is currently running (PID: %s). Aborting.", pid)
-        raise e
+        pid.create()
+    except PidFileError as e:
+        raise Exception("Tardis already running: %s", e)
 
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes
