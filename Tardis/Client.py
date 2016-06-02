@@ -1196,9 +1196,11 @@ def processCommandLine():
 
     t = args.job
     c = ConfigParser.ConfigParser(configDefaults)
-    c.add_section(t)                   # Make it safe for reading other values from.
     if args.config:
         c.read(args.config)
+        if not c.has_section(t):
+            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
+    c.add_section(t)                   # Make it safe for reading other values from.
 
     parser.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. Default: %(default)s')
