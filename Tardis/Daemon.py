@@ -259,7 +259,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
                         if self.full and old['chainlength'] != 0:
-                            retVal = CONTENT
+                            retVal = REFRESH
                         else:
                             retVal = DONE       # we're done either way
                     else:
