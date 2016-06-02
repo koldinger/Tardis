@@ -98,6 +98,7 @@ configDefaults = {
     'CompressMsgs':         str(False),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
+    'SendSig':              str(False),
     'ExcludePatterns':      None,
     'ExcludeFiles':         None,
     'ExcludeDirs':          None,
@@ -343,7 +344,7 @@ def processDelta(inode):
                 sigfile.seek(0)
 
                 # If we're encrypted, we need to generate a new signature, and send it along
-                makeSig = True if args.crypt and crypt else False
+                makeSig = True if (args.crypt and crypt) or args.signature else False
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
@@ -462,7 +463,7 @@ def sendContent(inode, reportType):
                     if mimeType in noCompTypes:
                         logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
                         compress = False
-                makeSig = True if args.crypt and crypt else False
+                makeSig = True if (args.crypt and crypt) or args.signature else False
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
@@ -475,7 +476,7 @@ def sendContent(inode, reportType):
                                         stats=stats,
                                         progress=progress)
 
-                if args.crypt and crypt:
+                if sig:
                     sig.seek(0)
                     message = {
                         "message" : "SIG",
@@ -1200,7 +1201,9 @@ def processCommandLine():
         c.read(args.config)
         if not c.has_section(t):
             sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
-    c.add_section(t)                   # Make it safe for reading other values from.
+            c.add_section(t)                    # Make it safe for reading other values from.
+    else:
+        c.add_section(t)                        # Make it safe for reading other values from.
 
     parser.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. Default: %(default)s')
     parser.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. Default: %(default)s')
@@ -1277,6 +1280,8 @@ def processCommandLine():
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=1000,            help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
     comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
                         help=_d('Protocol for data transfer.  Default: %(default)s'))
+    comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
+                        help=_d('Always send a signature.  Default: %(default)s'))
 
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s'))
@@ -1398,7 +1403,7 @@ def printReport():
         length = max(length, 50)
         fmts = ['','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 2)
-        fmt2 = '  %-{}s %-6s %-10s -10s'.format(length)
+        fmt2 = '  %-{}s %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s %-6s %-10s'.format(length)
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 2), '-' * 6, '-' * 10, '-' * 10)
@@ -1420,12 +1425,13 @@ def lockRun(server, port, client):
 
     # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by 
     # the superuser (ie, can't write to /var/run)
-    pid = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
+    pidfile = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
 
     try:
-        pid.create()
+        pidfile.create()
     except PidFileError as e:
         raise Exception("Tardis already running: %s", e)
+    return pidfile
 
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes
