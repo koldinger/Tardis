@@ -220,7 +220,7 @@ def filelist(dir, excludes):
     for p in excludes:
         remove = [x for x in fnmatch.filter(files, p)]
         if len(remove):
-            files = list(set(files) - set(remove))
+            files = set(files) - set(remove)
     for f in files:
         yield f
 
@@ -886,37 +886,41 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
-        # Check the max time on all the files.  If everything is before last timestamp, just clone
-        cloneable = False
-        #print "Checking cloneablity: {} Last {} ctime {} mtime {}".format(dir, conn.lastTimestamp, s.st_ctime, s.st_mtime)
-        if (args.clones > 0) and (s.st_ctime < conn.lastTimestamp) and (s.st_mtime < conn.lastTimestamp):
-            if len(files) > 0:
-                maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
-                #print "Max file timestamp: {} Last Timestamp {}".format(maxTime, conn.lastTimestamp)
-            else:
-                maxTime = max(s.st_ctime, s.st_mtime)
+        h = hashDir(files)
+        dirHashes[(s.st_ino, s.st_dev)] = h
 
-            if maxTime < conn.lastTimestamp:
-                cloneable = True
+        newFiles = [f for f in files if max(f['ctime'], f['mtime']) >= conn.lastTimestamp]
+        oldFiles = [f for f in files if max(f['ctime'], f['mtime']) < conn.lastTimestamp]
 
-        if cloneable:
-            if logger.isEnabledFor(logging.DIRS):
-                logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
+        if newFiles:
+            # There are new and (maybe) old files.
+            # First, save the hash.
 
-            #cloneDir(s.st_ino, s.st_dev, files, os.path.relpath(dir, top))
-            cloneDir(s.st_ino, s.st_dev, files, dir)
-        else:
-            h = hashDir(files)
-            dirHashes[(s.st_ino, s.st_dev)] = h
-            if logger.isEnabledFor(logging.DIRS):
-                logger.log(logging.DIRS, "Dir: [N]: %s", Util.shortPath(dir))
+            # Purge out any meta data that's been accumulated
             if newmeta:
                 batchMessage(makeMetaMessage())
-            sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), files)
+
+            if oldFiles:
+                # There are oldfiles.  Hash them.
+                if logger.isEnabledFor(logging.DIRS):
+                    logger.log(logging.DIRS, "Dir: [A]: %s", Util.shortPath(dir))
+                cloneDir(s.st_ino, s.st_dev, oldFiles, dir)
+            else:
+                if logger.isEnabledFor(logging.DIRS):
+                    logger.log(logging.DIRS, "Dir: [A]: %s", Util.shortPath(dir))
+            sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), newFiles)
+
+        else:
+            # everything is old
+            if logger.isEnabledFor(logging.DIRS):
+                logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
+            cloneDir(s.st_ino, s.st_dev, oldFiles, dir, info=h)
 
         # Make sure we're not at maximum depth
         if depth != 1:
-            files = None
+            # Purge out the lists.  Allow garbage collection to take place.  These can get largish.
+            files = oldFiles = newFiles = None
+            # Process the sub directories
             for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
 
@@ -941,16 +945,29 @@ def hashDir(files):
         m.update(f)
     return (m.hexdigest(), len(filenames))
 
-def cloneDir(inode, device, files, path):
+def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
-    (h, s) = hashDir(files)
-    dirHashes[(inode, device)] = (h, s)
+    if info:
+        (h, s) = info
+    else:
+        (h, s) = hashDir(files)
 
     message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
     cloneContents[(inode, device)] = (path, files)
     if len(cloneDirs) >= args.clones:
         flushClones()
+
+def splitDir(files, when):
+    newFiles = []
+    oldFiles = []
+    for f in files:
+        if f['mtime'] < when:
+            oldFiles.append(f)
+        else:
+            newFiles.append(f)
+    return newFiles, oldFiles
+
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
@@ -1589,12 +1606,16 @@ def main():
         # Sanity check.
         if len(cloneContents) != 0:
             logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+            #for key in cloneContents:
+            #    (path, files) = cloneContents[key]
+            #    print "{}:: {}".format(path, len(files))
+
         # This next one is usually non-zero, for some reason.  Enable to debug.
-        #if len(inodeDB) != 0:
-            #logger.warning("Warning: Some InodeDB none zero: %d", len(inodeDB))
+        if len(inodeDB) != 0:
+            logger.warning("Warning: Some InodeDB's not processed : %d", len(inodeDB))
             #for key in inodeDB.keys():
-                #(info, path) = inodeDB[key]
-                #print "{}:: {}".format(key, path)
+            #    (info, path) = inodeDB[key]
+            #    print "{}:: {}".format(key, path)
 
         # Send a purge command, if requested.
         if args.purge:
