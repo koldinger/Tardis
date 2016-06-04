@@ -547,6 +547,9 @@ def pruneBackupSetsByRange():
     if len(range) > 2:
         doprint("Invalid range '%s'" % args.range, color=colors['error'], eol=True)
         sys.exit(1)
+    elif len(range) == 1:
+        range.append(range[0])
+
     if range[0]:
         try:
             startRange = int(range[0])
@@ -583,6 +586,9 @@ def pruneBackupSetsByDateRange(tardis):
     if len(range) > 2:
         doprint("Invalid range '%s'" % args.daterange, color=colors['error'], eol=True)
         sys.exit(1)
+    elif len(range) == 1:
+        range.append(range[0])
+
     if range[0]:
         (then, success) = cal.parse(range[0])
         if success:
@@ -600,6 +606,7 @@ def pruneBackupSetsByDateRange(tardis):
             sys.exit(1)
     else:
         startRange = 0
+        startTime = time.mktime(time.gmtime(0))
 
     if range[1]:
         (then, success) = cal.parse(range[1])
@@ -615,6 +622,7 @@ def pruneBackupSetsByDateRange(tardis):
             sys.exit(1)
     else:
         endRange = sys.maxint
+        endTime = time.time()
 
     doprint("Starttime: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(startTime)), color=colors['header'], eol=True)
     doprint("EndTime:   " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(endTime)), color=colors['header'], eol=True)
@@ -741,8 +749,8 @@ def processArgs():
     parser.add_argument('--realpath',       dest='realpath',    default=True, action=Util.StoreBoolean,     help='Use the full path, expanding symlinks to their actual path components')
 
     rangegrp = parser.add_mutually_exclusive_group()
-    rangegrp.add_argument('--range',      dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
-    rangegrp.add_argument('--dates',      dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
+    rangegrp.add_argument('--range',      dest='range',   default=None,                                     help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
+    rangegrp.add_argument('--dates',      dest='daterange', default=None,                                   help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
     passgroup= parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
