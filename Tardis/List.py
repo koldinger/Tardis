@@ -587,7 +587,7 @@ def pruneBackupSetsByDateRange(tardis):
         doprint("Invalid range '%s'" % args.daterange, color=colors['error'], eol=True)
         sys.exit(1)
     elif len(range) == 1:
-        range.append(range[0])
+        range.append('')
 
     if range[0]:
         (then, success) = cal.parse(range[0])
