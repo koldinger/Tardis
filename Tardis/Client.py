@@ -1627,16 +1627,16 @@ def main():
 
     endtime = datetime.datetime.now()
 
-    # Sanity check.
-    if len(cloneContents) != 0:
-        logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+    # Sanity checks.  Enable for debugging.
+    #if len(cloneContents) != 0:
+    #   logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
         #for key in cloneContents:
         #    (path, files) = cloneContents[key]
         #    print "{}:: {}".format(path, len(files))
 
     # This next one is usually non-zero, for some reason.  Enable to debug.
-    if len(inodeDB) != 0:
-        logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
+    #if len(inodeDB) != 0:
+    #   logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
         #for key in inodeDB.keys():
         #    (info, path) = inodeDB[key]
         #    print "{}:: {}".format(key, path)
