@@ -1335,6 +1335,7 @@ def parseServerInfo(args):
     if args.local:
         sServer = 'localhost'
         sPort   = 'local'
+        sClient = args.client
     else:
         serverStr = args.server
         #logger.debug("Got server string: %s", serverStr)
@@ -1603,20 +1604,6 @@ def main():
         while flushBatchMsgs():
             pass
 
-        # Sanity check.
-        if len(cloneContents) != 0:
-            logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
-            #for key in cloneContents:
-            #    (path, files) = cloneContents[key]
-            #    print "{}:: {}".format(path, len(files))
-
-        # This next one is usually non-zero, for some reason.  Enable to debug.
-        if len(inodeDB) != 0:
-            logger.warning("Warning: Some InodeDB's not processed : %d", len(inodeDB))
-            #for key in inodeDB.keys():
-            #    (info, path) = inodeDB[key]
-            #    print "{}:: {}".format(key, path)
-
         # Send a purge command, if requested.
         if args.purge:
             if args.purgetime:
@@ -1640,7 +1627,19 @@ def main():
 
     endtime = datetime.datetime.now()
 
-    # Note, we SHOULD unlock the lock file, but it automatically be unlocked when this program completes.
+    # Sanity check.
+    if len(cloneContents) != 0:
+        logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+        #for key in cloneContents:
+        #    (path, files) = cloneContents[key]
+        #    print "{}:: {}".format(path, len(files))
+
+    # This next one is usually non-zero, for some reason.  Enable to debug.
+    if len(inodeDB) != 0:
+        logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
+        #for key in inodeDB.keys():
+        #    (info, path) = inodeDB[key]
+        #    print "{}:: {}".format(key, path)
 
     # Print stats and files report
     if args.stats:
