@@ -145,7 +145,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             if outname and not checkOverwrite(outname, info):
                 skip = True
-                logger.warning("Skipping existing file: %s", path)
+                logger.warning("Skipping existing file: %s (%s)", path, outname)
 
 
             # First, determine if we're in a linking situation
@@ -179,7 +179,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     else:
                         retCode += 1
             elif not skip:
-                logger.info("Recovering file %s", path)
+                logger.info("Recovering file %s => %s", path, outname)
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum, authenticate)
 
