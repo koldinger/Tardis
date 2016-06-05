@@ -530,11 +530,11 @@ def sendDirHash(inode):
     global dirHashes
 
     i = tuple(inode)
-    try:
-        (h,s) = dirHashes[i]
-    except KeyError:
-        logger.error("%s, No directory hash available for inode %d on device %d", i, i[0], i[1])
-        (h,s) = dirHashes.setdefault(i, ('00000000000000000000000000000000', 0))
+    #try:
+    #    (h,s) = dirHashes[i]
+    #except KeyError:
+    #    logger.error("%s, No directory hash available for inode %d on device %d", i, i[0], i[1])
+    (h,s) = dirHashes.setdefault(i, ('00000000000000000000000000000000', 0))
 
     message = {
         'message': 'DHSH',
