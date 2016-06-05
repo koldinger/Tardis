@@ -107,7 +107,7 @@ configDefaults = {
     'LocalExcludeFileName': Defaults.getDefault('TARDIS_LOCAL_EXCLUDES'),
     'SkipFileName':         Defaults.getDefault('TARDIS_SKIP'),
     'LogFiles':             None,
-    'Verbosity':            0,
+    'Verbosity':            str(0),
     'Stats':                str(False),
     'Report':               str(False),
     'Directories':          '.',
