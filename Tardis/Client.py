@@ -156,7 +156,7 @@ report = {}
 
 inodeDB             = {}
 dirHashes           = {
-    (0, 0): ('000000', 0)
+    (0, 0): ('00000000000000000000000000000000', 0)
     }
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
@@ -527,8 +527,14 @@ def handleAckMeta(message):
         (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
 def sendDirHash(inode):
+    global dirHashes
+
     i = tuple(inode)
-    (h,s) = dirHashes.setdefault(i, ('00000000000000000000', 0))
+    try:
+        (h,s) = dirHashes[i]
+    except KeyError:
+        logger.error("%s, No directory hash available for inode %d on device %d", i, i[0], i[1])
+        (h,s) = dirHashes.setdefault(i, ('00000000000000000000000000000000', 0))
 
     message = {
         'message': 'DHSH',
@@ -536,9 +542,9 @@ def sendDirHash(inode):
         'hash'   : h,
         'size'   : s
         }
+
     batchMessage(message)
-    if i != (0, 0):             # Leave the dummy entry
-        del dirHashes[i]
+    del dirHashes[i]
 
 def cksize(i, threshhold):
     if i in inodeDB:
@@ -860,6 +866,8 @@ processedDirs = set()
 
 def recurseTree(dir, top, depth=0, excludes=[]):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
+    global dirHashes
+
     newdepth = 0
     if depth > 0:
         newdepth = depth - 1
@@ -882,15 +890,29 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.debug("Skip file found.  Skipping %s", dir)
             return
 
-        #logger.info("Dir: %s", Util.shortPath(dir))
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
         h = hashDir(files)
+        #logger.debug("Dir: %s (%d, %d): Hash: %s Size: %d.", Util.shortPath(dir), s.st_ino, s.st_dev, h[0], h[1])
         dirHashes[(s.st_ino, s.st_dev)] = h
 
-        newFiles = [f for f in files if max(f['ctime'], f['mtime']) >= conn.lastTimestamp]
-        oldFiles = [f for f in files if max(f['ctime'], f['mtime']) < conn.lastTimestamp]
+        # Figure out which files to clone, and which to update
+        if files and args.clones:
+            if len(files) > args.clonethreshold:
+                newFiles = [f for f in files if max(f['ctime'], f['mtime']) >= conn.lastTimestamp]
+                oldFiles = [f for f in files if max(f['ctime'], f['mtime']) < conn.lastTimestamp]
+            else:
+                maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
+                if maxTime < conn.lastTimestamp:
+                    oldFiles = files
+                    newFiles = []
+                else:
+                    newFiles = files
+                    oldFiles = []
+        else:
+            newFiles = files
+            oldFiles = []
 
         if newFiles:
             # There are new and (maybe) old files.
@@ -1291,6 +1313,7 @@ def processCommandLine():
                         help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=100,               help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
+    comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: %(default)s'))
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s'))
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  Default: %(default)s'))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  Default: %(default)s'))
