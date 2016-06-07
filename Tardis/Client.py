@@ -1518,12 +1518,14 @@ def main():
         except Exception as e:
             logger.critical("Could not retrieve password.")
             sys.exit(1)
+        # Purge out the original password.  Maybe it might go away.
         args.password = None
 
         token = None
         if password:
             crypt = TardisCrypto.TardisCrypto(password, client)
             token = crypt.createToken()
+        # Again, purge out the password for security reasons.
         password = None
 
         # If no compression types are specified, load the list
@@ -1536,6 +1538,31 @@ def main():
                 logger.error("Could not load nocompress types list: %s", args.nocompress)
                 raise e
 
+        # Calculate the base directories
+        directories = map(fullPath, args.directories)
+        if args.basepath == 'common':
+            rootdir = os.path.commonprefix(directories)
+            # If the rootdir is actually one of the directories, back off one directory
+            if rootdir in directories:
+                rootdir  = os.path.split(rootdir)[0]
+        elif args.basepath == 'full':
+            rootdir = '/'
+        else:
+            # None, just using the final component of the pathname.
+            # Check that each final component is unique, or will cause server error.
+            names = {}
+            errors = False
+            for i in args.directories:
+                name = os.path.split(i)[1]
+                if name in names:
+                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, name, names[name])
+                    errors = True
+                else:
+                    names[name] = i
+            if errors:
+                raise Exception('All paths must have a unique final directory name if basepath is none')   
+            rootdir = None
+        logger.debug("Rootdir is: %s", rootdir)
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
         if args.exceptions:
@@ -1593,18 +1620,7 @@ def main():
 
     # Now, do the actual work here.
     try:
-        # Calculate the base directories
-        directories = map(fullPath, args.directories)
-        if args.basepath == 'common':
-            rootdir = os.path.commonprefix(directories)
-            # If the rootdir is actually one of the directories, back off one directory
-            if rootdir in directories:
-                rootdir  = os.path.split(rootdir)[0]
-        elif args.basepath == 'full':
-            rootdir = '/'
-        else:
-            rootdir = None
-        logger.debug("Rootdir is: %s", rootdir)
+
 
         # Now, process all the actual directories
         for directory in directories:
