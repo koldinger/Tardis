@@ -72,13 +72,13 @@ sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 minPwStrength = 0
 logger = None
 
-def getDB(crypt, new=False, keyfile=None):
+def getDB(crypt, new=False, keyfile=None, allowRemote=True):
     token = crypt.createToken() if crypt else None
     loc = urlparse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
-        if (new):
-            raise Exception("New clients cannot be created over HTTP/HTTPS.  Must be created locally on the server")
+        if (not allowRemote):
+            raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
         # If no port specified, insert the port
         if loc.port is None:
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
@@ -101,7 +101,7 @@ def getDB(crypt, new=False, keyfile=None):
 
 def createClient(crypt):
     try:
-        (db, cache) = getDB(None, True)
+        (db, cache) = getDB(None, True, allowRemote=False)
         db.close()
         if crypt:
             setToken(crypt)
@@ -452,12 +452,15 @@ def checkPasswordStrength(password):
 
 def setupLogging():
     global logger
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger('')
 
 def main():
     parseArgs()
     setupLogging()
+
+    # Commands which cannot be executed on remote databases
+    allowRemote = args.command not in ['create', 'purge']
 
     try:
         crypt = None
@@ -507,7 +510,7 @@ def main():
         db = None
         cache = None
         try:
-            (db, cache) = getDB(crypt)
+            (db, cache) = getDB(crypt, allowRemote=allowRemote)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
             sys.exit(1)
