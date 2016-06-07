@@ -298,53 +298,8 @@ def deleteBset(db, cache):
         print "Deleted %d files" % (filesDeleted)
         removeOrphans(db, cache)
 
-def _removeOrphans(db, cache):
-    # Now remove any leftover orphans
-    size = 0
-    count = 0
-    # Get a list of orphan'd files
-    orphans = db.listOrphanChecksums()
-    logger.debug("Attempting to remove orphans")
-    for c in orphans:
-        # And remove them each....
-        try:
-            s = os.stat(cache.path(c))
-            if s:
-                count += 1
-                size += s.st_size
-            cache.remove(c)
-
-            sig = c + ".sig"
-            s = os.stat(cache.path(sig))
-            if s:
-                size += s.st_size
-            cache.remove(sig)
-
-            # Delete the basis file, if it exists.
-            # Don't count it's stats, as this is actually a link
-            # to another file
-            basis = c + ".basis"
-            cache.remove(basis)
-
-            db.deleteChecksum(c)
-        except OSError:
-            logger.warning("No checksum file for checksum %s", c)
-        except Exception as e:
-            logger.error("Error purging orphans: %s", e)
-
-    return (count, size)
-
 def removeOrphans(db, cache):
-    count = 0
-    size = 0
-    rounds = 0
-    while True:
-        (lCount, lSize) = _removeOrphans(db, cache)
-        if lCount == 0:
-            break
-        rounds += 1
-        count  += lCount
-        size   += lSize
+    count, size, rounds = Util.removeOrphans(db, cache)
     print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
 def _printConfigKey(db, key):
@@ -497,7 +452,7 @@ def checkPasswordStrength(password):
 
 def setupLogging():
     global logger
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger('')
 
 def main():

@@ -64,6 +64,13 @@ class CacheDir:
     def exists(self, name):
         return os.path.lexists(self.path(name))
 
+    def size(self, name):
+        try:
+            s = os.stat(self.path(name))
+            return s.st_size
+        except:
+            return 0
+
     def mkdir(self, name):
         dir = self.dir(name)
         if not os.path.isdir(dir):

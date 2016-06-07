@@ -801,7 +801,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         # Select all sets that are purgeable.
         c = self.cursor.execute("SELECT " + _backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+                            {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield(row)
 
@@ -822,7 +822,7 @@ class TardisDB(object):
         self.logger.debug("Purging backupsets below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+                            {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         setsDeleted = self.cursor.rowcount
         # Then delete the files which are no longer referenced
         filesDeleted = self._purgeFiles()
@@ -832,10 +832,10 @@ class TardisDB(object):
     def purgeIncomplete(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
-        self.logger.debug("Purging files below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
+        self.logger.debug("Purging incomplete backupsets below priority {}, before {}, and backupset: {}".format(priority, timestamp, backupset))
         # First, purge out the backupsets that don't match
         self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
-                            {"priority": priority, "timestamp": timestamp, "backupset": backupset})
+                            {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         setsDeleted = self.cursor.rowcount
 
         # Then delete the files which are no longer referenced
@@ -852,18 +852,30 @@ class TardisDB(object):
 
         return filesDeleted
 
-    def listOrphanChecksums(self):
+    def listOrphanChecksums(self, isFile):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
                               "AND ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
                               "AND ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
-                              "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL)")
+                              "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                              "AND IsFile = :isfile",
+                              { 'isfile': int(isFile)} )
         while True:
             batch = c.fetchmany(self.chunksize)
             if not batch:
                 break
             for row in batch:
                 yield row[0]
+
+    def deleteOrphanChecksums(self, isFile):
+        c = self.cursor.execute("DELETE FROM Checksums "
+                                "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
+                                "AND ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                                "AND ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
+                                "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                                "AND IsFile = :isfile",
+                                { 'isfile': int(isFile)} )
+        return self.cursor.rowcount
 
     def compact(self):
         self.logger.debug("Removing unused names")

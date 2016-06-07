@@ -162,6 +162,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     statUpdFiles = 0
     statDirs     = 0
     statBytesReceived = 0
+    statPurgedFiles = 0
+    statPurgedSets = 0
     statCommands = {}
     address = ''
 
@@ -703,6 +705,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Purge the files
         if prevTime:
             (files, sets) = self.db.purgeSets(priority, prevTime)
+            self.statPurgedSets += sets
+            self.statPurgedFiles += files
             self.logger.info("Purged %d files in %d backup sets", files, sets)
             if files:
                 self.purged = True
@@ -1010,49 +1014,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
-    def removeOrphans(self):
-        # Now remove any leftover orphans
-        size = 0
-        count = 0
-
-        # Get a list of orphan'd files
-        orphans = self.db.listOrphanChecksums()
-        self.logger.debug("Attempting to remove orphans")
-        for c in orphans:
-            # And remove them each....
-            try:
-                if self.cache.exists(c):
-                    s = os.stat(self.cache.path(c))
-                    if s:
-                        count += 1
-                        size += s.st_size
-                    self.cache.remove(c)
-
-                sig = c + ".sig"
-                if self.cache.exists(sig):
-                    s = os.stat(self.cache.path(sig))
-                    if s:
-                        size += s.st_size
-                    self.cache.remove(sig)
-
-                # Delete the basis file, if it exists.  
-                # Don't count it's stats, as this is actually a link 
-                # to another file
-                basis = c + ".basis"
-                if self.cache.exists(basis):
-                    self.cache.remove(basis)
-
-                self.db.deleteChecksum(c)
-            except OSError:
-                self.logger.warning("Unable to remove checksum %s", c)
-            except Exception as e:
-                if self.server.exceptions:
-                    self.logger.exception(e)
-
-            if count:
-                self.purged = True
-            return (count, size)
-
     def calcAutoInfo(self, clienttime):
         """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
@@ -1255,12 +1216,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 print s.getvalue()
 
             if started:
-                (count, size) = self.removeOrphans()
+                (count, size, rounds) = Util.removeOrphans(self.db, self.cache)
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
                 self.logger.info("New or replaced files:    %d", self.statNewFiles)
                 self.logger.info("Updated files:            %d", self.statUpdFiles)
                 self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
                 self.logger.info("Command breakdown:        %s", self.statCommands)
+                self.logger.info("Purged Sets and File:     %d %d", self.statPurgedSets, self.statPurgedFiles)
                 self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 
                 self.logger.debug("Removing orphans")

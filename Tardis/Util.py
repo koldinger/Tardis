@@ -308,6 +308,63 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
     return (tardis, cache, crypt)
 
 """
+Data manipulation functions
+"""
+def _removeOrphans(db, cache):
+    #logger = logging.getLogger('UTIL')
+
+    size = 0
+    count = 0
+    # Get a list of orphan'd files
+    orphans = db.listOrphanChecksums(isFile=True)
+    for c in orphans:
+        # And remove them each....
+        try:
+            s = cache.size(c)
+            if s:
+                size += s
+                count += 1
+            cache.remove(c)
+
+            sig = c + ".sig"
+            size += cache.size(sig)
+            cache.remove(sig)
+
+            # Delete the basis file, if it exists.
+            # Don't count it's stats, as this is actually a link
+            # to another file
+            basis = c + ".basis"
+            cache.remove(basis)
+
+            db.deleteChecksum(c)
+        except OSError:
+            #logger.warning("No checksum file for checksum %s", c)
+            pass            # Do something better here.
+        except Exception as e:
+            #logger.error("Error purging orphans: %s", e)
+            pass            # Do something better here
+    return count, size
+
+def removeOrphans(db, cache):
+    count = 0
+    size = 0
+    rounds = 0
+    # Repeatedly prune the file trees until there are no more checksums
+    # we have to do this, as there can be multiple levels of basis files, each dependant on the one above (below?)
+    # Theoretically we should be able to do this is one go, but SQLite's implementation of recursive queries doesn't
+    # seem to work quite right. 
+    while True:
+        (lCount, lSize) = _removeOrphans(db, cache)
+        if lCount == 0:
+            break
+        rounds += 1
+        count  += lCount
+        size   += lSize
+
+    db.deleteOrphanChecksums(False)
+    return count, size, rounds
+
+"""
 Data transmission functions
 """
 
