@@ -64,8 +64,8 @@ import Defaults
 import parsedatetime
 
 features = Tardis.__check_features()
-support_xattr = True if 'xattr' in features else False
-support_acl   = True if 'pylibacl' in features else False
+support_xattr = 'xattr' in features
+support_acl   = 'pylibacl' in features
 
 if support_xattr:
     import xattr
@@ -137,8 +137,9 @@ args                = None
 cloneDirs           = []
 cloneContents       = {}
 batchMsgs           = []
-metaCache           = Util.bidict()
-newmeta             = []
+metaCache           = Util.bidict()                 # A cache of metadata.  Since many files can have the same metadata, we check that 
+                                                    # that we haven't sent it yet.
+newmeta             = []                            # When we encounter new metadata, keep it here until we flush it to the server.
 
 noCompTypes         = None
 
@@ -147,9 +148,13 @@ logger              = None
 
 # Stats block.
 # dirs/files/links  == Number of directories/files/links backed up total
-# new/delta         == Number of new/delta sets sent
+# new/delta         == Number of new/delta files sent
+# backed            == Total size of data represented by the backup.
 # dataSent          == Number of data bytes sent this run (not including messages)
 # dataBacked        == Number of bytes backed up this run
+# Example: If you have 100 files, and 99 of them are already backed up (ie, one new), backed would be 100, but new would be 1.
+# dataSent is the compressed and encrypted size of the files (or deltas) sent in this run, but dataBacked is the total size of 
+# the files.
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0}
 
 report = {}
@@ -344,7 +349,7 @@ def processDelta(inode):
                 sigfile.seek(0)
 
                 # If we're encrypted, we need to generate a new signature, and send it along
-                makeSig = True if (args.crypt and crypt) or args.signature else False
+                makeSig = (args.crypt and crypt) or args.signature
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
@@ -386,7 +391,7 @@ def processDelta(inode):
                 }
 
                 batchMessage(message, flush=True, batch=False, response=False)
-                compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                compress = (args.compress and (filesize > args.mincompsize))
                 progress = printProgress if args.progress else None
                 (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
                 delta.close()
@@ -454,7 +459,7 @@ def sendContent(inode, reportType):
             # Attempt to send the data.
             sig = None
             try:
-                compress = True if (args.compress and (filesize > args.mincompsize)) else False
+                compress = (args.compress and (filesize > args.mincompsize))
                 progress = printProgress if args.progress else None
                 # Check if it's a file type we don't want to compress
                 if compress and noCompTypes:
@@ -463,7 +468,7 @@ def sendContent(inode, reportType):
                     if mimeType in noCompTypes:
                         logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
                         compress = False
-                makeSig = True if (args.crypt and crypt) or args.signature else False
+                makeSig = (args.crypt and crypt) or args.signature
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
@@ -522,7 +527,7 @@ def handleAckMeta(message):
         }
 
         sendMessage(message)
-        compress = True if (args.compress and (len(data) > args.mincompsize)) else False
+        compress = (args.compress and (len(data) > args.mincompsize))
         progress = printProgress if args.progress else None
         (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
@@ -607,6 +612,9 @@ def handleAckDir(message):
         sendDirHash(message['inode'])
 
 def addMeta(meta):
+    """
+    Add data to the metadata cache
+    """
     global metaCache
     global newmeta
     if meta in metaCache:
@@ -833,7 +841,7 @@ def sendDirChunks(path, inode, files, hash=None):
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
         message["files"] = chunk
-        message["last"]  = True if (x + args.dirslice > len(files) ) else False
+        message["last"]  = (x + args.dirslice > len(files))
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
@@ -1326,6 +1334,8 @@ def processCommandLine():
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s'))
 
+    parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
+
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete')
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
@@ -1590,7 +1600,6 @@ def main():
             logger.exception(e)
         sys.exit(1)
 
-
     if verbosity or args.stats or args.report:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), server, port, conn.getSessionId()))
 
@@ -1620,8 +1629,6 @@ def main():
 
     # Now, do the actual work here.
     try:
-
-
         # Now, process all the actual directories
         for directory in directories:
             # skip if already processed.
@@ -1638,7 +1645,9 @@ def main():
             # And run the directory
             recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
 
-        # If any clone or batch requests still lying around, send them
+        # If any metadata, clone or batch requests still lying around, send them now
+        if newmeta:
+            batchMessage(makeMetaMessage())
         flushClones()
         while flushBatchMsgs():
             pass
@@ -1666,19 +1675,20 @@ def main():
 
     endtime = datetime.datetime.now()
 
-    # Sanity checks.  Enable for debugging.
-    #if len(cloneContents) != 0:
-    #   logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
-        #for key in cloneContents:
-        #    (path, files) = cloneContents[key]
-        #    print "{}:: {}".format(path, len(files))
+    if args.sanity:
+        # Sanity checks.  Enable for debugging.
+        if len(cloneContents) != 0:
+            logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+            for key in cloneContents:
+                (path, files) = cloneContents[key]
+                print "{}:: {}".format(path, len(files))
 
-    # This next one is usually non-zero, for some reason.  Enable to debug.
-    #if len(inodeDB) != 0:
-    #   logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
-        #for key in inodeDB.keys():
-        #    (info, path) = inodeDB[key]
-        #    print "{}:: {}".format(key, path)
+        # This next one is usually non-zero, for some reason.  Enable to debug.
+        if len(inodeDB) != 0:
+            logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
+            for key in inodeDB.keys():
+                (info, path) = inodeDB[key]
+                print "{}:: {}".format(key, path)
 
     # Print stats and files report
     if args.stats:
