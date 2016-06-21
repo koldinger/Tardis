@@ -98,6 +98,7 @@ configDefaults = {
     'CompressMsgs':         str(False),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
+    'SkipCaches':           str(False),
     'SendSig':              str(False),
     'ExcludePatterns':      None,
     'ExcludeFiles':         None,
@@ -608,8 +609,8 @@ def handleAckDir(message):
     if len(cksum) > 0:
         processChecksums([tuple(x) for x in cksum])
 
-    if message['last']:
-        sendDirHash(message['inode'])
+    #if message['last']:
+    #    sendDirHash(message['inode'])
 
 def addMeta(meta):
     """
@@ -846,6 +847,8 @@ def sendDirChunks(path, inode, files, hash=None):
             logger.debug("---- Sending chunk ----")
         batchMessage(message, batch=False)
 
+    sendDirHash(inode)
+
 def makeMetaMessage():
     global newmeta
     message = {
@@ -898,6 +901,16 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.debug("Skip file found.  Skipping %s", dir)
             return
 
+        if args.skipcaches and os.path.lexists(os.path.join(dir, 'CACHEDIR.TAG')):
+            logger.debug("CACHEDIR.TAG file found.  Analyzing")
+            try:
+                with file(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
+                    line = f.readline()
+                    if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
+                        logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
+                        return
+            except:
+                logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, 'CACHEDIR.TAG'), dir)
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
@@ -1298,7 +1311,10 @@ def processCommandLine():
     parser.add_argument('--basepath',           dest='basepath', default='full', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
-    excgrp.add_argument('--cvs-ignore',                 dest='cvs', action=Util.StoreBoolean,                           help='Ignore files like CVS')
+    excgrp.add_argument('--cvs-ignore',                 dest='cvs', default=c.getboolean(t, 'IgnoreCVS'), action=Util.StoreBoolean,
+                        help='Ignore files like CVS')
+    excgrp.add_argument('--skip-caches',                dest='skipcaches', default=c.getboolean(t, 'SkipCaches'),action=Util.StoreBoolean,
+                        help='Skip directories with valid CACHEDIR.TAG files')
     excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append', default=splitList(c.get(t, 'ExcludePatterns')),
                         help='Patterns to exclude globally (may be repeated)')
     excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',                           help='Load patterns from exclude file (may be repeated)')
