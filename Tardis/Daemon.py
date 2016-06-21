@@ -740,7 +740,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             numDeltas = self.db.getNumDeltaFilesInDirectory(inoDev, current=False)
                             if numDeltas > 0:
                                 # Oops, there's a delta file in here on a full backup.
-                                self.logger.debug("Inode %d contains %d deltas on full backup.  Requesting refresh.", inode, numDeltas)
+                                #self.logger.debug("Inode %d contains %d deltas on full backup.  Requesting refresh.", inode, numDeltas)
                                 content.append(inoDev)
                             else:
                                 # No delta files for full backup.  We're done
@@ -1272,7 +1272,7 @@ class TardisDomainSocketServer(SocketServer.UnixStreamServer):
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
 def setConfig(self, args, config):
-    self.basedir        = config.get('Tardis', 'BaseDir')
+    self.basedir        = args.database
     self.savefull       = config.getboolean('Tardis', 'SaveFull')
     self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
     self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
@@ -1358,7 +1358,7 @@ def setupLogging():
         handler.setFormatter(format)
         logger.addHandler(handler)
 
-        loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+        loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
         logger.setLevel(loglevel)
 
     return logger
@@ -1416,6 +1416,7 @@ def processArgs():
     config.read(args.config)
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
+    parser.add_argument('--database',           dest='database',        default=config.get('Tardis', 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
