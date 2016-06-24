@@ -92,13 +92,18 @@ def shortPath(path, width=80):
     if path == None or len(path) <= width:
         return path
 
+    shortened = False
     width -= 8
     while len(path) > width:
         try:
             head, path = str.split(path, os.sep, 1)
+            shortened = True
         except:
             break
+
     # if still longer, really 
+    # Shorten it up by removing some stuff in the middle.
+    # TODO: This really needs to be celaned up.
     if len(path) > width:
         namecomps = path.rsplit('.', 1)
         if len(namecomps) == 2:
@@ -108,11 +113,14 @@ def shortPath(path, width=80):
             suffix = ''
         length = len(main) - len(suffix) - 5
         length = min(length, width - 10)
-        path   = main[0:length/2] + "..." + main[-(length/2):]
+        path   = main[0:length/2] + " ... " + main[-(length/2):]
         if suffix:
             path = '.'.join([path, suffix])
 
-    return ".../" + path
+    if shortened:
+        return ".../" + path
+    else:
+        return path
 
 def accumulateStat(stats, stat, amount=1):
     if stats:
