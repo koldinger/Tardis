@@ -121,6 +121,12 @@ def doAuthenticate(outname, checksum, digest):
                         outname, checksum, digest, action)
         return target
 
+def notSame(a, b, string):
+    if a == b:
+        return ''
+    else:
+        return string
+
 def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, authenticate=True):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
@@ -141,11 +147,11 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 # This should only happen only one file specified.
                 outname = name
             elif outputdir:
-                outname = os.path.join(outputdir, realname)
+                outname = os.path.abspath(os.path.join(outputdir, realname))
 
             if outname and not checkOverwrite(outname, info):
                 skip = True
-                logger.warning("Skipping existing file: %s (%s)", path, outname)
+                logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
 
 
             # First, determine if we're in a linking situation
@@ -158,28 +164,36 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 else:
                     linkDB[key] = outname
 
+            # If it's a directory, create the directory, and recursively process it
             if info['dir']:
-                logger.info("Processing directory %s", path)
+                logger.info("Processing directory %s", Util.shortPath(path))
                 contents = tardis.readDirectory((info['inode'], info['device']), bset)
+                # Make sure an output directory is specified (really only useful at the top level)
                 if not outname:
                     #logger.error("Cannot regenerate directory %s without outputdir specified", path)
                     raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
                 if not os.path.exists(outname):
                     os.mkdir(outname)
                 dirInode = (info['inode'], info['device'])
+                # For each file in the directory, regenerate it.
                 for i in contents:
                     name = i['name']
+                    # Get the Info
                     childInfo = tardis.getFileInfoByName(name, dirInode, bset)
+
+                    # Decrypt filename, and make it UTF-8.
                     if args.crypt and crypt:
                         name = crypt.decryptFilename(name)
                     name = name.decode('utf-8')
+
+                    # Recurse into the child, if it exists.
                     if childInfo:
                         if args.recurse or not childInfo['dir']:
                             recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     else:
                         retCode += 1
             elif not skip:
-                logger.info("Recovering file %s => %s", path, outname)
+                logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, outname, " => " + Util.shortPath(outname)))
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum, authenticate)
 
@@ -492,7 +506,7 @@ def main():
             for i in args.files:
                 try:
                     i = os.path.abspath(i)
-                    logger.info("Processing %s", i)
+                    logger.info("Processing %s", Util.shortPath(i))
                     path = None
                     f = None
                     if args.last:
