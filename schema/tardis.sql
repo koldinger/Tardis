@@ -65,9 +65,9 @@ CREATE TABLE IF NOT EXISTS Files (
 
     PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
     FOREIGN KEY(NameId)      REFERENCES Names(NameId),
-    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumIdD)
-    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumIdD)
+    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumId)
 );
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
