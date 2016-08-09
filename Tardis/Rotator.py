@@ -34,23 +34,29 @@ import subprocess
 import os, os.path
 import stat
 import time
+import gzip
 
 class Rotator:
-    def __init__(self, rotations=5, compress=32 * 1024, compressor='gzip'):
+    def __init__(self, rotations=5, compress=32 * 1024):
         self.logger = logging.getLogger("Rotator")
         self.rotations = rotations
         self.compress = compress
-        self.compressor = compressor
 
     def backup(self, name):
-        newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
-        self.logger.debug("Copying %s to %s", name, newname)
-        shutil.copyfile(name, newname)
-        stat = os.stat(newname)
-        if stat.st_size  > self.compress:
-            self.logger.debug("Compressing %s", newname)
-            args = [self.compressor, newname]
-            subprocess.check_call(args)
+        with file(name, 'rb') as infile:
+            newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
+            stat = os.stat(name)
+            if self.compress and stat.st_size >= self.compress:
+                newname += '.gz'
+                self.logger.debug("Compressing %s to %s", name, newname)
+                outfile = gzip.open(newname, "wb")
+            else:
+                self.logger.debug("Copying %s to %s", name, newname)
+                outfile = file(newname, 'wb')
+            try:
+                shutil.copyfileobj(infile, outfile)
+            finally:
+                outfile.close()
 
     def rotate(self, name):
         d, f = os.path.split(os.path.abspath(name))
