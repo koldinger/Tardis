@@ -332,6 +332,7 @@ def processDelta(inode):
         if args.progress:
             printProgress("File [D]:", pathname)
         setMessageID(message)
+        logger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
         ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
         ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
@@ -351,6 +352,8 @@ def processDelta(inode):
 
                 # If we're encrypted, we need to generate a new signature, and send it along
                 makeSig = (args.crypt and crypt) or args.signature
+
+                logger.debug("Generating delta for %s", pathname)
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
