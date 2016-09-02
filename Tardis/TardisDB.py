@@ -71,7 +71,7 @@ def _addFields(x, y):
 def _splitpath(path):
     """ Split a path into chunks, recursively """
     (head, tail) = os.path.split(path)
-    return splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
+    return _splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
 
 def _fetchEm(cursor):
     while True:
