@@ -193,7 +193,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     else:
                         retCode += 1
             elif not skip:
-                logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, outname, " => " + Util.shortPath(outname)))
+                myname = outname if outname else "stdout"
+                logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
+
                 checksum = info['checksum']
                 i = regenerator.recoverChecksum(checksum, authenticate)
 
@@ -541,6 +543,7 @@ def main():
         logger.error("Recovery interupted")
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
+        #logger.exception(e)
 
     if errors:
         logger.warning("%d files could not be recovered.")
