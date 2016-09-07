@@ -32,7 +32,8 @@ import requests
 import logging
 import tempfile
 import sys
-import urllib
+import urllib, urllib3
+import warnings
 
 import os, os.path
 
@@ -90,6 +91,11 @@ class RemoteDB(object):
         self.host = host
         self.headers = { "user-agent": "TardisDB-" + Tardis.__versionstring__ }
 
+        # Disable insecure requests warning, if verify is disabled.
+        # Generates too much output
+        if not self.verify:
+            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
         if compress:
             self.headers['Accept-Encoding'] = "deflate"
 
@@ -113,6 +119,7 @@ class RemoteDB(object):
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
         self.session = requests.Session()
+        self.session.verify = self.verify
 
         postData = { 'host': self.host }
         if self.token:
@@ -133,7 +140,7 @@ class RemoteDB(object):
 
     @reconnect
     def listBackupSets(self):
-        r = self.session.get(self.baseURL + "listBackupSets", verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "listBackupSets", headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             self.logger.debug("Returning %s", str(i))
@@ -142,27 +149,27 @@ class RemoteDB(object):
 
     @reconnect
     def lastBackupSet(self, completed=True):
-        r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "lastBackupSet/" + str(int(completed)), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getBackupSetInfo(self, name):
         name = urllib.quote(name, '')
-        r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getBackupSetDetails(self, name):
         name = urllib.quote(name, '')
-        r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getBackupSetInfoForTime(self, time):
-        r = self.session.get(self.baseURL + "getBackupSetInfoForTime/" + str(time), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getBackupSetInfoForTime/" + str(time), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -171,7 +178,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         (inode, device) = parent
         name = urllib.quote(name, '/')
-        r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -181,7 +188,7 @@ class RemoteDB(object):
         if not path.startswith('/'):
             path = '/' + path
         path = urllib.quote(path, '/')
-        r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -190,7 +197,7 @@ class RemoteDB(object):
         if not path.startswith('/'):
             path = '/' + path
         path = urllib.quote(path, '/')
-        r = self.session.get(self.baseURL + "getFileInfoByPathForRange/" + str(first) + '/' + str(last) + path, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFileInfoByPathForRange/" + str(first) + '/' + str(last) + path, headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             yield i
@@ -199,7 +206,7 @@ class RemoteDB(object):
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "readDirectory/" + bset + "/" + str(device) + "/" + str(inode), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "readDirectory/" + bset + "/" + str(device) + "/" + str(inode), headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             i['name'] = fs_encode(i['name'])
@@ -208,7 +215,7 @@ class RemoteDB(object):
     @reconnect
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
-        r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "readDirectoryForRange/" + str(device) + "/" + str(inode) + "/" + str(first) + "/" + str(last), headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             i['name'] = fs_encode(i['name'])
@@ -217,7 +224,7 @@ class RemoteDB(object):
     @reconnect
     def checkPermissions(self, path, checker, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFileInfoForPath/" + bset + "/" + path, headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             ret = checker(i['uid'], i['gid'], i['mode'])
@@ -232,38 +239,38 @@ class RemoteDB(object):
         if not path.startswith('/'):
             path = '/' + path
         path = urllib.quote(path, '/')
-        r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getChecksumInfo(self, checksum):
-        r = self.session.get(self.baseURL + "getChecksumInfo/" + checksum, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getChecksumInfo/" + checksum, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getFirstBackupSet(self, name, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getChainLength(self, checksum):
-        r = self.session.get(self.baseURL + "getChainLength/" + checksum, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getChainLength/" + checksum, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getConfigValue(self, name):
-        r = self.session.get(self.baseURL + "getConfigValue/" + name, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "getConfigValue/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def setConfigValue(self, name, value):
-        r = self.session.get(self.baseURL + "setConfigValue/" + name + "/" + value, verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "setConfigValue/" + name + "/" + value, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -291,41 +298,41 @@ class RemoteDB(object):
     @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "listPurgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "listPurgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "listPurgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "listPurgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def purgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "purgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "purgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def purgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "purgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "purgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def listOrphanChecksums(self):
-        r = self.session.get(self.baseURL + "listOrphanChecksums", verify=self.verify, headers=self.headers)
+        r = self.session.get(self.baseURL + "listOrphanChecksums", headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def open(self, checksum, mode):
         temp = tempfile.SpooledTemporaryFile("wb")
-        r = self.session.get(self.baseURL + "getFileData/" + checksum, verify=self.verify, stream=True)
+        r = self.session.get(self.baseURL + "getFileData/" + checksum, stream=True)
         r.raise_for_status()
         #self.logger.debug("%s", str(r.headers))
 
