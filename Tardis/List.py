@@ -720,7 +720,7 @@ def processArgs():
 
     parser.add_argument('--long', '-l',     dest='long',        default=False, action='store_true',         help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',      default=False, action='store_true',         help='Show hidden files.')
-    parser.add_argument('--reverse', '-r',   dest='reverse',    default=False, action='store_true',         help='Reverse the sort order')
+    parser.add_argument('--reverse', '-r',  dest='reverse',     default=False, action='store_true',         help='Reverse the sort order')
     parser.add_argument('--annotate', '-f', dest='annotate',    default=False, action='store_true',         help='Annotate files based on type.')
     parser.add_argument('--size', '-s',     dest='size',        default=False, action='store_true',         help='Show file sizes')
     parser.add_argument('--human', '-H',    dest='human',       default=False, action='store_true',         help='Format sizes for easy reading')
@@ -729,6 +729,7 @@ def processArgs():
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
     parser.add_argument('--versions',       dest='versions',    default=True,  action=Util.StoreBoolean,    help='Display versions of files.  Default: %(default)s')
+    parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
     parser.add_argument('--all',            dest='all',         default=False, action='store_true',         help='Show all versions of a file. Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
     parser.add_argument('--times',          dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
