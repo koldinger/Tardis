@@ -33,6 +33,8 @@ import os.path
 import logging, logging.handlers
 import socket
 import fnmatch
+import glob
+import itertools
 from stat import *
 import json
 import argparse
@@ -96,6 +98,7 @@ configDefaults = {
     'Local':                str(False),
     'LocalServerCmd':       'tardisd --config ' + local_config,
     'CompressMsgs':         str(False),
+    'ChecksumContent':      str(0),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
     'SkipCaches':           str(False),
@@ -1336,7 +1339,7 @@ def processCommandLine():
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
     comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', action=Util.StoreBoolean, default=c.getboolean(t, 'CompressMsgs'),
                         help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',            dest='ckscontent', default=0, type=int, nargs='?', const=4096,
+    comgrp.add_argument('--cks-content',            dest='ckscontent', default=c.getint(t, 'ChecksumContent'), type=int, nargs='?', const=4096,
                         help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=100,               help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
@@ -1568,7 +1571,7 @@ def main():
                 raise e
 
         # Calculate the base directories
-        directories = map(fullPath, args.directories)
+        directories = list(itertools.chain.from_iterable(map(glob.glob, map(fullPath, args.directories))))
         if args.basepath == 'common':
             rootdir = os.path.commonprefix(directories)
             # If the rootdir is actually one of the directories, back off one directory
@@ -1581,7 +1584,7 @@ def main():
             # Check that each final component is unique, or will cause server error.
             names = {}
             errors = False
-            for i in args.directories:
+            for i in directories:
                 name = os.path.split(i)[1]
                 if name in names:
                     logger.error("%s directory name (%s) is not unique.  Collides with %s", i, name, names[name])
