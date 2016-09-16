@@ -468,7 +468,7 @@ def main():
     setupLogging()
 
     # Commands which cannot be executed on remote databases
-    allowRemote = args.command not in ['create', 'purge']
+    allowRemote = args.command not in ['create']
 
     try:
         crypt = None
