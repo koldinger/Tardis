@@ -37,6 +37,7 @@ import time
 import datetime
 import pprint
 import urlparse
+import json
 
 import parsedatetime
 import passwordmeter
@@ -299,7 +300,14 @@ def deleteBset(db, cache):
         removeOrphans(db, cache)
 
 def removeOrphans(db, cache):
-    count, size, rounds = Util.removeOrphans(db, cache)
+    if hasattr(cache, 'removeOrphans'):
+        r = cache.removeOrphans()
+        logger.debug("Remove Orphans: %s %s", type(r), r)
+        count = r['count']
+        size = r['size']
+        rounds = r['rounds']
+    else:
+        count, size, rounds = Util.removeOrphans(db, cache)
     print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
 
 def _printConfigKey(db, key):

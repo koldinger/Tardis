@@ -378,13 +378,29 @@ def purgeIncomplete(backupset, priority, timestamp):
     db = getDB()
     return createResponse(json.dumps(db.purgeIncomplete(priority, timestamp, backupset)))
 
-@app.route('/listOrphanChecksums')
-def listOrphanChecksums():
+@app.route('/listOrphanChecksums/<int:isfile>')
+def listOrphanChecksums(isfile):
     db = getDB()
-    orphans = []
-    for i in db.listOrphanChecksums():
-        orphans.append(i)
+    orphans = list(db.listOrphanChecksums(isfile))
     return createResponse(json.dumps(orphans))
+
+@app.route('/deleteOrphanChecksums/<int:isfile>')
+def deleteOrphanChecksums(isfile):
+    db = getDB()
+    return createResponse(json.dumps(db.deleteOrphanChecksums(isfile)))
+
+@app.route('/removeOrphans')
+def removeOrphans():
+    db = getDB()
+    host = session['host']
+    cache = caches[host]
+    count, size, rounds = Util.removeOrphans(db, cache)
+    j = {
+        'count': count,
+        'size': size,
+        'rounds': rounds,
+    }
+    return createResponse(json.dumps(j))
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)

@@ -42,6 +42,8 @@ import ConnIdLogAdapter
 
 import requests_cache
 
+import functools
+
 requests_cache.install_cache(backend='memory', expire_after=30.0)
 
 # Define a decorator that will wrap our functions in a retry mechanism
@@ -49,6 +51,7 @@ requests_cache.install_cache(backend='memory', expire_after=30.0)
 # reconnect.
 def reconnect(func):
     #print "Decorating ", str(func)
+    @functools.wraps(func)
     def doit(self, *args, **kwargs):
         try:
             # Try the original function
@@ -324,8 +327,8 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
-    def listOrphanChecksums(self):
-        r = self.session.get(self.baseURL + "listOrphanChecksums", headers=self.headers)
+    def listOrphanChecksums(self, isFile):
+        r = self.session.get(self.baseURL + 'listOrphanChecksums/' + str(int(isFile)), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -341,3 +344,9 @@ class RemoteDB(object):
 
         temp.seek(0)
         return temp
+
+    @reconnect
+    def removeOrphans(self):
+        r = self.session.get(self.baseURL + "removeOrphans", verify=self.verify, headers=self.headers)
+        r.raise_for_status()
+        return r.json()
