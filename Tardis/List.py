@@ -435,7 +435,8 @@ def printVersions(fInfos, filename):
             color = colors['gone']
             gone = True
         elif (pInfo is None) or (info['checksum'] != pInfo['checksum']) or \
-            (args.checktimes and (info['mtime'] != pInfo['mtime'] or info['ctime'] != pInfo['ctime'])):
+             ((args.checktimes or args.checkmeta) and (info['mtime'] != pInfo['mtime'] or info['ctime'] != pInfo['ctime'])) or \
+             (args.checkmeta and (info['uid'] != pInfo['uid'] or info['gid'] != pInfo['gid'])):
             if info['chainlength'] == 0 and not info['dir']:
                 color = colors['full']
             else:
@@ -732,7 +733,8 @@ def processArgs():
     parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
     parser.add_argument('--all',            dest='all',         default=False, action='store_true',         help='Show all versions of a file. Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
-    parser.add_argument('--times',          dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
+    parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
+    parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=Util.StoreBoolean,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
     parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
     parser.add_argument('--colors',         dest='colors',      default=isatty, action=Util.StoreBoolean,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
