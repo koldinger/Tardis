@@ -253,6 +253,11 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def getChecksumInfoChain(self, checksum):
+        r = self.session.get(self.baseURL + "getChecksumInfoChaing/" + checksum, headers=self.headers)
+        r.raise_for_status()
+
+    @reconnect
     def getFirstBackupSet(self, name, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, headers=self.headers)

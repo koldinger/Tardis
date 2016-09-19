@@ -115,9 +115,17 @@ class Regenerator:
         outfile.seek(0)
         return outfile
 
-    def recoverChecksum(self, cksum, authenticate=True):
+    def recoverChecksum(self, cksum, authenticate=True, chain=None):
         self.logger.debug("Recovering checksum: %s", cksum)
-        cksInfo = self.db.getChecksumInfo(cksum)
+        cksInfo = None
+        if not chain:
+            chain = self.db.getChecksumInfoChain(cksum)
+        if chain:
+            cksInfo = chain.pop(0)
+            if cksInfo['checksum'] != cksum:
+                self.logger.error("Unexpected checksum: %s.  Expected: %s", cksInfo['checksum'], cksum)
+                return None
+
         if cksInfo is None:
             self.logger.error("Checksum %s not found", cksum)
             return None
@@ -126,7 +134,7 @@ class Regenerator:
 
         try:
             if cksInfo['basis']:
-                basis = self.recoverChecksum(cksInfo['basis'], authenticate)
+                basis = self.recoverChecksum(cksInfo['basis'], authenticate, chain)
 
                 if cksInfo['encrypted']:
                     patchfile = self.decryptFile(cksum, cksInfo['disksize'], authenticate)
@@ -176,9 +184,10 @@ class Regenerator:
         if self.crypt and not nameEncrypted:
             name = self.crypt.encryptPath(filename)
         try:
-            cksum = self.db.getChecksumByPath(name, bset, permchecker=permchecker)
-            if cksum:
-                return self.recoverChecksum(cksum, authenticate)
+            chain = self.db.getChecksumInfoChainByPath(name, bset, permchecker=permchecker)
+            if chain:
+                cksum = chain[0]['checksum']
+                return self.recoverChecksum(cksum, authenticate, chain)
             else:
                 self.logger.error("Could not locate file: %s ", filename)
                 return None

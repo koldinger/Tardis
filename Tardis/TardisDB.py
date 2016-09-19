@@ -450,6 +450,14 @@ class TardisDB(object):
         else:
             return None
 
+    def getChecksumInfoChainByPath(self, name, current=False, permchecker=None):
+        backupset = self._bset(current)
+        cksum = self.getChecksumByPath(name, backupset, permchecker)
+        if cksum:
+            return self.getChecksumInfoChain(cksum)
+        else:
+            return None
+
     def getFirstBackupSet(self, name, current=False):
         backupset = self._bset(current)
         self.logger.debug("getFirstBackupSet (%d) %s", backupset, name)
@@ -572,6 +580,20 @@ class TardisDB(object):
         else:
             self.logger.debug("No checksum found for %s", checksum)
             return None
+
+    def getChecksumInfoChain(self, checksum):
+        """ Recover a list of all the checksums which need to be used to generate a file """
+        self.logger.debug("Getting checksum info chain on: %s", checksum)
+        chain = []
+        while checksum:
+            row = self.getChecksumInfo(checksum)
+            if row:
+                chain.append(row)
+            else:
+                return chain
+            checksum = row['basis']
+
+        return chain
 
     def getChainLength(self, checksum):
         data = self.getChecksumInfo(checksum)

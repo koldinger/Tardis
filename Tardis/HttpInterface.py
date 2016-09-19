@@ -262,6 +262,12 @@ def getChecksumInfo(checksum):
     db = getDB()
     return createResponse(json.dumps(makeDict(db.getChecksumInfo(checksum))))
 
+@app.route('/getChecksumInfoChain/<checksum>')
+def getChecksumInfo(checksum):
+    #app.logger.info("getChecksumInfo Invoked: %s", checksum)
+    db = getDB()
+    return createResponse(json.dumps(map(makeDict, db.getChecksumInfoChain(checksum))))
+
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
     #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
