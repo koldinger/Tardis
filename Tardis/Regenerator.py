@@ -120,11 +120,14 @@ class Regenerator:
         cksInfo = None
         if not chain:
             chain = self.db.getChecksumInfoChain(cksum)
+
         if chain:
             cksInfo = chain.pop(0)
             if cksInfo['checksum'] != cksum:
                 self.logger.error("Unexpected checksum: %s.  Expected: %s", cksInfo['checksum'], cksum)
                 return None
+        else:
+            cksInfo = self.db.getChecksumInfo(cksum)
 
         if cksInfo is None:
             self.logger.error("Checksum %s not found", cksum)

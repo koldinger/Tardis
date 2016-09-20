@@ -166,14 +166,18 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             # If it's a directory, create the directory, and recursively process it
             if info['dir']:
-                logger.info("Processing directory %s", Util.shortPath(path))
-                contents = tardis.readDirectory((info['inode'], info['device']), bset)
-                # Make sure an output directory is specified (really only useful at the top level)
                 if not outname:
                     #logger.error("Cannot regenerate directory %s without outputdir specified", path)
                     raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
+
+                logger.info("Processing directory %s", Util.shortPath(path))
+
+                contents = tardis.readDirectory((info['inode'], info['device']), bset)
+
+                # Make sure an output directory is specified (really only useful at the top level)
                 if not os.path.exists(outname):
                     os.mkdir(outname)
+
                 dirInode = (info['inode'], info['device'])
                 # For each file in the directory, regenerate it.
                 for i in contents:
