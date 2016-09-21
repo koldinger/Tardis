@@ -595,6 +595,18 @@ class TardisDB(object):
 
         return chain
 
+    def getNamesForChecksum(self, checksum, bset):
+        """ Recover a list of names that represent a checksum """
+        self.logger.debug("Recovering name for checksum %s", checksum)
+        c = self._execute('SELECT DISTINCT Name FROM Names JOIN Files ON Names.NameID = Files.NameID JOIN Checksums ON Checksums.ChecksumID = Files.ChecksumID '
+                          'WHERE Checksums.Checksum = :checksum AND :bset BETWEEN Files.FirstSet AND Files.LastSet',
+                          {'checksum': checksum, 'bset': bset})
+        names = []
+        for row in c.fetchall():
+            self.logger.debug("Found name %s", row[0])
+            names.append(row[0])
+        return names
+
     def getChainLength(self, checksum):
         data = self.getChecksumInfo(checksum)
         if data:

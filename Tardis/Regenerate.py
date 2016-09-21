@@ -329,6 +329,20 @@ def findLastPath(tardis, path, reduce):
             return bset['backupset'], tmp, bset['name']
     return (None, None, None)
 
+def recoverName(tardis, cksum, bset):
+    names = tardis.getNamesForChecksum(cksum, bset)
+    #print names
+    if names:
+        if len(names) > 1:
+            logger.warning("Multiple (%d) names for checksum %s %s", len(names), cksum, list(names))
+        name = names[0]
+        if args.crypt and crypt:
+            name = crypt.decryptFilename(name)
+        return name
+    else:
+        logger.error("No name discovered for checksum %s", cksum)
+        return cksum
+
 def mkOutputDir(name):
     if os.path.isdir(name):
         return name
@@ -362,6 +376,7 @@ def parseArgs():
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                      help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
 
+    parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')
     parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
     parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
 
@@ -476,6 +491,9 @@ def main():
                 try:
                     if args.auth:
                         hasher = Util.getHash(crypt)
+                    ckname = i
+                    if args.recovername:
+                        ckname = recoverName(tardis, i, bset)
                     f = r.recoverChecksum(i, args.auth)
                     if f:
                     # Generate an output name
@@ -483,7 +501,7 @@ def main():
                             # Note, this should ONLY be true if only one file
                             output = file(outname,  "wb")
                         elif outputdir:
-                            outname = os.path.join(outputdir, i)
+                            outname = os.path.join(outputdir, ckname)
                             logger.debug("Writing output to %s", outname)
                             output = file(outname,  "wb")
                         try:
