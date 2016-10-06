@@ -69,6 +69,7 @@ import Regenerator
 import Util
 import Defaults
 import Connection
+import CompressedBuffer
 
 import Tardis
 
