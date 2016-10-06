@@ -1704,6 +1704,8 @@ def main():
         conn.close()
     except KeyboardInterrupt:
         logger.warning("Backup Interupted")
+        if args.exceptions:
+            logger.exception(e)
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         if args.exceptions:
