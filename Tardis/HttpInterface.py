@@ -263,7 +263,7 @@ def getChecksumInfo(checksum):
     return createResponse(json.dumps(makeDict(db.getChecksumInfo(checksum))))
 
 @app.route('/getChecksumInfoChain/<checksum>')
-def getChecksumInfo(checksum):
+def getChecksumInfoChain(checksum):
     #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
     return createResponse(json.dumps(map(makeDict, db.getChecksumInfoChain(checksum))))
