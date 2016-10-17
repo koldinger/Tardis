@@ -64,7 +64,7 @@ colors = {
     'full'      :  'cyan,,bold',
     'header'    :  'green',
     'name'      :  None,
-    'error'     :  'red',
+    'error'     :  'red,,bold',
     'default'   :  None
 }
 
@@ -416,8 +416,8 @@ def printVersions(fInfos, filename):
     Doesn't actually do the printing, but calls printit to do it.
     """
     global column
-    pInfo = None        # Previous version's info
-    lSet  = None
+    prevInfo = None        # Previous version's info
+    lSet     = None
     column = 0
 
     for bset in backupSets:
@@ -427,28 +427,32 @@ def printVersions(fInfos, filename):
         gone = False
 
         # If there was no previous version, or the checksum has changed, we're new
-        if (info is None) and (pInfo is None):
+        if (info is None) and (prevInfo is None):
             # file didn't exist here or previously.  Just skip
             continue
-        if (info is None) and pInfo is not None:
+        if (info is None) and prevInfo is not None:
             # file disappeared.
             color = colors['gone']
             gone = True
-        elif (pInfo is None) or (info['checksum'] != pInfo['checksum']) or \
-             ((args.checktimes or args.checkmeta) and (info['mtime'] != pInfo['mtime'] or info['ctime'] != pInfo['ctime'])) or \
-             (args.checkmeta and (info['uid'] != pInfo['uid'] or info['gid'] != pInfo['gid'])):
+        elif (info['checksum'] is None):
+            # Check for the error case where a file isn't connected to a checksum.  Not good.
+            color = colors['error']
+            new = True
+        elif (prevInfo is None) or (info['checksum'] != prevInfo['checksum']) or \
+             ((args.checktimes or args.checkmeta) and (info['mtime'] != prevInfo['mtime'] or info['ctime'] != prevInfo['ctime'])) or \
+             (args.checkmeta and (info['uid'] != prevInfo['uid'] or info['gid'] != prevInfo['gid'])):
             if info['chainlength'] == 0 and not info['dir']:
                 color = colors['full']
             else:
                 color = colors['changed']
             new = True
-        elif (info['inode'] != pInfo['inode']):
+        elif (info['inode'] != prevInfo['inode']):
             color = colors['moved']
             new = True
         else:
             pass
 
-        pInfo = info
+        prevInfo = info
         if new:
             lSet = bset
 
