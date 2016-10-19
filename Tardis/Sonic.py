@@ -239,7 +239,7 @@ def _bsetInfo(db, crypt, info):
 def bsetInfo(db, crypt):
     printed = False
     if args.backup or args.date:
-        info = getBackupSet(db)
+        info = getBackupSet(db, args.backupset, args.date)
         if info:
             _bsetInfo(db, crypt, info)
             printed = True
@@ -263,16 +263,18 @@ def confirm():
         return (yesno == 'YES' or yesno == 'Y')
 
 def purge(db, cache, crypt):
-    bset = getBackupSet(db, True)
+    bset = getBackupSet(db, args.backup, args.date, True)
     if bset == None:
         logger.error("No backup set found")
         sys.exit(1)
-    # List the sets we're going to delete`
+    # List the sets we're going to delete
     if args.incomplete:
         pSets = db.listPurgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
     else:
         pSets = db.listPurgeSets(args.priority, bset['endtime'], bset['backupset'])
+
     names = [x['name'] for x in pSets]
+    logger.debug("Names: %s", names)
     if len(names) == 0:
         print "No matching sets"
         return
@@ -289,7 +291,7 @@ def purge(db, cache, crypt):
         removeOrphans(db, cache)
 
 def deleteBset(db, cache):
-    bset = getBackupSet(db)
+    bset = getBackupSet(db, args.backup, None)
     if bset == None:
         logger.error("No backup set found")
         sys.exit(1)
@@ -348,9 +350,15 @@ def parseArgs():
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-d",   help="Use last backupset before date", dest='date', default=None)
 
-    purgeParser= argparse.ArgumentParser(add_help=False)
+    purgeParser = argparse.ArgumentParser(add_help=False)
     purgeParser.add_argument('--priority',       dest='priority',   default=0, type=int,                   help='Maximum priority backupset to purge')
     purgeParser.add_argument('--incomplete',     dest='incomplete', default=False, action='store_true',    help='Purge only incomplete backup sets')
+    bsetgroup = purgeParser.add_mutually_exclusive_group()
+    bsetgroup.add_argument("--date", "-d",     dest='date',       default=None,                            help="Purge sets before this date")
+    bsetgroup.add_argument("--backup", "-b",   dest='backup',     default=None,                            help="Purge sets before this set")
+
+    deleteParser = argparse.ArgumentParser(add_help=False)
+    deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
 
     cnfParser = argparse.ArgumentParser(add_help=False)
     cnfParser.add_argument('--confirm',          dest='confirm', action=Util.StoreBoolean, default=True,   help='Confirm deletes and purges')
@@ -359,13 +367,13 @@ def parseArgs():
     keyGroup = keyParser.add_mutually_exclusive_group(required=True)
     keyGroup.add_argument('--extract',          dest='extract', default=False, action='store_true',         help='Extract keys from database')
     keyGroup.add_argument('--insert',           dest='insert', default=False, action='store_true',          help='Insert keys from database')
-    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean,     help='Delete keys from server or database')
+    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
 
     common = argparse.ArgumentParser(add_help=False)
     #common = parser.add_argument_group('Global options')
-    common.add_argument('--dbname', '-N',       dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    common.add_argument('--client', '-C',       dest='client',          default=client,                  help='Client to use (Default: %(default)s)')
-    common.add_argument('--database', '-D',     dest='database',        default=baseDir,                 help='Path to the database (Default: %(default)s)')
+    common.add_argument('--dbname', '-N',       dest='dbname',          default=config.get(t, 'DBName'),    help='Use the database name (Default: %(default)s)')
+    common.add_argument('--client', '-C',       dest='client',          default=client,                     help='Client to use (Default: %(default)s)')
+    common.add_argument('--database', '-D',     dest='database',        default=baseDir,                    help='Path to the database (Default: %(default)s)')
 
     create = argparse.ArgumentParser(add_help=False)
     create.add_argument('--schema',                 dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
@@ -401,7 +409,8 @@ def parseArgs():
     subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
     subs.add_parser('list',         parents=[common],                                      help='List backup sets')
     subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
-    subs.add_parser('purge',        parents=[common, bsetParser, purgeParser, cnfParser],  help='Purge old backup sets')
+    subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],              help='Purge old backup sets')
+    subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],             help='Delete a backup set')
     subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
     subs.add_parser('getconfig',    parents=[common, configKeyParser],                     help='Get Config Value')
     subs.add_parser('setconfig',    parents=[common, configValueParser],                   help='Set Config Value')
@@ -416,14 +425,14 @@ def parseArgs():
     minPwStrength = config.getfloat(t, 'PwStrMin')
     return args
 
-def getBackupSet(db, defaultCurrent=False):
+def getBackupSet(db, backup, date, defaultCurrent=False):
     bsetInfo = None
-    if args.date:
+    if date:
         cal = parsedatetime.Calendar()
-        (then, success) = cal.parse(args.date)
+        (then, success) = cal.parse(date)
         if success:
             timestamp = time.mktime(then)
-            logger.info("Using time: %s", time.asctime(then))
+            logger.debug("Using time: %s", time.asctime(then))
             bsetInfo = db.getBackupSetInfoForTime(timestamp)
             if bsetInfo and bsetInfo['backupset'] != 1:
                 bset = bsetInfo['backupset']
@@ -433,11 +442,13 @@ def getBackupSet(db, defaultCurrent=False):
                 bsetInfo = None
         else:
             logger.critical("Could not parse date string: %s", args.date)
-    elif args.backup:
+    elif backup:
         try:
-            bset = int(args.backup)
+            bset = int(backup)
+            logger.debug("Using integer value: %d", bset)
             bsetInfo = db.getBackupSetInfoById(bset)
-        except:
+        except ValueError:
+            logger.debug("Using string value: %s", args.backup)
             if args.backup == current:
                 bsetInfo = db.lastBackupSet()
             else:
