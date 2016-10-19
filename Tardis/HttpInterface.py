@@ -380,11 +380,6 @@ def listPurgeIncomplete(backupset, priority, timestamp):
         sets.append(makeDict(x))
     return createResponse(json.dumps(sets))
 
-@app.route('/purgeSet/<int:backupset>')
-def purgeSet(backupset):
-    db = getDB()
-    return createResponse(json.dumps(db.purgeSet(backupset)))
-
 @app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeSets(backupset, priority, timestamp):
     db = getDB()

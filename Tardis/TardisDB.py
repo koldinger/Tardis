@@ -850,14 +850,6 @@ class TardisDB(object):
         for row in c:
             yield(row)
 
-    def purgeSet(self, bset):
-        backupset = self._bset(bset)
-        self.logger.debug("Purging backupset {}".format(backupset))
-        self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": backupset})
-        setsDeleted = self.cursor.rowcount
-        filesDeleted = self._purgeFiles()       
-        return (filesDeleted, setsDeleted)
-
     def purgeSets(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
