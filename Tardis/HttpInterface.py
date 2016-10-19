@@ -161,11 +161,17 @@ def logout():
     return redirect(url_for('index'))
 
 # getBackupSetInfo
-@app.route('/getBackupSetInfo/<backupset>')
-def getBackupSetInfo(backupset):
-    #app.logger.info("getBackupSetInfo Invoked: %s", backupset)
+@app.route('/getBackupSetInfo/<name>')
+def getBackupSetInfo(name):
+    #app.logger.info("getBackupSetInfo Invoked: %s", name)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getBackupSetInfo(backupset))))
+    return createResponse(json.dumps(makeDict(db.getBackupSetInfo(name))))
+
+@app.route('/getBackupSetInfoById/<int:backupset>')
+def getBackupSetInfoById(backupset):
+    #app.logger.info("getBackupSetInfoById Invoked: %s", backupset)
+    db = getDB()
+    return createResponse(json.dumps(makeDict(db.getBackupSetInfoById(backupset))))
 
 @app.route('/getBackupSetDetails/<backupset>')
 def getBackupSetDetails(backupset):

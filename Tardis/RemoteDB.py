@@ -164,6 +164,12 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def getBackupSetInfoById(self, bset):
+        r = self.session.get(self.baseURL + "getBackupSetInfoById/" + str(bset), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def getBackupSetDetails(self, name):
         name = urllib.quote(name, '')
         r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), headers=self.headers)
