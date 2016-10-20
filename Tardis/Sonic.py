@@ -449,23 +449,23 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
                 bset = bsetInfo['backupset']
                 logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
             else:
-                logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
+                logger.critical("No backupset at date: %s (%s)", date, time.asctime(then))
                 bsetInfo = None
         else:
-            logger.critical("Could not parse date string: %s", args.date)
+            logger.critical("Could not parse date string: %s", date)
     elif backup:
         try:
             bset = int(backup)
             logger.debug("Using integer value: %d", bset)
             bsetInfo = db.getBackupSetInfoById(bset)
         except ValueError:
-            logger.debug("Using string value: %s", args.backup)
-            if args.backup == current:
+            logger.debug("Using string value: %s", backup)
+            if backup == current:
                 bsetInfo = db.lastBackupSet()
             else:
-                bsetInfo = db.getBackupSetInfo(args.backup)
+                bsetInfo = db.getBackupSetInfo(backup)
             if not bsetInfo:
-                logger.critical("No backupset at for name: %s", args.backup)
+                logger.critical("No backupset at for name: %s", backup)
     elif defaultCurrent:
         bsetInfo = db.lastBackupSet()
     return bsetInfo
