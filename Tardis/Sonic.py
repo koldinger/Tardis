@@ -290,14 +290,24 @@ def purge(db, cache, crypt):
         print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
         removeOrphans(db, cache)
 
-def deleteBset(db, cache):
-    bset = getBackupSet(db, args.backup, None)
-    if bset == None:
-        logger.error("No backup set found")
-        sys.exit(1)
-    print "Set to be deleted: %s" % (bset['name'])
+def deleteBsets(db, cache):
+    if not args.backups:
+        logger.error("No backup sets specified")
+        sys.exit(0)
+    bsets = []
+    for i in args.backups:
+        bset = getBackupSet(db, i, None)
+        if bset == None:
+            logger.error("No backup set found for %s", i)
+            sys.exit(1)
+        bsets.append(bset)
+
+    names = [b['name'] for b in bsets]
+    print "Sets to be deleted: %s" % (names)
     if confirm():
-        filesDeleted = db.deleteBackupSet(bset['backupset'])
+        filesDeleted = 0
+        for bset in bsets:
+            filesDeleted = filesDeleted + db.deleteBackupSet(bset['backupset'])
         print "Deleted %d files" % (filesDeleted)
         removeOrphans(db, cache)
 
@@ -358,7 +368,8 @@ def parseArgs():
     bsetgroup.add_argument("--backup", "-b",   dest='backup',     default=None,                            help="Purge sets before this set")
 
     deleteParser = argparse.ArgumentParser(add_help=False)
-    deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
+    #deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
+    deleteParser.add_argument("backups", nargs="*", default=None, help="Backup sets to delete")
 
     cnfParser = argparse.ArgumentParser(add_help=False)
     cnfParser.add_argument('--confirm',          dest='confirm', action=Util.StoreBoolean, default=True,   help='Confirm deletes and purges')
@@ -547,7 +558,7 @@ def main():
             return purge(db, cache, crypt)
 
         if args.command == 'delete':
-            return deleteBset(db, cache)
+            return deleteBsets(db, cache)
 
         if args.command == 'getconfig':
             return getConfig(db)
