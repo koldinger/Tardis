@@ -260,7 +260,7 @@ class RemoteDB(object):
 
     @reconnect
     def getChecksumInfoChain(self, checksum):
-        r = self.session.get(self.baseURL + "getChecksumInfoChaing/" + checksum, headers=self.headers)
+        r = self.session.get(self.baseURL + "getChecksumInfoChain/" + checksum, headers=self.headers)
         r.raise_for_status()
 
     @reconnect
