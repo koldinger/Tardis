@@ -120,6 +120,7 @@ def shortPath(path, width=80):
 
     return "..." + os.sep + retPath
 
+
 def accumulateStat(stats, stat, amount=1):
     if stats:
         stats[stat] = stats.setdefault(stat, 0) + amount
@@ -204,6 +205,9 @@ def matchPath(pattern, path):
         return False
     else:
         return True
+
+def fullPath(name):
+    return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
 
 """
 Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)
@@ -306,7 +310,7 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
 
     if crypt:
         if keyFile:
-            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
+            (f, c) = loadKeys(fullPath(keyFile), tardis.getConfigValue('ClientID'))
         else:
             (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
