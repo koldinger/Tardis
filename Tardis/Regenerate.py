@@ -42,6 +42,7 @@ import CacheDir
 import RemoteDB
 import Util
 import Defaults
+import Config
 
 import logging
 import subprocess
@@ -353,34 +354,46 @@ def mkOutputDir(name):
         return name
 
 def parseArgs():
-    database = Defaults.getDefault('TARDIS_DB')
-    hostname = Defaults.getDefault('TARDIS_CLIENT')
-    dbname   = Defaults.getDefault('TARDIS_DBNAME')
+    parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
+    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
+    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
 
-    parser = argparse.ArgumentParser(description="Regenerate a Tardis backed file", fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter)
+    (args, remaining) = parser.parse_known_args()
+
+    t = args.job
+    c = Config.config
+    if args.config:
+        c.read(args.config)
+        if not c.has_section(t):
+            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
+            c.add_section(t)                    # Make it safe for reading other values from.
+    else:
+        c.add_section(t)                        # Make it safe for reading other values from.
+
+    parser.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
+    parser.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
 
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
-
-    parser.add_argument("--database", "-D", help="Path to database directory (Default: %(default)s)", dest="database", default=database)
-    parser.add_argument("--dbname", "-N",   help="Name of the database file (Default: %(default)s)", dest="dbname", default=dbname)
-    parser.add_argument("--client", "-C",   help="Client to process for (Default: %(default)s)", dest='client', default=hostname)
 
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
     bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"), 
 
-    pwgroup = parser.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',        dest='password', default=None, nargs='?', const=True,   help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=None,                      help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog',         dest='passwordprog', default=None,                      help='Use the specified command to generate the password on stdout')
+    passgroup= parser.add_argument_group("Password/Encryption specification options")
+    pwgroup = passgroup.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True,
+                                                                                                            help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
-    parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')
-    parser.add_argument('--crypt',          dest='crypt', default=True, action=Util.StoreBoolean,   help='Are files encyrpted, if password is specified. Default: %(default)s')
-    parser.add_argument('--keys',           dest='keys', default=None,                              help='Load keys from file.')
+    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
+                                                                                                            help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
 
     parser.add_argument('--recurse',        dest='recurse', default=True, action=Util.StoreBoolean, help='Recurse directory trees.  Default: %(default)s')
+    parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')  
 
     parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
     parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
@@ -398,6 +411,8 @@ def parseArgs():
 
     parser.add_argument('--verbose', '-v', action='count', dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
+    parser.add_argument('--help', '-h',         action='help')
+
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
     args = parser.parse_args()
