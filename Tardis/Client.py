@@ -1079,8 +1079,7 @@ def loadExcludeFile(name):
         #traceback.print_exc()
         return []
 
-def fullPath(name):
-    return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
+
 
 # Load all the excludes we might want
 def loadExcludes(args):
@@ -1099,7 +1098,7 @@ def loadExcludes(args):
 def loadExcludedDirs(args):
     global excludeDirs
     if args.excludedirs is not None:
-        excludeDirs.extend(map(fullPath, args.excludedirs))
+        excludeDirs.extend(map(Util.fullPath, args.excludedirs))
 
 def sendMessage(message):
     if verbosity > 4:
@@ -1458,7 +1457,7 @@ def setupLogging(logfiles, verbosity):
             elif logfile == ':STDOUT:':
                 handler = logging.StreamHandler(sys.stdout)
             else:
-                handler = logging.handlers.WatchedFileHandler(fullPath(logfile))
+                handler = logging.handlers.WatchedFileHandler(Util.fullPath(logfile))
         else:
             handler = logging.StreamHandler(logfile)
 
@@ -1592,7 +1591,7 @@ def main():
                 raise e
 
         # Calculate the base directories
-        directories = list(itertools.chain.from_iterable(map(glob.glob, map(fullPath, args.directories))))
+        directories = list(itertools.chain.from_iterable(map(glob.glob, map(Util.fullPath, args.directories))))
         if args.basepath == 'common':
             rootdir = os.path.commonprefix(directories)
             # If the rootdir is actually one of the directories, back off one directory
@@ -1656,13 +1655,13 @@ def main():
             crypt.genKeys()
             if args.keys:
                 (f, c) = crypt.getKeys()
-                Util.saveKeys(fullPath(args.keys), conn.getClientId(), f, c)
+                Util.saveKeys(Util.fullPath(args.keys), conn.getClientId(), f, c)
             else:
                 sendKeys(crypt)
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
-                (f, c) = Util.loadKeys(fullPath(args.keys), conn.getClientId())
+                (f, c) = Util.loadKeys(args.keys, conn.getClientId())
             else:
                 (f, c) = conn.getKeys()
             if not (f and c):
