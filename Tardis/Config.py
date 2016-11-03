@@ -30,17 +30,54 @@
 
 import ConfigParser
 import Defaults
+import argparse
 
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
+    'DBName':				Defaults.getDefault('TARDIS_DBNAME'),
     'Password':             None,
     'PasswordFile':         None,
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              None,
     'LogFiles':             None,
-    'Verbosity':            str(0)
+    'Verbosity':            str(0),
+    'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
 }
 
 config = ConfigParser.ConfigParser(configDefaults)
+"""
+def parseConfigOptions(parser):
+    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
+    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
+
+    (args, remaining) = parser.parse_known_args()
+
+    t = args.job
+    if args.config:
+        config.read(args.config)
+        if not config.has_section(t):
+            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
+            config.add_section(t)                    # Make it safe for reading other values from.
+    else:
+        config.add_section(t)                        # Make it safe for reading other values from.
+
+    return args, remaining
+
+def setCommonOptions(parser):
+    parser.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
+    parser.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
+    parser.add_argument("--dbname", "-N",   dest="dbname",      default=c.get(t, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
+
+def setPWOptions(parser):
+	passgroup= parser.add_argument_group("Password/Encryption specification options")
+    pwgroup = passgroup.add_mutually_exclusive_group()
+    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
+
+    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
+                                                                                                            help='Encrypt data.  Only valid if password is set')
+    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
+ """
