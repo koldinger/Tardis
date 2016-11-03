@@ -1476,7 +1476,10 @@ def setupLogging(logfiles, verbosity):
 def printStats(starttime, endtime):
     connstats = conn.getStats()
 
-    logger.log(logging.STATS, "Runtime:     {}".format((endtime - starttime)))
+    duration = endtime - starttime
+    duration = datetime.timedelta(duration.days, duration.seconds, duration.seconds - (duration.seconds % 100000))          # Truncate the microseconds
+
+    logger.log(logging.STATS, "Runtime:     {}".format(duration)
     logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
     logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
     logger.log(logging.STATS, "Data Sent:   Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
