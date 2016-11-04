@@ -31,6 +31,7 @@
 import ConfigParser
 import Defaults
 import argparse
+import Util
 
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
@@ -47,37 +48,40 @@ configDefaults = {
 }
 
 config = ConfigParser.ConfigParser(configDefaults)
-"""
+job = None
+
 def parseConfigOptions(parser):
-    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
-    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
+    global job
+    configGroup = parser.add_argument_group("Configuration File Options")
+    configGroup.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
+    configGroup.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
 
     (args, remaining) = parser.parse_known_args()
 
-    t = args.job
+    job = args.job
     if args.config:
         config.read(args.config)
-        if not config.has_section(t):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
-            config.add_section(t)                    # Make it safe for reading other values from.
+        if not config.has_section(job):
+            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(job, str(config.sections()).strip('[]')))
+            config.add_section(job)                    # Make it safe for reading other values from.
     else:
-        config.add_section(t)                        # Make it safe for reading other values from.
+        config.add_section(job)                        # Make it safe for reading other values from.
 
     return args, remaining
 
-def setCommonOptions(parser):
-    parser.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
-    parser.add_argument("--dbname", "-N",   dest="dbname",      default=c.get(t, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
+def addCommonOptions(parser):
+    dbGroup = parser.add_argument_group("Database specification options")
+    dbGroup.add_argument('--database', '-D', dest='database',    default=config.get(job, 'Database'),               help="Database to use.  Default: %(default)s")
+    dbGroup.add_argument('--client', '-C',   dest='client',      default=config.get(job, 'Client'),                 help="Client to list on.  Default: %(default)s")
+    dbGroup.add_argument("--dbname", "-N",   dest="dbname",      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
 
-def setPWOptions(parser):
-	passgroup= parser.add_argument_group("Password/Encryption specification options")
+def addPasswordOptions(parser):
+    passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument('--password', '-P',dest='password', default=config.get(job, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
+    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=config.get(job, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
+    pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
+    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
                                                                                                             help='Encrypt data.  Only valid if password is set')
-    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
- """
+    passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')

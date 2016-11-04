@@ -720,23 +720,11 @@ def processArgs():
     isatty = os.isatty(sys.stdout.fileno())
 
     parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
-    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
+   
+    (args, remaining) = Config.parseConfigOptions(parser)
 
-    (args, remaining) = parser.parse_known_args()
-
-    t = args.job
-    c = Config.config
-    if args.config:
-        c.read(args.config)
-        if not c.has_section(t):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
-            c.add_section(t)                    # Make it safe for reading other values from.
-    else:
-        c.add_section(t)                        # Make it safe for reading other values from.
-
-    parser.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
+    Config.addCommonOptions(parser)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--long', '-l',     dest='long',        default=False, action='store_true',         help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',      default=False, action='store_true',         help='Show hidden files.')
@@ -757,8 +745,7 @@ def processArgs():
     parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
     parser.add_argument('--colors',         dest='colors',      default=isatty, action=Util.StoreBoolean,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
-    parser.add_argument('--dbname',         dest='dbname',      default=Defaults.getDefault('TARDIS_DBNAME'), 
-                                                                                                            help="Name of the database file. Default: %(default)s")
+   
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxint, type=int,               help='Maximum depth to recurse directories')
 
@@ -773,32 +760,23 @@ def processArgs():
     rangegrp.add_argument('--range',        dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',        dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
-    passgroup= parser.add_argument_group("Password/Encryption specification options")
-    pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True,
-                                                                                                            help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
-
-    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
-                                                                                                            help='Encrypt data.  Only valid if password is set')
-    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
-
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
     parser.add_argument('directories', nargs='*', default='.',                                              help='List of directories/files to list')
 
-    return parser.parse_args()
+    return parser.parse_args(remaining)
 
 def main():
     global args, logger
     try:
-        args = processArgs()
+
 
         FORMAT = "%(levelname)s : %(message)s"
         logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
         logger = logging.getLogger("")
+
+        args = processArgs()
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 

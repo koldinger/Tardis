@@ -57,37 +57,12 @@ def parseArgs():
     current = Defaults.getDefault('TARDIS_RECENT_SET')
 
     parser = argparse.ArgumentParser(description='Diff files between current and a Tardis backup, or multiple Tardis versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
-    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
+    (args, remaining) = Config.parseConfigOptions(parser)
 
-    (args, remaining) = parser.parse_known_args()
-
-    t = args.job
-    c = Config.config
-    if args.config:
-        c.read(args.config)
-        if not c.has_section(t):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
-            c.add_section(t)                    # Make it safe for reading other values from.
-    else:
-        c.add_section(t)                        # Make it safe for reading other values from.
-
-    parser.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
-    parser.add_argument("--dbname", "-N",   dest="dbname",      default=c.get(t, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
+    Config.addCommonOptions(parser)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument("--backup", '-b',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
-
-    passgroup= parser.add_argument_group("Password/Encryption specification options")
-    pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True,
-                                                                                                            help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
-
-    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
-                                                                                                            help='Encrypt data.  Only valid if password is set')
-    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
 
     parser.add_argument('--color',                  dest='color',   default=isatty, action=Util.StoreBoolean,   help='Use colors')
 
@@ -107,7 +82,7 @@ def parseArgs():
     parser.add_argument('--help', '-h',     action='help')
     parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
 
-    args = parser.parse_args()
+    args = parser.parse_args(remaining)
 
     #print args
     return args
