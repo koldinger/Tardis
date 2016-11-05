@@ -51,6 +51,9 @@ import CacheDir
 import RemoteDB
 import Config
 
+current      = Defaults.getDefault('TARDIS_RECENT_SET')
+pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
+
 # Config keys which can be gotten or set.
 configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled']
 # Extra keys that we print when everything is requested
@@ -332,21 +335,10 @@ def parseArgs():
     global args, minPwStrength
 
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-    parser.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
-    parser.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
-
-    (args, remaining) = parser.parse_known_args()
-
-    t = args.job
+   
+    (args, remaining) = Config.parseConfigOptions(parser)
     c = Config.config
-    if args.config:
-        c.read(args.config)
-        if not c.has_section(t):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
-            c.add_section(t)                    # Make it safe for reading other values from.
-    else:
-        c.add_section(t)                        # Make it safe for reading other values from.
-
+    t = args.job
 
     # Shared parser
     bsetParser = argparse.ArgumentParser(add_help=False)
@@ -375,25 +367,15 @@ def parseArgs():
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
 
     common = argparse.ArgumentParser(add_help=False)
-
+    """
     common.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
     common.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
     common.add_argument("--dbname", "-N",   dest="dbname",      default=c.get(t, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
- 
+    """
 
     create = argparse.ArgumentParser(add_help=False)
     create.add_argument('--schema',                 dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
 
-    passgroup= parser.add_argument_group("Password/Encryption specification options")
-    pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=c.get(t, 'Password'), nargs='?', const=True,
-                                                                                                            help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=c.get(t, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
-
-    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
-                                                                                                            help='Encrypt data.  Only valid if password is set')
-    passgroup.add_argument('--keys',        dest='keys', default=c.get(t, 'KeyFile'),                       help='Load keys from file.')
     newPassParser = argparse.ArgumentParser(add_help=False)
     newpassgrp = newPassParser.add_argument_group("New Password specification options")
     npwgroup = newpassgrp.add_mutually_exclusive_group()
@@ -408,6 +390,9 @@ def parseArgs():
     configValueParser = argparse.ArgumentParser(add_help=False)
     configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
     configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
+
+    Config.addPasswordOptions(common)
+    Config.addCommonOptions(common)
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create], help='Create a client database')
@@ -426,10 +411,11 @@ def parseArgs():
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
+    
     args = parser.parse_args(remaining)
 
     # And load the required strength for new passwords.  NOT specifiable on the command line.
-    minPwStrength = c.getfloat(t, 'PwStrMin')
+    #minPwStrength = c.getfloat(t, 'PwStrMin')
     return args
 
 def getBackupSet(db, backup, date, defaultCurrent=False):
