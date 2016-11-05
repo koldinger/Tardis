@@ -310,7 +310,7 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
 
     if crypt:
         if keyFile:
-            (f, c) = loadKeys(fullPath(keyFile), tardis.getConfigValue('ClientID'))
+            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
         else:
             (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
@@ -489,10 +489,11 @@ def receiveData(receiver, output):
 
 """
 Load a key file.
-Key files are JSON documents, with at least two fields, FilenameKey and ContentKey, each containing a base64 blob containing a key.
+Key files are config databases, where each section is keyed by the clientID from the server.  Each secition needs to contain two entries, a ContentKey
+and a FilenameKey, both of which are base64 encoded strings containing the encyrpted keys.
 """
 def _updateLen(value, length):
-    if value is None:
+    if not value:
         return None
 
     res = base64.b64decode(value)
@@ -508,7 +509,7 @@ def _updateLen(value, length):
 def loadKeys(name, client):
     config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
     config.add_section(client)
-    config.read(name)
+    config.read(fullPath(name))
     contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
     nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
     return (nameKey, contentKey)
