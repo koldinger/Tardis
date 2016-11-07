@@ -32,6 +32,7 @@ import ConfigParser
 import Defaults
 import argparse
 import Util
+import sys
 
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
