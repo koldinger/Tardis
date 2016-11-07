@@ -324,8 +324,9 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
-    def purgeSet(self, bset):
-        r = self.session.get(self.baseURL + "purgeSet/" + str(bset))
+    def purgeSets(self, priority, timestamp, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "purgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -333,6 +334,12 @@ class RemoteDB(object):
     def purgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "purgeIncomplete/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def deleteBackupSet(self, bset):
+        r = self.session.get(self.baseURL + "deleteBackupSet/" + str(bset))
         r.raise_for_status()
         return r.json()
 

@@ -108,7 +108,10 @@ def compressMsg(string, threshold=1024):
             return (comp, True)
     return (string, False)
 
-def createResponse(string, compress=True, cacheable=True):
+def createResponse(string, compress=True, cacheable=True, dumps=True):
+    if dumps:
+        string = json.dumps(string)
+
     if compress and allowCompress:
         app.logger.debug("Attempting to compress: %d", len(string))
         (data, compressed) = compressMsg(string)
@@ -117,6 +120,7 @@ def createResponse(string, compress=True, cacheable=True):
             response.headers['Content-Encoding'] = 'deflate'
     else:
         response = make_response(string)
+
     if cacheable and allowCache:
         response.headers['Cache-Control'] = 'max-age=300'
     app.logger.debug("Response: %s", str(response.headers))
@@ -165,24 +169,24 @@ def logout():
 def getBackupSetInfo(name):
     #app.logger.info("getBackupSetInfo Invoked: %s", name)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getBackupSetInfo(name))))
+    return createResponse(makeDict(db.getBackupSetInfo(name)))
 
 @app.route('/getBackupSetInfoById/<int:backupset>')
 def getBackupSetInfoById(backupset):
     #app.logger.info("getBackupSetInfoById Invoked: %s", backupset)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getBackupSetInfoById(backupset))))
+    return createResponse(makeDict(db.getBackupSetInfoById(backupset)))
 
 @app.route('/getBackupSetDetails/<backupset>')
 def getBackupSetDetails(backupset):
     db = getDB()
-    return createResponse(json.dumps(db.getBackupSetDetails(backupset)))
+    return createResponse(db.getBackupSetDetails(backupset))
 
 # lastBackupSet
 @app.route('/lastBackupSet/<int:completed>')
 def lastBackupSet(completed):
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.lastBackupSet(bool(completed)))))
+    return createResponse(makeDict(db.lastBackupSet(bool(completed))))
 
 # listBackupSets
 @app.route('/listBackupSets')
@@ -195,7 +199,7 @@ def listBackupSets():
         sets.append(makeDict(backup))
 
     #app.logger.debug(str(sets))
-    return createResponse(json.dumps(sets))
+    return createResponse(sets)
 
 @app.route('/getFileInfoByPath/<int:backupset>')
 def getFileInfoByPathRoot(backupset):
@@ -206,7 +210,7 @@ def getFileInfoByPathRoot(backupset):
 def getFileInfoByPath(backupset, pathname):
     #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getFileInfoByPath(str(pathname), backupset))))
+    return createResponse(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
 @app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
 def getFileInfoForPath(backupset, pathname):
@@ -214,7 +218,7 @@ def getFileInfoForPath(backupset, pathname):
     pathinfo = []
     for i in db.getFileInfoForPath(pathname, backupset):
         pathinfo.append(makeDict(i))
-    return createResponse(json.dumps(pathinfo))
+    return createResponse(pathinfo)
 
 
 @app.route('/getFileInfoByPathForRange/<int:first>/<int:last>/<path:pathname>')
@@ -224,14 +228,14 @@ def getFileInfoByPathForRange(first, last, pathname):
     #return createResponse(json.dumps(makeDict(db.getFileInfoByPathForRange(str(pathname), first, last))))
     for (bset, info) in db.getFileInfoByPathForRange(str(pathname), first, last):
         fInfos.append((bset, makeDict(info)))
-    return createResponse(json.dumps(fInfos))
+    return createResponse(fInfos)
 
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
     #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getFileInfoByName(name, (inode, device), backupset))))
+    return createResponse(akeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
@@ -241,7 +245,7 @@ def readDirectory(backupset, device, inode):
     directory = []
     for x in db.readDirectory((inode, device), backupset):
         directory.append(makeDict(x))
-    return createResponse(json.dumps(directory))
+    return createResponse(directory)
 
 @app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
 def readDirectoryForRange(device, inode, first, last):
@@ -250,7 +254,7 @@ def readDirectoryForRange(device, inode, first, last):
     directory = []
     for x in db.readDirectoryForRange((inode, device), first, last):
         directory.append(makeDict(x))
-    return createResponse(json.dumps(directory))
+    return createResponse(directory)
 
 # getChecksumByPath
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
@@ -259,26 +263,26 @@ def getChecksumByPath(backupset, pathname):
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
     #app.logger.info("Checksum: %s", cksum)
-    return createResponse(json.dumps(cksum))
+    return createResponse(cksum)
 
 # getChecksumInfo
 @app.route('/getChecksumInfo/<checksum>')
 def getChecksumInfo(checksum):
     #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getChecksumInfo(checksum))))
+    return createResponse(makeDict(db.getChecksumInfo(checksum)))
 
 @app.route('/getChecksumInfoChain/<checksum>')
 def getChecksumInfoChain(checksum):
     #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
-    return createResponse(json.dumps(map(makeDict, db.getChecksumInfoChain(checksum))))
+    return createResponse(map(makeDict, db.getChecksumInfoChain(checksum)))
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
     #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
     db = getDB()
-    return createResponse(json.dumps(makeDict(db.getBackupSetInfoForTime(time))))
+    return createResponse(makeDict(db.getBackupSetInfoForTime(time)))
 
 # getFirstBackupSet
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
@@ -287,14 +291,14 @@ def getFirstBackupSet(backupset, pathname):
     db = getDB()
     if not pathname.startswith('/'):
         pathname = '/' + pathname
-    return createResponse(json.dumps(db.getFirstBackupSet(pathname, backupset)))
+    return createResponse(db.getFirstBackupSet(pathname, backupset))
 
 # getChainLength
 @app.route('/getChainLength/<checksum>')
 def getChainLength(checksum):
     #app.logger.info("getChainLength Invoked: d %s", checksum)
     db = getDB()
-    return createResponse(json.dumps(db.getChainLength(checksum)))
+    return createResponse(db.getChainLength(checksum))
 
 _blocksize = (64 * 1024)
 def _stream(f):
@@ -331,13 +335,13 @@ def getFileData(checksum):
 def getConfigValue(name):
     db = getDB()
     #app.logger.info("getConfigValue Invoked: %s", name)
-    return createResponse(json.dumps(db.getConfigValue(name)))
+    return createResponse(db.getConfigValue(name))
 
 @app.route('/setConfigValue/<name>/<value>')
 def setConfigValue(name, value):
     db = getDB()
     app.logger.info("setConfigValue Invoked: %s %s", name, value)
-    return createResponse(json.dumps(db.setConfigValue(name, value)))
+    return createResponse(db.setConfigValue(name, value))
 
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
@@ -370,7 +374,7 @@ def listPurgeSets(backupset, priority, timestamp):
     sets = []
     for x in db.listPurgeSets(priority, timestamp, backupset):
         sets.append(makeDict(x))
-    return createResponse(json.dumps(sets))
+    return createResponse(sets)
 
 @app.route('/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def listPurgeIncomplete(backupset, priority, timestamp):
@@ -378,28 +382,33 @@ def listPurgeIncomplete(backupset, priority, timestamp):
     sets = []
     for x in db.listPurgeIncomplete(priority, timestamp, backupset):
         sets.append(makeDict(x))
-    return createResponse(json.dumps(sets))
+    return createResponse(sets)
 
 @app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeSets(backupset, priority, timestamp):
     db = getDB()
-    return createResponse(json.dumps(db.purgeSets(priority, timestamp, backupset)))
+    return createResponse(db.purgeSets(priority, timestamp, backupset))
     
 @app.route('/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeIncomplete(backupset, priority, timestamp):
     db = getDB()
-    return createResponse(json.dumps(db.purgeIncomplete(priority, timestamp, backupset)))
+    return createResponse(db.purgeIncomplete(priority, timestamp, backupset))
+
+@app.route('/deleteBackupSet/<int:backupset>')
+def deleteBackupSet(backupset):
+    db = getDB()
+    return createResponse(db.deleteBackupSet(backupset))
 
 @app.route('/listOrphanChecksums/<int:isfile>')
 def listOrphanChecksums(isfile):
     db = getDB()
     orphans = list(db.listOrphanChecksums(isfile))
-    return createResponse(json.dumps(orphans))
+    return createResponse(orphans)
 
 @app.route('/deleteOrphanChecksums/<int:isfile>')
 def deleteOrphanChecksums(isfile):
     db = getDB()
-    return createResponse(json.dumps(db.deleteOrphanChecksums(isfile)))
+    return createResponse(db.deleteOrphanChecksums(isfile))
 
 @app.route('/removeOrphans')
 def removeOrphans():
@@ -412,7 +421,7 @@ def removeOrphans():
         'size': size,
         'rounds': rounds,
     }
-    return createResponse(json.dumps(j))
+    return createResponse(j)
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
