@@ -171,7 +171,7 @@ class RemoteDB(object):
 
     @reconnect
     def getBackupSetDetails(self, name):
-        name = urllib.quote(name, '')
+        name = urllib.quote(str(name), '')
         r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), headers=self.headers)
         r.raise_for_status()
         return r.json()
