@@ -135,6 +135,11 @@ class TardisFS(fuse.Fuse):
             logging.basicConfig(level=logging.WARNING)
             self.log = logging.getLogger("TardisFS")
 
+            self.parser.add_option("--database", '-D',      help="Path to the Tardis database directory")
+            self.parser.add_option("--client", '-C',        help="Client to load database for")
+            self.parser.add_option("--password", '-P',      help="Password for this archive (use '-o password=' to prompt for password)")
+            self.parser.add_option("--keys",                help="Load keys from the specified file")
+
             self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
             self.parser.add_option(mountopt="client",       help="Client to load database for")
             self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
@@ -151,13 +156,6 @@ class TardisFS(fuse.Fuse):
             res = self.parse(values=self, errex=1)
 
             self.mountpoint = res.mountpoint
-
-            self.log.info("TardsFS Version: %s", Tardis.__versionstring__)
-            self.log.info("Database: %s", self.database)
-            self.log.info("Client: %s", self.client)
-            self.log.info("MountPoint: %s", self.mountpoint)
-            self.log.info("DBName: %s", self.dbname)
-            self.log.info("Repoint Links: %s", self.repoint)
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
 
@@ -183,7 +181,6 @@ class TardisFS(fuse.Fuse):
             self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
 
-            self.log.debug('Init complete.')
         except Exception as e:
             self.log.exception(e)
             sys.exit(2)
@@ -732,7 +729,7 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.WARNING)
 
     try:
         fs = TardisFS()
@@ -741,10 +738,17 @@ def main():
 
     fs.flags = 0
     fs.multithreaded = 0
+
     try:
+        logger.debug("TardsFS Version: %s", Tardis.__versionstring__)
+        logger.debug("Database: %s", fs.database)
+        logger.debug("Client: %s", fs.client)
+        logger.debug("MountPoint: %s", fs.mountpoint)
+        logger.debug("DBName: %s", fs.dbname)
+        logger.debug("Repoint Links: %s", fs.repoint)
         fs.main()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)
 
 if __name__ == "__main__":
     main()
