@@ -320,6 +320,7 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
 """
 Data manipulation functions
 """
+_suffixes = [".basis", ".sig", ".meta"]
 def _removeOrphans(db, cache):
     #logger = logging.getLogger('UTIL')
 
@@ -327,27 +328,23 @@ def _removeOrphans(db, cache):
     count = 0
     # Get a list of orphan'd files
     orphans = db.listOrphanChecksums(isFile=True)
-    for c in orphans:
+    for cksum in orphans:
         # And remove them each....
         try:
-            s = cache.size(c)
+            s = cache.size(cksum)
             if s:
                 size += s
                 count += 1
-            cache.remove(c)
+            cache.remove(cksum)
 
-            sig = c + ".sig"
+            sig = cksum + ".sig"
             size += cache.size(sig)
-            cache.remove(sig)
 
-            # Delete the basis file, if it exists.
-            # Don't count it's stats, as this is actually a link
-            # to another file
-            basis = c + ".basis"
-            cache.remove(basis)
+            for suffix in _suffixes:
+                cache.remove(cksum + suffixi)
 
-            db.deleteChecksum(c)
-        except OSError:
+            db.deleteChecksum(cksum)
+        except OSError as e:
             #logger.warning("No checksum file for checksum %s", c)
             pass            # Do something better here.
         except Exception as e:
