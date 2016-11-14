@@ -546,6 +546,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.statBytesReceived += bytesReceived
 
+        self.recordMetaData(checksum, size, compressed, encrypted, bytesReceived, basis=basis)
+
         if output:
             try:
                 if savefull:
@@ -760,7 +762,25 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
 
 
-    sequenceNumber = 0
+    _sequenceNumber = 0
+
+    def recordMetaData(self, checksum, size, compressed, encrypted, disksize, basis=None):
+        f = None
+        metaName = checksum + '.meta'
+        metaData = {'checksum': checksum, 'compressed': compressed, 'encrypted': encrypted, 'size': size, 'disksize': disksize }
+        if basis:
+            metaData['basis'] = basis
+        metaStr = json.dumps(metaData)
+        self.logger.debug("Storing metadata for %s: %s", checksum, metaStr)
+
+        try:
+            f = self.cache.open(metaName, 'wb')
+            f.write(metaStr)
+            f.close()
+        except Exception as e:
+            self.logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
+            if self.server.exceptions:
+                self.logger.exception(e)
 
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
@@ -776,8 +796,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = self.cache.open(checksum, "w")
         else:
             #temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
-            tempName = os.path.join(self.tempdir, self.tempPrefix + str(self.sequenceNumber))
-            self.sequenceNumber += 1
+            tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
+            self._sequenceNumber += 1
             self.logger.debug("Sending output to temporary file %s", tempName)
             output = file(tempName, 'wb')
 
@@ -787,6 +807,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
+        self.recordMetaData(checksum, size, compressed, encrypted, bytesReceived)
 
         try:
             if tempName:
@@ -813,9 +834,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.setChecksum(inode, dev, checksum)
             self.statNewFiles += 1
         except Exception as e:
-            logger.error("Could insert checksum %s info: %s", checksum, str(e))
+            self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
             if self.server.exceptions:
-                logger.exception(e)
+                self.logger.exception(e)
 
         self.statBytesReceived += bytesReceived
 
