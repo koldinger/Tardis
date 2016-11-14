@@ -535,7 +535,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 output = self.cache.open(checksum, "wb")
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
-        logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
+        self.logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
             pass
@@ -580,7 +580,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.debug("Setting checksum for inode %s to %s", inode, checksum)
                 self.db.setChecksum(inode, dev, checksum)
             except Exception as e:
-                logger.error("Could not insert checksum %s: %s", checksum, str(e))
+                self.logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
             # TODO: This has gotta be wrong.
 
@@ -678,7 +678,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         encrypted = message.get('encrypted', False)
 
         (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
-        logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
+        self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
 
@@ -804,7 +804,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         encrypted = message.get('encrypted', False)
 
         (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
-        logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
+        self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
         self.recordMetaData(checksum, size, compressed, encrypted, bytesReceived)
@@ -1320,7 +1320,7 @@ def setConfig(self, args, config):
     numFormats = len(self.formats)
     if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
         logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
-                        len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
+                            len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
     self.dbbackups      = config.getint('Tardis', 'DBBackups')
 
