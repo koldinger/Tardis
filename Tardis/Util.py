@@ -59,7 +59,7 @@ import RemoteDB
 import urlparse
 import urllib
 
-#logger = logging.getLogger('UTIL')
+logger = logging.getLogger('UTIL')
 
 def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
     fmt = "%d %s"
@@ -320,7 +320,7 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
 """
 Data manipulation functions
 """
-_suffixes = [".basis", ".sig", ".meta"]
+_suffixes = [".basis", ".sig", ".meta", ""]
 def _removeOrphans(db, cache):
     #logger = logging.getLogger('UTIL')
 
@@ -329,27 +329,23 @@ def _removeOrphans(db, cache):
     # Get a list of orphan'd files
     orphans = db.listOrphanChecksums(isFile=True)
     for cksum in orphans:
+        logger.debug("Removing %s", cksum)
         # And remove them each....
         try:
             s = cache.size(cksum)
             if s:
                 size += s
                 count += 1
-            cache.remove(cksum)
 
             sig = cksum + ".sig"
             size += cache.size(sig)
 
-            for suffix in _suffixes:
-                cache.remove(cksum + suffix)
+            cache.removeSuffixes(cksum, _suffixes)
 
-            # db.deleteChecksum(cksum)
+            db.deleteChecksum(cksum)
         except OSError as e:
-            #logger.warning("No checksum file for checksum %s", c)
+            logger.warning("No checksum file for checksum %s", c)
             pass            # Do something better here.
-        except Exception as e:
-            #logger.error("Error purging orphans: %s", e)
-            pass            # Do something better here
     return count, size
 
 def removeOrphans(db, cache):
