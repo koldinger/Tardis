@@ -341,9 +341,9 @@ def _removeOrphans(db, cache):
             size += cache.size(sig)
 
             for suffix in _suffixes:
-                cache.remove(cksum + suffixi)
+                cache.remove(cksum + suffix)
 
-            db.deleteChecksum(cksum)
+            # db.deleteChecksum(cksum)
         except OSError as e:
             #logger.warning("No checksum file for checksum %s", c)
             pass            # Do something better here.
