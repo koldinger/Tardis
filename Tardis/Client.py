@@ -1672,6 +1672,15 @@ def main():
                 sys.exit(1)
             crypt.setKeys(f, c)
 
+    # Send the command line
+    jsonArgs = json.dumps(vars(args), cls=Util.ArgJsonEncoder, sort_keys=True)
+    message = {
+        "message": "CLICONFIG",
+        "args":    jsonArgs
+    }
+
+    batchMessage(message)
+
     # Now, do the actual work here.
     try:
         # Now, process all the actual directories

@@ -851,7 +851,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         responses = []
         for mess in batch:
             (response, flush) = self.processMessage(mess, transaction=False)
-            responses.append(response)
+            if response:
+                responses.append(response)
 
         response = { 
             'message': 'ACKBTCH',
@@ -870,6 +871,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             'response': 'OK' if ret else 'FAIL'
         }
         return (response, True)
+
+    def processClientConfig(self, message):
+        clientConfig = message['args']
+        self.logger.debug("Received client config: %s", clientConfig)
+        self.db.setClientConfig(clientConfig)
+        return (None, False)
+
 
     def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """
@@ -900,10 +908,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (response, flush) = self.processBatch(message)
         elif messageType == "PRG":
             (response, flush) = self.processPurge(message)
+        elif messageType == "CLICONFIG":
+            (response, flush) = self.processClientConfig(message)
         elif messageType == "META":
-            (response, flush) =  self.processMeta(message)
+            (response, flush) = self.processMeta(message)
         elif messageType == "METADATA":
-            (response, flush) =  self.processMetaData(message)
+            (response, flush) = self.processMetaData(message)
         elif messageType == "SETKEYS":
             (response, flush) = self.processSetKeys(message)
         else:

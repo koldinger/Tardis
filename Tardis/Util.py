@@ -41,6 +41,7 @@ import getpass
 import stat
 import fnmatch
 import json
+import types
 import base64
 from functools import partial
 
@@ -583,6 +584,22 @@ class HelpFormatter(argparse.HelpFormatter):
             ret = super(HelpFormatter, self)._format_action_invocation(action)
         #print "Got ", ret
         return ret
+
+"""
+Argument formatter.  Useful for converting our command line arguments into strings"
+"""
+class ArgJsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, types.FileType):
+            if obj == sys.stderr:
+                return "<stderr>"
+            elif obj == sys.stdout:
+                return "<stdout>"
+            else:
+                return "<file>"
+        else:
+            return json.JSONEncoder(self, obj)
+
 
 """
 Class to have a two directional dictionary.

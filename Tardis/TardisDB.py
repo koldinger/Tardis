@@ -62,7 +62,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 8
+_schemaVersion = 9
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -255,6 +255,17 @@ class TardisDB(object):
             return True
         except sqlite3.IntegrityError as e:
             return False
+
+    def setClientConfig(self, config, current=True):
+        """ Store the command line from this run """
+        backupset = self._bset(current)
+        r = self._executeWithResult("SELECT ClientConfigID FROM ClientConfig WHERE ClientConfig = :config", {"config": config})
+        if r is None:
+            c = self._execute("INSERT INTO ClientConfig (ClientConfig) VALUES (:config)", {"config": config})
+            clientConfigId = c.lastrowid
+        else:
+            clientConfigId = r[0]
+        self._execute("UPDATE Backups SET ClientConfigID = :configId WHERE BackupSet = :backupset", {"configId": clientConfigId, "backupset": backupset})
 
     def checkBackupSetName(self, name):
         """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """

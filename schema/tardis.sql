@@ -3,6 +3,12 @@ CREATE TABLE IF NOT EXISTS Config (
     Value           TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS ClientConfig (
+    ClientConfigID  INTEGER PRIMARY KEY AUTOINCREMENT,
+    ClientConfig    TEXT
+);
+
+
 CREATE TABLE IF NOT EXISTS Backups (
     Name            TEXT UNIQUE,
     BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +24,9 @@ CREATE TABLE IF NOT EXISTS Backups (
     ClientIP        TEXT,
     FilesFull       INTEGER,
     FilesDelta      INTEGER,
-    BytesReceived   INTEGER
+    BytesReceived   INTEGER,
+    ClientConfigId  INTEGER,
+    FOREIGN KEY(ClientConfigId) REFERENCES ClientConfig(ClientConfigIf)
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (
@@ -88,5 +96,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "8");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "9");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
