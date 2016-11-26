@@ -1713,7 +1713,7 @@ def main():
             else:
                 sendPurge(True)
         conn.close()
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         if args.exceptions:
             logger.exception(e)
