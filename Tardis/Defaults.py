@@ -36,7 +36,7 @@ SECTION = 'Tardis'
 
 _defaults = {
                 'TARDIS_DB'             : '/srv/tardis',
-                'TARDIS_DBDIR'          : '%(TARDIS_DB)s',
+                'TARDIS_DBDIR'          : '',
                 'TARDIS_DBNAME'         : 'tardis.db',
                 'TARDIS_CLIENT'         : socket.gethostname(),
                 'TARDIS_SERVER'         : 'localhost',

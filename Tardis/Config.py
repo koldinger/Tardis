@@ -76,7 +76,7 @@ def addCommonOptions(parser):
     dbGroup.add_argument('--database', '-D', dest='database',    default=config.get(job, 'Database'),               help="Database to use.  Default: %(default)s")
     dbGroup.add_argument('--client', '-C',   dest='client',      default=config.get(job, 'Client'),                 help="Client to list on.  Default: %(default)s")
     dbGroup.add_argument('--dbname', '-N',   dest='dbname',      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
-    dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  Default: %(default)s")
+    dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  If no value, uses the value of --database.  Default: %(default)s")
 
 def addPasswordOptions(parser):
     passgroup = parser.add_argument_group("Password/Encryption specification options")

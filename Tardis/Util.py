@@ -306,7 +306,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
     else:
         cacheDir = os.path.join(loc.path, client)
         cache = CacheDir.CacheDir(cacheDir, create=False)
-        if dbLoc is None:
+        if not dbLoc:
             dbDir = cacheDir
         else:
             dbDir = os.path.join(dbLoc, client)

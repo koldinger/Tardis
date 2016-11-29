@@ -928,6 +928,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return (response, flush)
 
     def getCacheDir(self):
+        self.logger.debug("Using cache dir: %s", self.basedir)
         return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
 
     def getDB(self, client, token):
@@ -945,7 +946,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         connid = {'connid': self.idstr }
 
         if not os.path.exists(self.dbfile):
-            os.makedirs(self.dbdir)
+            if not os.path.exists(self.dbdir):
+                os.makedirs(self.dbdir)
             if self.server.requirePW and token is None:
                 self.logger.warning("No password specified.  Cannot create")
                 raise InitFailedException("Password required for creation")
@@ -1314,7 +1316,10 @@ class TardisDomainSocketServer(SocketServer.UnixStreamServer):
 # Want to do this in multiple classes.
 def setConfig(self, args, config):
     self.basedir        = args.database
-    self.dbdir          = args.dbdir
+    if args.dbdir:
+        self.dbdir      = args.dbdir
+    else:
+        self.dbdir      = self.basedir
     self.savefull       = config.getboolean('Tardis', 'SaveFull')
     self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
     self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
