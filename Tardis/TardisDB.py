@@ -62,7 +62,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 9
+_schemaVersion = 10
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -224,15 +224,16 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None, full=False):
+    def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None, full=False, serverID=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
         now = time.time()
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, ClientIP) "
-                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :clientip)",
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, ClientIP, ServerSession) "
+                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :clientip, :serversessionid)",
                       {"name": name, "now": now, "session": session, "priority": priority, "full": full,
                        "clienttime": clienttime, "clientversion": version, "clientip": ip,
+                       "serversessionid": serverID,
                        "serverversion": (Tardis.__buildversion__ or Tardis.__version)})
         except sqlite3.IntegrityError as e:
             raise Exception("Backupset {} already exists".format(name))

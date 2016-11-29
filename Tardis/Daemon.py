@@ -1157,7 +1157,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     priority = 0
 
                 # Create the actual backup set
-                self.db.newBackupSet(name, str(self.sessionid), priority, clienttime, version, self.address, self.full)
+                self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.server.serverSessionID)
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
                 sock.sendall(json.dumps(message))
@@ -1178,7 +1178,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             response = {
                 "status": "OK",
-                "sessionid": str(self.sessionid),
+                "sessionid": self.sessionid,
                 "prevDate": str(self.db.prevBackupDate),
                 "new": new,
                 "name": serverName if serverName else name,
@@ -1367,6 +1367,9 @@ def setConfig(self, args, config):
     self.certfile       = args.certfile
     self.keyfile        = args.keyfile
 
+    # Create a session ID
+    self.serverSessionID = str(uuid.uuid1())
+
     if args.profile:
         self.profiler = cProfile.Profile()
     else:
@@ -1419,6 +1422,8 @@ def run_server():
         else:
             logger.info("Starting Single Threaded server Port: %d", config.getint('Tardis', 'Port'));
             server = TardisSingleThreadedSocketServer(args, config)
+
+        logger.info("Server Session: %s", server.serverSessionID)
 
         if args.single:
             server.handle_request()
