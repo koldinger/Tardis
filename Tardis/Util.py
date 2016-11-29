@@ -285,7 +285,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
 """
 Get the database, cachedir, and crypto object.
 """
-def setupDataConnection(dbLoc, client, password, keyFile, dbName):
+def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
     crypt = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password, client)
@@ -294,7 +294,7 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
     if crypt:
         token = crypt.createToken()
 
-    loc = urlparse.urlparse(dbLoc)
+    loc = urlparse.urlparse(dataLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
         # If no port specified, insert the port
         if loc.port is None:
@@ -304,9 +304,13 @@ def setupDataConnection(dbLoc, client, password, keyFile, dbName):
         tardis = RemoteDB.RemoteDB(dbLoc, client, token=token)
         cache = tardis
     else:
-        baseDir = os.path.join(loc.path, client)
-        cache = CacheDir.CacheDir(baseDir, create=False)
-        dbPath = os.path.join(baseDir, dbName)
+        cacheDir = os.path.join(loc.path, client)
+        cache = CacheDir.CacheDir(cacheDir, create=False)
+        if dbLoc is None:
+            dbDir = cacheDir
+        else:
+            dbDir = os.path.join(dbLoc, client)
+        dbPath = os.path.join(dbDir, dbName)
         tardis = TardisDB.TardisDB(dbPath, token=token)
 
     if crypt:

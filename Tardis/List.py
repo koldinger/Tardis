@@ -773,7 +773,7 @@ def main():
 
 
         FORMAT = "%(levelname)s : %(message)s"
-        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
         logger = logging.getLogger("")
 
         args = processArgs()
@@ -784,7 +784,7 @@ def main():
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
 
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
+        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         setupDisplay(tardis)
 

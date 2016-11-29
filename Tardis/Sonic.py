@@ -79,7 +79,8 @@ def getDB(crypt, new=False, keyfile=None, allowRemote=True):
         cache = tardisdb
     else:
         basedir = os.path.join(args.database, args.client)
-        dbfile = os.path.join(basedir, args.dbname)
+        dbdir = os.path.join(args.dbdir, args.client)
+        dbfile = os.path.join(dbdir, args.dbname)
         if new and os.path.exists(dbfile):
             raise Exception("Database for client %s already exists." % (args.client))
 

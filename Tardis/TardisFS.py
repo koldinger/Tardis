@@ -113,6 +113,7 @@ class TardisFS(fuse.Fuse):
         try:
             client   = Defaults.getDefault('TARDIS_CLIENT')
             database = Defaults.getDefault('TARDIS_DB')
+            dbdir    = Defaults.getDefault('TARDIS_DBDIR') % { 'TARDIS_DB': database }          # HACK
             dbname   = Defaults.getDefault('TARDIS_DBNAME')
             current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
@@ -125,13 +126,15 @@ class TardisFS(fuse.Fuse):
             self.pwprog         = None
             self.keys           = None
             self.dbname         = dbname
+            self.dbdir          = dbdir
             self.cachetime      = 60
             self.nocrypt        = False
             self.noauth         = False
             self.current        = current
             self.authenticate   = True
 
-            self.crypt      = None
+            self.crypt          = None
+
             logging.basicConfig(level=logging.WARNING)
             self.log = logging.getLogger("TardisFS")
 
@@ -148,6 +151,7 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="keys",         help="Load keys from the specified file")
             self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
             self.parser.add_option(mountopt="dbname",       help="Database Name")
+            self.parser.add_option(mountopt="dbdir",        help="Database Directory (if different from data directory")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
             self.parser.add_option(mountopt='noauth',       help="Disable authentication")
@@ -167,7 +171,7 @@ class TardisFS(fuse.Fuse):
 
             #if password:
             #    self.crypt = TardisCrypto.TardisCrypto(password, self.client)
-            (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname)
+            (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname, self.dbdir)
             password = None
 
             # Remove the crypto object if not encyrpting files.

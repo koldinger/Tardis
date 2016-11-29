@@ -37,7 +37,8 @@ import sys
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
-    'DBName':				Defaults.getDefault('TARDIS_DBNAME'),
+    'DBDir':		    Defaults.getDefault('TARDIS_DBDIR'),
+    'DBName':		    Defaults.getDefault('TARDIS_DBNAME'),
     'Password':             None,
     'PasswordFile':         None,
     'PasswordProg':         None,
@@ -74,7 +75,8 @@ def addCommonOptions(parser):
     dbGroup = parser.add_argument_group("Database specification options")
     dbGroup.add_argument('--database', '-D', dest='database',    default=config.get(job, 'Database'),               help="Database to use.  Default: %(default)s")
     dbGroup.add_argument('--client', '-C',   dest='client',      default=config.get(job, 'Client'),                 help="Client to list on.  Default: %(default)s")
-    dbGroup.add_argument("--dbname", "-N",   dest="dbname",      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
+    dbGroup.add_argument('--dbname', '-N',   dest='dbname',      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
+    dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  Default: %(default)s")
 
 def addPasswordOptions(parser):
     passgroup = parser.add_argument_group("Password/Encryption specification options")

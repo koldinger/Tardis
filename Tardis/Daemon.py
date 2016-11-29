@@ -85,6 +85,7 @@ databaseName    = Defaults.getDefault('TARDIS_DBNAME')
 schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir         = Defaults.getDefault('TARDIS_DB')
+dbDir           = Defaults.getDefault('TARDIS_DBDIR')
 portNumber      = Defaults.getDefault('TARDIS_PORT')
 pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
 journalName     = Defaults.getDefault('TARDIS_JOURNAL')
@@ -104,6 +105,7 @@ else:
 configDefaults = {
     'Port'              : portNumber,
     'BaseDir'           : baseDir,
+    'DBDir'             : dbDir,
     'DBName'            : databaseName,
     'Schema'            : schemaFile,
     'LogCfg'            : None,
@@ -925,27 +927,34 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return (response, flush)
 
+    def getCacheDir(self):
+        return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
+
     def getDB(self, client, token):
         script = None
         ret = "EXISTING"
         journal = None
         self.client     = client
         self.basedir    = os.path.join(self.server.basedir, client)
-        self.cache      = CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
-        self.dbfile     = os.path.join(self.basedir, self.server.dbname)
+        self.dbdir      = os.path.join(self.server.dbdir, client)
+        self.dbname     = self.server.dbname.format({'client': client})
+        self.dbfile     = os.path.join(self.dbdir, self.dbname)
 
-        if self.server.journal:
-            journal = os.path.join(self.basedir, self.server.journal)
+        self.cache = self.getCacheDir()
 
         connid = {'connid': self.idstr }
 
         if not os.path.exists(self.dbfile):
+            os.makedirs(self.dbdir)
             if self.server.requirePW and token is None:
                 self.logger.warning("No password specified.  Cannot create")
                 raise InitFailedException("Password required for creation")
             self.logger.debug("Initializing database for %s with file %s", client, schemaFile)
             script = schemaFile
             ret = "NEW"
+
+        if self.server.journal:
+            journal = os.path.join(self.dbdir, self.server.journal)
 
         self.db = TardisDB.TardisDB(self.dbfile,
                                     initialize=script,
@@ -1277,7 +1286,7 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("TCP Server %s Running: %s", Tardis.__versionstring__, self.dbname)
+        logger.info("TCP Server %s Running", Tardis.__versionstring__)
 
 
 class TardisSingleThreadedSocketServer(SocketServer.TCPServer):
@@ -1291,7 +1300,7 @@ class TardisSingleThreadedSocketServer(SocketServer.TCPServer):
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("Single Threaded TCP Server %s Running: %s", Tardis.__versionstring__, self.dbname)
+        logger.info("Single Threaded TCP Server %s Running", Tardis.__versionstring__)
 
 class TardisDomainSocketServer(SocketServer.UnixStreamServer):
     def __init__(self, args, config):
@@ -1299,12 +1308,13 @@ class TardisDomainSocketServer(SocketServer.UnixStreamServer):
         self.args = args
         SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
         setConfig(self, args, config)
-        logger.info("Unix Domain Socket %s Server Running: %s", Tardis.__versionstring__, self.dbname)
+        logger.info("Unix Domain Socket %s Server Running", Tardis.__versionstring__)
 
 # HACK.  Operate on an object, but not in the class.
 # Want to do this in multiple classes.
 def setConfig(self, args, config):
     self.basedir        = args.database
+    self.dbdir          = args.dbdir
     self.savefull       = config.getboolean('Tardis', 'SaveFull')
     self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
     self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
@@ -1448,7 +1458,8 @@ def processArgs():
     config.read(args.config)
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
-    parser.add_argument('--database',           dest='database',        default=config.get('Tardis', 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    parser.add_argument('--database',           dest='database',        default=config.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    parser.add_argument('--dbdir',              dest='dbdir',           default=config.get(t, 'DBDir'),  help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')

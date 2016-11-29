@@ -416,7 +416,7 @@ def main():
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname)
+        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except Exception as e:
