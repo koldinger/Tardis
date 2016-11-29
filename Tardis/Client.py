@@ -1500,7 +1500,7 @@ def printReport():
         fmt3 = '  %-{}s %-6s %-10s'.format(length)
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 2), '-' * 6, '-' * 10, '-' * 10)
-        for i in sorted(report):
+        for i in sorted(report, key=os.path.split):
             r = report[i]
             (d, f) = os.path.split(i)
             if d != lastDir:
