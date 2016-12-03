@@ -106,21 +106,23 @@ def shortPath(path, width=80):
             main = namecomps[0]
             suffix = ''
         length = len(main) - len(suffix) - 5
-        length = min(length, width - 10)
+        length = min(length, width - 4)
         retPath   = main[0:length/2] + "..." + main[-(length/2):]
         if suffix:
             retPath = '.'.join([retPath, suffix])
 
     # Build it up backwards from the end
     while len(retPath) < width:
+        #print retPath, len(retPath), width
         path, tail = os.path.split(path)
-        if len(tail) + len(retPath) > width:
+        if not path or not tail:
+            break
+        elif len(tail) + len(retPath) > width:
             break
         else:
             retPath = os.path.join(tail, retPath)
 
     return "..." + os.sep + retPath
-
 
 def accumulateStat(stats, stat, amount=1):
     if stats:
