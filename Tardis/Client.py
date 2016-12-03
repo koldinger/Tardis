@@ -422,7 +422,7 @@ def processDelta(inode):
                     else:
                         x['sigsize'] = 0
 
-                    report[pathname] = x
+                    report[os.path.split(pathname)] = x
             else:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
@@ -513,7 +513,7 @@ def sendContent(inode, reportType):
                 repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
                 if sig:
                     repInfo['sigsize'] = sSent
-                report[pathname] = repInfo
+                report[os.path.split(pathname)] = repInfo
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
@@ -1492,7 +1492,7 @@ def printReport():
     length = 0
     logger.log(logging.STATS, "")
     if report:
-        length = reduce(max, map(len, map(os.path.basename, report)))
+        length = reduce(max, map(len, map(lambda x:x[0], report)))
         length = max(length, 50)
         fmts = ['','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 2)
@@ -1500,9 +1500,9 @@ def printReport():
         fmt3 = '  %-{}s %-6s %-10s'.format(length)
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 2), '-' * 6, '-' * 10, '-' * 10)
-        for i in sorted(report, key=os.path.split):
+        for i in sorted(report):
             r = report[i]
-            (d, f) = os.path.split(i)
+            (d, f) = i
             if d != lastDir:
                 logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
                 lastDir = d
