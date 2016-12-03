@@ -1522,7 +1522,7 @@ def lockRun(server, port, client):
 
     try:
         pidfile.create()
-    except PidFileError as e:
+    except pid.PidFileError as e:
         raise Exception("Tardis already running: %s", e)
     return pidfile
 
