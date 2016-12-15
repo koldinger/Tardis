@@ -31,11 +31,11 @@
 import socket
 import json
 import uuid
-import sys
 import time
-import Messages
 import ssl
+
 import Tardis
+import Tardis.Messages as Messages
 
 protocolVersion = "1.1"
 headerString    = "TARDIS " + protocolVersion
@@ -80,7 +80,7 @@ class Connection(object):
                 raise Exception("Unknown protocol: {}".format(message))
 
             # Create a BACKUP message
-            message = {
+            resp = {
                 'message'   : 'BACKUP',
                 'host'      : client,
                 'encoding'  : encoding,
@@ -94,9 +94,9 @@ class Connection(object):
                 'full'      : full
             }
             if token:
-                message['token'] = token
+                resp['token'] = token
             # BACKUP { json message }
-            self.put(json.dumps(message))
+            self.put(json.dumps(resp))
 
             message = self.sock.recv(1024).strip()
             fields = json.loads(message)
@@ -114,7 +114,7 @@ class Connection(object):
                 self.filenameKey = fields['filenameKey']
             if 'contentKey' in fields:
                 self.contentKey = fields['contentKey']
-        except Exception as e:
+        except Exception:
             self.sock.close()
             raise
 
@@ -123,7 +123,7 @@ class Connection(object):
         self.stats['messagesSent'] += 1
         return
 
-    def recv(n):
+    def recv(self, n):
         msg = ''
         while len(msg) < n:
             chunk = self.sock.recv(n-len(msg))
@@ -206,18 +206,10 @@ class MsgPackConnection(ProtocolConnection):
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
-class NullConnection(Connection):
-    def __init__(self, host, port, name):
-        pass
-
-    def send(self, message):
-        print json.dumps(message)
-
-    def receive(self):
-        return None
-
 if __name__ == "__main__":
-    """ Test Code """
+    """
+    Test Code
+    """
     conn = JsonConnection("localhost", 9999, "HiMom")
     print conn.getSessionId()
     conn.send({ 'x' : 1 })

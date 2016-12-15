@@ -28,10 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Cryptodome.Cipher import AES, Blowfish
-from Cryptodome.Protocol.KDF import PBKDF2
-import Cryptodome.Random
-import socket
 import hashlib
 import hmac
 import os
@@ -39,9 +35,13 @@ import os.path
 import base64
 import binascii
 
-import Defaults
+from Cryptodome.Cipher import AES
+from Cryptodome.Protocol.KDF import PBKDF2
+import Cryptodome.Random
 
-class TardisCrypto:
+import Tardis.Defaults as Defaults
+
+class TardisCrypto(object):
     _contentKey  = None
     _filenameKey = None
     _tokenKey    = None
@@ -56,7 +56,7 @@ class TardisCrypto:
 
     def __init__(self, password, client=None):
         self._random = Cryptodome.Random.new()
-        if client == None:
+        if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
 
         self.client = client
@@ -66,8 +66,7 @@ class TardisCrypto:
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
 
     def getContentCipher(self, iv):
-        cipher = AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
-        return cipher
+        return AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
 
     def getFilenameCipher(self):
         #cipher = AES.new(self._filenameKey, AES.MODE_ECB)
@@ -77,8 +76,7 @@ class TardisCrypto:
         return hmac.new(self._contentKey, digestmod=func)
 
     def getIV(self):
-        iv = self._random.read(self.ivLength)
-        return iv
+        return self._random.read(self.ivLength)
 
     def pad(self, data, length=None):
         if length is None:
@@ -87,7 +85,7 @@ class TardisCrypto:
         data += chr(pad) * pad
         return data
 
-    def unpad(self, data, validate=True):
+    def unpad(self, data):
         #if validate:
             #self.checkpad(data)
         l = ord(data[-1])
@@ -140,7 +138,7 @@ class TardisCrypto:
 
     def createToken(self, client=None):
         if client is None:
-            client = self.client  
+            client = self.client
         cipher = AES.new(self._tokenKey, AES.MODE_ECB)
         token = base64.b64encode(cipher.encrypt(self.padzero(client)), self._altchars)
         return token
@@ -169,55 +167,3 @@ class TardisCrypto:
         self._contentKey  = self._tokenKey
         self._filenameKey = self._keyKey
         self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)
-
-if __name__ == "__main__":
-    enc = TardisCrypto("I've got a password, do you?")
-    dec = TardisCrypto("I've got a password, do you?")
-
-    print enc.createToken()
-    print dec.createToken()
-
-    enc.genKeys()
-    (a, b) = enc.getKeys()
-    print "Keys: ", a, b
-    dec.setKeys(a, b)
-
-    #print base64.b64encode(enc._filenameKey)
-    #print base64.b64encode(enc._contentKey)
-
-    iv = enc.getIV()
-    cc = enc.getContentCipher(iv)
-
-    fc = enc.getFilenameCipher()
-
-    print "---- Paths"
-    a = enc.encryptPath('a/b/c/d/e')
-    b = enc.encryptPath('/srv/music/MP3/CD/Classical/Bartók,_Béla_&_Kodaly,_Zoltan/Bartok_-_The_Miraculous_Mandarin_Kodály_-_Háry_Janos_Dances_Of_Galánta/02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
-    c = enc.encryptPath(os.path.join('a' * 16, 'b' * 32, 'c' * 48, 'd' * 64, 'e' * 80, 'f' * 96, 'g' * 112))
-    print "1", a
-    print "2", b
-    print "3", c
-
-    print "1", dec.decryptPath(a)
-    print "2", dec.decryptPath(b)
-    print "3", dec.decryptPath(c)
-
-    print "---- Names"
-    a =  enc.encryptFilename("srv")
-    print a
-    print dec.decryptFilename(a)
-
-    print "---- More Names"
-    b = enc.encryptFilename('02.Háry_János,_suite_from_the_opera_for_orchestra,_Prelude.mp3')
-    print b
-    print dec.decryptFilename(b)
-
-    print "---- Data"
-    pt = "This is a test.  This is only a test.  This is a test of the Emergency Broadcasting System.  Had this been an actual emergency, the attention signal you just heard"
-    iv = enc.getIV()
-    cipher = enc.getContentCipher(iv)
-    ct = cipher.encrypt(enc.pad(pt))
-
-    decipher = dec.getContentCipher(iv)
-    dt = decipher.decrypt(ct)
-    print dt

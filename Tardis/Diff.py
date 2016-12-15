@@ -28,7 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os, os.path
+import os
+import os.path
 import sys
 import difflib
 import argparse
@@ -39,14 +40,12 @@ import termcolor
 import parsedatetime
 
 import Tardis
-import Util
-import TardisDB
-import TardisCrypto
-import Regenerator
-import CacheDir
-import Defaults
-import Config
+import Tardis.Util as Util
+import Tardis.Regenerator as Regenerator
+import Tardis.Defaults as Defaults
+import Tardis.Config as Config
 
+logger = None
 args = None
 
 current = Defaults.getDefault('TARDIS_RECENT_SET')
@@ -54,7 +53,6 @@ current = Defaults.getDefault('TARDIS_RECENT_SET')
 def parseArgs():
     isatty = os.isatty(sys.stdout.fileno())
     global args
-    current = Defaults.getDefault('TARDIS_RECENT_SET')
 
     parser = argparse.ArgumentParser(description='Diff files between current and a Tardis backup, or multiple Tardis versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
     (args, remaining) = Config.parseConfigOptions(parser)
@@ -74,7 +72,7 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s');
+    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
     parser.add_argument('--list', '-l',         dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
@@ -93,10 +91,6 @@ def setupLogging(verbosity):
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     logging.basicConfig(level=loglevel)
     logger = logging.getLogger('')
-    pass
-
-def setupFiles(filename, cache, db, crypt):
-    pass
 
 def setcolor(line):
     if args.color:
@@ -180,7 +174,7 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
 
 def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
     # Collect the first directory contents
-    (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+    (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
     entries1 = tardis.readDirectory((info1['inode'], info1['device']))
     names1 = ([x['name'] for x in entries1])
     if crypt:
@@ -189,7 +183,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     names1 = sorted(names1)
 
     if bsets[1]:
-        (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
+        (info2, _) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
         entries2 = tardis.readDirectory((info2['inode'], info2['device']))
         names2 = [x['name'] for x in entries2]
         if crypt:
@@ -212,7 +206,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
 
 def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now, then):
     """
-    Diff two files, either both from the database, or one from the database, and one from the 
+    Diff two files, either both from the database, or one from the database, and one from the
     actual filesystem
     """
     path = os.path.abspath(fName)
@@ -306,7 +300,7 @@ def main():
 
         for f in args.files:
             if bsets[1] is None and os.path.isdir(f):
-                diffDir(f, r, bsets, tardis, crypt, reducePath, now, then, recurse=args.recurse)
+                diffDir(f, r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:

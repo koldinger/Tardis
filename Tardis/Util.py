@@ -36,7 +36,6 @@ import sys
 import subprocess
 import hashlib
 import shlex
-import StringIO
 import getpass
 import stat
 import fnmatch
@@ -45,20 +44,20 @@ import types
 import base64
 from functools import partial
 
-import Messages
-import Connection
-import CompressedBuffer
-import Tardis
-import Defaults
-
-import TardisDB
-import TardisCrypto
-import CacheDir
-import RemoteDB
-
 #import pycurl
 import urlparse
 import urllib
+
+import Tardis.Connection as Connection
+import Tardis.CompressedBuffer as CompressedBuffer
+import Tardis.Defaults as Defaults
+
+import Tardis.TardisDB as TardisDB
+import Tardis.TardisCrypto as TardisCrypto
+import Tardis.CacheDir as CacheDir
+import Tardis.RemoteDB as RemoteDB
+
+
 
 logger = logging.getLogger('UTIL')
 
@@ -79,7 +78,7 @@ def getIntOrNone(config, section, name):
     try:
         x = config.get(section, name)
         return int(x, 0)
-    except:
+    except Exception:
         return None
 
 def stripComments(line):
@@ -124,13 +123,13 @@ def shortPath(path, width=80):
 
     return "..." + os.sep + retPath
 
-def accumulateStat(stats, stat, amount=1):
+def accumulateStat(stats, name, amount=1):
     if stats:
-        stats[stat] = stats.setdefault(stat, 0) + amount
+        stats[name] = stats.setdefault(name, 0) + amount
 
-"""
-Functions for reducing a path.
-"""
+
+# Functions for reducing a path.
+
 def findDirInRoot(tardis, bset, path, crypt=None):
     #logger = logging.getLogger('UTIL')
     """
@@ -150,7 +149,7 @@ def findDirInRoot(tardis, bset, path, crypt=None):
             return i
     return None
 
-def reducePath(tardis, bset, path, reduce, crypt=None):
+def reducePath(tardis, bset, path, reduceBy, crypt=None):
     #logger = logging.getLogger('UTIL')
     """
     Reduce a path by a specified number of directory levels.
@@ -158,21 +157,18 @@ def reducePath(tardis, bset, path, reduce, crypt=None):
     element which occurs in the root directory.
     """
     #logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
-    if reduce == sys.maxint:
-        reduce = findDirInRoot(tardis, bset, path, crypt)
-    if reduce:
-        #logger.debug("Reducing path by %d entries: %s", reduce, path)
+    if reduceBy == sys.maxint:
+        reduceBy = findDirInRoot(tardis, bset, path, crypt)
+    if reduceBy:
+        #logger.debug("Reducing path by %d entries: %s", reduceBy, path)
         comps = path.split(os.sep)
-        if reduce > len(comps):
-            #logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduce, len(comps), path)
+        if reduceBy > len(comps):
+            #logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduceBy, len(comps), path)
             return None
-        tmp = os.path.join(os.sep, *comps[reduce + 1:])
-        #logger.info("Reduced path %s to %s", path, tmp)
+        tmp = os.path.join(os.sep, *comps[reduceBy + 1:])
+        #logger.info("reduced path %s to %s", path, tmp)
         path = tmp
-    return path 
-
-"""
-"""
+    return path
 
 def isMagic(path):
     if ('*' in path) or ('?' in path) or ('[' in path):
@@ -185,7 +181,7 @@ def matchPath(pattern, path):
     pats = pattern.split(os.sep)
     dirs = path.split(os.sep)
     inWild = False
-    while (len(pats) != 0 and len(dirs) != 0):
+    while len(pats) != 0 and len(dirs) != 0:
         if not inWild:
             p = pats.pop(0)
             d = dirs.pop(0)
@@ -278,15 +274,14 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
         pwf.close()
 
     if pwprog:
-        args = shlex.split(pwprog)
-        output = subprocess.check_output(args)
+        a = shlex.split(pwprog)
+        output = subprocess.check_output(a)
         password = output.split('\n')[0].rstrip()
 
     return password
 
-"""
-Get the database, cachedir, and crypto object.
-"""
+# Get the database, cachedir, and crypto object.
+
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
     crypt = None
     if password:
@@ -324,9 +319,9 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
 
     return (tardis, cache, crypt)
 
-"""
-Data manipulation functions
-"""
+
+# Data manipulation functions
+
 _suffixes = [".basis", ".sig", ".meta", ""]
 def _removeOrphans(db, cache):
     #logger = logging.getLogger('UTIL')
@@ -350,9 +345,8 @@ def _removeOrphans(db, cache):
             cache.removeSuffixes(cksum, _suffixes)
 
             db.deleteChecksum(cksum)
-        except OSError as e:
-            logger.warning("No checksum file for checksum %s", c)
-            pass            # Do something better here.
+        except OSError:
+            logger.warning("No checksum file for checksum %s", cksum)
     return count, size
 
 def removeOrphans(db, cache):
@@ -362,7 +356,7 @@ def removeOrphans(db, cache):
     # Repeatedly prune the file trees until there are no more checksums
     # we have to do this, as there can be multiple levels of basis files, each dependant on the one above (below?)
     # Theoretically we should be able to do this is one go, but SQLite's implementation of recursive queries doesn't
-    # seem to work quite right. 
+    # seem to work quite right.
     while True:
         (lCount, lSize) = _removeOrphans(db, cache)
         if lCount == 0:
@@ -374,9 +368,7 @@ def removeOrphans(db, cache):
     db.deleteOrphanChecksums(False)
     return count, size, rounds
 
-"""
-Data transmission functions
-"""
+# Data transmission functions
 
 def _chunks(stream, chunksize):
     last = ''
@@ -387,11 +379,12 @@ def _chunks(stream, chunksize):
     yield (last, True)
 
 def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
-    """ Send a block of data, optionally encrypt and/or compress it before sending """
+    """
+    Send a block of data, optionally encrypt and/or compress it before sending
+    """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
         sender = sender.sender
-    num = 0
     size = 0
     status = "OK"
     ck = None
@@ -532,11 +525,12 @@ def saveKeys(name, client, nameKey, contentKey):
     with open(name, 'wb') as configfile:
         config.write(configfile)
 
-"""
-Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,
-or --argument to store a true.
-"""
+
 class StoreBoolean(argparse.Action):
+    """
+    Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,
+    or --argument to store a true.
+    """
     def __init__(self, option_strings, dest, negate="no", nargs=0, **kwargs):
         if nargs is not 0:
             raise ValueError("nargs not allowed")
@@ -547,18 +541,19 @@ class StoreBoolean(argparse.Action):
         option_strings.append(self.negative_option)
         super(StoreBoolean, self).__init__(option_strings, dest, nargs=0, **kwargs)
 
-    def __call__(self, parser, args, values, option_string=None):
+    def __call__(self, parser, arguments, values, option_string=None):
         #print "Here: ", option_string, " :: ", self.option_strings
         if option_string == self.negative_option:
             value = False
         else:
             value = True
-        setattr(args, self.dest, value)
+        setattr(arguments, self.dest, value)
 
-"""
-Class to handle toggling options.  -x = true -xx = false -xxx = true, etc
-"""
+
 class Toggle(argparse.Action):
+    """
+    Class to handle toggling options.  -x = true -xx = false -xxx = true, etc
+    """
     def __init__(self,
                  option_strings,
                  dest,
@@ -577,10 +572,9 @@ class Toggle(argparse.Action):
         new_value = not argparse._ensure_value(namespace, self.dest, False)
         setattr(namespace, self.dest, new_value)
 
-"""
-Help formatter to handle the StoreBoolean options.
-Only handles overriding the basic HelpFormatter class.
-"""
+# Help formatter to handle the StoreBoolean options.
+# Only handles overriding the basic HelpFormatter class.
+
 class HelpFormatter(argparse.HelpFormatter):
     def _format_action_invocation(self, action):
         #print "_format_action_invocation", str(action)
@@ -591,9 +585,8 @@ class HelpFormatter(argparse.HelpFormatter):
         #print "Got ", ret
         return ret
 
-"""
-Argument formatter.  Useful for converting our command line arguments into strings"
-"""
+# Argument formatter.  Useful for converting our command line arguments into strings"
+
 class ArgJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, types.FileType):
@@ -607,15 +600,14 @@ class ArgJsonEncoder(json.JSONEncoder):
             return json.JSONEncoder(self, obj)
 
 
-"""
-Class to have a two directional dictionary.
-"""
+# Class to have a two directional dictionary.
+
 class bidict(dict):
     def __init__(self, *args, **kwargs):
         super(bidict, self).__init__(*args, **kwargs)
         self.inverse = {}
         for key, value in self.iteritems():
-            self.inverse.setdefault(value,[]).append(key) 
+            self.inverse.setdefault(value,[]).append(key)
 
     def __setitem__(self, key, value):
         super(bidict, self).__setitem__(key, value)
@@ -623,25 +615,23 @@ class bidict(dict):
 
     def __delitem__(self, key):
         self.inverse.setdefault(self[key],[]).remove(key)
-        if self[key] in self.inverse and not self.inverse[self[key]]: 
+        if self[key] in self.inverse and not self.inverse[self[key]]:
             del self.inverse[self[key]]
         super(bidict, self).__delitem__(key)
 
-"""
-Get a hash function.  Configurable.
-"""
+# Get a hash function.  Configurable.
+
 def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
     if crypt and doCrypt:
         return crypt.getHash(func)
     else:
         return func()
 
-"""
-'Test' code
-"""
+
+# 'Test' code
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(formatter_class=MyHelpFormatter)
+    p = argparse.ArgumentParser(formatter_class=HelpFormatter)
 
     p.add_argument("--doit", action=StoreBoolean, help="Yo mama")
     p.add_argument("-x", action=Toggle, help="Whatever")

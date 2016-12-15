@@ -53,10 +53,10 @@ class Cache(object):
         self.cache[key] = (value, timeout)
         self.logger.debug("Inserting key %s", key)
         if self.size != 0 and len(self.cache) > self.size:
-            self.cache.flush()
+            self.flush()
             if len(self.cache) > self.size:
                 self.cache.popitem(False)
-        
+
     def retrieve(self, key):
         if not key in self.cache:
             self.logger.debug("Retrieving key %s failed", key)
@@ -73,15 +73,15 @@ class Cache(object):
     def delete(self, key):
         if key in self.cache:
             del self.cache[key]
-    
+
     def flush(self):
         now = time.time()
         i = self.cache.iteritems()
         z = i.next()
         try:
             while z:
-                (key, item) = z
-                (value, timeout) = item
+                (_, item) = z
+                (_, timeout) = item
                 if timeout > now:
                     return
                 self.cache.popitem(False)
@@ -91,7 +91,7 @@ class Cache(object):
             pass
 
     def purge(self):
-        self.cache = collection.OrderedDict()
+        self.cache = collections.OrderedDict()
 
 if __name__ == "__main__":
     c = Cache(5, 2)

@@ -29,33 +29,29 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import fuse
 
-fuse.fuse_python_api = (0, 2)
-
-from time import time
-
-import stat    # for file properties
 import os      # for filesystem modes (O_RDONLY, etc)
+import os.path
 import errno   # for error number codes (ENOENT, etc)
                # - note: these must be returned as negatives
 import sys
-import os.path
 import logging
 import tempfile
-import socket
 import json
 import base64
+import time
+import stat    # for file properties
+
+import fuse
 
 import Tardis
-import TardisDB
-import RemoteDB
-import CacheDir
-import Regenerator
-import TardisCrypto
-import Util
-import Cache
-import Defaults
+import Tardis.CacheDir as CacheDir
+import Tardis.Regenerator as Regenerator
+import Tardis.Util as Util
+import Tardis.Cache as Cache
+import Tardis.Defaults as Defaults
+
+fuse.fuse_python_api = (0, 2)
 
 _BackupSetInfo = 0
 _LastBackupSet = 1
@@ -102,7 +98,11 @@ def getParts(path):
 
 class TardisFS(fuse.Fuse):
     """
+    FUSE filesystem to read data from a Tardis Backup Database
     """
+    # Disable pylint complaints about "could me a function" and "unused argument" as lots of required FUSE functions
+    # just return "read-only FS" status
+    # pragma pylint: disable=no-self-use,unused-argument
     backupsets = {}
     dirInfo = {}
     fsencoding = sys.getfilesystemencoding()
@@ -185,6 +185,10 @@ class TardisFS(fuse.Fuse):
             self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
 
+            # Fuse variables
+            self.flags = 0
+            self.multithreaded = 0
+
         except Exception as e:
             self.log.exception(e)
             sys.exit(2)
@@ -198,7 +202,7 @@ class TardisFS(fuse.Fuse):
         else:
             return name.encode(self.fsencoding)
 
-    def getBackupSetInfo(self, b, requestTime = None):
+    def getBackupSetInfo(self, b):
         key = (_BackupSetInfo, b)
         info = self.cache.retrieve(key)
         if info:
@@ -242,7 +246,7 @@ class TardisFS(fuse.Fuse):
         if info:
             self.cache.insert(key, info)
         return info
-            
+
     def getFileInfoByPath(self, path):
         #self.log.info("getFileInfoByPath: %s", path)
 
@@ -325,7 +329,7 @@ class TardisFS(fuse.Fuse):
             # Root directory contents
             lead = getParts(path)
             st = fuse.Stat()
-            if (lead[0] == self.current):
+            if lead[0] == self.current:
                 target = self.lastBackupSet(True)
                 timestamp = float(target['endtime'])
                 st.st_mode = stat.S_IFLNK | 0755
@@ -380,7 +384,7 @@ class TardisFS(fuse.Fuse):
 
 
     @tracer
-    def getdir(self, path):
+    def getdir(self, _):
         """
         return: [[('file1', 0), ('file2', 0), ... ]]
         """
@@ -390,7 +394,6 @@ class TardisFS(fuse.Fuse):
     @tracer
     def readdir(self, path, offset):
         #self.log.info("CALL readdir %s Offset: %d", path, offset)
-        inodes = {}
         parent = None
 
         path = self.fsEncodeName(path)
@@ -416,8 +419,8 @@ class TardisFS(fuse.Fuse):
                     #entries = self.decryptNames(entries)
 
                 # For each entry, cache it, so a later getattr() call can use it.
-                # Get attr will typically be called promptly after a call to 
-                now = time()
+                # Get attr will typically be called promptly after a call to
+                now = time.time()
                 for e in entries:
                     name  = e['name']
                     if self.crypt:
@@ -478,7 +481,7 @@ class TardisFS(fuse.Fuse):
 
         depth = getDepth(path) # depth of path, zero-based from root
 
-        if (depth < 2):
+        if depth < 2:
             return -errno.ENOENT
 
         # TODO: Lock this
@@ -497,7 +500,7 @@ class TardisFS(fuse.Fuse):
                 try:
                     f.flush()
                     f.seek(0)
-                except AttributeError, IOError:
+                except (AttributeError, IOError):
                     bytesCopied = 0
                     self.log.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
@@ -538,7 +541,7 @@ class TardisFS(fuse.Fuse):
             return link
         if path == '/' + self.current:
             target = self.lastBackupSet(True)
-            self.log.debug("Path: {} Target: {} {}".format(path, target['name'], target['backupset']))
+            self.log.debug("Path: %s Target: %s %s", path, target['name'], target['backupset'])
             link = str(target['name'])
             self.cache.insert(key, link)
             return link
@@ -565,7 +568,7 @@ class TardisFS(fuse.Fuse):
         path = self.fsEncodeName(path)
 
         if self.files[path]:
-            self.files[path]["opens"] -= 1;
+            self.files[path]["opens"] -= 1
             if self.files[path]["opens"] == 0:
                 self.files[path]["file"].close()
                 del self.files[path]
@@ -602,7 +605,7 @@ class TardisFS(fuse.Fuse):
             st.f_namemax = fs.f_namemax
             return st
         else:
-            return -errorno.EINVAL
+            return -errno.EINVAL
 
     def symlink ( self, targetPath, linkPath ):
         #self.log.info('CALL symlink {} {}'.format(path, linkPath))
@@ -635,19 +638,19 @@ class TardisFS(fuse.Fuse):
     @tracer
     def listxattr ( self, path, size ):
         path = self.fsEncodeName(path)
-        self.log.info('CALL listxattr {} {}'.format(path, size))
+        self.log.info('CALL listxattr %s %d', path, size)
         if size == 0:
             retFunc = lambda x: len("".join(x)) + len(str(x))
         else:
             retFunc = lambda x: x
 
-        if (getDepth(path) == 1):
+        if getDepth(path) == 1:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
                 return retFunc(self.attrMap.keys())
 
-        if (getDepth(path) > 1):
+        if getDepth(path) > 1:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
@@ -678,7 +681,7 @@ class TardisFS(fuse.Fuse):
         if size == 0:
             retFunc = lambda x: len(str(x))
         else:
-            retFunc = lambda x: str(x)
+            retFunc = str
 
         depth = getDepth(path)
 
@@ -703,18 +706,18 @@ class TardisFS(fuse.Fuse):
                     if checksum:
                         return retFunc(checksum)
             elif attr == 'user.tardis_since':
-                if b: 
+                if b:
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
                     #self.log.debug(str(since))
                     if since:
                         return retFunc(since)
             elif attr == 'user.tardis_chain':
-                    info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
-                    #self.log.debug(str(checksum))
-                    if info:
-                        chain = str(info['chainlength'])
-                        self.log.debug(str(chain))
-                        return retFunc(chain)
+                info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
+                #self.log.debug(str(checksum))
+                if info:
+                    chain = str(info['chainlength'])
+                    self.log.debug(str(chain))
+                    return retFunc(chain)
             else:
                 # Must be an imported value.  Let's generate it.
                 info = self.getFileInfoByPath(path)
