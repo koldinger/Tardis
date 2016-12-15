@@ -31,36 +31,20 @@
 import os
 import os.path
 import stat
-import types
 import sys
 import argparse
-import socket
-import TardisDB
-import TardisCrypto
-import Regenerator
-import CacheDir
-import RemoteDB
-import Util
-import Defaults
-import Config
-
 import logging
-import subprocess
 import time
 import base64
-import binascii
-
-import librsync
-import tempfile
-import shutil
+import json
 import parsedatetime
 import xattr
 import posix1e
 
-import hashlib
-import hmac
-
 import Tardis
+import Regenerator
+import Util
+import Config
 
 logger  = None
 crypt = None
@@ -74,6 +58,9 @@ owMode = OW_NEVER
 
 errors = 0
 
+tardis = None
+args = None
+
 def checkOverwrite(name, info):
     if os.path.exists(name):
         if owMode == OW_NEVER:
@@ -81,8 +68,8 @@ def checkOverwrite(name, info):
         elif owMode == OW_ALWAYS:
             return True
         else:
-            stat = os.lstat(name)
-            if stat.st_mtime < info['mtime']:
+            s = os.lstat(name)
+            if s.st_mtime < info['mtime']:
                 # Current version is older
                 return True if owMode == OW_NEWER else False
             else:
@@ -118,7 +105,7 @@ def doAuthenticate(outname, checksum, digest):
             action = ''
         if outname is None:
             outname = ''
-        logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s", 
+        logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
                         outname, checksum, digest, action)
         return target
 
@@ -218,7 +205,6 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                             logger.warning("No name specified for link: %s", x)
                         if hasher:
                             hasher.update(x)
-                        pass
                     else:
                         if outname:
                             # Generate an output name
@@ -270,14 +256,13 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 except Exception as e:
                     logger.warning("Unable to process extended attributes for %s", outname)
             if outname and args.setacl and 'acl' in info and info['acl']:
-               try:
-                   f = regenerator.recoverChecksum(info['acl'], authenticate)
-                   acl = json.loads(f.read())
-                   a = posix1e.ACL(text=acl)
-                   a.applyto(outname)
-               except Exception as e:
-                   logger.warning("Unable to process extended attributes for %s", outname)
-
+                try:
+                    f = regenerator.recoverChecksum(info['acl'], authenticate)
+                    acl = json.loads(f.read())
+                    a = posix1e.ACL(text=acl)
+                    a.applyto(outname)
+                except Exception as e:
+                    logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
         #logger.exception(e)
@@ -287,10 +272,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
 def setupPermissionChecks():
     uid = os.getuid()
-    gid = os.getgid()
     groups = os.getgroups()
 
-    if (uid == 0):
+    if uid == 0:
         return None     # If super-user, return None.  Causes no checking to happen.
 
     # Otherwise, create a closure function which can be used to do checking for each file.
@@ -307,14 +291,14 @@ def setupPermissionChecks():
                 return True
             elif (pGid in groups) and (stat.S_IRGRP & mode):
                 return True
-            elif (stat.S_IROTH & mode):
+            elif stat.S_IROTH & mode:
                 return True
         return False
 
     # And return the function.
     return checkPermission
 
-def findLastPath(tardis, path, reduce):
+def findLastPath(path, reduce):
     logger.debug("findLastPath: %s", path)
     # Search all the sets in backwards order
     bsets = list(tardis.listBackupSets())
@@ -330,7 +314,7 @@ def findLastPath(tardis, path, reduce):
             return bset['backupset'], tmp, bset['name']
     return (None, None, None)
 
-def recoverName(tardis, cksum, bset):
+def recoverName(cksum, bset):
     names = tardis.getNamesForChecksum(cksum, bset)
     #print names
     if names:
@@ -355,8 +339,8 @@ def mkOutputDir(name):
 
 def parseArgs():
     parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-    
-    (args, remaining) = Config.parseConfigOptions(parser)
+
+    (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
@@ -366,10 +350,10 @@ def parseArgs():
     bsetgroup = parser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
     bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
-    bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file"), 
+    bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file")
 
     parser.add_argument('--recurse',        dest='recurse', default=True, action=Util.StoreBoolean, help='Recurse directory trees.  Default: %(default)s')
-    parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')  
+    parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')
 
     parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
     parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
@@ -391,9 +375,7 @@ def parseArgs():
 
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
-    args = parser.parse_args(remaining)
-
-    return args
+    return parser.parse_args(remaining)
 
 def setupLogging(args):
     #FORMAT = "%(levelname)s : %(name)s : %(message)s"
@@ -484,7 +466,7 @@ def main():
                         hasher = Util.getHash(crypt)
                     ckname = i
                     if args.recovername:
-                        ckname = recoverName(tardis, i, bset)
+                        ckname = recoverName(i, bset)
                     f = r.recoverChecksum(i, args.auth)
                     if f:
                     # Generate an output name
@@ -525,7 +507,7 @@ def main():
                     path = None
                     f = None
                     if args.last:
-                        (bset, path, name) = findLastPath(tardis, i, args.reduce)
+                        (bset, path, name) = findLastPath(i, args.reduce)
                         if bset is None:
                             logger.error("Unable to find a latest version of %s", i)
                             raise Exception("Unable to find a latest version of " + i)
