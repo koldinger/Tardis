@@ -568,7 +568,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     # Process the delta file into the new file.
                     #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
-                    # Can't use instanceof
+                    # Can't use isinstance
                     if type(basisFile) != types.FileType:
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
