@@ -132,7 +132,7 @@ class RemoteDB(object):
         """ Determine the backupset we're being asked about.
             True == current, false = previous, otherwise a number is returned
         """
-        if current.isntanceof(bool):
+        if type(current) is bool:
             return str(None) if current else str(self.prevBackupSet)
         else:
             return str(current)
