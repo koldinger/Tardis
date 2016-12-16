@@ -32,10 +32,9 @@ import os
 import os.path
 import socket
 import logging
-import pwd, grp
 import shutil
 
-class CacheDir:
+class CacheDir(object):
     def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None):
         self.root = os.path.abspath(root)
         self.parts = parts
@@ -48,18 +47,18 @@ class CacheDir:
             if create:
                 os.makedirs(self.root)
                 if self.chown:
-                  os.chown(self.root, self.user, self.group)
+                    os.chown(self.root, self.user, self.group)
             else:
                 raise Exception("CacheDir does not exist: " + root)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
 
-    def dir(self, name):
+    def dirPath(self, name):
         return reduce(os.path.join, self.comps(name), self.root)
 
     def path(self, name):
-        return os.path.join(self.dir(name), name)
+        return os.path.join(self.dirPath(name), name)
 
     def exists(self, name):
         return os.path.lexists(self.path(name))
@@ -72,9 +71,9 @@ class CacheDir:
             return 0
 
     def mkdir(self, name):
-        dir = self.dir(name)
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
+        directory = self.dirPath(name)
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
             if self.chown:
                 path = self.root
                 for i in self.comps(name):
@@ -100,7 +99,7 @@ class CacheDir:
 
     def link(self, source, dest):
         dstpath = self.path(dest)
-        srcpath = os.path.relpath(self.path(source), self.dir(dest))
+        srcpath = os.path.relpath(self.path(source), self.dirPath(dest))
         os.symlink(srcpath, dstpath)
 
     def remove(self, name):
@@ -117,7 +116,7 @@ class CacheDir:
                 #logger.debug("Removed %s", name + suffix)
                 deleted += 1
         return deleted
-    
+
     def move(self, oldname, newname):
         try:
             self.mkdir(self.dir(newname)
@@ -133,7 +132,7 @@ if __name__ == "__main__":
     path = os.path.join("cache", socket.gethostname())
     c = CacheDir(path, 4, 2, True)
     print c.comps(test)
-    print c.dir(test)
+    print c.dirPath(test)
     print c.path(test)
     print c.exists(test)
 
@@ -150,5 +149,3 @@ if __name__ == "__main__":
         for line in fd:
             print line,
     print c.exists(test)
-
-

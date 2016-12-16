@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-from Tardis import Client
 import sys
+from Tardis import Client
 
 sys.exit(Client.main())

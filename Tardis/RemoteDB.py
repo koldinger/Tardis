@@ -28,21 +28,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import requests
 import logging
 import tempfile
 import sys
-import urllib, urllib3
-import warnings
+import urllib
+import functools
 
-import os, os.path
-
-import Tardis
-import ConnIdLogAdapter
-
+import requests
 import requests_cache
 
-import functools
+import Tardis
+
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)
 
@@ -117,7 +113,7 @@ class RemoteDB(object):
             self.prevBackupSet  = b['backupset']
             self.prevBackupDate = b['starttime']
             self.lastClientTime = b['clienttime']
-        self.logger.debug("Last Backup Set: {} {} ".format(self.prevBackupName, self.prevBackupSet))
+        self.logger.debug("Last Backup Set: %s %d", self.prevBackupName, self.prevBackupSet)
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
@@ -137,7 +133,7 @@ class RemoteDB(object):
             True == current, false = previous, otherwise a number is returned
         """
         if type(current) is bool:
-            return str(self.currBackupSet) if current else str(self.prevBackupSet)
+            return str(None) if current else str(self.prevBackupSet)
         else:
             return str(current)
 

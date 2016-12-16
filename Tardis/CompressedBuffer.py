@@ -29,11 +29,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import zlib
-import base64
 import sys
-import StringIO
-import hashlib
-import librsync
+
+import Tardis.librsync as librsync
 
 _defaultChunksize = 128 * 1024
 
@@ -66,7 +64,7 @@ class BufferedReader(object):
         #print "read called: {}  {} bytes available".format(size, avail)
         out = ""
         left = size
-        while(len(out) < size):
+        while len(out) < size:
             #print "read loop: so far: {}".format(len(out))
             if (not self.buffer) or (len(self.buffer) == 0):
                 #print "Calling _get"
@@ -114,37 +112,36 @@ class CompressedBufferedReader(BufferedReader):
         ret = None
         if self.stream:
             while not ret:
-                buffer = self.stream.read(self.chunksize)
-                self.uncompressed += len(buffer)
+                buf = self.stream.read(self.chunksize)
+                self.uncompressed += len(buf)
                 if self.hasher:
-                    self.hasher.update(buffer)
+                    self.hasher.update(buf)
                 if self.sig:
-                    self.sig.step(buffer)
+                    self.sig.step(buf)
                 # First time around, create a compressor and check the compression ratio
                 if self.first:
                     self.first = False
-                    buflen = len(buffer)
                     self.compressor = zlib.compressobj()
-                    ret = self.compressor.compress(buffer) 
-                    # Flush the buffer and colculate the size
+                    ret = self.compressor.compress(buf)
+                    # Flush the buf and colculate the size
                     ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
                     # Now, check what we've got back.
                     if ret:
-                        ratio = float(len(ret)) / float(len(buffer))
-                        #print "Initial ratio: {} {} {}".format(ratio, len(ret), len(buffer))
+                        ratio = float(len(ret)) / float(len(buf))
+                        #print "Initial ratio: {} {} {}".format(ratio, len(ret), len(buf))
                         if ratio > self.threshold:
-                            ret = buffer
+                            ret = buf
                             self.compressor = None
                 elif self.compressor:
-                    if not buffer:
+                    if not buf:
                         #print "_get: Done"
                         ret = self.compressor.flush(zlib.Z_FINISH)
                         self.stream = None
                     else:
-                        #print "_get: {} bytes read".format(len(buffer))
-                        ret = self.compressor.compress(buffer)
+                        #print "_get: {} bytes read".format(len(buf))
+                        ret = self.compressor.compress(buf)
                 else:
-                    ret = buffer
+                    ret = buf
                     break       # Make sure we don't got around the loop at the EOF
 
             self.compressed += len(ret)
@@ -158,11 +155,11 @@ class CompressedBufferedReader(BufferedReader):
         return self.compressed
 
     def ratio(self):
-        return (float(self.compressed) / float(self.uncompressed))
+        return float(self.compressed) / float(self.uncompressed)
 
     def size(self):
         return self.origsize()
-    
+
     def isCompressed(self):
         return self.compressor != None
 
@@ -178,23 +175,23 @@ class UncompressedBufferedReader(BufferedReader):
         ret = None
         while not ret:
             if self.stream:
-                buffer = self.stream.read(self.chunksize)
-                if not buffer:
+                buf = self.stream.read(self.chunksize)
+                if not buf:
                     #print "_get: Done"
                     ret = self.compressor.flush()
                     self.uncompressed = self.uncompressed + len(ret)
                     self.stream = None
                 else:
-                    #print "_get: {} bytes read".format(len(buffer))
-                    ret = self.compressor.decompress(buffer)
-                    self.compressed = self.uncompressed + len(buffer)
+                    #print "_get: {} bytes read".format(len(buf))
+                    ret = self.compressor.decompress(buf)
+                    self.compressed = self.uncompressed + len(buf)
                     self.uncompressed = self.compressed + len(ret)
             return ret
         return None
 
 if __name__ == "__main__":
     print "Opening {}".format(sys.argv[1])
-    x = CompressedBufferedReader(file(sys.argv[1], "rb"), checksum=True)
+    x = CompressedBufferedReader(file(sys.argv[1], "rb"))
     #line = x.get()
     with file(sys.argv[2], "wb") as f:
         line = x.read(16384)
@@ -205,16 +202,3 @@ if __name__ == "__main__":
             line = x.read(16384)
 
     print x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum()
-
-"""
-    print "Opening {}".format(sys.argv[2])
-    y = UncompressedBufferedReader(file(sys.argv[2], "rb"))
-    total = 0
-    line = y.read(size=80)
-    while line:
-        #print "==== ",  len(line), ":", total, " :: ", line #base64.b64encode(line)
-        #print line
-        total += len(line)
-        #line = x.get()
-        line = y.read(size=80)
-"""

@@ -33,7 +33,6 @@ import logging
 import os
 import os.path
 import stat
-import termcolor
 import argparse
 import fnmatch
 import pwd
@@ -41,13 +40,12 @@ import grp
 import time
 import parsedatetime
 
+import termcolor
+
 import Tardis
-import TardisDB
-import RemoteDB
-import TardisCrypto
-import Util
-import Defaults
-import Config
+import Tardis.Util as Util
+import Tardis.Defaults as Defaults
+import Tardis.Config as Config
 
 columns = None
 columnfmt = None
@@ -72,7 +70,6 @@ colors = {
 fsEncoding = sys.getfilesystemencoding()
 
 def setColors(s):
-    global colors
     groups = s.split(':')
     groups = map(str.strip, groups)
     for g in groups:
@@ -156,7 +153,7 @@ def collectFileInfo(filename, tardis, crypt):
     lookup = crypt.encryptPath(filename.encode()) if crypt else filename
 
     fInfos = {}
-    lInfo = None
+    lInfo = {}
     if filename == '/':
         fInfos = makeFakeRootInfo()
     elif args.reduce:
@@ -213,13 +210,13 @@ def collectDirContents2(tardis, dirList, crypt):
     names = set()
     ranges = []
     dirRange = []
-    prev = None
+    prev = {}
     dirHash = dict([(x['backupset'], y) for (x,y) in dirList])
     # Detect the ranges
     for bset in backupSets:
         d = dirHash.setdefault(bset['backupset'])
         # If we don't have an entry here, the range ends.
-        # OR if the inode is different from the previous 
+        # OR if the inode is different from the previous
         if prev and ((not d) or (prev['inode'] != d['inode']) or (prev['device'] != d['device'])):
             if len(dirRange):
                 ranges.append(dirRange)
@@ -230,7 +227,7 @@ def collectDirContents2(tardis, dirList, crypt):
     if len(dirRange):
         ranges.append(dirRange)
 
-    # Now, for each range, populate 
+    # Now, for each range, populate
     for r in ranges:
         first = r[0]['backupset']
         last  = r[-1]['backupset']
@@ -242,7 +239,7 @@ def collectDirContents2(tardis, dirList, crypt):
             name = name.decode(fsEncoding)
             names.add(name)
             for bset in r:
-                if (y['firstset'] <= bset['backupset'] <= y['lastset']):
+                if y['firstset'] <= bset['backupset'] <= y['lastset']:
                     contents[bset['backupset']][name] = y
 
     # and return what we've discovered
@@ -276,9 +273,7 @@ def getInfoByName(contents, name):
 
     return fInfo
 
-""" 
-Get group and user names.  Very unixy
-"""
+# Get group and user names.  Very unixy
 _groups = {}
 _users = {}
 
@@ -306,10 +301,8 @@ def getUserId(uid):
         else:
             return None
 
-"""
-Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
-then Jan 12, 2014.  Same as ls.
-"""
+# Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
+# then Jan 12, 2014.  Same as ls.
 _now = time.time()
 _yearago = _now - (365 * 24 * 3600)
 def formatTime(then):
@@ -318,7 +311,6 @@ def formatTime(then):
     else:
         fmt = '%b %d, %Y'
     return time.strftime(fmt, time.localtime(then))
-
 
 column = 0
 
@@ -411,7 +403,7 @@ def printit(info, name, color, gone):
             eol = False
         doprint(columnfmt % name, color, eol=eol)
 
-def printVersions(fInfos, filename):
+def printVersions(fInfos):
     """
     Print info about each version of the file that exists
     Doesn't actually do the printing, but calls printit to do it.
@@ -431,11 +423,12 @@ def printVersions(fInfos, filename):
         if (info is None) and (prevInfo is None):
             # file didn't exist here or previously.  Just skip
             continue
+
         if (info is None) and prevInfo is not None:
             # file disappeared.
             color = colors['gone']
             gone = True
-        elif (info['checksum'] is None):
+        elif info['checksum'] is None:
             # Check for the error case where a file isn't connected to a checksum.  Not good.
             color = colors['error']
             new = True
@@ -447,7 +440,7 @@ def printVersions(fInfos, filename):
             else:
                 color = colors['changed']
             new = True
-        elif (info['inode'] != prevInfo['inode']):
+        elif info['inode'] != prevInfo['inode']:
             color = colors['moved']
             new = True
         else:
@@ -462,7 +455,7 @@ def printVersions(fInfos, filename):
         # OR if we're printing deletions and we disappered
         if args.recent or not ((args.all or new) or (args.deletions and gone)):
             continue
-        
+
         printit(info, bset['name'], color, gone)
 
     if args.recent:
@@ -489,7 +482,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             flushLine()
 
     if args.versions:
-        printVersions(fInfos, filename)
+        printVersions(fInfos)
 
     # Figure out which versions of the file are directories
 
@@ -500,12 +493,12 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             if not args.hidden:
                 names = [n for n in names if not n.startswith('.')]
             (numCols, fmt) = computeColumnWidth(names)
-            column = 0
+            col = 0
 
             for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
                 fInfo = getInfoByName(contents, name)
-                column += 1
-                eol = True if ((column % numCols) == 0) else False
+                col += 1
+                eol = True if ((col % numCols) == 0) else False
                 processFile(name, fInfo, tardis, crypt, printContents=False, recurse=0, first=False, fmt=fmt, eol=eol)
             flushLine()
 
@@ -517,7 +510,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             if not args.hidden:
                 names = [n for n in names if not n.startswith('.')]
             (numCols, fmt) = computeColumnWidth(names)
-            column = 0
+            col = 0
 
             for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
                 fInfos = getInfoByName(contents, name)
@@ -534,43 +527,43 @@ def findSet(name):
     doprint("Could not find backupset %s" % name, color=colors['error'], eol=True)
     return -1
 
-"""
-Prune backupsets to only those in the specified range.
-"""
 def pruneBackupSets(startRange, endRange):
+    """
+    Prune backupsets to only those in the specified range.
+    """
     global backupSets
     newsets = backupSets[:]
     for i in backupSets:
-        if not (startRange <= i['backupset'] <= endRange):
+        if not startRange <= i['backupset'] <= endRange:
             newsets.remove(i)
     backupSets = newsets
 
-"""
-Parse and check the range varables, and prune the set appopriately.
-"""
 def pruneBackupSetsByRange():
-    range = args.range.split(':')
-    if len(range) > 2:
+    """
+    Parse and check the range varables, and prune the set appopriately.
+    """
+    setRange = args.range.split(':')
+    if len(setRange) > 2:
         doprint("Invalid range '%s'" % args.range, color=colors['error'], eol=True)
         sys.exit(1)
-    elif len(range) == 1:
-        range.append(range[0])
+    elif len(setRange) == 1:
+        setRange.append(setRange[0])
 
-    if range[0]:
+    if setRange[0]:
         try:
-            startRange = int(range[0])
+            startRange = int(setRange[0])
         except ValueError:
-            startRange = findSet(range[0])
+            startRange = findSet(setRange[0])
             if startRange == -1:
                 sys.exit(1)
     else:
         startRange = 0
 
-    if range[1]:
+    if setRange[1]:
         try:
-            endRange = int(range[1])
+            endRange = int(setRange[1])
         except ValueError:
-            endRange = findSet(range[1])
+            endRange = findSet(setRange[1])
             if endRange == -1:
                 sys.exit(1)
     else:
@@ -582,24 +575,23 @@ def pruneBackupSetsByRange():
 
     pruneBackupSets(startRange, endRange)
 
-"""
-Parse and check the date range variable, and prune the range appropriately.
-"""
 def pruneBackupSetsByDateRange(tardis):
-    global backupSets
+    """
+    Parse and check the date range variable, and prune the range appropriately.
+    """
     cal = parsedatetime.Calendar()
-    range = args.daterange.split(':')
-    if len(range) > 2:
+    daterange = args.daterange.split(':')
+    if len(daterange) > 2:
         doprint("Invalid range '%s'" % args.daterange, color=colors['error'], eol=True)
         sys.exit(1)
-    elif len(range) == 1:
-        range.append('')
+    elif len(daterange) == 1:
+        daterange.append('')
 
-    if range[0]:
-        (then, success) = cal.parse(range[0])
+    if daterange[0]:
+        (then, success) = cal.parse(daterange[0])
         if success:
             startTime = time.mktime(then)
-            startSet = tardis.getBackupSetInfoForTime(startTime)
+
             if startSet:
                 # Get the backupset, then add 1.  Backupset will be the LAST backupset before
                 # the start time, so 1 larger should be the first backupset after that.
@@ -608,14 +600,14 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 startRange = 0
         else:
-            doprint("Invalid time: %s" % range[0], color=colors['error'], eol=True)
+            doprint("Invalid time: %s" % daterange[0], color=colors['error'], eol=True)
             sys.exit(1)
     else:
         startRange = 0
         startTime = time.mktime(time.gmtime(0))
 
-    if range[1]:
-        (then, success) = cal.parse(range[1])
+    if daterange[1]:
+        (then, success) = cal.parse(daterange[1])
         if success:
             endTime = time.mktime(then)
             endSet = tardis.getBackupSetInfoForTime(endTime)
@@ -624,7 +616,7 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 endRange = sys.maxint
         else:
-            doprint("Invalid time: %s" % range[1], color=colors['error'], eol=True)
+            doprint("Invalid time: %s" % daterange[1], color=colors['error'], eol=True)
             sys.exit(1)
     else:
         endRange = sys.maxint
@@ -640,10 +632,10 @@ def pruneBackupSetsByDateRange(tardis):
     pruneBackupSets(startRange, endRange)
 
 
-"""
-Given a list of names, compute the columns widths
-"""
 def computeColumnWidth(names):
+    """
+    Given a list of names, compute the columns widths
+    """
     if len(names) == 0:
         return (1, '%s')
     longestName = max(map(len, names))
@@ -652,7 +644,7 @@ def computeColumnWidth(names):
         columns = args.columns
     else:
         if os.isatty(sys.stdout.fileno()):
-            height, width = Util.getTerminalSize()
+            _, width = Util.getTerminalSize()
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
             columns = width / (longestName + 4)
         else:
@@ -662,10 +654,10 @@ def computeColumnWidth(names):
 
     return (columns, fmt)
 
-"""
-Calculate display parameters, including creating the list of backupsets that we want to process
-"""
 def setupDisplay(tardis):
+    """
+    Calculate display parameters, including creating the list of backupsets that we want to process
+    """
     global columns, columnfmt
     global backupSets
 
@@ -681,7 +673,7 @@ def setupDisplay(tardis):
 
 def globPath(path, tardis, crypt, first=0):
     """
-    Glob a path.  Only globbs the first 
+    Glob a path.  Only globbs the first
     """
     logger.debug("Globbing %s", path)
     if not Util.isMagic(path):
@@ -701,7 +693,7 @@ def globPath(path, tardis, crypt, first=0):
             dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
 
             # And cons up the names which are in those directories
-            (data, names) = collectDirContents2(tardis, dirs, crypt)
+            (_, names) = collectDirContents2(tardis, dirs, crypt)
 
             # Filter down any that match
             matches = fnmatch.filter(names, pattern)
@@ -720,8 +712,8 @@ def processArgs():
     isatty = os.isatty(sys.stdout.fileno())
 
     parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-   
-    (args, remaining) = Config.parseConfigOptions(parser)
+
+    (_, remaining) = Config.parseConfigOptions(parser)
 
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
@@ -745,7 +737,7 @@ def processArgs():
     parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
     parser.add_argument('--colors',         dest='colors',      default=isatty, action=Util.StoreBoolean,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
-   
+
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxint, type=int,               help='Maximum depth to recurse directories')
 
@@ -753,7 +745,7 @@ def processArgs():
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
     parser.add_argument('--reduce',         dest='reduce',      default=0, type=int, const=sys.maxint, nargs='?',
-                                                                                                            help='Reduce paths by N directories.  No value for smart reduction')
+                        help='Reduce paths by N directories.  No value for smart reduction')
     parser.add_argument('--realpath',       dest='realpath',    default=True, action=Util.StoreBoolean,     help='Use the full path, expanding symlinks to their actual path components')
 
     rangegrp = parser.add_mutually_exclusive_group()
@@ -770,10 +762,8 @@ def processArgs():
 def main():
     global args, logger
     try:
-
-
         FORMAT = "%(levelname)s : %(message)s"
-        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.DEBUG)
+        logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
         logger = logging.getLogger("")
 
         args = processArgs()
@@ -784,7 +774,7 @@ def main():
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
         args.password = None
 
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, _, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         setupDisplay(tardis)
 

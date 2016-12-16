@@ -1,24 +1,25 @@
 #! /usr/bin/python
 
-from setuptools import setup, find_packages
-import sys, os
+import os
 import subprocess
+
+from setuptools import setup, find_packages
+
+import Tardis
 
 longdesc = '''
 This is a system for performing backups, supporting incremental, delta backups, with option encryption, and 
 recovery of data via either a filesystem based interface, or via explicit tools.  Please pardon any Dr. Who
 jokes.
 '''
-    
+
 buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
 file('tardisversion', 'w').write(buildVersion + "\n")
-
-import Tardis
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
 
 version = Tardis.__version__
-add_pkgs = Tardis.__check_features()
+add_pkgs = Tardis.check_features()
 
 setup(  name                    = 'Tardis-Backup',
         version                 = version,
@@ -47,27 +48,27 @@ setup(  name                    = 'Tardis-Backup',
                       ( root + '/etc/logwatch/scripts/services',  [ 'logwatch/scripts/services/tardisd' ]),
                      ],
         entry_points = {
-                'console_scripts' : [
-                    'tardis = Tardis.Client:main',
-                    'tardisd = Tardis.Daemon:main',
-                    'tardisfs = Tardis.TardisFS:main',
-                    'regenerate = Tardis.Regenerate:main',
-                    'lstardis = Tardis.List:main',
-                    'sonic = Tardis.Sonic:main',
-                    'tardiff = Tardis.Diff:main',
-                    'tardisremote = Tardis.HttpInterface:tornado',
-                ],
+            'console_scripts' : [
+                'tardis = Tardis.Client:main',
+                'tardisd = Tardis.Daemon:main',
+                'tardisfs = Tardis.TardisFS:main',
+                'regenerate = Tardis.Regenerate:main',
+                'lstardis = Tardis.List:main',
+                'sonic = Tardis.Sonic:main',
+                'tardiff = Tardis.Diff:main',
+                'tardisremote = Tardis.HttpInterface:tornado',
+            ],
         },
         classifiers = [
-                'License :: OSI Approved :: BSD License',
-                'Development Status :: 4 - Beta',
-                'Intended Audience :: Developers',
-                'Intended Audience :: System Administrators',
-                'Topic :: System :: Archiving :: Backup',
-                'Programming Language :: Python',
-                'Programming Language :: Python :: 2.7'
-                'Operating System :: MacOS :: MacOS X',
-                'Operating System :: POSIX',
-                'Operating System :: POSIX :: Linux',
+            'License :: OSI Approved :: BSD License',
+            'Development Status :: 4 - Beta',
+            'Intended Audience :: Developers',
+            'Intended Audience :: System Administrators',
+            'Topic :: System :: Archiving :: Backup',
+            'Programming Language :: Python',
+            'Programming Language :: Python :: 2.7'
+            'Operating System :: MacOS :: MacOS X',
+            'Operating System :: POSIX',
+            'Operating System :: POSIX :: Linux',
         ]
-    )
+     )

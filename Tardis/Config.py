@@ -28,17 +28,18 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import ConfigParser
-import Defaults
-import argparse
-import Util
 import sys
+import ConfigParser
+
+import Tardis.Defaults as Defaults
+import Tardis.Util as Util
+
 
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
-    'DBDir':		    Defaults.getDefault('TARDIS_DBDIR'),
-    'DBName':		    Defaults.getDefault('TARDIS_DBNAME'),
+    'DBDir':		        Defaults.getDefault('TARDIS_DBDIR'),
+    'DBName':		        Defaults.getDefault('TARDIS_DBNAME'),
     'Password':             None,
     'PasswordFile':         None,
     'PasswordProg':         None,
@@ -86,5 +87,5 @@ def addPasswordOptions(parser):
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
     passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
-                                                                                                            help='Encrypt data.  Only valid if password is set')
+                           help='Encrypt data.  Only valid if password is set')
     passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')

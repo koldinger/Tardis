@@ -29,38 +29,23 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import types
-
-import TardisDB
-import TardisCrypto
-import CacheDir
-import RemoteDB
-import Util
-import CompressedBuffer
-import Defaults
-
 import binascii
 import logging
-import subprocess
-import time
-import base64
-
-import librsync
 import tempfile
 import shutil
-
 import hashlib
-import hmac
 
-import Tardis
+import Tardis.CompressedBuffer as CompressedBuffer
+
+import Tardis.librsync as librsync
+
 
 class RegenerateException(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
+    pass
 
-class Regenerator:
+class Regenerator(object):
+    errors = 0
+
     def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
         self.logger = logging.getLogger("Regenerator")
         self.cacheDir = cache
@@ -70,7 +55,7 @@ class Regenerator:
 
     def decryptFile(self, filename, size, authenticate=True):
         self.logger.debug("Decrypting %s", filename)
-        if self.crypt == None:
+        if self.crypt is None:
             raise Exception("Encrypted file.  No password specified")
         infile = self.cacheDir.open(filename, 'rb')
         hmac = self.crypt.getHash(func=hashlib.sha512)
@@ -154,8 +139,8 @@ class Regenerator:
                 try:
                     output = librsync.patch(basis, patchfile)
                 except librsync.LibrsyncError as e:
-                    self.logger.error("Recovering checksum: {} : {}".format(cksum, e))
-                    raise RegenerateException("Checksum: {}: Error: {}".format(chksum, e))
+                    self.logger.error("Recovering checksum: %s : %s", cksum, e)
+                    raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
                 #output.seek(0)
                 return output
@@ -181,8 +166,7 @@ class Regenerator:
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
-        global errors
-        self.logger.info("Recovering file: {}".format(filename))
+        self.logger.info("Recovering file: %s", filename)
         name = filename
         if self.crypt and not nameEncrypted:
             name = self.crypt.encryptPath(filename)
@@ -200,7 +184,6 @@ class Regenerator:
         except Exception as e:
             #logger.exception(e)
             self.logger.error("Error recovering file: %s: %s", filename, str(e))
-            errors += 1
+            self.errors += 1
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
-

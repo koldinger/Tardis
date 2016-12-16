@@ -28,44 +28,42 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os, sys
+import os
+import sys
 import os.path
-import logging, logging.handlers
-import socket
+import logging
+import logging.handlers
 import fnmatch
 import glob
 import itertools
-from stat import *
 import json
 import argparse
 import ConfigParser
 import time
 import datetime
 import base64
-import traceback
 import subprocess
 import hashlib
-import hmac
 import tempfile
 import cStringIO
 import shlex
-import magic
 import urlparse
-from functools import partial
+import functools
+import stat
 
+import magic
 import pid
-
-import librsync
-
-import TardisCrypto
-import Tardis
-import CompressedBuffer
-import Connection
-import Util
-import Defaults
 import parsedatetime
 
-features = Tardis.__check_features()
+import Tardis
+import Tardis.TardisCrypto as TardisCrypto
+import Tardis.CompressedBuffer as CompressedBuffer
+import Tardis.Connection as Connection
+import Tardis.Util as Util
+import Tardis.Defaults as Defaults
+import Tardis.librsync as librsync
+
+features = Tardis.check_features()
 support_xattr = 'xattr' in features
 support_acl   = 'pylibacl' in features
 
@@ -137,15 +135,16 @@ verbosity           = 0
 
 conn                = None
 args                = None
+config              = None
 
 cloneDirs           = []
 cloneContents       = {}
 batchMsgs           = []
-metaCache           = Util.bidict()                 # A cache of metadata.  Since many files can have the same metadata, we check that 
+metaCache           = Util.bidict()                 # A cache of metadata.  Since many files can have the same metadata, we check that
                                                     # that we haven't sent it yet.
 newmeta             = []                            # When we encounter new metadata, keep it here until we flush it to the server.
 
-noCompTypes         = None
+noCompTypes         = []
 
 crypt               = None
 logger              = None
@@ -157,7 +156,7 @@ logger              = None
 # dataSent          == Number of data bytes sent this run (not including messages)
 # dataBacked        == Number of bytes backed up this run
 # Example: If you have 100 files, and 99 of them are already backed up (ie, one new), backed would be 100, but new would be 1.
-# dataSent is the compressed and encrypted size of the files (or deltas) sent in this run, but dataBacked is the total size of 
+# dataSent is the compressed and encrypted size of the files (or deltas) sent in this run, but dataBacked is the total size of
 # the files.
 stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0}
 
@@ -198,6 +197,7 @@ class ProtocolError(Exception):
     pass
 
 def setEncoder(format):
+    global encoder, encoding, decoder
     if format == 'base64':
         encoding = "base64"
         encoder  = base64.b64encode
@@ -219,9 +219,9 @@ def fs_encode(val):
 
 def checkMessage(message, expected):
     """ Check that a message is of the expected type.  Throw an exception if not """
-    if not (message['message'] == expected):
+    if not message['message'] == expected:
         logger.critical("Expected {} message, received {}".format(expected, message['message']))
-        raise ProtocolException("Expected {} message, received {}".format(expected, message['message']))
+        raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
 
 def filelist(dir, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
@@ -242,18 +242,18 @@ def processChecksums(inodes):
     files = []
     for inode in inodes:
         if inode in inodeDB:
-            (fileInfo, pathname) = inodeDB[inode]
+            (_, pathname) = inodeDB[inode]
             if args.progress:
                 printProgress("File [C]:", pathname)
 
             m = Util.getHash(crypt, args.crypt)
             s = os.lstat(pathname)
             mode = s.st_mode
-            if S_ISLNK(mode):
+            if stat.S_ISLNK(mode):
                 m.update(os.readlink(pathname))
             else:
                 with open(pathname, "rb") as file:
-                    for chunk in iter(partial(file.read, args.chunksize), ''):
+                    for chunk in iter(functools.partial(file.read, args.chunksize), ''):
                         m.update(chunk)
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
@@ -275,7 +275,7 @@ def logFileInfo(i, c):
         if "size" in x:
             size = x["size"]
         else:
-            size = 0;
+            size = 0
         size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
         logger.log(logging.FILES, "File: [%c]: %s (%s)", c, Util.shortPath(name), size)
 
@@ -327,7 +327,7 @@ def processDelta(inode):
     """ Generate a delta and send it """
 
     if inode in inodeDB:
-        (fileInfo, pathname) = inodeDB[inode]
+        (_, pathname) = inodeDB[inode]
         message = {
             "message" : "SGR",
             "inode" : inode
@@ -400,7 +400,7 @@ def processDelta(inode):
                 batchMessage(message, flush=True, batch=False, response=False)
                 compress = (args.compress and (filesize > args.mincompsize))
                 progress = printProgress if args.progress else None
-                (sent, ck, sig) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -412,7 +412,7 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, sCk, sSig) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sSent, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -441,7 +441,7 @@ def sendContent(inode, reportType):
                 printProgress("File [N]:", pathname)
             mode = fileInfo["mode"]
             filesize = fileInfo["size"]
-            if S_ISDIR(mode):
+            if stat.S_ISDIR(mode):
                 return
             (encrypt, pad, iv, hmac) = makeEncryptor()
             message = {
@@ -454,7 +454,7 @@ def sendContent(inode, reportType):
             # Attempt to open the data source
             # Punt out if unsuccessful
             try:
-                if S_ISLNK(mode):
+                if stat.S_ISLNK(mode):
                     # It's a link.  Send the contents of readlink
                     data = cStringIO.StringIO(os.readlink(pathname))
                 else:
@@ -479,14 +479,14 @@ def sendContent(inode, reportType):
                 #sendMessage(message)
                 batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
-                                        encrypt, pad, hasher=Util.getHash(crypt, args.crypt),
-                                        chunksize=args.chunksize,
-                                        compress=compress,
-                                        signature=makeSig,
-                                        hmac=hmac,
-                                        iv=iv,
-                                        stats=stats,
-                                        progress=progress)
+                                                      encrypt, pad, hasher=Util.getHash(crypt, args.crypt),
+                                                      chunksize=args.chunksize,
+                                                      compress=compress,
+                                                      signature=makeSig,
+                                                      hmac=hmac,
+                                                      iv=iv,
+                                                      stats=stats,
+                                                      progress=progress)
 
                 if sig:
                     sig.seek(0)
@@ -496,7 +496,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, sCk, sSig) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sSent, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data: %s", e)
                 if args.exceptions:
@@ -536,11 +536,9 @@ def handleAckMeta(message):
         sendMessage(message)
         compress = (args.compress and (len(data) > args.mincompsize))
         progress = printProgress if args.progress else None
-        (sent, ck, sig) = Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+        Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
 def sendDirHash(inode):
-    global dirHashes
-
     i = tuple(inode)
     #try:
     #    (h,s) = dirHashes[i]
@@ -560,9 +558,9 @@ def sendDirHash(inode):
 
 def cksize(i, threshhold):
     if i in inodeDB:
-       (f, p) = inodeDB[i]
-       if f['size'] > threshhold:
-        return True
+        (f, _) = inodeDB[i]
+        if f['size'] > threshhold:
+            return True
     return False
 
 def handleAckDir(message):
@@ -622,8 +620,6 @@ def addMeta(meta):
     """
     Add data to the metadata cache
     """
-    global metaCache
-    global newmeta
     if meta in metaCache:
         return metaCache[meta]
     else:
@@ -635,18 +631,17 @@ def addMeta(meta):
         return digest
 
 def mkFileInfo(dir, name):
-    file = None
     pathname = os.path.join(dir, name)
     s = os.lstat(pathname)
     mode = s.st_mode
-    if S_ISREG(mode) or S_ISDIR(mode) or S_ISLNK(mode):
+    if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
         if args.crypt and crypt:
             name = crypt.encryptFilename(name)
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
-            'dir':    S_ISDIR(mode),
-            'link':   S_ISLNK(mode),
+            'dir':    stat.S_ISDIR(mode),
+            'link':   stat.S_ISLNK(mode),
             'nlinks': s.st_nlink,
             'size':   s.st_size,
             'mtime':  int(s.st_mtime),              # We strip these down to the integer value beacuse FP conversions on the back side can get confused.
@@ -669,7 +664,7 @@ def mkFileInfo(dir, name):
                 cks = addMeta(attr_string)
                 finfo['xattr'] = cks
 
-        if support_acl and args.acl and (not S_ISLNK(mode)):
+        if support_acl and args.acl and not stat.S_ISLNK(mode):
             # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
             # Definitely an issue
             if posix1e.has_extended(pathname):
@@ -710,13 +705,13 @@ def getDirContents(dir, dirstat, excludes=[]):
                 fInfo = mkFileInfo(dir, f)
                 if fInfo and (args.crossdev or device == fInfo['dev']):
                     mode = fInfo["mode"]
-                    if S_ISLNK(mode):
+                    if stat.S_ISLNK(mode):
                         Util.accumulateStat(stats, 'links')
-                    elif S_ISREG(mode):
+                    elif stat.S_ISREG(mode):
                         Util.accumulateStat(stats, 'files')
                         Util.accumulateStat(stats, 'backed', fInfo['size'])
 
-                    if S_ISDIR(mode):
+                    if stat.S_ISDIR(mode):
                         sub = os.path.join(dir, f)
                         if sub in excludeDirs:
                             logger.debug("%s excluded.  Skipping", sub)
@@ -769,7 +764,7 @@ def handleAckClone(message):
                 delInode(key)
             del cloneContents[inode]
         else:
-            logger.error("Unable to locate info for %s", inode);
+            logger.error("Unable to locate info for %s", inode)
         # And the directory.
         delInode(inode)
 
@@ -831,9 +826,9 @@ def sendPurge(relative):
     if purgeTime:
         message.update( { 'time': purgeTime, 'relative': relative })
 
-    response = batchMessage(message, flush=True, batch=False)
+    batchMessage(message, flush=True, batch=False)
 
-def sendDirChunks(path, inode, files, hash=None):
+def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     message = {
         'message': 'DIR',
@@ -870,7 +865,7 @@ _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 
 def initProgressBar():
-    height, width = Util.getTerminalSize()
+    _, width = Util.getTerminalSize()
     global _progressBarFormat, _progressPathWidth
 
     if width < 110:
@@ -908,7 +903,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         newdepth = depth - 1
 
     s = os.lstat(dir)
-    if not S_ISDIR(s.st_mode):
+    if not stat.S_ISDIR(s.st_mode):
         return
 
     if args.progress:
@@ -1116,14 +1111,14 @@ def sendAndReceive(message):
     response = receiveMessage()
     return response
 
-def sendKeys(crypt):
+def sendKeys():
     (f, c) = crypt.getKeys()
     token = crypt.createToken()
     message = { "message": "SETKEYS",
                 "filenameKey": f,
                 "contentKey": c,
                 "token": token
-                }
+              }
     response = sendAndReceive(message)
     checkMessage(response, 'ACKSETKEYS')
     if response['response'] != 'OK':
@@ -1156,7 +1151,7 @@ def setMessageID(message):
     message['msgid'] = nextMsgId
     nextMsgId += 1
 
-def batchMessage(message, batch=True, flush=False, response=True, extra=None):
+def batchMessage(message, batch=True, flush=False, response=True):
     setMessageID(message)
 
     batch = batch and (args.batchsize > 0)
@@ -1233,7 +1228,7 @@ def runServer(cmd, tempfile):
     subp = subprocess.Popen(server_cmd)
     # Wait until the subprocess has created the domain socket.
     # There's got to be a better way to do this. Oy.
-    for i in range(0, 20):
+    for _ in range(0, 20):
         if os.path.exists(tempfile):
             return subp
         if subp.poll():
@@ -1241,7 +1236,7 @@ def runServer(cmd, tempfile):
         time.sleep(0.5)
 
     logger.error("Unable to locate socket %s from process %d.  Killing subprocess", tempfile, subp.pid)
-    subp.term()
+    subp.terminate()
     return None
 
 def getConnection(server, port, client, name, priority, auto, token):
@@ -1314,7 +1309,7 @@ def processCommandLine():
                            help='Load keys from file.  Keys are not stored in database')
 
     parser.add_argument('--compress-data',  '-Z',   dest='compress', action=Util.StoreBoolean, default=c.getboolean(t, 'CompressData'),
-                                                                                                                        help='Compress files.  Default: %(default)s')
+                        help='Compress files.  Default: %(default)s')
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
     parser.add_argument('--nocompress-types',       dest='nocompress', default=c.get(t, 'NoCompressFile'),              help='File containing a list of MIME types to not compress.  Default: %(default)s')
     if support_xattr:
@@ -1451,7 +1446,7 @@ def setupLogging(logfiles, verbosity):
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
     for logfile in logfiles:
-        if type(logfile) == str:
+        if type(logfile) is str:
             if logfile == ':STDERR:':
                 handler = logging.StreamHandler(sys.stderr)
             elif logfile == ':STDOUT:':
@@ -1516,7 +1511,7 @@ def printReport():
 def lockRun(server, port, client):
     lockName = 'tardis_' + str(server) + '_' + str(port) + '_' + str(client)
 
-    # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by 
+    # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by
     # the superuser (ie, can't write to /var/run)
     pidfile = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
 
@@ -1527,7 +1522,7 @@ def lockRun(server, port, client):
     return pidfile
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt, noCompTypes
+    global starttime, args, config, conn, verbosity, crypt
     # Read the command line arguments.
     (args, config) = processCommandLine()
 
@@ -1615,7 +1610,7 @@ def main():
                 else:
                     names[name] = i
             if errors:
-                raise Exception('All paths must have a unique final directory name if basepath is none')   
+                raise Exception('All paths must have a unique final directory name if basepath is none')
             rootdir = None
         logger.debug("Rootdir is: %s", rootdir)
     except Exception as e:
@@ -1660,7 +1655,7 @@ def main():
                 (f, c) = crypt.getKeys()
                 Util.saveKeys(Util.fullPath(args.keys), conn.getClientId(), f, c)
             else:
-                sendKeys(crypt)
+                sendKeys()
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
@@ -1743,7 +1738,7 @@ def main():
         if len(inodeDB) != 0:
             logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
             for key in inodeDB.keys():
-                (info, path) = inodeDB[key]
+                (_, path) = inodeDB[key]
                 print "{}:: {}".format(key, path)
 
     # Print stats and files report

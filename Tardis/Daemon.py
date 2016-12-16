@@ -32,7 +32,8 @@ import os
 import types
 import sys
 import string
-import pwd, grp
+import pwd
+import grp
 import argparse
 import uuid
 import logging
@@ -40,38 +41,33 @@ import logging.config
 import ConfigParser
 import SocketServer
 import ssl
-import hashlib
-import base64
-import subprocess
-import daemonize
 import pprint
 import tempfile
 import shutil
 import traceback
 import signal
-import thread
 import threading
 import json
 from datetime import datetime
-import librsync
 
 # For profiling
 import cProfile
 import StringIO
 import pstats
 
-import ConnIdLogAdapter
-
-import Messages
-import CacheDir
-import TardisDB
-import Regenerator
-import Util
-import Defaults
-import Connection
-import CompressedBuffer
+import daemonize
 
 import Tardis
+import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
+import Tardis.Messages as Messages
+import Tardis.CacheDir as CacheDir
+import Tardis.TardisDB as TardisDB
+import Tardis.Regenerator as Regenerator
+import Tardis.Util as Util
+import Tardis.Defaults as Defaults
+import Tardis.Connection as Connection
+import Tardis.CompressedBuffer as CompressedBuffer
+import Tardis.librsync as librsync
 
 DONE    = 0
 CONTENT = 1
@@ -169,12 +165,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     statPurgedSets = 0
     statCommands = {}
     address = ''
+    regenerator = None
+    basedir = None
+    autoPurge = False
+    deltaPercent = 80
+    forceFull = False
+    saveFull = False
+    lastCompleted = None
+    maxChain = 0
 
     def setup(self):
         self.sessionid = str(uuid.uuid1())
-        logger      = logging.getLogger('Tardis')
+        log            = logging.getLogger('Tardis')
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
-        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logger, {'connid': self.idstr})
+        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {'connid': self.idstr})
         if self.client_address:
             self.address = self.client_address[0]
         else:
@@ -195,9 +199,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.setAcl(inode, device, acl)
 
     def checkFile(self, parent, f, dirhash):
+        """
+        Process an individual file.  Check to see if it's different from what's there already
+        """
         xattr = None
         acl = None
-        """ Process an individual file.  Check to see if it's different from what's there already """
         self.logger.debug("Processing file: %s %s", str(f), str(parent))
         name = f["name"]
         inode = f["inode"]
@@ -209,7 +215,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         #self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
         #self.logger.debug("DirHash: %s", str(dirhash))
-        
+
         if name in dirhash:
             old = dirhash[name]
         else:
@@ -251,7 +257,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
-                    if not (old["checksum"] is None):
+                    if not old["checksum"] is None:
                         #self.db.setChecksum(inode, device, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
@@ -274,7 +280,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         self.setXattrAcl(inode, device, xattr, acl)
                         retVal = CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
-                elif (osize == fsize) and not (old["checksum"] is None):
+                elif (osize == fsize) and (not old["checksum"] is None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
@@ -328,13 +334,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                         if (old["name"] == f["name"]) and (old["parent"] == parent) and (old['device'] == f['parentdev']):
                             # If the name and parent ID are the same, assume it's the same
                             #if ("checksum" in old.keys()) and not (old["checksum"] is None):
-                            if not (old["checksum"] is None):
+                            if old["checksum"] is not None:
                                 self.db.setChecksum(inode, device, old['checksum'])
                                 retVal = DONE
                             else:
                                 retVal = CONTENT
                         else:
-                            # otherwise 
+                            # otherwise
                             retVal = CKSUM
                     else:
                         # TODO: Lookup based on inode.
@@ -393,7 +399,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Got directory: %s", str(dirhash))
 
         for f in files:
-            inode = f['inode']
             fileId = (f['inode'], f['dev'])
             self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
             res = self.checkFile(parentInode, f, dirhash)
@@ -459,9 +464,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             try:
                 sigfile = chksum + ".sig"
                 if self.cache.exists(sigfile):
-                    file = self.cache.open(sigfile, "rb")
-                    sig = file.read()       # TODO: Does this always read the entire file?
-                    file.close()
+                    sigfile = self.cache.open(sigfile, "rb")
+                    sig = sigfile.read()       # TODO: Does this always read the entire file?
+                    sigfile.close()
                 else:
                     rpipe = self.regenerator.recoverChecksum(chksum)
                     #pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
@@ -540,7 +545,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
-            pass
 
         if deltasize is None:
             # BUG: should actually be the uncompressed size, but hopefully we won't get here.
@@ -564,6 +568,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     # Process the delta file into the new file.
                     #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
+                    # Can't use isinstance
                     if type(basisFile) != types.FileType:
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
@@ -586,14 +591,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             output.close()
             # TODO: This has gotta be wrong.
 
-        flush = True if size > 1000000 else False;
+        flush = True if size > 1000000 else False
         return (None, flush)
 
     def processSignature(self, message):
         """ Receive a signature message. """
         self.logger.debug("Processing signature message: %s", message)
         output = None
-        temp = None
         checksum = message["checksum"]
 
         # If a signature is specified, receive it as well.
@@ -604,6 +608,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:
             output = self.cache.open(sigfile, "wb")
 
+        # TODO: Record these in stats
         (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
 
         if output is not None:
@@ -666,7 +671,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             'done': done
         }
         return (message, False)
-    
+
     def processMetaData(self, message):
         """ Process a content message, including all the data content chunks """
         self.logger.debug("Processing metadata message: %s", message)
@@ -740,7 +745,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if numFiles is not None:
                     #logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
                     if (numFiles == d['numfiles']) and (info['checksum'] == d['cksum']):
-                        rows = self.db.cloneDir(inoDev)
+                        self.db.cloneDir(inoDev)
                         if self.full:
                             numDeltas = self.db.getNumDeltaFilesInDirectory(inoDev, current=False)
                             if numDeltas > 0:
@@ -845,18 +850,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         #return {"message" : "OK", "inode": message["inode"]}
         flush = False
         if bytesReceived > 1000000:
-            flush = True;
+            flush = True
         return (None, flush)
 
     def processBatch(self, message):
         batch = message['batch']
         responses = []
         for mess in batch:
-            (response, flush) = self.processMessage(mess, transaction=False)
+            (response, _) = self.processMessage(mess, transaction=False)
             if response:
                 responses.append(response)
 
-        response = { 
+        response = {
             'message': 'ACKBTCH',
             'responses': responses
         }
@@ -937,17 +942,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         journal = None
         self.client     = client
         self.basedir    = os.path.join(self.server.basedir, client)
-        self.dbdir      = os.path.join(self.server.dbdir, client)
-        self.dbname     = self.server.dbname.format({'client': client})
-        self.dbfile     = os.path.join(self.dbdir, self.dbname)
+        dbdir           = os.path.join(self.server.dbdir, client)
+        dbname          = self.server.dbname.format({'client': client})
+
+        dbfile          = os.path.join(dbdir, dbname)
 
         self.cache = self.getCacheDir()
 
         connid = {'connid': self.idstr }
 
-        if not os.path.exists(self.dbfile):
-            if not os.path.exists(self.dbdir):
-                os.makedirs(self.dbdir)
+        if not os.path.exists(dbfile):
+            if not os.path.exists(dbdir):
+                os.makedirs(dbdir)
             if self.server.requirePW and token is None:
                 self.logger.warning("No password specified.  Cannot create")
                 raise InitFailedException("Password required for creation")
@@ -956,9 +962,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             ret = "NEW"
 
         if self.server.journal:
-            journal = os.path.join(self.dbdir, self.server.journal)
+            journal = os.path.join(dbdir, self.server.journal)
 
-        self.db = TardisDB.TardisDB(self.dbfile,
+        self.db = TardisDB.TardisDB(dbfile,
                                     initialize=script,
                                     backup=True,
                                     connid=connid,
@@ -1058,12 +1064,14 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
     def calcAutoInfo(self, clienttime):
-        """ Calculate a name if autoname is passed in. """
+        """
+        Calculate a name if autoname is passed in.
+        """
         starttime = datetime.fromtimestamp(clienttime)
         # Walk the automatic naming formats until we find one that's free
         for (fmt, prio, keep, full) in zip(self.formats, self.priorities, self.keep, self.forceFull):
             name = starttime.strftime(fmt)
-            if (self.db.checkBackupSetName(name)):
+            if self.db.checkBackupSetName(name):
                 return (name, prio, keep, full)
 
         # Oops, nothing worked.  Didn't change the name.
@@ -1192,7 +1200,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 if (filenameKey is None) ^ (contentKey is None):
                     self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
-                
+
                 if filenameKey:
                     response['filenameKey'] = filenameKey
                 if contentKey:
@@ -1203,7 +1211,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             started = True
 
             #sock.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
-            done = False;
+            done = False
 
             while not done:
                 flush = False
@@ -1259,7 +1267,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 print s.getvalue()
 
             if started:
-                (count, size, rounds) = Util.removeOrphans(self.db, self.cache)
+                (count, size, _) = Util.removeOrphans(self.db, self.cache)
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
                 self.logger.info("New or replaced files:    %d", self.statNewFiles)
                 self.logger.info("Updated files:            %d", self.statUpdFiles)
@@ -1276,109 +1284,103 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.logger.info("Session from %s {%s} Ending: %s: %s", client, self.sessionid, str(completed), str(datetime.now() - starttime))
 
-#class TardisSocketServer(SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer):
-    def __init__(self, args, config):
-        self.config = config
-        self.args = args
+class TardisServer(object):
+    # HACK.  Operate on an object, but not in the class.
+    # Want to do this in multiple classes.
+    def __init__(self):
+        self.basedir        = args.database
+        if args.dbdir:
+            self.dbdir      = args.dbdir
+        else:
+            self.dbdir      = self.basedir
+        self.savefull       = config.getboolean('Tardis', 'SaveFull')
+        self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
+        self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
 
+        self.dbname         = args.dbname
+        self.allowNew       = args.newhosts
+        self.schemaFile     = args.schema
+        self.journal        = args.journal
+
+        self.linkBasis      = config.getboolean('Tardis', 'LinkBasis')
+
+        self.timeout        = args.timeout
+
+        self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
+
+        self.allowOverrides = config.getboolean('Tardis', 'AllowClientOverrides')
+
+        self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
+        self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
+        self.keep           = map(int, config.get('Tardis', 'KeepDays').split(','))
+        self.forceFull      = map(int, config.get('Tardis', 'ForceFull').split(','))
+
+        numFormats = len(self.formats)
+        if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
+            logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
+                           len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
+
+        self.dbbackups      = config.getint('Tardis', 'DBBackups')
+
+        self.exceptions     = args.exceptions
+
+        self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
+
+        self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
+
+        self.user = None
+        self.group = None
+
+        # If the User or Group is set, attempt to determine the users
+        # Note, these will throw exeptions if the User or Group is unknown.  Will get
+        # passed up.
+        if args.daemon:
+            if args.user:
+                self.user = pwd.getpwnam(args.user).pw_uid
+            if args.group:
+                self.group = grp.getgrnam(args.group).gr_gid
+
+        # Get SSL set up, if it's been requested.
+        self.ssl            = args.ssl
+        self.certfile       = args.certfile
+        self.keyfile        = args.keyfile
+
+        # Create a session ID
+        self.serverSessionID = str(uuid.uuid1())
+
+        if args.profile:
+            self.profiler = cProfile.Profile()
+        else:
+            self.profiler = None
+
+#class TardisSocketServer(SocketServer.TCPServer):
+class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer, TardisServer):
+    def __init__(self):
         if args.reuseaddr:
             # Allow reuse of the address before timeout if requested.
             self.allow_reuse_address = True
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
-        setConfig(self, args, config)
+        TardisServer.__init__(self)
         logger.info("TCP Server %s Running", Tardis.__versionstring__)
 
-
-class TardisSingleThreadedSocketServer(SocketServer.TCPServer):
-    def __init__(self, args, config):
-        self.config = config
-        self.args = args
-
+class TardisSingleThreadedSocketServer(SocketServer.TCPServer, TardisServer):
+    def __init__(self):
         if args.reuseaddr:
             # Allow reuse of the address before timeout if requested.
             self.allow_reuse_address = True
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
-        setConfig(self, args, config)
+        TardisServer.__init__(self)
         logger.info("Single Threaded TCP Server %s Running", Tardis.__versionstring__)
 
-class TardisDomainSocketServer(SocketServer.UnixStreamServer):
-    def __init__(self, args, config):
-        self.config = config
-        self.args = args
+class TardisDomainSocketServer(SocketServer.UnixStreamServer, TardisServer):
+    def __init__(self):
         SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
-        setConfig(self, args, config)
+        TardisServer.__init__(self)
         logger.info("Unix Domain Socket %s Server Running", Tardis.__versionstring__)
 
-# HACK.  Operate on an object, but not in the class.
-# Want to do this in multiple classes.
-def setConfig(self, args, config):
-    self.basedir        = args.database
-    if args.dbdir:
-        self.dbdir      = args.dbdir
-    else:
-        self.dbdir      = self.basedir
-    self.savefull       = config.getboolean('Tardis', 'SaveFull')
-    self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
-    self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
 
-    self.dbname         = args.dbname
-    self.allowNew       = args.newhosts
-    self.schemaFile     = args.schema
-    self.journal        = args.journal
-
-    self.linkBasis      = config.getboolean('Tardis', 'LinkBasis')
-
-    self.timeout        = args.timeout
-
-    self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
-
-    self.allowOverrides = config.getboolean('Tardis', 'AllowClientOverrides')
-
-    self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
-    self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
-    self.keep           = map(int, config.get('Tardis', 'KeepDays').split(','))
-    self.forceFull      = map(int, config.get('Tardis', 'ForceFull').split(','))
-
-    numFormats = len(self.formats)
-    if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
-        logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
-                            len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
-
-    self.dbbackups      = config.getint('Tardis', 'DBBackups')
-
-    self.exceptions     = args.exceptions
-
-    self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
-
-    self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
-
-    self.user = None
-    self.group = None
-
-    # If the User or Group is set, attempt to determine the users
-    # Note, these will throw exeptions if the User or Group is unknown.  Will get
-    # passed up.
-    if args.daemon:
-        if args.user:
-            self.user = pwd.getpwnam(args.user).pw_uid
-        if args.group:
-            self.group = grp.getgrnam(args.group).gr_gid
-
-    # Get SSL set up, if it's been requested.
-    self.ssl            = args.ssl
-    self.certfile       = args.certfile
-    self.keyfile        = args.keyfile
-
-    # Create a session ID
-    self.serverSessionID = str(uuid.uuid1())
-
-    if args.profile:
-        self.profiler = cProfile.Profile()
-    else:
-        self.profiler = None
 
 def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
@@ -1391,7 +1393,7 @@ def setupLogging():
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
-        format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+        logFormat = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
 
         verbosity = args.verbose
 
@@ -1405,7 +1407,7 @@ def setupLogging():
         else:
             handler = logging.StreamHandler()
 
-        handler.setFormatter(format)
+        handler.setFormatter(logFormat)
         logger.addHandler(handler)
 
         loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
@@ -1419,14 +1421,14 @@ def run_server():
     try:
         #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
         if args.local:
-            logger.info("Starting server Socket: %s", args.local);
-            server = TardisDomainSocketServer(args, config)
+            logger.info("Starting Server. Socket: %s", args.local)
+            server = TardisDomainSocketServer()
         elif args.threaded:
-            logger.info("Starting server Port: %d", config.getint('Tardis', 'Port'));
-            server = TardisSocketServer(args, config)
+            logger.info("Starting Server on Port: %d", config.getint('Tardis', 'Port'))
+            server = TardisSocketServer()
         else:
-            logger.info("Starting Single Threaded server Port: %d", config.getint('Tardis', 'Port'));
-            server = TardisSingleThreadedSocketServer(args, config)
+            logger.info("Starting Single Threaded Server on Port: %d", config.getint('Tardis', 'Port'))
+            server = TardisSingleThreadedSocketServer()
 
         logger.info("Server Session: %s", server.serverSessionID)
 
@@ -1473,27 +1475,27 @@ def processArgs():
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
-    parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file');
+    parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
     parser.add_argument('--log-exceptions',     dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
     parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=Util.StoreBoolean, default=config.getboolean(t, 'AllowNewHosts'),
-                                                                        help='Allow new clients to attach and create new backup sets')
+                        help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
 
-    parser.add_argument('--single',             dest='single',          action=Util.StoreBoolean, default=config.getboolean(t, 'Single'), 
-                                                                        help='Run a single transaction and quit')
+    parser.add_argument('--single',             dest='single',          action=Util.StoreBoolean, default=config.getboolean(t, 'Single'),
+                        help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
-                                                                        help='Run as a Unix Domain Socket Server on the specified filename')
+                        help='Run as a Unix Domain Socket Server on the specified filename')
     parser.add_argument('--threads',            dest='threaded',        action=Util.StoreBoolean, default=True, help='Run a threaded server.  Default: %(default)s')
 
     parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
     parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')
 
     parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean, default=config.getboolean(t, 'ReuseAddr'),
-                                                                        help='Reuse the socket address immediately')
+                        help='Reuse the socket address immediately')
 
     parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
-                                                                        help='Run as a daemon')
+                        help='Run as a daemon')
     parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
     parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
     parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')

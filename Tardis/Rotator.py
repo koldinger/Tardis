@@ -30,13 +30,12 @@
 
 import shutil
 import logging
-import subprocess
-import os, os.path
-import stat
+import os
+import os.path
 import time
 import gzip
 
-class Rotator:
+class Rotator(object):
     def __init__(self, rotations=5, compress=32 * 1024):
         self.logger = logging.getLogger("Rotator")
         self.rotations = rotations

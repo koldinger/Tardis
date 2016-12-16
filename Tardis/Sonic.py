@@ -30,26 +30,25 @@
 
 import logging
 import argparse
-import ConfigParser
-import os, os.path
+import os
+import os.path
 import sys
 import time
 import datetime
 import pprint
 import urlparse
-import json
 
 import parsedatetime
 import passwordmeter
 
 import Tardis
-import Util
-import Defaults
-import TardisDB
-import TardisCrypto
-import CacheDir
-import RemoteDB
-import Config
+import Tardis.Util as Util
+import Tardis.Defaults as Defaults
+import Tardis.TardisDB as TardisDB
+import Tardis.TardisCrypto as TardisCrypto
+import Tardis.CacheDir as CacheDir
+import Tardis.RemoteDB as RemoteDB
+import Tardis.Config as Config
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
@@ -61,13 +60,14 @@ sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 
 minPwStrength = 0
 logger = None
+args = None
 
-def getDB(crypt, new=False, keyfile=None, allowRemote=True):
+def getDB(crypt, new=False, allowRemote=True):
     token = crypt.createToken() if crypt else None
     loc = urlparse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
-        if (not allowRemote):
+        if not allowRemote:
             raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
         # If no port specified, insert the port
         if loc.port is None:
@@ -95,7 +95,7 @@ def getDB(crypt, new=False, keyfile=None, allowRemote=True):
 
 def createClient(crypt):
     try:
-        (db, cache) = getDB(None, True, allowRemote=False)
+        (db, _) = getDB(None, True, allowRemote=False)
         db.close()
         if crypt:
             setToken(crypt)
@@ -107,7 +107,7 @@ def createClient(crypt):
 def setToken(crypt):
     try:
         # Must be no token specified yet
-        (db, cache) = getDB(None)
+        (db, _) = getDB(None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         token = crypt.createToken()
@@ -126,7 +126,7 @@ def setToken(crypt):
 
 def changePassword(crypt, crypt2):
     try:
-        (db, cache) = getDB(crypt)
+        (db, _) = getDB(crypt)
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
@@ -161,7 +161,7 @@ def moveKeys(db, crypt):
             return 1
         clientId = db.getConfigValue('ClientID')
         token    = crypt.createToken()
-        (db, cache) = getDB(crypt)
+        (db, _) = getDB(crypt)
         if args.extract:
             (f, c) = db.getKeys()
             if not (f and c):
@@ -183,7 +183,7 @@ def moveKeys(db, crypt):
         logger.exception(e)
         return 1
 
-def listBSets(db, crypt):
+def listBSets(db):
     try:
         last = db.lastBackupSet()
         for i in db.listBackupSets():
@@ -203,7 +203,7 @@ def listBSets(db, crypt):
         logger.exception(e)
         return 1
 
-def _bsetInfo(db, crypt, info):
+def _bsetInfo(db, info):
     print "Backupset       : %s (%d)" % ((info['name']), info['backupset'])
     print "Completed       : %s" % ('True' if info['completed'] else 'False')
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
@@ -229,19 +229,19 @@ def _bsetInfo(db, crypt, info):
     print "Purgeable Size  : %s" % (Util.fmtSize(endInfo[1]))
     print "Purgeable Space : %s" % (Util.fmtSize(endInfo[2]))
 
-def bsetInfo(db, crypt):
+def bsetInfo(db):
     printed = False
     if args.backup or args.date:
         info = getBackupSet(db, args.backupset, args.date)
         if info:
-            _bsetInfo(db, crypt, info)
+            _bsetInfo(db, info)
             printed = True
     else:
         first = True
         for info in db.listBackupSets():
             if not first:
                 print "------------------------------------------------"
-            _bsetInfo(db, crypt, info)
+            _bsetInfo(db, info)
             first = False
             printed = True
     if printed:
@@ -253,11 +253,11 @@ def confirm():
     else:
         print "Proceed (y/n): ",
         yesno = sys.stdin.readline().strip().upper()
-        return (yesno == 'YES' or yesno == 'Y')
+        return yesno == 'YES' or yesno == 'Y'
 
-def purge(db, cache, crypt):
+def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
-    if bset == None:
+    if bset is None:
         logger.error("No backup set found")
         sys.exit(1)
     # List the sets we're going to delete
@@ -290,7 +290,7 @@ def deleteBsets(db, cache):
     bsets = []
     for i in args.backups:
         bset = getBackupSet(db, i, None)
-        if bset == None:
+        if bset is None:
             logger.error("No backup set found for %s", i)
             sys.exit(1)
         bsets.append(bset)
@@ -339,7 +339,7 @@ def parseArgs():
     global args, minPwStrength
 
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
-   
+
     (args, remaining) = Config.parseConfigOptions(parser)
     c = Config.config
     t = args.job
@@ -371,11 +371,8 @@ def parseArgs():
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
 
     common = argparse.ArgumentParser(add_help=False)
-    """
-    common.add_argument('--database', '-D', dest='database',    default=c.get(t, 'Database'),               help="Database to use.  Default: %(default)s")
-    common.add_argument('--client', '-C',   dest='client',      default=c.get(t, 'Client'),                 help="Client to list on.  Default: %(default)s")
-    common.add_argument("--dbname", "-N",   dest="dbname",      default=c.get(t, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
-    """
+    Config.addPasswordOptions(common)
+    Config.addCommonOptions(common)
 
     create = argparse.ArgumentParser(add_help=False)
     create.add_argument('--schema',                 dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
@@ -395,9 +392,6 @@ def parseArgs():
     configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
     configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
 
-    Config.addPasswordOptions(common)
-    Config.addCommonOptions(common)
-
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create], help='Create a client database')
     subs.add_parser('setpass',      parents=[common], help='Set a password')
@@ -415,7 +409,7 @@ def parseArgs():
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
-    
+
     args = parser.parse_args(remaining)
 
     # And load the required strength for new passwords.  NOT specifiable on the command line.
@@ -423,38 +417,38 @@ def parseArgs():
     return args
 
 def getBackupSet(db, backup, date, defaultCurrent=False):
-    bsetInfo = None
+    bInfo = None
     if date:
         cal = parsedatetime.Calendar()
         (then, success) = cal.parse(date)
         if success:
             timestamp = time.mktime(then)
             logger.debug("Using time: %s", time.asctime(then))
-            bsetInfo = db.getBackupSetInfoForTime(timestamp)
-            if bsetInfo and bsetInfo['backupset'] != 1:
-                bset = bsetInfo['backupset']
-                logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
+            bInfo = db.getBackupSetInfoForTime(timestamp)
+            if bInfo and bInfo['backupset'] != 1:
+                bset = bInfo['backupset']
+                logger.debug("Using backupset: %s %d", bInfo['name'], bInfo['backupset'])
             else:
                 logger.critical("No backupset at date: %s (%s)", date, time.asctime(then))
-                bsetInfo = None
+                bInfo = None
         else:
             logger.critical("Could not parse date string: %s", date)
     elif backup:
         try:
             bset = int(backup)
             logger.debug("Using integer value: %d", bset)
-            bsetInfo = db.getBackupSetInfoById(bset)
+            bInfo = db.getBackupSetInfoById(bset)
         except ValueError:
             logger.debug("Using string value: %s", backup)
             if backup == current:
-                bsetInfo = db.lastBackupSet()
+                bInfo = db.lastBackupSet()
             else:
-                bsetInfo = db.getBackupSetInfo(backup)
-            if not bsetInfo:
+                bInfo = db.getBackupSetInfo(backup)
+            if not bInfo:
                 logger.critical("No backupset at for name: %s", backup)
     elif defaultCurrent:
-        bsetInfo = db.lastBackupSet()
-    return bsetInfo
+        bInfo = db.lastBackupSet()
+    return bInfo
 
 def checkPasswordStrength(password):
     strength, improvements = passwordmeter.test(password)
@@ -511,7 +505,7 @@ def main():
             if not checkPasswordStrength(newpw):
                 return -1
 
-            if args.newpw == True:
+            if args.newpw is True:
                 newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
                 if newpw2 != newpw:
                     logger.error("Passwords don't match")
@@ -533,26 +527,19 @@ def main():
 
         if args.command == 'keys':
             return moveKeys(db, crypt)
-
-        if args.command == 'list':
-            return listBSets(db, crypt)
-
-        if args.command == 'info':
-            return bsetInfo(db, crypt)
-
-        if args.command == 'purge':
-            return purge(db, cache, crypt)
-
-        if args.command == 'delete':
+        elif args.command == 'list':
+            return listBSets(db)
+        elif args.command == 'info':
+            return bsetInfo(db)
+        elif args.command == 'purge':
+            return purge(db, cache)
+        elif args.command == 'delete':
             return deleteBsets(db, cache)
-
-        if args.command == 'getconfig':
+        elif args.command == 'getconfig':
             return getConfig(db)
-
-        if args.command == 'setconfig':
+        elif args.command == 'setconfig':
             return setConfig(db)
-
-        if args.command == 'orphans':
+        elif args.command == 'orphans':
             return removeOrphans(db, cache)
     except KeyboardInterrupt:
         pass

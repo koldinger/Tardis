@@ -35,57 +35,52 @@ import os
 SECTION = 'Tardis'
 
 _defaults = {
-                'TARDIS_DB'             : '/srv/tardis',
-                'TARDIS_DBDIR'          : '',
-                'TARDIS_DBNAME'         : 'tardis.db',
-                'TARDIS_CLIENT'         : socket.gethostname(),
-                'TARDIS_SERVER'         : 'localhost',
-                'TARDIS_EXCLUDES'       : '.tardis-excludes',
-                'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
-                'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
-                'TARDIS_SKIP'           : '.tardis-skip',
-                'TARDIS_PORT'           : '7420',
-                'TARDIS_TIMEOUT'        : '300',
-                'TARDIS_DAEMON_CONFIG'  : '/etc/tardis/tardisd.cfg',
-                'TARDIS_LOCAL_CONFIG'   : '/etc/tardis/tardisd.local.cfg',
-                'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
-                'TARDIS_JOURNAL'        : 'tardis.journal',
-                'TARDIS_SCHEMA'         : 'schema/tardis.sql',
-                'TARDIS_REMOTE_PORT'	: '7430',
-                'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
-                'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
-                'TARDIS_LS_COLORS'      : "gone=yellow:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=white:error=red,,bold:default=white",
-                'TARDIS_NOCOMPRESS'     : None,
-                'TARDIS_RECENT_SET'     : 'Current',
-                'TARDIS_PW_STRENGTH'    : '0.75',
-                'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
-               }
+    'TARDIS_DB'             : '/srv/tardis',
+    'TARDIS_DBDIR'          : '',
+    'TARDIS_DBNAME'         : 'tardis.db',
+    'TARDIS_CLIENT'         : socket.gethostname(),
+    'TARDIS_SERVER'         : 'localhost',
+    'TARDIS_EXCLUDES'       : '.tardis-excludes',
+    'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
+    'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
+    'TARDIS_SKIP'           : '.tardis-skip',
+    'TARDIS_PORT'           : '7420',
+    'TARDIS_TIMEOUT'        : '300',
+    'TARDIS_DAEMON_CONFIG'  : '/etc/tardis/tardisd.cfg',
+    'TARDIS_LOCAL_CONFIG'   : '/etc/tardis/tardisd.local.cfg',
+    'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
+    'TARDIS_JOURNAL'        : 'tardis.journal',
+    'TARDIS_SCHEMA'         : 'schema/tardis.sql',
+    'TARDIS_REMOTE_PORT'	: '7430',
+    'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
+    'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
+    'TARDIS_LS_COLORS'      : "gone=yellow:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=white:error=red,,bold:default=white",
+    'TARDIS_NOCOMPRESS'     : None,
+    'TARDIS_RECENT_SET'     : 'Current',
+    'TARDIS_PW_STRENGTH'    : '0.75',
+    'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
+}
 
 
 try:
     _default_file = os.environ['TARDIS_DEFAULTS']
-except:
+except KeyError:
     _default_file = _defaults['TARDIS_DEFAULTS']
 
 _parser = ConfigParser.ConfigParser(_defaults)
 _parser.add_section(SECTION)                       # Keep it happy later.
 _parser.read(_default_file)
 
-
-"""
-Get a default value
-"""
 def getDefault(var):
     if var in os.environ:
         return os.environ[var]
     else:
         try:
             return _parser.get(SECTION, var)
-        except ConfigParser.Error as e:
+        except ConfigParser.Error:
             return None
 
 if __name__ == "__main__":
     print _default_file
-    for i in _defaults.keys():
+    for i in _defaults:
         print "%-24s: %s" % (i, getDefault(i))
-

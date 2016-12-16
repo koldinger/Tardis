@@ -48,7 +48,7 @@ except:
 if __buildversion__:
     __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
 
-def __check_features():
+def check_features():
     xattr_pkg = 'xattr'
     acl_pkg   = 'pylibacl'
     os_info = os.uname()

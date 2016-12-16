@@ -28,26 +28,28 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from flask import Flask, Response, session, request, url_for, escape, abort, redirect, send_file, make_response
-from tornado.wsgi import WSGIContainer
-from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
 
-import os, os.path
-import logging, logging.handlers
+
+import os
+import os.path
+import logging
+import logging.handlers
 import json
 import argparse
 import ConfigParser
 import zlib
-import base64
 import daemonize
 
-import Tardis
-import TardisDB
-import Util
-import CacheDir
-import Defaults
+from flask import Flask, Response, session, request, url_for, abort, redirect, make_response
+from tornado.wsgi import WSGIContainer
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
 
+import Tardis
+import Tardis.TardisDB as TardisDB
+import Tardis.Util as Util
+import Tardis.CacheDir as CacheDir
+import Tardis.Defaults as Defaults
 
 basedir     = Defaults.getDefault('TARDIS_DB')
 dbname      = Defaults.getDefault('TARDIS_DBNAME')
@@ -85,8 +87,10 @@ allowCache = False
 args = None
 config = None
 
+logger = None
+
 def getDB():
-    if not 'host' in session:
+    if 'host' not in session:
         abort(401)
     host = session['host']
     db = dbs[host]
@@ -235,7 +239,7 @@ def getFileInfoByPathForRange(first, last, pathname):
 def getFileInfoByName(backupset, device, inode, name):
     #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
-    return createResponse(akeDict(db.getFileInfoByName(name, (inode, device), backupset)))
+    return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
@@ -305,7 +309,7 @@ def _stream(f):
     try:
         f.seek(0)
         r = f.read(_blocksize)
-        while (r):
+        while r:
             yield r
             r = f.read(_blocksize)
     except Exception as e:
@@ -351,7 +355,7 @@ def setKeys():
         token = request.form['token']
         fKey  = request.form.get('FilenameKey')
         cKey  = request.form.get('ContentKey')
-        if (db.setKeys(token, fKey, cKey) == False):
+        if not db.setKeys(token, fKey, cKey):
             raise Exception("Unable to set keys")
         return "OK"
     except Exception as e:
@@ -363,9 +367,9 @@ def setToken():
     try:
         db = getDB()
         token = request.form['token']
-        if (db.setToken(token, fKey, cKey) == False):
-            raise Exception("Unable to set keys")
-    except Exception as e:
+        if not db.setToken(token):
+            raise Exception("Unable to set token")
+    except Exception:
         abort(403)
 
 @app.route('/listPurgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
@@ -388,7 +392,7 @@ def listPurgeIncomplete(backupset, priority, timestamp):
 def purgeSets(backupset, priority, timestamp):
     db = getDB()
     return createResponse(db.purgeSets(priority, timestamp, backupset))
-    
+
 @app.route('/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def purgeIncomplete(backupset, priority, timestamp):
     db = getDB()
@@ -463,11 +467,11 @@ def processArgs():
 
 def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
-    logger = logging.getLogger('')
+    log = logging.getLogger('')
 
     verbosity = args.verbose
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
-    logger.setLevel(loglevel)
+    log.setLevel(loglevel)
 
     format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
 
@@ -479,8 +483,8 @@ def setupLogging():
         handler = logging.StreamHandler()
 
     handler.setFormatter(format)
-    logger.addHandler(handler)
-    return logger
+    log.addHandler(handler)
+    return log
 
 def setup():
     global args, config, logger, allowCompress, allowCache
@@ -515,10 +519,10 @@ def tornado():
     if args.daemon:
         user  = args.user
         group = args.group
-        pidfile = args.pidfile 
+        pidfile = args.pidfile
         fds = [h.stream.fileno() for h in logger.handlers if isinstance(h, logging.StreamHandler)]
         logger.info("About to daemonize")
-    
+
         try:
             daemon = daemonize.Daemonize(app="tardisremote", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
             daemon.start()
