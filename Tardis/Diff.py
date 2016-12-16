@@ -175,6 +175,10 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
 def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
     # Collect the first directory contents
     (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+    if not info1:
+        logger.error("No data available for %s", path)
+        return  
+
     entries1 = tardis.readDirectory((info1['inode'], info1['device']))
     names1 = ([x['name'] for x in entries1])
     if crypt:
@@ -300,7 +304,7 @@ def main():
 
         for f in args.files:
             if bsets[1] is None and os.path.isdir(f):
-                diffDir(f, r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
+                diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
