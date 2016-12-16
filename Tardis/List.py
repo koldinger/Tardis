@@ -409,7 +409,7 @@ def printVersions(fInfos):
     Doesn't actually do the printing, but calls printit to do it.
     """
     global column
-    prevInfo = {}        # Previous version's info
+    prevInfo = None        # Previous version's info
     lSet     = None
     column = 0
 
