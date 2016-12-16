@@ -928,7 +928,8 @@ class TardisDB(object):
         self.conn.commit()
 
     def close(self, completeBackup=False):
-        self.logger.debug("Closing DB: %s", self.dbName)
+        #self.logger.debug("Closing DB: %s", self.dbName)
+        # Apparently logger will get shut down if we're executing in __del__, so leave the debugging message out
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
                               { "now": time.time(), "backup": self.currBackupSet })
