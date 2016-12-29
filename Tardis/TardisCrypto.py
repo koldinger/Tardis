@@ -131,7 +131,7 @@ class TardisCrypto(object):
         return encpath
 
     def encryptFilename(self, name):
-        return base64.b64encode(self._filenameEnc.encrypt(self.padzero(name)), self._altchars)
+        return base64.b64encode(self._filenameEnc.encrypt(self.padzero(str(name))), self._altchars)
 
     def decryptFilename(self, name):
         return self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).rstrip('\0')
