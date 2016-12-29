@@ -38,6 +38,7 @@ import time
 
 import termcolor
 import parsedatetime
+import binaryornot.check
 
 import Tardis
 import Tardis.Util as Util
@@ -72,6 +73,7 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
+    parser.add_argument('--binary', '-B',       dest='binary', default=False, action=Util.StoreBoolean, help='Print differences in binary files.  Default: %(default)s')
     parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
     parser.add_argument('--list', '-l',         dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
@@ -113,11 +115,30 @@ def setcolor(line):
 
     return color
 
+def isBinary(lines, numLines = 128):
+    lineNo = 0
+    numLines = min(numLines, len(lines))
+    while lineNo < numLines:
+        if binaryornot.check.is_binary_string(lines[lineNo]):
+            return True
+        lineNo += 1
+    return False
+
 def runDiff(f1, f2, name, then, now):
     l1 = f1.readlines()
     l2 = f2.readlines()
-    #l1 = map(str.rstrip, l1)
-    #l2 = map(str.rstrip, l2)
+
+    # If we only want to list files, just see if the 
+    if args.list and l1 != l2:
+        color = 'yellow' if args.color else 'white'
+        termcolor.cprint('File {} (versions {} and {}) differs.'.format(name, then, now), color)
+        return
+
+    if not args.binary and (isBinary(l1) or isBinary(l2)):
+        if l1 != l2:
+            color = 'yellow' if args.color else 'white'
+            termcolor.cprint('Binary file {} (versions {} and {}) differs.'.format(name, then, now), color)
+        return
 
     if args.ndiff:
         diffs = difflib.ndiff(l1, l2)
@@ -127,10 +148,6 @@ def runDiff(f1, f2, name, then, now):
         diffs = difflib.context_diff(l1, l2, name, name, then, now, n = args.context)
 
     for line in diffs:
-        if args.list:
-            color = 'yellow' if args.color else 'white'
-            termcolor.cprint('File {} (versions {} and {}) differ.'.format(name, then, now), color)
-            break
         line = line.rstrip()
         termcolor.cprint(line, setcolor(line))
 
