@@ -102,7 +102,7 @@ def setcolor(line):
                 color = 'red'
             elif c == '+':
                 color = 'green'
-            elif c == '!':
+            elif c == '!' or c == '@':
                 color = 'yellow'
             elif c == '?' or c == '*':
                 color = 'cyan'
@@ -190,6 +190,7 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
 
 
 def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
+    logger.info("Diffing directory: %s", path)
     # Collect the first directory contents
     (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
     if not info1:
@@ -211,19 +212,24 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
             names2 = map(crypt.decryptFilename, names2)
         names2 = map(lambda x: x.decode('utf-8'), names2)
         names2 = sorted(names2)
+        otherName = bsets[1]['name']
     else:
         names2 = sorted(os.listdir(path))
+        otherName = 'filesystem'
+
+    missing = 'magenta' if args.color else 'white'
+
 
     for i in names1:
         if i in names2:
             logger.info('Diffing %s', os.path.join(path, i))
             diffFile(os.path.join(path, i), regenerator, bsets, tardis, crypt, reducePath, True, now, then)
         else:
-            logger.info('%s in %s, not in %s', os.path.join(path, i), bsets[0]['name'], 'other')
+            termcolor.cprint('{} in {}, not in {}'.format(os.path.join(path, i), bsets[0]['name'], otherName), missing)
 
     for i in names2:
         if i not in names1:
-            logger.info('%s in %s, not in %s', os.path.join(path, i), 'other', bsets[0]['name'])
+            termcolor.cprint('{} in {}, not in {}'.format(os.path.join(path, i), otherName, bsets[0]['name']), missing)
 
 def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now, then):
     """
