@@ -197,7 +197,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
         logger.error("No data available for %s", path)
         return  
 
-    entries1 = tardis.readDirectory((info1['inode'], info1['device']))
+    entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
     names1 = ([x['name'] for x in entries1])
     if crypt:
         names1 = map(crypt.decryptFilename, names1)
@@ -206,7 +206,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
 
     if bsets[1]:
         (info2, _) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
-        entries2 = tardis.readDirectory((info2['inode'], info2['device']))
+        entries2 = tardis.readDirectory((info2['inode'], info2['device']), bsets[1]['backupset'])
         names2 = [x['name'] for x in entries2]
         if crypt:
             names2 = map(crypt.decryptFilename, names2)
@@ -217,8 +217,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
         names2 = sorted(os.listdir(path))
         otherName = 'filesystem'
 
-    missing = 'magenta' if args.color else 'white'
-
+    missing = 'red' if args.color else 'white'
 
     for i in names1:
         if i in names2:
@@ -237,6 +236,7 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
     actual filesystem
     """
     path = os.path.abspath(fName)
+    logger.info("Diffing file: %s", path)
 
     # Process the first file
     (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
@@ -329,6 +329,12 @@ def main():
             if bsets[1] is None and os.path.isdir(f):
                 diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
+                (i0, _) = getFileInfo(os.path.abspath(f), bsets[0]['backupset'], tardis, crypt, args.reduce)
+                if i0 and i0['dir']:
+                    (i1, _) = getFileInfo(os.path.abspath(f), bsets[1]['backupset'], tardis, crypt, args.reduce)
+                    if i1 and i1['dir']:
+                        diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
+                        continue
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
         pass
