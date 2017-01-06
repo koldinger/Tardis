@@ -453,14 +453,12 @@ def printVersions(fInfos):
         # Skip out if we're not printing something here
         # Bascially we stay if we're print everything or it's a new file
         # OR if we're printing deletions and we disappered
-        #args.recent or
-            #(not args.deletions and gone) 
-        if args.recent or args.revisions == 'none' or (args.revisions == 'change' and not (new or gone)) or (gone and not args.deletions):
+        if args.revisions == 'last' or args.revisions == 'none' or (args.revisions == 'change' and not (new or gone)) or (gone and not args.deletions):
             continue
 
         printit(info, bset['name'], color, gone)
 
-    if args.recent:
+    if args.revisions == 'last':
         printit(fInfos[lSet['backupset']], lSet['name'], colors['changed'], False)
 
     flushLine()
@@ -730,7 +728,7 @@ def processArgs():
     parser.add_argument('--checksums', '-c',dest='cksums',      default=False, action='store_true',         help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
-    parser.add_argument('--revisions', '-V',dest='revisions',   default='change', choices=['none', 'change', 'all'],   help='Display all, changed, or no versions of files.  Default: %(default)s')
+    parser.add_argument('--revisions', '-V',dest='revisions',   default='change', choices=['none', 'change', 'all', 'last'],   help='Display all, changed, last, or no versions of files.  Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
     parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
     parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
@@ -742,7 +740,6 @@ def processArgs():
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxint, type=int,               help='Maximum depth to recurse directories')
 
-    parser.add_argument('--recent',         dest='recent',      default=False, action=Util.StoreBoolean,    help='Show only the most recent version of a file. Default: %(default)s')
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
     parser.add_argument('--reduce',         dest='reduce',      default=0, type=int, const=sys.maxint, nargs='?',
