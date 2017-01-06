@@ -453,7 +453,9 @@ def printVersions(fInfos):
         # Skip out if we're not printing something here
         # Bascially we stay if we're print everything or it's a new file
         # OR if we're printing deletions and we disappered
-        if args.recent or not ((args.all or new) or (args.deletions and gone)):
+        #args.recent or
+            #(not args.deletions and gone) 
+        if args.recent or not ((args.revisions == 'all' or (args.revisions == 'change' and new)) and (not args.deletions and gone)):
             continue
 
         printit(info, bset['name'], color, gone)
@@ -478,10 +480,10 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
         doprint(fmt % filename, color)
         if numFound == 0:
             doprint(' Not found', colors['error'])
-        if (numFound == 0) or args.versions or eol:
+        if (numFound == 0) or args.revisions != 'none' or eol:
             flushLine()
 
-    if args.versions:
+    if args.revisions != 'none':
         printVersions(fInfos)
 
     # Figure out which versions of the file are directories
@@ -728,9 +730,8 @@ def processArgs():
     parser.add_argument('--checksums', '-c',dest='cksums',      default=False, action='store_true',         help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
-    parser.add_argument('--versions',       dest='versions',    default=True,  action=Util.StoreBoolean,    help='Display versions of files.  Default: %(default)s')
+    parser.add_argument('--revisions', '-V',dest='revisions',   default='change', choices=['none', 'change', 'all'],   help='Display all, changed, or no versions of files.  Default: %(default)s')
     parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
-    parser.add_argument('--all',            dest='all',         default=False, action='store_true',         help='Show all versions of a file. Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
     parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
     parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=Util.StoreBoolean,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
