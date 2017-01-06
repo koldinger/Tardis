@@ -455,7 +455,7 @@ def printVersions(fInfos):
         # OR if we're printing deletions and we disappered
         #args.recent or
             #(not args.deletions and gone) 
-        if args.recent or not ((args.revisions == 'all' or (args.revisions == 'change' and new)) and (not args.deletions and gone)):
+        if args.recent or args.revisions == 'none' or (args.revisions == 'change' and not (new or gone)) or (gone and not args.deletions):
             continue
 
         printit(info, bset['name'], color, gone)
@@ -731,8 +731,8 @@ def processArgs():
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
     parser.add_argument('--revisions', '-V',dest='revisions',   default='change', choices=['none', 'change', 'all'],   help='Display all, changed, or no versions of files.  Default: %(default)s')
-    parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
     parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
+    parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
     parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
     parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=Util.StoreBoolean,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
     parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
