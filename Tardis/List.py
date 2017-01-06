@@ -724,7 +724,7 @@ def processArgs():
     parser.add_argument('--annotate', '-f', dest='annotate',    default=False, action='store_true',         help='Annotate files based on type.')
     parser.add_argument('--size', '-s',     dest='size',        default=False, action='store_true',         help='Show file sizes')
     parser.add_argument('--human', '-H',    dest='human',       default=False, action='store_true',         help='Format sizes for easy reading')
-    parser.add_argument('--dirinfo', '-d',  dest='dirinfo',     default=False, action='store_true',         help='Maxdepth to recurse directories.  0 for none')
+    parser.add_argument('--dirinfo', '-d',  dest='dirinfo',     default=False, action='store_true',         help='List directories, but not their contents')
     parser.add_argument('--checksums', '-c',dest='cksums',      default=False, action='store_true',         help='Print checksums.')
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
