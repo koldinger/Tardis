@@ -380,7 +380,7 @@ def parseArgs():
 def main():
     global logger, crypt, tardis, args, owMode
     args = parseArgs()
-    logger = Util.setupLogging(args.verbose)
+    logger = Util.setupLogging(args.verbose, stream=sys.stderr)
 
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
