@@ -127,6 +127,15 @@ def accumulateStat(stats, name, amount=1):
     if stats:
         stats[name] = stats.setdefault(name, 0) + amount
 
+def setupLogging(verbosity, levels=None, format = "%(levelname)s : %(message)s"):
+    if levels is None:
+        levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+
+    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+    logging.basicConfig(format=format, level=loglevel)
+    logger = logging.getLogger('')
+
+    return logger
 
 # Functions for reducing a path.
 

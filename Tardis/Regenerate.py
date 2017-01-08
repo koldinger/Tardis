@@ -377,23 +377,10 @@ def parseArgs():
 
     return parser.parse_args(remaining)
 
-def setupLogging(args):
-    #FORMAT = "%(levelname)s : %(name)s : %(message)s"
-    FORMAT = "%(levelname)s : %(message)s"
-    logging.basicConfig(stream=sys.stderr, format=FORMAT)
-    logger = logging.getLogger("")
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-    logging.getLogger("parsedatetime").setLevel(logging.WARNING)
-
-    return logger
-
 def main():
     global logger, crypt, tardis, args, owMode
     args = parseArgs()
-    logger = setupLogging(args)
+    logger = Util.setupLogging(args.verbose)
 
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
@@ -547,3 +534,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

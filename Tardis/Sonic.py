@@ -405,10 +405,9 @@ def parseArgs():
     subs.add_parser('getconfig',    parents=[common, configKeyParser],                     help='Get Config Value')
     subs.add_parser('setconfig',    parents=[common, configValueParser],                   help='Set Config Value')
 
-    #parser.add_argument('--verbose', '-v',      dest='verbose', action='count',                     help='Be verbose')
+    parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
-
 
     args = parser.parse_args(remaining)
 
@@ -460,14 +459,11 @@ def checkPasswordStrength(password):
     else:
         return True
 
-def setupLogging():
-    global logger
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger('')
 
 def main():
+    global logger
     parseArgs()
-    setupLogging()
+    logger = Util.setupLogging(args.verbose)
 
     # Commands which cannot be executed on remote databases
     allowRemote = args.command not in ['create']

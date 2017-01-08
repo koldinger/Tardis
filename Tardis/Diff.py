@@ -87,13 +87,6 @@ def parseArgs():
     #print args
     return args
 
-def setupLogging(verbosity):
-    global logger
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
-    loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
-    logging.basicConfig(level=loglevel)
-    logger = logging.getLogger('')
-
 def setcolor(line):
     if args.color:
         if line:
@@ -291,9 +284,10 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
     runDiff(f1, f2, fName, then, now)
 
 def main():
+    global logger
     try:
         parseArgs()
-        setupLogging(args.verbose)
+        logger = Util.setupLogging(args.verbose)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
