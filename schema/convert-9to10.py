@@ -20,6 +20,7 @@ if int(t[0]) != version:
 
 conn.execute("ALTER TABLE Backups ADD COLUMN ServerSession TEXT")
 
-conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", ?)', str(version + 1))
+# Ugh, make sure the last element is a tuple, otherwise the string will get broken into multiple characters
+conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", ?)', (str(version + 1),) )
 
 conn.commit()
