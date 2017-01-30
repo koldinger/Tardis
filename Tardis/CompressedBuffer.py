@@ -28,12 +28,47 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import zlib
 import sys
+import zlib
+import bz2
+import liblzma
 
 import Tardis.librsync as librsync
 
-_defaultChunksize = 128 * 1024
+_defaultChunksize = 1024 * 1024
+
+# Pick a selected compressor or decompressor
+class _NullCompressor:
+    def compress(self, data):
+        return data
+
+    def decompress(self, data):
+        return data
+
+    def flush(self):
+        return None
+
+_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor(), _NullCompressor()) }
+_compressors.keys()
+
+def _updateAlg(alg):
+    if (alg is None) or (alg == 0) or (alg == 'None'):
+        alg = 'none'
+    if (alg == 1):
+        alg = 'zlib'
+    return alg
+
+def getCompressor(alg='zlib'):
+    alg = _updateAlg(alg)
+    return _compressors[alg][0]()
+
+def getDecompressor(alg='zlib'):
+    alg = _updateAlg(alg)
+    print alg
+    return _compressors[alg][1]()
+
+def getCompressors():
+    return _compressors.keys()
 
 class BufferedReader(object):
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, signature=False):
@@ -99,13 +134,14 @@ class BufferedReader(object):
         return False
 
 class CompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False):
+    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor='zlib'):
         super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
         self.compressor = None
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
         self.threshold = threshold
+        self.compressor = getCompressor(compressor)
 
     def _get(self):
         #print "_get called"
@@ -121,10 +157,9 @@ class CompressedBufferedReader(BufferedReader):
                 # First time around, create a compressor and check the compression ratio
                 if self.first:
                     self.first = False
-                    self.compressor = zlib.compressobj()
                     ret = self.compressor.compress(buf)
                     # Flush the buf and colculate the size
-                    ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
+                    #ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
                     # Now, check what we've got back.
                     if ret:
                         ratio = float(len(ret)) / float(len(buf))
@@ -135,7 +170,8 @@ class CompressedBufferedReader(BufferedReader):
                 elif self.compressor:
                     if not buf:
                         #print "_get: Done"
-                        ret = self.compressor.flush(zlib.Z_FINISH)
+                        #ret = self.compressor.flush(zlib.Z_FINISH)
+                        ret = self.compressor.flush()
                         self.stream = None
                     else:
                         #print "_get: {} bytes read".format(len(buf))
@@ -164,11 +200,11 @@ class CompressedBufferedReader(BufferedReader):
         return self.compressor != None
 
 class UncompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize):
+    def __init__(self, stream, chunksize=_defaultChunksize, compressor='zlib'):
         super(UncompressedBufferedReader, self).__init__(stream, chunksize=chunksize)
-        self.compressor = zlib.decompressobj()
         self.compressed = 0.0
         self.uncompressed = 0.0
+        self.compressor = getDecompressor(compressor)
 
     def _get(self):
         #print "_get called"
@@ -178,7 +214,10 @@ class UncompressedBufferedReader(BufferedReader):
                 buf = self.stream.read(self.chunksize)
                 if not buf:
                     #print "_get: Done"
-                    ret = self.compressor.flush()
+                    try:
+                        ret = self.compressor.flush()
+                    except AttributeError:
+                        ret = ''
                     self.uncompressed = self.uncompressed + len(ret)
                     self.stream = None
                 else:

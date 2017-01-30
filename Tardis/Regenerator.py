@@ -132,7 +132,7 @@ class Regenerator(object):
                 if cksInfo['compressed']:
                     self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
-                    buf = CompressedBuffer.UncompressedBufferedReader(patchfile)
+                    buf = CompressedBuffer.UncompressedBufferedReader(patchfile, compressor=cksInfo['compressed'])
                     shutil.copyfileobj(buf, temp)
                     temp.seek(0)
                     patchfile = temp
@@ -153,7 +153,7 @@ class Regenerator(object):
                 if cksInfo['compressed']:
                     self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
-                    buf = CompressedBuffer.UncompressedBufferedReader(output)
+                    buf = CompressedBuffer.UncompressedBufferedReader(output, compressor=cksInfo['compressed'])
                     shutil.copyfileobj(buf, temp)
                     temp.seek(0)
                     output = temp
@@ -162,7 +162,7 @@ class Regenerator(object):
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            # self.logger.exception(e)
+            self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
@@ -180,6 +180,7 @@ class Regenerator(object):
                 return None
         except RegenerateException as e:
             self.logger.error("Could not regenerate file: %s: %s", filename, str(e))
+            #self.logger.exception(e)
             return None
         except Exception as e:
             #logger.exception(e)

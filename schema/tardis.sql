@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS CheckSums (
     Basis       INTEGER,
     DeltaSize   INTEGER,
     DiskSize    INTEGER,
-    Compressed  INTEGER,            -- Boolean
+    Compressed  TEXT,
     Encrypted   INTEGER,            -- Boolean
     ChainLength INTEGER,
     Added       INTEGER,            -- References BackupSet, but not foreign key, as sets can be deleted.
@@ -97,5 +97,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "10");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "11");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

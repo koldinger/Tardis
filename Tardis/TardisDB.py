@@ -60,7 +60,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 10
+_schemaVersion = 11
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -536,7 +536,7 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    def insertChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed=False, disksize=None, current=True, isFile=True):
+    def insertChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
         def _xstr(x):
@@ -553,7 +553,7 @@ class TardisDB(object):
         self.cursor.execute("INSERT INTO CheckSums (CheckSum,  Size,  Basis,  Encrypted,  DeltaSize,  Compressed,  DiskSize,  ChainLength,  Added,  IsFile) "
                             "VALUES                (:checksum, :size, :basis, :encrypted, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
                             {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
-                             "compressed": int(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
+                             "compressed": str(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return self.cursor.lastrowid
 
     def updateChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed=False, disksize=None, chainlength=0):
@@ -564,7 +564,7 @@ class TardisDB(object):
                             "Compressed = :compressed, DiskSize = :disksize "
                             "WHERE Checksum = :checksum",
                             {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
-                             "compressed": int(compressed), "chainlength": chainlength, "disksize": disksize})
+                             "compressed": str(compressed), "chainlength": chainlength, "disksize": disksize})
 
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)

@@ -466,7 +466,7 @@ def sendContent(inode, reportType):
             # Attempt to send the data.
             sig = None
             try:
-                compress = (args.compress and (filesize > args.mincompsize))
+                compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 progress = printProgress if args.progress else None
                 # Check if it's a file type we don't want to compress
                 if compress and noCompTypes:
@@ -1308,7 +1308,7 @@ def processCommandLine():
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
-    parser.add_argument('--compress-data',  '-Z',   dest='compress', action=Util.StoreBoolean, default=c.getboolean(t, 'CompressData'),
+    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=None, nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  Default: %(default)s')
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
     parser.add_argument('--nocompress-types',       dest='nocompress', default=c.get(t, 'NoCompressFile'),              help='File containing a list of MIME types to not compress.  Default: %(default)s')

@@ -42,11 +42,14 @@ import fnmatch
 import json
 import types
 import base64
-from functools import partial
+import functools
 
-#import pycurl
 import urlparse
 import urllib
+
+import zlib
+import bz2
+import liblzma
 
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
@@ -56,8 +59,6 @@ import Tardis.TardisDB as TardisDB
 import Tardis.TardisCrypto as TardisCrypto
 import Tardis.CacheDir as CacheDir
 import Tardis.RemoteDB as RemoteDB
-
-
 
 logger = logging.getLogger('UTIL')
 
@@ -381,15 +382,16 @@ def removeOrphans(db, cache):
 
 def _chunks(stream, chunksize):
     last = ''
-    for chunk in iter(partial(stream.read, chunksize), ''):
+    for chunk in iter(functools.partial(stream.read, chunksize), ''):
         if last:
             yield (last, False)
         last = chunk
     yield (last, True)
 
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=False, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
+def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
     """
     Send a block of data, optionally encrypt and/or compress it before sending
+    Compress should be either None, for no compression, or one of the known compression types (zlib, bzip, lzma)
     """
     #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
@@ -405,7 +407,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
             progressPeriod -= progressPeriod % chunksize
 
     if compress:
-        stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature)
+        stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature, compressor=compress)
     else:
         stream = CompressedBuffer.BufferedReader(data, hasher=hasher, signature=signature)
 
@@ -442,7 +444,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         raise e
     finally:
         sender.sendMessage('', raw=True)
-        compressed = stream.isCompressed()
+        compressed = compress if stream.isCompressed() else "None"
         size = stream.size()
 
         accumulateStat(stats, 'dataBacked', size)
@@ -635,7 +637,6 @@ def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
         return crypt.getHash(func)
     else:
         return func()
-
 
 # 'Test' code
 
