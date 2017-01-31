@@ -90,7 +90,7 @@ configDefaults = {
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              None,
-    'CompressData':         str(False),
+    'CompressData':         'none',
     'CompressMin':          str(4096),
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
     'Local':                str(False),
@@ -1258,6 +1258,15 @@ def splitList(line):
     else:
         return shlex.split(line.strip())
 
+def checkConfig(c, t):
+    # Check things in the config file that might be confusing
+    # CompressedBuffer will convert True or 1 to zlib, anything else not in the list to none
+    comp = c.get(t, 'CompressData').lower()
+    if (comp == 'true') or (comp == '1'):
+        c.set(t, 'CompressData', 'zlib')
+    elif not (comp in CompressedBuffer.getCompressors()):
+        c.set(t, 'CompressData', 'none')
+
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
     def _d(help):
@@ -1280,6 +1289,7 @@ def processCommandLine():
         if not c.has_section(t):
             sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
             c.add_section(t)                    # Make it safe for reading other values from.
+        checkConfig(c, t)
     else:
         c.add_section(t)                        # Make it safe for reading other values from.
 
@@ -1308,7 +1318,7 @@ def processCommandLine():
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
-    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=None, nargs='?', choices=CompressedBuffer.getCompressors(),
+    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  Default: %(default)s')
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
     parser.add_argument('--nocompress-types',       dest='nocompress', default=c.get(t, 'NoCompressFile'),              help='File containing a list of MIME types to not compress.  Default: %(default)s')
