@@ -48,13 +48,13 @@ class _NullCompressor:
     def flush(self):
         return None
 
-_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor(), _NullCompressor()) }
+_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
 _compressors.keys()
 
 def _updateAlg(alg):
     if (alg is None) or (alg == 0) or (alg == 'None'):
         alg = 'none'
-    if (alg == 1):
+    if (alg == 1) or (alg == 'True'):
         alg = 'zlib'
     return alg
 
@@ -64,7 +64,7 @@ def getCompressor(alg='zlib'):
 
 def getDecompressor(alg='zlib'):
     alg = _updateAlg(alg)
-    print alg
+    #print alg
     return _compressors[alg][1]()
 
 def getCompressors():
@@ -218,7 +218,8 @@ class UncompressedBufferedReader(BufferedReader):
                         ret = self.compressor.flush()
                     except AttributeError:
                         ret = ''
-                    self.uncompressed = self.uncompressed + len(ret)
+                    if ret:
+                        self.uncompressed = self.uncompressed + len(ret)
                     self.stream = None
                 else:
                     #print "_get: {} bytes read".format(len(buf))
