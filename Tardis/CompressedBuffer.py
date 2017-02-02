@@ -49,7 +49,6 @@ class _NullCompressor:
         return None
 
 _compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
-_compressors.keys()
 
 def _updateAlg(alg):
     if (alg is None) or (alg == 0) or (alg == 'None'):
@@ -140,6 +139,7 @@ class CompressedBufferedReader(BufferedReader):
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
+        self.flushed = False
         self.threshold = threshold
         self.compressor = getCompressor(compressor)
 
