@@ -37,8 +37,9 @@ import Tardis.librsync as librsync
 
 _defaultChunksize = 1024 * 1024
 
-# Pick a selected compressor or decompressor
-class _NullCompressor:
+# Dummy class to just pass empty data through
+# Looks like a compressor, but doesn't do anything.
+class _NullCompressor(object):
     def compress(self, data):
         return data
 
@@ -50,6 +51,7 @@ class _NullCompressor:
 
 _compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
 
+# Pick a selected compressor or decompressor
 def _updateAlg(alg):
     if (alg is None) or (alg == 0) or (alg == 'None'):
         alg = 'none'
@@ -145,7 +147,8 @@ class CompressedBufferedReader(BufferedReader):
 
     def _get(self):
         #print "_get called"
-        ret = None
+        ret = ''
+        uncomp = ''
         if self.stream:
             while not ret:
                 buf = self.stream.read(self.chunksize)
@@ -154,34 +157,36 @@ class CompressedBufferedReader(BufferedReader):
                     self.hasher.update(buf)
                 if self.sig:
                     self.sig.step(buf)
-                # First time around, create a compressor and check the compression ratio
-                if self.first:
-                    self.first = False
-                    ret = self.compressor.compress(buf)
-                    # Flush the buf and colculate the size
-                    #ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
-                    # Now, check what we've got back.
-                    if ret:
-                        ratio = float(len(ret)) / float(len(buf))
-                        #print "Initial ratio: {} {} {}".format(ratio, len(ret), len(buf))
-                        if ratio > self.threshold:
-                            ret = buf
-                            self.compressor = None
-                elif self.compressor:
+                if self.first and buf:
+                    uncomp = uncomp + buf
+                if self.compressor:
                     if not buf:
                         #print "_get: Done"
                         #ret = self.compressor.flush(zlib.Z_FINISH)
-                        ret = self.compressor.flush()
+                        ret = ret + self.compressor.flush()
                         self.stream = None
                     else:
                         #print "_get: {} bytes read".format(len(buf))
-                        ret = self.compressor.compress(buf)
+                        ret = ret + self.compressor.compress(buf)
                 else:
                     ret = buf
                     break       # Make sure we don't got around the loop at the EOF
-
+                # end while
+            # First time around, create a compressor and check the compression ratio
+            if self.first:
+                self.first = False
+                # Flush the buf and colculate the size
+                #ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
+                # Now, check what we've got back.
+                if ret:
+                    ratio = float(len(ret)) / float(self.uncompressed)
+                    #print "Initial ratio: {} {} {}".format(ratio, len(ret), len(buf))
+                    if ratio > self.threshold:
+                        ret = uncomp
+                        self.compressor = None
             self.compressed += len(ret)
             return ret
+            # End if self.stream
         return None
 
     def origsize(self):
