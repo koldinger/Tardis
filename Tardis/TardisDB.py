@@ -543,7 +543,7 @@ class TardisDB(object):
             return x if x is not None else ''
 
         if self.journal:
-            self.journal.write("{}:{}:{}\n".format(checksum, _xstr(basis), int(encrypted)))
+            self.journal.write("{}:{}:{}:{}\n".format(checksum, _xstr(basis), int(encrypted), compressed))
 
         if basis is None:
             chainlength = 0
