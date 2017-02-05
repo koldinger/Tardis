@@ -760,6 +760,7 @@ def processArgs():
 
 def main():
     global args, logger
+    tardis = None
     try:
         args = processArgs()
         logger = Util.setupLogging(args.verbose)
@@ -799,6 +800,9 @@ def main():
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
         logger.exception(e)
+    finally:
+        if tardis:
+            tardis.close()
 
 if __name__ == "__main__":
     main()

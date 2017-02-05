@@ -130,10 +130,6 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
     app.logger.debug("Response: %s", str(response.headers))
     return response
 
-@app.route('/')
-def hello():
-    return "Hello World\n"
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -148,7 +144,7 @@ def login():
             session['host']     = host
             #app.logger.debug(str(session))
             dbs[host] = tardis
-            caches[host]= cache
+            caches[host] = cache
             return "OK"
         except Exception as e:
             app.logger.exception(e)
@@ -161,12 +157,16 @@ def login():
         </form>
     '''
 
-@app.route('/logout')
-def logout():
+@app.route('/close')
+def close():
     # remove the username from the session if it's there
-
-    session.pop('host', None)
-    return redirect(url_for('index'))
+    #app.logger.info("close Invoked")
+    host = session.pop('host', None)
+    dbs[host].close()
+    del dbs[host]
+    del caches[host]
+    ret = { 'status': 'OK' }
+    return createResponse(ret)
 
 # getBackupSetInfo
 @app.route('/getBackupSetInfo/<name>')

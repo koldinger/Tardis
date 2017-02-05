@@ -96,7 +96,6 @@ def getDB(crypt, new=False, allowRemote=True):
 def createClient(crypt):
     try:
         (db, _) = getDB(None, True, allowRemote=False)
-        db.close()
         if crypt:
             setToken(crypt)
         return 0
@@ -118,7 +117,6 @@ def setToken(crypt):
             db.commit()
         else:
             db.setKeys(token, f, c)
-        db.close()
         return 0
     except Exception as e:
         logger.error(e)
@@ -148,7 +146,6 @@ def changePassword(crypt, crypt2):
             db.commit()
         else:
             db.setKeys(crypt2.createToken(), f, c)
-        db.close()
         return 0
     except Exception as e:
         logger.error(e)
@@ -468,8 +465,10 @@ def main():
     # Commands which cannot be executed on remote databases
     allowRemote = args.command not in ['create']
 
+    db      = None
+    crypt   = None
+    cache   = None
     try:
-        crypt = None
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=(args.command != 'setPass'))
         if args.command in ['setpass', 'create']:
             if password and not checkPasswordStrength(password):
@@ -513,8 +512,6 @@ def main():
             args.newpw = None
             return changePassword(crypt, crypt2)
 
-        db = None
-        cache = None
         try:
             (db, cache) = getDB(crypt, allowRemote=allowRemote)
         except Exception as e:
@@ -542,6 +539,9 @@ def main():
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
         logger.exception(e)
+    finally:
+        if db:
+            db.close()
 
 if __name__ == "__main__":
     main()

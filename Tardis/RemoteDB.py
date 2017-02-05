@@ -115,6 +115,12 @@ class RemoteDB(object):
             self.lastClientTime = b['clienttime']
         self.logger.debug("Last Backup Set: %s %d", self.prevBackupName, self.prevBackupSet)
 
+    def __del__(self):
+        try:
+            self.close()
+        except Exception as e:
+            self.logger.warning("Caught exception closing: " + str(e))
+
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
         self.session = requests.Session()
@@ -127,6 +133,12 @@ class RemoteDB(object):
 
         response = self.session.post(self.baseURL + "login", data=postData)
         response.raise_for_status()
+
+    def close(self):
+        self.logger.debug("Closing session")
+        r = self.session.get(self.baseURL + "close", headers=self.headers)
+        r.raise_for_status()
+        return r.json()
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
