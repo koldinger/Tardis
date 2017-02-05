@@ -193,6 +193,10 @@ class TardisFS(fuse.Fuse):
             self.log.exception(e)
             sys.exit(2)
 
+    def __del__(self):
+        if self.tardis:
+            self.tardis.close()
+
     def __repr__(self):
         return self.name
 
