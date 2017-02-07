@@ -755,6 +755,7 @@ def processArgs():
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
+    parser.add_argument('--log-exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
     parser.add_argument('directories', nargs='*', default='.',                                              help='List of directories/files to list')
 
     return parser.parse_args(remaining)
@@ -800,7 +801,8 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if tardis:
             tardis.close()
