@@ -76,7 +76,8 @@ def setColors(s):
         x = g.split('=')
         name = x[0]
         c = map(str.strip, x[1].split(','))
-        c = map(lambda x: None if x.lower() == 'none' else x, c)
+        #c = map(lambda x: None if x.lower() == 'none' else x, c)
+        c = [None if x.lower() == 'none' else x for x in c]
         if len(c) == 1:
             colors[name] = c[0]
         else:
