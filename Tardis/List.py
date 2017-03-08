@@ -150,7 +150,7 @@ def collectFileInfo(filename, tardis, crypt):
     Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
     by directory basis.
     """
-    lookup = crypt.encryptPath(filename.encode()) if crypt else filename
+    lookup = crypt.encryptPath(filename) if crypt else filename
 
     fInfos = {}
     lInfo = {}
