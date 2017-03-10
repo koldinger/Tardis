@@ -636,7 +636,7 @@ def mkFileInfo(dir, name):
     mode = s.st_mode
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
         if args.crypt and crypt:
-            name = crypt.encryptFilename(name)
+            name = crypt.encryptFilename(name.decode(systemencoding))
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
