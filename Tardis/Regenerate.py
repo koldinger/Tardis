@@ -129,7 +129,6 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             realname = info['name']
             if args.crypt and crypt:
                 realname = crypt.decryptFilename(realname)
-            realname = realname.decode('utf-8')
 
             if name:
                 # This should only happen only one file specified.
@@ -489,7 +488,7 @@ def main():
         else: # Not checksum, but acutal pathnames
             for i in args.files:
                 try:
-                    i = os.path.abspath(i)
+                    i = unicode(os.path.abspath(i).decode('utf-8'))
                     logger.info("Processing %s", Util.shortPath(i))
                     path = None
                     f = None
