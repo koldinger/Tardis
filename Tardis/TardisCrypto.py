@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import os
 import os.path
+import sys
 import base64
 import binascii
 
@@ -48,13 +49,14 @@ class TardisCrypto(object):
     _keyKey      = None
     _random      = None
     _filenameEnc = None
+    _fsEncoding  = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
     _altchars    = '#@'
 
     ivLength    = _blocksize
 
-    def __init__(self, password, client=None):
+    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         self._random = Cryptodome.Random.new()
         if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
@@ -64,6 +66,8 @@ class TardisCrypto(object):
         keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
+
+        self._fsEncoding = fsencoding
 
     def getContentCipher(self, iv):
         return AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
@@ -131,10 +135,11 @@ class TardisCrypto(object):
         return encpath
 
     def encryptFilename(self, name):
-        return base64.b64encode(self._filenameEnc.encrypt(self.padzero(str(name))), self._altchars)
+        n = self.padzero(bytes(name.encode(self._fsEncoding)))
+        return base64.b64encode(self._filenameEnc.encrypt(n), self._altchars)
 
     def decryptFilename(self, name):
-        return self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).rstrip('\0')
+        return unicode(self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).decode(self._fsEncoding).rstrip('\0'))
 
     def createToken(self, client=None):
         if client is None:

@@ -194,7 +194,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     names1 = ([x['name'] for x in entries1])
     if crypt:
         names1 = map(crypt.decryptFilename, names1)
-    names1 = map(lambda x: x.decode('utf-8'), names1)
+    #names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
     if bsets[1]:
@@ -321,6 +321,7 @@ def main():
             now = time.asctime() + '  (filesystem)'
 
         for f in args.files:
+            f = unicode(f.decode(sys.getfilesystemencoding()))
             if bsets[1] is None and os.path.isdir(f):
                 diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
