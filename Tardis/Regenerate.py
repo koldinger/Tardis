@@ -175,7 +175,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     # Decrypt filename, and make it UTF-8.
                     if args.crypt and crypt:
                         name = crypt.decryptFilename(name)
-                    name = name.decode('utf-8')
+                    #name = name.decode('utf-8')
 
                     # Recurse into the child, if it exists.
                     if childInfo:
