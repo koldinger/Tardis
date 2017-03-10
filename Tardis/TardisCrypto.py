@@ -139,7 +139,7 @@ class TardisCrypto(object):
         return base64.b64encode(self._filenameEnc.encrypt(n), self._altchars)
 
     def decryptFilename(self, name):
-        return unicode(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)).decode(self._fsEncoding).rstrip('\0'))
+        return unicode(self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).decode(self._fsEncoding).rstrip('\0'))
 
     def createToken(self, client=None):
         if client is None:
