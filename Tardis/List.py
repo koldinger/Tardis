@@ -236,7 +236,6 @@ def collectDirContents2(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             name = crypt.decryptFilename(y['name']) if crypt else y['name']
-            name = name.decode(fsEncoding)
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:
@@ -789,7 +788,7 @@ def main():
             directories = args.directories
 
         for d in directories:
-            d = os.path.abspath(d)
+            d = unicode(os.path.abspath(d).decode(sys.getfilesystemencoding()))
             if args.realpath:
                 d = os.path.realpath(d)
             fInfos = collectFileInfo(d, tardis, crypt)
