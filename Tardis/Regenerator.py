@@ -162,7 +162,7 @@ class Regenerator(object):
 
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            self.logger.exception(e)
+            #self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
