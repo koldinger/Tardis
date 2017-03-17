@@ -112,7 +112,7 @@ def flushLine():
     """
     global line
     if line:
-        print line.rstrip()     # clear out any trailing spaces
+        print line.encode(fsEncoding, 'replace').rstrip()     # clear out any trailing spaces
         line=''
 
 def makeFakeRootInfo():
@@ -790,7 +790,7 @@ def main():
             directories = args.directories
 
         for d in directories:
-            d = unicode(os.path.abspath(d).decode(sys.getfilesystemencoding()))
+            d = unicode(os.path.abspath(d).decode(fsEncoding))
             if args.realpath:
                 d = os.path.realpath(d)
             fInfos = collectFileInfo(d, tardis, crypt)

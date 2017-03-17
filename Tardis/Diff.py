@@ -231,57 +231,61 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
     path = os.path.abspath(fName)
     logger.info("Diffing file: %s", path)
 
-    # Process the first file
-    (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
-    if info1:
-        dir1 = info1['dir']
-    else:
-        logger.error("%s does not exist in backupset %s", path, bsets[0]['name'])
-        return
-
-    if bsets[1] is not None:
-        #  if bsets[1], then we're looking into two in the backup.
-        #  Process the second one
-        (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
-        if info2:
-            dir2 = info1['dir']
+    try:
+        # Process the first file
+        (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+        if info1:
+            dir1 = info1['dir']
         else:
-            logger.error("%s does not exist in backupset %s", path, bsets[1]['name'])
-            return
-    else:
-        dir2 = os.path.isdir(path)
-
-    if dir1 != dir2:
-        logger.error("%s Is directory in one, but not other", path)
-        return
-    elif dir1:
-        logger.info("%s is a directory", path)
-        if args.recurse:
-            diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
-        return
-    else:
-        logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
-        #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
-        f1 = regenerator.recoverChecksum(info1['checksum'])
-        if not f1:
-            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+            logger.error("%s does not exist in backupset %s", path, bsets[0]['name'])
             return
 
         if bsets[1] is not None:
-            logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
-            f2 = regenerator.recoverChecksum(info2['checksum'])
-            if not f2:
-                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+            #  if bsets[1], then we're looking into two in the backup.
+            #  Process the second one
+            (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
+            if info2:
+                dir2 = info1['dir']
+            else:
+                logger.error("%s does not exist in backupset %s", path, bsets[1]['name'])
                 return
         else:
-            logger.debug("Opening %s", path)
-            try:
-                f2 = file(path, "rb")
-            except IOError as e:
-                logger.error("Could not open %s: %s", path, str(e))
+            dir2 = os.path.isdir(path)
+
+        if dir1 != dir2:
+            logger.error("%s Is directory in one, but not other", path)
+            return
+        elif dir1:
+            logger.info("%s is a directory", path)
+            if args.recurse:
+                diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
+            return
+        else:
+            logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
+            #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
+            f1 = regenerator.recoverChecksum(info1['checksum'])
+            if not f1:
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
                 return
 
-    runDiff(f1, f2, fName, then, now)
+            if bsets[1] is not None:
+                logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
+                f2 = regenerator.recoverChecksum(info2['checksum'])
+                if not f2:
+                    logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                    return
+            else:
+                logger.debug("Opening %s", path)
+                try:
+                    f2 = file(path, "rb")
+                except IOError as e:
+                    logger.error("Could not open %s: %s", path, str(e))
+                    return
+
+        runDiff(f1, f2, fName, then, now)
+    except Exception as e:
+        logger.error("Error occurred during diffing of %s: %s", path, str(e))
+        #logger.exception(e)
 
 def main():
     global logger
