@@ -93,6 +93,7 @@ configDefaults = {
     'CompressData':         'none',
     'CompressMin':          str(4096),
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
+    'NoCompress':           None,
     'Local':                str(False),
     'LocalServerCmd':       'tardisd --config ' + local_config,
     'CompressMsgs':         str(False),
@@ -1321,7 +1322,10 @@ def processCommandLine():
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  Default: %(default)s')
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
-    parser.add_argument('--nocompress-types',       dest='nocompress', default=c.get(t, 'NoCompressFile'),              help='File containing a list of MIME types to not compress.  Default: %(default)s')
+    parser.add_argument('--nocompress-types',       dest='nocompressfile', default=splitList(c.get(t, 'NoCompressFile')), action='append',
+                        help='File containing a list of MIME types to not compress.  Default: %(default)s')
+    parser.add_argument('--nocompress', '-z',       dest='nocompress', default=splitList(c.get(t, 'NoCompress')), action='append',
+                        help='MIME type to not compress. Can be repeated')
     if support_xattr:
         parser.add_argument('--xattr',              dest='xattr', default=True, action=Util.StoreBoolean,               help='Backup file extended attributes')
     if support_acl:
@@ -1589,14 +1593,18 @@ def main():
         password = None
 
         # If no compression types are specified, load the list
-        if args.nocompress:
+        types = []
+        for i in args.nocompressfile:
             try:
-                data = map(Util.stripComments, file(args.nocompress, 'r').readlines())
-                noCompTypes = [x for x in data if len(x)]
-                logger.debug("Ignoring types: %s", data)
+                logger.debug("Reading types to ignore from: %s", i)
+                data = map(Util.stripComments, file(i, 'r').readlines())
+                types = types + [x for x in data if len(x)]
             except Exception as e:
-                logger.error("Could not load nocompress types list: %s", args.nocompress)
+                logger.error("Could not load nocompress types list from: %s", i)
                 raise e
+        types = types + args.nocompress
+        noCompTypes = set(types)
+        logger.debug("Types to ignore: %s", sorted(noCompTypes))
 
         # Calculate the base directories
         directories = list(itertools.chain.from_iterable(map(glob.glob, map(Util.fullPath, args.directories))))
