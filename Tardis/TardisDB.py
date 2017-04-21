@@ -759,6 +759,12 @@ class TardisDB(object):
 
         return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
 
+    def getNewFiles(self, bSet, other):
+        cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin + 
+                               "WHERE Files.FirstSet = :bSet",
+                               {'bSet': bSet })
+        return _fetchEm(cursor)
+
     def setStats(self, newFiles, deltaFiles, bytesReceived, current=True):
         bset = self._bset(current)
         self._execute("UPDATE Backups SET FilesFull = :full, FilesDelta = :delta, BytesReceived = :bytes WHERE BackupSet = :bset",

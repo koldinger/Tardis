@@ -241,6 +241,15 @@ def getFileInfoByName(backupset, device, inode, name):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
+# getNewFiles
+@app.route('/getNewFiles/<int:backupset>/<other>')
+def getNewFiles(backupset, other):
+    db = getDB()
+    files = []
+    for x in db.getNewFiles(backupset, other)
+        files.append(makeDict(x))
+    return createResponse(files)
+
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
 def readDirectory(backupset, device, inode):

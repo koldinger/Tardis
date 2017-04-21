@@ -249,6 +249,14 @@ class RemoteDB(object):
                 return False
         return True
 
+    @reconnect
+    def getNewFiles(self, bSet, other):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "getNewFiles/" + bset + "/" + str(other, headers=self.headers)
+        r.raise_for_status()
+        for i in r.json():
+            i['name'] = fs_encode(i['name'])
+            yield i
 
     @reconnect
     def getChecksumByPath(self, path, current=False, permchecker=None):
