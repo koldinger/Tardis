@@ -1532,7 +1532,7 @@ def lockRun(server, port, client):
     return pidfile
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt
+    global starttime, args, config, conn, verbosity, crypt, noCompTypes
     # Read the command line arguments.
     (args, config) = processCommandLine()
 
@@ -1592,7 +1592,7 @@ def main():
         if args.nocompress:
             try:
                 data = map(Util.stripComments, file(args.nocompress, 'r').readlines())
-                data = [x for x in data if len(x)]
+                noCompTypes = [x for x in data if len(x)]
                 logger.debug("Ignoring types: %s", data)
             except Exception as e:
                 logger.error("Could not load nocompress types list: %s", args.nocompress)
