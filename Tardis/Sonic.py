@@ -226,7 +226,7 @@ def listFiles(db, crypt):
     lastDir = '/'
     lastDirInode = (-1, -1)
     bset = info['backupset']
-    files = db.getNewFiles(info['backupset'], False)
+    files = db.getNewFiles(info['backupset'], args.previous)
     for i in files:
         if i['dir']:
             continue
@@ -415,8 +415,9 @@ def parseArgs():
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
 
     filesParser = argparse.ArgumentParser(add_help=False)
-    filesParser.add_argument('--long', '-l',    dest='long', default=False, action='store_true',                help='Long format')
-    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action='store_true',        help='Print full path name in names')
+    filesParser.add_argument('--long', '-l',    dest='long', default=False, action=Util.StoreBoolean,           help='Long format')
+    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=Util.StoreBoolean,   help='Print full path name in names')
+    filesParser.add_argument('--previous',      dest='previous', default=False, action=Util.StoreBoolean,       help="Include files that first appear in the set, but weren't added here")
 
     common = argparse.ArgumentParser(add_help=False)
     Config.addPasswordOptions(common)
@@ -508,7 +509,6 @@ def checkPasswordStrength(password):
         return False
     else:
         return True
-
 
 def main():
     global logger

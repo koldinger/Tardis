@@ -760,9 +760,13 @@ class TardisDB(object):
         return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
 
     def getNewFiles(self, bSet, other):
+        if other:
+            pSet = self._executeWithResult("SELECT max(BackupSet) FROM BackupSets WHERE BackupSet < :bset", {'bset': bSet})
+        else:
+            pSet = bSet
         cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin + 
-                               "WHERE Files.FirstSet = :bSet",
-                               {'bSet': bSet })
+                               "WHERE Files.FirstSet >= :pSet AND Files.LastSet >= :bSet",
+                               {'bSet': bSet, 'pSet': pSet})
         return _fetchEm(cursor)
 
     def setStats(self, newFiles, deltaFiles, bytesReceived, current=True):
