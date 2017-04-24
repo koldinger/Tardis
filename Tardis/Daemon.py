@@ -1142,6 +1142,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 raise InitFailedException(str(e))
 
             serverName = None
+            serverForceFull = False
             try:
                 new = self.getDB(client, token)
 

@@ -158,7 +158,7 @@ def moveKeys(db, crypt):
             return 1
         clientId = db.getConfigValue('ClientID')
         token    = crypt.createToken()
-        (db, _) = getDB(crypt)
+        #(db, _) = getDB(crypt)
         if args.extract:
             (f, c) = db.getKeys()
             if not (f and c):
@@ -200,6 +200,61 @@ def listBSets(db):
         logger.exception(e)
         return 1
 
+# cache of paths we've already calculated.
+# the root (0, 0,) is always prepopulated
+_paths = {(0, 0): '/'}
+
+def _decryptFilename(name, crypt):
+    return crypt.decryptFilename(name) if crypt else name
+
+def _path(db, crypt, bset, inode):
+    global _paths
+    if inode in _paths:
+        return _paths[inode]
+    else:
+        fInfo = db.getFileInfoByInode(inode, bset)
+        if fInfo:
+            parent = (fInfo['parent'], fInfo['parentdev'])
+            prefix = _path(db, crypt, bset, parent)
+
+            name = _decryptFilename(fInfo['name'], crypt)
+            path = os.path.join(prefix, name)
+            _paths[inode] = path
+            return path
+        else:
+            return ''
+
+def listFiles(db, crypt):
+    #print args
+    info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
+    #print info, info['backupset']
+    lastDir = '/'
+    lastDirInode = (-1, -1)
+    bset = info['backupset']
+    files = db.getNewFiles(info['backupset'], args.previous)
+    for i in files:
+        if i['dir']:
+            continue
+        dirInode = (i['parent'], i['parentdev'])
+        if dirInode == lastDirInode:
+            path = lastDir
+        else:
+            path = _path(db, crypt, bset, dirInode)
+            lastDirInode = dirInode
+            lastDir = path
+            if not args.fullname:
+                print "%s:" % (path)
+        status = '[New]' if i['chainlength'] == 0 else '[Delta]'
+        name = _decryptFilename(i['name'], crypt)
+        if args.fullname:
+            name = os.path.join(path, name)
+
+        if args.long:
+            print "    %-7s %10d %32s %s" % (status, i['size'], i['checksum'], name)
+        else:
+            print "    %-7s %s" % (status, name)
+
+
 def _bsetInfo(db, info):
     print "Backupset       : %s (%d)" % ((info['name']), info['backupset'])
     print "Completed       : %s" % ('True' if info['completed'] else 'False')
@@ -229,7 +284,7 @@ def _bsetInfo(db, info):
 def bsetInfo(db):
     printed = False
     if args.backup or args.date:
-        info = getBackupSet(db, args.backupset, args.date)
+        info = getBackupSet(db, args.backup, args.date)
         if info:
             _bsetInfo(db, info)
             printed = True
@@ -367,9 +422,15 @@ def parseArgs():
     keyGroup.add_argument('--insert',           dest='insert', default=False, action='store_true',          help='Insert keys from database')
     keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
 
+    filesParser = argparse.ArgumentParser(add_help=False)
+    filesParser.add_argument('--long', '-l',    dest='long', default=False, action=Util.StoreBoolean,           help='Long format')
+    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=Util.StoreBoolean,   help='Print full path name in names')
+    filesParser.add_argument('--previous',      dest='previous', default=False, action=Util.StoreBoolean,       help="Include files that first appear in the set, but weren't added here")
+
     common = argparse.ArgumentParser(add_help=False)
     Config.addPasswordOptions(common)
     Config.addCommonOptions(common)
+
 
     create = argparse.ArgumentParser(add_help=False)
     create.add_argument('--schema',                 dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
@@ -390,17 +451,18 @@ def parseArgs():
     configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
 
     subs = parser.add_subparsers(help="Commands", dest='command')
-    subs.add_parser('create',       parents=[common, create], help='Create a client database')
-    subs.add_parser('setpass',      parents=[common], help='Set a password')
-    subs.add_parser('chpass',       parents=[common, newPassParser],                       help='Change a password')
-    subs.add_parser('keys',         parents=[common, keyParser],                           help='Move keys to/from server and key file')
-    subs.add_parser('list',         parents=[common],                                      help='List backup sets')
-    subs.add_parser('info',         parents=[common, bsetParser],                          help='Print info on backup sets')
-    subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],              help='Purge old backup sets')
-    subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],             help='Delete a backup set')
-    subs.add_parser('orphans',      parents=[common],                                      help='Delete orphan files')
-    subs.add_parser('getconfig',    parents=[common, configKeyParser],                     help='Get Config Value')
-    subs.add_parser('setconfig',    parents=[common, configValueParser],                   help='Set Config Value')
+    subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
+    subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
+    subs.add_parser('chpass',       parents=[common, newPassParser],                        help='Change a password')
+    subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')
+    subs.add_parser('list',         parents=[common],                                       help='List backup sets')
+    subs.add_parser('files',        parents=[common, filesParser, bsetParser],              help='List new files in a backup set')
+    subs.add_parser('info',         parents=[common, bsetParser],                           help='Print info on backup sets')
+    subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],               help='Purge old backup sets')
+    subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],              help='Delete a backup set')
+    subs.add_parser('orphans',      parents=[common],                                       help='Delete orphan files')
+    subs.add_parser('getconfig',    parents=[common, configKeyParser],                      help='Get Config Value')
+    subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
 
     parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
@@ -455,7 +517,6 @@ def checkPasswordStrength(password):
         return False
     else:
         return True
-
 
 def main():
     global logger
@@ -514,6 +575,12 @@ def main():
 
         try:
             (db, cache) = getDB(crypt, allowRemote=allowRemote)
+            if crypt:
+                if args.keys:
+                    (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+                else:
+                    (f, c) = db.getKeys()
+                crypt.setKeys(f, c)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
             sys.exit(1)
@@ -522,6 +589,8 @@ def main():
             return moveKeys(db, crypt)
         elif args.command == 'list':
             return listBSets(db)
+        elif args.command == 'files':
+            return listFiles(db, crypt)
         elif args.command == 'info':
             return bsetInfo(db)
         elif args.command == 'purge':

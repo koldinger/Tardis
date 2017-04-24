@@ -78,7 +78,7 @@ while (<STDIN>) {
         $sessionId = $1;
         if ($_ =~ /Request received from:\s*(\d+\.\d+\.\d+\.\d+)\s*Session:\s*([a-f0-9-]+)/) {
             $requests++;
-            $sessionInfo{$sessionId} = { 'complete' => 'Folse', 'new' => 0, 'upd' => 0, 'runtime' => '' };
+            $sessionInfo{$sessionId} = { 'complete' => 'False', 'new' => 0, 'upd' => 0, 'runtime' => '' };
             #$sessionInfo{$sessionId}->{'complete'} = "False";
         } elsif ($_ =~ /Creating backup for\s*([\w\.\-]+):/) {
             my $host = $1;
