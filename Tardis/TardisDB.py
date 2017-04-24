@@ -761,9 +761,10 @@ class TardisDB(object):
 
     def getNewFiles(self, bSet, other):
         if other:
-            pSet = self._executeWithResult("SELECT max(BackupSet) FROM BackupSets WHERE BackupSet < :bset", {'bset': bSet})
+            pSet = self._executeWithResult("SELECT max(BackupSet) FROM Backups WHERE BackupSet < :bset", {'bset': bSet})
         else:
             pSet = bSet
+        self.logger.debug("Getting new files for changsets %d -> %d", pSet, bSet)
         cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin + 
                                "WHERE Files.FirstSet >= :pSet AND Files.LastSet >= :bSet",
                                {'bSet': bSet, 'pSet': pSet})

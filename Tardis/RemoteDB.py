@@ -199,6 +199,15 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+
+    @reconnect
+    def getFileInfoByInode(self, node, current=True):
+        bset = self._bset(current)
+        (inode, device) = node
+        r = self.session.get(self.baseURL + "getFileInfoByInode/" + bset + "/" + str(device) + "/" + str(inode), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
     @reconnect
     def getFileInfoByPath(self, path, current=False):
         bset = self._bset(current)
@@ -250,9 +259,8 @@ class RemoteDB(object):
         return True
 
     @reconnect
-    def getNewFiles(self, bSet, other):
-        bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getNewFiles/" + bset + "/" + str(other), headers=self.headers)
+    def getNewFiles(self, bset, other):
+        r = self.session.get(self.baseURL + "getNewFiles/" + str(bset) + "/" + str(other), headers=self.headers)
         r.raise_for_status()
         for i in r.json():
             i['name'] = fs_encode(i['name'])

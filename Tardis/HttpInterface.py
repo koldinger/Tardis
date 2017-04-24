@@ -241,12 +241,21 @@ def getFileInfoByName(backupset, device, inode, name):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
+
+# getFileInfoByInode
+@app.route('/getFileInfoByInode/<int:backupset>/<int:device>/<int:inode>')
+def getFileInfoByInode(backupset, device, inode):
+    #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
+    db = getDB()
+    return createResponse(makeDict(db.getFileInfoByInode((inode, device), backupset)))
+
 # getNewFiles
 @app.route('/getNewFiles/<int:backupset>/<other>')
 def getNewFiles(backupset, other):
     db = getDB()
     files = []
-    for x in db.getNewFiles(backupset, other)
+    other = True if other == 'True' else False
+    for x in db.getNewFiles(backupset, other):
         files.append(makeDict(x))
     return createResponse(files)
 

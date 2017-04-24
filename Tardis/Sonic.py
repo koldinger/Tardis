@@ -158,7 +158,7 @@ def moveKeys(db, crypt):
             return 1
         clientId = db.getConfigValue('ClientID')
         token    = crypt.createToken()
-        (db, _) = getDB(crypt)
+        #(db, _) = getDB(crypt)
         if args.extract:
             (f, c) = db.getKeys()
             if not (f and c):
@@ -204,6 +204,9 @@ def listBSets(db):
 # the root (0, 0,) is always prepopulated
 _paths = {(0, 0): '/'}
 
+def _decryptFilename(name, crypt):
+    return crypt.decryptFilename(name) if crypt else name
+
 def _path(db, crypt, bset, inode):
     global _paths
     if inode in _paths:
@@ -213,7 +216,9 @@ def _path(db, crypt, bset, inode):
         if fInfo:
             parent = (fInfo['parent'], fInfo['parentdev'])
             prefix = _path(db, crypt, bset, parent)
-            path = os.path.join(prefix, fInfo['name'])
+
+            name = _decryptFilename(fInfo['name'], crypt)
+            path = os.path.join(prefix, name)
             _paths[inode] = path
             return path
         else:
@@ -240,7 +245,10 @@ def listFiles(db, crypt):
             if not args.fullname:
                 print "%s:" % (path)
         status = '[New]' if i['chainlength'] == 0 else '[Delta]'
-        name = os.path.join(path, i['name']) if args.fullname else i['name']
+        name = _decryptFilename(i['name'], crypt)
+        if args.fullname:
+            name = os.path.join(path, name)
+
         if args.long:
             print "    %-7s %10d %32s %s" % (status, i['size'], i['checksum'], name)
         else:
@@ -567,6 +575,12 @@ def main():
 
         try:
             (db, cache) = getDB(crypt, allowRemote=allowRemote)
+            if crypt:
+                if args.keys:
+                    (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+                else:
+                    (f, c) = db.getKeys()
+                crypt.setKeys(f, c)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
             sys.exit(1)
