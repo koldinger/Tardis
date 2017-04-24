@@ -35,9 +35,6 @@ import os.path
 import stat
 import argparse
 import fnmatch
-import pwd
-import grp
-import time
 import parsedatetime
 
 import termcolor
@@ -272,44 +269,6 @@ def getInfoByName(contents, name):
 
     return fInfo
 
-# Get group and user names.  Very unixy
-_groups = {}
-_users = {}
-
-def getGroupName(gid):
-    if gid in _groups:
-        return _groups[gid]
-    else:
-        group = grp.getgrgid(gid)
-        if group:
-            name = group.gr_name
-            _groups[gid] = name
-            return name
-        else:
-            return None
-
-def getUserId(uid):
-    if uid in _users:
-        return _users[uid]
-    else:
-        user = pwd.getpwuid(uid)
-        if user:
-            name = user.pw_name
-            _users[uid] = name
-            return name
-        else:
-            return None
-
-# Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
-# then Jan 12, 2014.  Same as ls.
-_now = time.time()
-_yearago = _now - (365 * 24 * 3600)
-def formatTime(then):
-    if then > _yearago:
-        fmt = '%b %d %H:%M'
-    else:
-        fmt = '%b %d, %Y'
-    return time.strftime(fmt, time.localtime(then))
 
 column = 0
 
@@ -362,9 +321,9 @@ def printit(info, name, color, gone):
             doprint('  %s' % (name), color, eol=True)
         else:
             mode = Util.filemode(info['mode'])
-            group = getGroupName(info['gid'])
-            owner = getUserId(info['uid'])
-            mtime = formatTime(info['mtime'])
+            group = Util.getGroupName(info['gid'])
+            owner = Util.getUserId(info['uid'])
+            mtime = Util.formatTime(info['mtime'])
             if info['size'] is not None:
                 if args.human:
                     size = Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
