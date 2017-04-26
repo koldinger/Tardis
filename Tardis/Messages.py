@@ -36,6 +36,7 @@ import msgpack
 import base64
 import struct
 import zlib
+import snappy
 
 try:
     import bson
@@ -68,19 +69,39 @@ class Messages(object):
             self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 
+class zlibCompressor:
+    def __init__(self):
+        self.compressor = zlib.compressobj()
+        self.decompressor = zlib.decompressobj()
+
+    def compress(self, message):
+        message = self.compressor.compress(message)
+        message += self.compressor.flush(zlib.Z_SYNC_FLUSH)
+        return message
+
+    def decompress(self, message):
+        message = self.decompressor.decompress(message)
+        return message
+
 class BinMessages(Messages):
     compress = None
     decompress = None
     def __init__(self, socket, stats=None, compress=False):
         Messages.__init__(self, socket, stats)
-        if compress:
-            self.compress = zlib.compressobj()
-            self.decompress = zlib.decompressobj()
+        if compress == True or compress == 'zlib-stream':
+            self.compressor = zlibCompressor()
+            self.compress = self.compressor.compress
+            self.decompress = self.compressor.decompress
+        elif compress == 'zlib':
+            self.compress = zlib.compress
+            self.decompress = zlib.decompress
+        elif compress == 'snappy':
+            self.compress = snappy.compress
+            self.decompress = snappy.decompress
 
     def sendMessage(self, message, compress=True, raw=False):
         if compress and self.compress:
-            message = self.compress.compress(message)
-            message += self.compress.flush(zlib.Z_SYNC_FLUSH)
+            message = self.compress(message)
         length = len(message)
         if compress and self.compress:
             length |= 0x80000000
@@ -97,7 +118,7 @@ class BinMessages(Messages):
             comp = True
         bytes = self.receiveBytes(n)
         if comp:
-            bytes = self.decompress.decompress(bytes)
+            bytes = self.decompress(bytes)
         return bytes
 
 class TextMessages(Messages):
