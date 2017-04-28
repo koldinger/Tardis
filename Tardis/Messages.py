@@ -98,6 +98,8 @@ class BinMessages(Messages):
         elif compress == 'snappy':
             self.compress = snappy.compress
             self.decompress = snappy.decompress
+        elif compress != 'none' and compress != False:
+            raise Exception("Unrecognized compression method: %" % str(compress))
 
     def sendMessage(self, message, compress=True, raw=False):
         if compress and self.compress:

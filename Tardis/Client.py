@@ -96,7 +96,7 @@ configDefaults = {
     'NoCompress':           None,
     'Local':                str(False),
     'LocalServerCmd':       'tardisd --config ' + local_config,
-    'CompressMsgs':         str(False),
+    'CompressMsgs':         'none',
     'ChecksumContent':      str(0),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
@@ -1363,7 +1363,7 @@ def processCommandLine():
                         help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
-    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', nargs='?', const='zlib', choices=['zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
+    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', nargs='?', const='zlib', choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  Default: %(default)s')
     comgrp.add_argument('--cks-content',            dest='ckscontent', default=c.getint(t, 'ChecksumContent'), type=int, nargs='?', const=4096,
                         help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
