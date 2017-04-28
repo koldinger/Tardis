@@ -22,26 +22,8 @@ Tardis consists of several components:
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
-Features currently planned to be implemented:
-
-1. ~~Handling multiple filesystems~~ (mostly handled.  Some potential issues)
-2. ~~Saving of extended attributes and access control lists~~
-2. ~~Saving of per-connection configuration values in the server DB~~
-3. ~~Authentication of password~~
-4. ~~Encrypted encryption key stored on server, decrypted on client?~~
-5. ~~Option to save key on the client.~~
-5. ~~User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  Currently different backup sessions could use different keys, and basically create a mess of everything).~~
-6. ~~Python EGG setup.~~
-7. ~~Better daemon support.~~
-8. ~~LSB init script (systemctl support)?~~
-9. Space management.  ~~Multiple purge schedules for different priorities.~~  On demand purging when low on space.
-10. ~~Client side configuration files.~~ (as argument files)
-11. ~~Stand alone execution (no need for separate server)~~
-12. ~~Remote access to data and files.~~
-13. ~~Read password without echo.~~
-
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, 
-and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, python-snappy, 
+and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
@@ -50,9 +32,7 @@ Note: as of version 0.15, references to host or hostname have been changed to cl
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
-  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.  Fixes for bugs.  
-  * 0.26 Improvements to all tools to bring compatibility together.  Functioning version of tardisremote.
+  * 0.32.0 Next Release Candidate
   
 Installation
 ============
@@ -134,7 +114,12 @@ Files can be listed in the tardisfs, or via the lstardis application.
 
 lstardis can list all versions of a file available.  See lstardis -h for details.
 
-lstardis is new in version 0.15.
+Comparing versions of files
+===========================
+tardiff can directly compare two versions of a file in the database, or a file in the database, and it's corresponding version
+in the filesystem.
+
+See tardiff -h for details.
 
 Recovering Files
 ================
@@ -149,6 +134,28 @@ Regenerate can be used to recover entire directory trees.  In general, using reg
 See regenerate -h for details.
 
 At present, the regenerate application does NO permission checking to determine if a user has permission to read a file.  Thus, any file in the database set can be accessed by anybody with access to the backup database.  If this is a problem in your environment, it is recommended to disable the regenerate application (or at least protect the database with a password that you don't share with all users), and allow access primarily through a tardisfs filesystem controlled by the super-user.  See Mounting the Filesystem below.
+
+Utility Functions
+=================
+The sonic program is useful for manipulating a backup.  Sonic provides various functions whch don't fit well elsewhere.
+These include:
+   * create -- Create a new backup (can only be run on the server machine)
+   * setpass -- Set a password into a backup.  Note, this will not encrypt any current contents of the backup.
+   * chpass -- Change the password of a backup.
+   * keys -- Extract or insert the encyrption keys of an encrypted backup.
+   * list -- List all backup sets.
+   * files -- Print a list of files that were updated in a specified backup set.
+   * info -- Print information about each backup set.  Very slow, not recommended (deprecated)
+   * purge -- Purge old backup sets, based on the criteria presented.
+   * delete -- Delete a specific backup set.
+   * orphans -- Purge out orphanned data in the backup set.  Can be very slow running.
+   * getconfig -- Get a server side configuration value, or all values.
+   * setconfig -- Set a server side configuration value.
+
+These options are available as subcommands, for instance:
+    sonic list <options>
+Each subcommand takes a different set of options, although many are common.
+
 
 Environment Variables
 =====================
