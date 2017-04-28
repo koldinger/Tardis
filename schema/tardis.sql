@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS Config (
 );
 
 CREATE TABLE IF NOT EXISTS ClientConfig (
-    ClientConfigID  INTEGER PRIMARY KEY AUTOINCREMENT,
+    ClientConfigId  INTEGER PRIMARY KEY AUTOINCREMENT,
     ClientConfig    TEXT
 );
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS Backups (
     BytesReceived   INTEGER,
     ClientConfigId  INTEGER,
     ServerSession   TEXT,
-    FOREIGN KEY(ClientConfigId) REFERENCES ClientConfig(ClientConfigIf)
+    FOREIGN KEY(ClientConfigId) REFERENCES ClientConfig(ClientConfigId)
 );
 
 CREATE TABLE IF NOT EXISTS CheckSums (
