@@ -86,9 +86,9 @@ class zlibCompressor:
 class BinMessages(Messages):
     compress = None
     decompress = None
-    def __init__(self, socket, stats=None, compress=False):
+    def __init__(self, socket, stats=None, compress='none'):
         Messages.__init__(self, socket, stats)
-        if compress == True or compress == 'zlib-stream':
+        if compress == 'zlib-stream':
             self.compressor = zlibCompressor()
             self.compress = self.compressor.compress
             self.decompress = self.compressor.decompress
@@ -98,8 +98,8 @@ class BinMessages(Messages):
         elif compress == 'snappy':
             self.compress = snappy.compress
             self.decompress = snappy.decompress
-        elif compress != 'none' and compress != False:
-            raise Exception("Unrecognized compression method: %" % str(compress))
+        elif compress != 'none':
+            raise Exception("Unrecognized compression method: %s" % str(compress))
 
     def sendMessage(self, message, compress=True, raw=False):
         if compress and self.compress:
