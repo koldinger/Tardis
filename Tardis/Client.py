@@ -861,20 +861,19 @@ def makeMetaMessage():
     return message
 
 _progressBarFormat = None
-_progressPathWidth = 40
+_windowWidth = 80
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 
 def initProgressBar():
     _, width = Util.getTerminalSize()
-    global _progressBarFormat, _progressPathWidth
+    global _progressBarFormat, _windowWidth
 
     if width < 110:
-        _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s %s' + _ansiClearEol + _startOfLine
-        _progressPathWidth = width - 45
+        _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s '
     else:
-        _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s %s' + _ansiClearEol + _startOfLine
-        _progressPathWidth = width - 77
+        _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
+    _windowWidth = width
 
     #logger.warning("Initializing progress bar.  Width: %d. Path Width: %d.  Format: %s",
     #            width, _progressPathWidth, _progressBarFormat)
@@ -885,9 +884,10 @@ _lastInfo = (None, None)                # STATIC for printProgress
 
 def printProgress(header=None, name=None):
     global _lastInfo
-    bar = _progressBarFormat % \
-        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0], Util.shortPath(name or _lastInfo[1], _progressPathWidth))
-    print bar,
+    bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
+
+    width = _windowWidth - len(bar) - 4
+    print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
     if header or name:
         #update the last info
         _lastInfo = (header or _lastInfo[0], name or _lastInfo[1])
