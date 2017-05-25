@@ -22,26 +22,8 @@ Tardis consists of several components:
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
-Features currently planned to be implemented:
-
-1. ~~Handling multiple filesystems~~ (mostly handled.  Some potential issues)
-2. ~~Saving of extended attributes and access control lists~~
-2. ~~Saving of per-connection configuration values in the server DB~~
-3. ~~Authentication of password~~
-4. ~~Encrypted encryption key stored on server, decrypted on client?~~
-5. ~~Option to save key on the client.~~
-5. ~~User authentication capability (this differs from 3 above. 3 is to make sure the password/encryption key remains the same.  Currently different backup sessions could use different keys, and basically create a mess of everything).~~
-6. ~~Python EGG setup.~~
-7. ~~Better daemon support.~~
-8. ~~LSB init script (systemctl support)?~~
-9. Space management.  ~~Multiple purge schedules for different priorities.~~  On demand purging when low on space.
-10. ~~Client side configuration files.~~ (as argument files)
-11. ~~Stand alone execution (no need for separate server)~~
-12. ~~Remote access to data and files.~~
-13. ~~Read password without echo.~~
-
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, 
-and termcolor packages.
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, python-snappy, 
+and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
@@ -50,16 +32,14 @@ Note: as of version 0.15, references to host or hostname have been changed to cl
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.24 Changes to the encryption format, and support for the ability to store the keys out of the database file.
-  * 0.25 Changes to the encryption format to support HMAC based authentication, and tagging of files.  Fixes for bugs.  
-  * 0.26 Improvements to all tools to bring compatibility together.  Functioning version of tardisremote.
+  * 0.32.0 Next Release Candidate
   
 Installation
 ============
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python development
-    * Fedora: {yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp
-    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev
+    * Fedora: {yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp snappy-devel
+    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev
   * Run the python setup:
     * python setup.py install
 
@@ -134,7 +114,12 @@ Files can be listed in the tardisfs, or via the lstardis application.
 
 lstardis can list all versions of a file available.  See lstardis -h for details.
 
-lstardis is new in version 0.15.
+Comparing versions of files
+===========================
+tardiff can directly compare two versions of a file in the database, or a file in the database, and it's corresponding version
+in the filesystem.
+
+See tardiff -h for details.
 
 Recovering Files
 ================
@@ -150,108 +135,51 @@ See regenerate -h for details.
 
 At present, the regenerate application does NO permission checking to determine if a user has permission to read a file.  Thus, any file in the database set can be accessed by anybody with access to the backup database.  If this is a problem in your environment, it is recommended to disable the regenerate application (or at least protect the database with a password that you don't share with all users), and allow access primarily through a tardisfs filesystem controlled by the super-user.  See Mounting the Filesystem below.
 
+Utility Functions
+=================
+The sonic program is useful for manipulating a backup.  Sonic provides various functions whch don't fit well elsewhere.
+These include:
+   * create -- Create a new backup (can only be run on the server machine)
+   * setpass -- Set a password into a backup.  Note, this will not encrypt any current contents of the backup.
+   * chpass -- Change the password of a backup.
+   * keys -- Extract or insert the encyrption keys of an encrypted backup.
+   * list -- List all backup sets.
+   * files -- Print a list of files that were updated in a specified backup set.
+   * info -- Print information about each backup set.  Very slow, not recommended (deprecated)
+   * purge -- Purge old backup sets, based on the criteria presented.
+   * delete -- Delete a specific backup set.
+   * orphans -- Purge out orphanned data in the backup set.  Can be very slow running.
+   * getconfig -- Get a server side configuration value, or all values.
+   * setconfig -- Set a server side configuration value.
+
+These options are available as subcommands, for instance:
+    sonic list <options>
+Each subcommand takes a different set of options, although many are common.
+
+
 Environment Variables
 =====================
 
-<table>
-    <tr>
-        <th>Variable
-        <th>Description
-        <th>Default
-        <th>tardis <th>tardisd <th>tardisfs <th>regenerate <th>lstardis <th> tardiff <th> tardisremote
-    </tr>
-    <tr>
-        <td>TARDIS_DB
-        <td>Location of the tardis database
-        <td>/srv/tardis
-        <td> No (Except in local case) <td>Yes <td>Yes <td>Yes <td> Yes <td> Yes <td> Yes
-    <tr>
-        <td> TARDIS_PORT
-        <td>Port to use to connect to the Tardis Daemon
-        <td> 7420
-        <td>Yes (except in local case) <td>Yes <td>No <td>No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_DBNAME
-        <td> Name of the database file containing tardis information
-        <td> tardis.db
-        <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
-    <tr>
-        <td> TARDIS_SERVER
-        <td> Name (or IP address) of the tardis server
-        <td> localhost
-        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_CLIENT
-        <td> Name of the backup client.
-        <td> Current hostname (essentialy output of /usr/bin/hostname)
-        <td> Yes <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> No
-    <tr>
-        <td> TARDIS_DAEMON_CONFIG
-        <td> Name of the file containing the daemon configuration
-        <td> /etc/tardis/tardisd.cfg
-        <td> No (except in local case) <td> Yes <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_LOCAL_CONFIG
-        <td> Name of the file containing the configuration when running the daemon in local mode
-        <td> /etc/tardis/tardisd.local.cfg
-        <td> No (except in local case) <td> Yes (only in local case) <td> No <td> No <td> No <td> No <td> No
-    <tr> 
-        <td> TARDIS_EXCLUDES
-        <td> Name of the file containing patterns to exclude below the current directory.
-        <td> .tardis-excludes
-        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_LOCAL_EXCLUDES
-        <td> Name of the file containing patterns to exclude <i>only</i> in the local directory.
-        <td> .tardis-local-excludes
-        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_GLOBAL_EXCLUDES
-        <td> Name of the file containing patterns to exclude globally
-        <td> /etc/tardis/excludes
-        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_SKIPFILE
-        <td> Name of a file whose presence excludes a current directory (and all directories below)
-        <td> .tardis-skip
-        <td> Yes <td> No <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_PIDFILE
-        <td> File to indicate that the daemon is running.
-        <td> /var/run/tardisd.pid
-        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
-    <tr>
-        <td> TARDIS_SCHEMA
-        <td> File containing the schema for the database.
-        <td> schema/tardis.sql
-        <td> No <td> Yes <td> No <td> No <td> No <td> No <td> No
-    <tr>
-       <td> TARDIS_LS_COLORS
-       <td> Description of colors for lstardis
-       <td> 
-       <td> No <td> No <td> No <td> No <td> Yes <td> No <td> No
-
-    <tr>
-        <td> TARDIS_REMOTE_PORT
-        <td> Port used for the HTTP Remote interface
-        <td> 7430
-        <td> No <td> No <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
-    <tr>
-        <td> TARDIS_REMOTE_CONFIG
-        <td> Configuration file for tardisremote
-        <td> /etc/tardis/tardisremote.cfg
-        <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
-    <tr>
-        <td> TARDIS_REMOTE_PIDFILE
-        <td> Path to the pidfile for tardisremote daemon.
-        <td> /var/run/tardisremote.pid
-        <td> No <td> No <td> No <td> No <td> No <td> No <td> No <td> Yes
-    <tr>
-       <td> TARDIS_DEFAULTS
-       <td> Location of a defaults file.
-       <td> /etc/tardis/system.defaults
-       <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes <td> Yes
-</table>
+| Variable | Description | Default | Users |
+| -------- | ----------- | ------- | ----- |
+| TARDIS_DB   | Location of the tardis database| /srv/tardis | User Tools |
+| TARDIS_PORT | Port to use to connect to the Tardis Daemon | 7420 | Client, Daemon |
+| TARDIS_DBNAME | Name of the database file containing tardis information| tardis.db | Daemon, Remote, User Tools |
+| TARDIS_SERVER |  Name (or IP address) of the tardis server| localhost | Client |
+| TARDIS_CLIENT | Name of the backup client. |Current hostname | Client, User Tools |
+| TARDIS_DAEMON_CONFIG | Name of the file containing the daemon configuration| /etc/tardis/tardisd.cfg| Daemon |
+| TARDIS_LOCAL_CONFIG | Name of the file containing the configuration when running the daemon in local mode|  /etc/tardis/tardisd.local.cfg| Daemon |
+| TARDIS_EXCLUDES| Name of the file containing patterns to exclude below the current directory.| .tardis-excludes | Client |
+| TARDIS_LOCAL_EXCLUDES| Name of the file containing patterns to exclude *only* in the local directory.| .tardis-local-excludes| Client |
+| TARDIS_GLOBAL_EXCLUDES| Name of the file containing patterns to exclude globally| /etc/tardis/excludes| Client |
+| TARDIS_SKIPFILE| Name of a file whose presence excludes a current directory (and all directories below)| .tardis-skip| Client |
+| TARDIS_PIDFILE| File to indicate that the daemon is running.| /var/run/tardisd.pid | Daemon |
+| TARDIS_SCHEMA| File containing the schema for the database.| schema/tardis.sql | Daemon |
+| TARDIS_LS_COLORS| Description of colors for lstardis | | lstardis |
+| TARDIS_REMOTE_PORT| Port used for the HTTP Remote interface| 7430 | Remote, User Tools |
+| TARDIS_REMOTE_CONFIG | Configuration file for tardisremote| /etc/tardis/tardisremote.cfg | Remote |
+| TARDIS_REMOTE_PIDFILE |Path to the pidfile for tardisremote daemon.| /var/run/tardisremote.pid| Remote |
+| TARDIS_DEFAULTS| Location of a defaults file.| /etc/tardis/system.defaults | All |
 
 System Defaults
 ---------------
@@ -265,96 +193,35 @@ Server Configuration File
 =========================
 The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the standard .ini file format.  There is a single section, "[Tardis]", containing all the variables.  The following configuration variables are defined:
 
-<table>
-  <tr>
-   <th> Name
-   <th> Default Value
-   <th> Definition
-  <tr> <td> Port
-   <td> 7420
-   <td> Port to listen on
-  <tr> <td> BaseDir
-   <td> /srv/tardis
-   <td> Directory containing all databases handled by this server
-  <tr> <td> DBName
-   <td> tardis.db
-   <td> Name of the database containing all metadata
-  <tr> <td> Schema
-   <td> schema/tardis.sql
-   <td> Path to the file containing the database schema.
-  <tr> <td> LogFile
-   <td> None
-   <td> Filename for logging.  stderr if not specified.
-  <tr> <td> JournalFile
-   <td> tardis.journal
-   <td> Journal file for logging which files are dependent on others.  Stored in the DB directory for each client.
-  <tr> <td> Profile
-   <td> False
-   <td> If true, a profile of each session will be generated and printed to stdout
-  <tr> <td> AllowNewHosts
-   <td> False
-   <td> If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup.
-  <tr> <td> RequirePassword
-   <td> False
-   <td> Require all backups to have a password.
-  <tr> <td> LogExceptions
-   <td> False
-   <td> Log full detail of all exceptions, including call chain.
-  <tr> <td> MaxDeltaChain
-   <td> 5
-   <td> Maximum number of delta's to request before requesting an entire new copy of a file.
-  <tr> <td> MaxChangePercent
-   <td> 50
-   <td> Maximum percentage change in file size allowed before requesting an entire new copy of a file.
-  <tr> <td> SaveFull
-   <td> False
-   <td> Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data.
-  <tr> <td> Single
-   <td> False
-   <td> Run a single client backup session, and exit.
-  <tr> <td> Local
-   <td> None
-   <td> Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
-  <tr> <td> Verbose
-   <td> 0
-   <td> Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy.
-  <tr> <td> Daemon
-   <td> False
-   <td> Run as a daemon process, detaching from the initial process, and running in the background.
-  <tr> <td> Umask
-   <td> 2 (002)
-   <td> Mode mask used when creating files in the database.
-  <tr> <td> User
-   <td> None
-   <td> Name of the user to run as when run in daemon mode.
-  <tr> <td> Group
-   <td> None
-   <td> Name of the group to run as when run in daemon mode.
-  <tr> <td> PidFile
-   <td> None
-   <td> Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true.
-  <tr> <td> SSL
-   <td> False
-   <td> Use SSL over the socket.
-  <tr> <td> CertFile
-   <td> None
-   <td> Path to the certificate file for SSL communications.  Must be set if SSL is true.
-  <tr> <td> KeyFile
-   <td> None
-   <td> Path to the key file for SSL communications.  Must be set if SSL is true
-  <tr> <td> Formats
-   <td> Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d
-   <td> Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same
-           type as used by pythons time.strptime() function.  Each name will be checked in order.
-  <tr> <td> MonthPrio, WeekPrio, DayPrio
-   <td> 40, 20, 10
-   <td> Priority value corresponding to the names in the Formats value.
-  <tr> <td> KeepPeriods
-   <td> 0, 180, 30
-   <td> Number of days to keep for each backup type, corresponding to the names in the Formats value.
-  <tr> <td> DBBackups
-   <td> 5
-   <td> Number of backup iterations of the database to keep.
+| Name       | Default Value| Definition |
+| ---        | ------------ | ---------- |
+| Port       | 7420| Port to listen on |
+| BaseDir    | /srv/tardis| Directory containing all databases handled by this server |
+| DBName     | tardis.db| Name of the database containing all metadata |
+| Schema     | schema/tardis.sql| Path to the file containing the database schema. |
+| LogFile    | None|  Filename for logging.  stderr if not specified. |
+| JournalFile| tardis.journal| Journal file for logging which files are dependent on others.  Stored in the DB directory for each client. |
+| Profile    | False| If true, a profile of each session will be generated and printed to stdout| 
+| AllowNewHosts| False|If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup. |
+| RequirePassword| False| Require all backups to have a password. |
+| LogExceptions | False | Log full detail of all exceptions, including call chain. |
+| MaxDeltaChain| 5| Maximum number of delta's to request before requesting an entire new copy of a file. |
+|MaxChangePercent| 50| Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
+| SaveFull   | False| Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
+| Single     | False |Run a single client backup session, and exit. |
+| Local      | None | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
+| Verbose    | 0| Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
+| Daemon     | False| Run as a daemon process, detaching from the initial process, and running in the background. |
+| Umask      | 2 (002)| Mode mask used when creating files in the database. |
+| User       | None| Name of the user to run as when run in daemon mode. |
+| Group      | None| Name of the group to run as when run in daemon mode.
+| PidFile    | None| Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true.
+| SSL        |False|Use SSL over the socket.
+| CertFile   | None| Path to the key file for SSL communications.  Must be set if SSL is true
+| Formats    | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order.
+| Priorities | 40, 20, 10| Priority value corresponding to the names in the Formats value.
+| KeepPeriods| 0, 180, 30| Number of days to keep for each backup type, corresponding to the names in the Formats value.
+| DBBackups  | 5| Number of backup iterations of the database to keep.
   
 </table>
 Mounting the filesystem
@@ -382,45 +249,6 @@ Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Pytho
 Beyond this, it appears to function as normal.
 
 Tested only on Yosemite.
-
-Bugs in 0.21
-============
-I've identified two bugs in the 0.21 release that can have major impacts.
-  * File sizes are incorrectly recorded in compressed backups.  No real fix right now.  Data is just wrong in the database.
-  * Encryption keys are improperly generated if you use the --client option to tardis or any of the command line tools.   Keys are generated as if you were using the value in the TARDIS_CLIENT variable (or the default hostname if you haven't specified TARDIS_CLIENT).  This could be a major problem for existing encrypted databases that used a non-default client value originally.
-
-If you install after this message is here, from a post 0.21 version, these bugs are fixed.  If you have an encrypted or compressed (or both) database before, I recommend proceeding with extreme caution.  Maintain a 0.22 installation and use it to extract your backup data.
-
-Note on Post 0.21 Installation
-==============================
-Sometime after the 0.21 release, the BSON package I was using in Tardis disappeared.  As a result, I've switched from using BSON to a different serialization format called MsgPack.  BSON is still supported if it's on your system, but MsgPack has become the default.
-
-Also, post 0.21 I've introduced checking in the Daemon to make sure you have the correct database version.  If you are out of date, it will complain.  There are scripts in the schema directory called things like "convert2-3.py", "convert3-4.py", etc, to convert the various formats.  These scripts are invoked "python convert3-4.py /path/to/tardis.db".  Some are significant, for instance 4-5 is really slow (you can remove the SQL Update command and be just fine, it will be hugely faster, should you so desire).
-
-0.22 Changes the database functionality in an attempt to make things a bit faster, and to fix an issue with encrypted backups, have added some new information to the database.  You don't need to do anything to deal with this, but it will cause a couple of backups after you upgrade to be significantly slower.  You can run the setDirHashes script in the tools directory.  This takes same sort of arguments as tardis, and will automatically generate the correct hash values.   Should only take a few minutes, depending on the speed of the machine you're running on, and the speed of the disk drive.
-
-Note on 0.24 and 0.25 Releases
-==============================
-The 0.24 release changes the format of the encrypted files.  The goal is to make the encrypted files easier to recover should the database become damaged.  No longer will the file's initialization vector be stored in the database.  Instead, it will be stored as the first 16 bytes of the file.  In addition, the padding will be compatible with PKCS#7, ie padding with the number of bytes to delete.  As a result, files which are a multiple of the blocksize will be padded with an additional block.  Thus, files may increase by up to 32 bytes in practice, 16 for the init vector, and 16 for the padding.
-
-The result of this is that encrypted backups with 0.24 and later are not compatible with files from 0.23 and earlier.  I am working on a script, but just need to find some time to complete it, hopefully in the next few days.
-
-The 0.25 release again changes the format of the encrypted files, as well as the naming convention, adding an HMAC at the end of the files for authentication.  Prior to 0.25, all database files were name based on
-the MD5 checksum of the original file.  Starting in 0.25, if a password is added, these files will be named using the HMAC-MD5 of the original file, or the MD5 checksum if no password is used.
-This is regardless of the setting of the --crypt flag to tardis.
-
-Correspondingly, the 0.25 release adds a --authenticate/--noauthenticate switch to the regenerate program. This authenticates both the components of the files, and the fully recovered output. 
-When converting to a 0.25 from a previous version, the --noauthenticate switch may be needed for regenerate to correctly regenerate data files.
-
-0.24 also introduces a new way to store keys.   Keys are normally stored in encrypted format in the database.  As of 0.24, keys can be stored independently in a user controlled file.  They still remain encrypted.
-This key database is accessed via the --keys option to the client and regenerate, and the "keys=filename" option to tardisfs.
-
-The "keys" file can support multiple backup targets in a single file. 
-
-If this file is used, it must NOT be lost.  If you lose the keys file, there is no way to reconstruct it.  Even if you back it up into tardis, once lost, you will not be
-able to recover it.
-
-The contents of this file are kept encrypted.
 
 Notes on Data Storage
 =====================

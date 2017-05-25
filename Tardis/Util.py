@@ -43,6 +43,9 @@ import json
 import types
 import base64
 import functools
+import pwd
+import grp
+import time
 
 import urlparse
 import urllib
@@ -82,9 +85,50 @@ def getIntOrNone(config, section, name):
     except Exception:
         return None
 
+# Get group and user names.  Very unixy
+_groups = {}
+_users = {}
+
+def getGroupName(gid):
+    if gid in _groups:
+        return _groups[gid]
+    else:
+        group = grp.getgrgid(gid)
+        if group:
+            name = group.gr_name
+            _groups[gid] = name
+            return name
+        else:
+            return None
+
+def getUserId(uid):
+    if uid in _users:
+        return _users[uid]
+    else:
+        user = pwd.getpwuid(uid)
+        if user:
+            name = user.pw_name
+            _users[uid] = name
+            return name
+        else:
+            return None
+
+# Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
+# then Jan 12, 2014.  Same as ls.
+_now = time.time()
+_yearago = _now - (365 * 24 * 3600)
+def formatTime(then):
+    if then > _yearago:
+        fmt = '%b %d %H:%M'
+    else:
+        fmt = '%b %d, %Y'
+    return time.strftime(fmt, time.localtime(then))
+
+# Strip comments from input lines.
 def stripComments(line):
     return line.partition('#')[0].strip()
 
+# Make a path look short.
 def shortPath(path, width=80):
     """
     Compress a path to only show the last elements if it's wider than specified.

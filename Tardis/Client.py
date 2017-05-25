@@ -96,7 +96,7 @@ configDefaults = {
     'NoCompress':           None,
     'Local':                str(False),
     'LocalServerCmd':       'tardisd --config ' + local_config,
-    'CompressMsgs':         str(False),
+    'CompressMsgs':         'none',
     'ChecksumContent':      str(0),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
@@ -861,20 +861,19 @@ def makeMetaMessage():
     return message
 
 _progressBarFormat = None
-_progressPathWidth = 40
+_windowWidth = 80
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 
 def initProgressBar():
     _, width = Util.getTerminalSize()
-    global _progressBarFormat, _progressPathWidth
+    global _progressBarFormat, _windowWidth
 
     if width < 110:
-        _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s %s' + _ansiClearEol + _startOfLine
-        _progressPathWidth = width - 45
+        _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s '
     else:
-        _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s %s' + _ansiClearEol + _startOfLine
-        _progressPathWidth = width - 77
+        _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
+    _windowWidth = width
 
     #logger.warning("Initializing progress bar.  Width: %d. Path Width: %d.  Format: %s",
     #            width, _progressPathWidth, _progressBarFormat)
@@ -885,9 +884,10 @@ _lastInfo = (None, None)                # STATIC for printProgress
 
 def printProgress(header=None, name=None):
     global _lastInfo
-    bar = _progressBarFormat % \
-        ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0], Util.shortPath(name or _lastInfo[1], _progressPathWidth))
-    print bar,
+    bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
+
+    width = _windowWidth - len(bar) - 4
+    print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
     if header or name:
         #update the last info
         _lastInfo = (header or _lastInfo[0], name or _lastInfo[1])
@@ -1363,7 +1363,7 @@ def processCommandLine():
                         help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
-    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', action=Util.StoreBoolean, default=c.getboolean(t, 'CompressMsgs'),
+    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', nargs='?', const='zlib', choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  Default: %(default)s')
     comgrp.add_argument('--cks-content',            dest='ckscontent', default=c.getint(t, 'ChecksumContent'), type=int, nargs='?', const=4096,
                         help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')

@@ -183,18 +183,18 @@ def moveKeys(db, crypt):
 def listBSets(db):
     try:
         last = db.lastBackupSet()
-        for i in db.listBackupSets():
-            t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(i['starttime'])))
-            if i['endtime'] is not None:
-                duration = str(datetime.timedelta(seconds = (int(float(i['endtime']) - float(i['starttime'])))))
+        for bset in db.listBackupSets():
+            t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
+            if bset['endtime'] is not None:
+                duration = str(datetime.timedelta(seconds = (int(float(bset['endtime']) - float(bset['starttime'])))))
             else:
                 duration = ''
-            completed = 'Comp' if i['completed'] else 'Incomp'
-            full      = 'Full' if i['full'] else 'Delta'
-            isCurrent = current if i['backupset'] == last['backupset'] else ''
-            size = Util.fmtSize(i['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
+            completed = 'Comp' if bset['completed'] else 'Incomp'
+            full      = 'Full' if bset['full'] else 'Delta'
+            isCurrent = current if bset['backupset'] == last['backupset'] else ''
+            size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print "%-30s %-4d %-6s %3d  %-5s  %s  %-7s %6s %5s %8s  %s" % (i['name'], i['backupset'], completed, i['priority'], full, t, duration, i['filesfull'], i['filesdelta'], size, isCurrent)
+            print "%-30s %-4d %-6s %3d  %-5s  %s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent)
     except Exception as e:
         logger.error(e)
         logger.exception(e)
@@ -232,10 +232,12 @@ def listFiles(db, crypt):
     lastDirInode = (-1, -1)
     bset = info['backupset']
     files = db.getNewFiles(info['backupset'], args.previous)
-    for i in files:
-        if i['dir']:
+    for fInfo in files:
+        name = _decryptFilename(fInfo['name'], crypt)
+        
+        if not args.dirs and fInfo['dir']:
             continue
-        dirInode = (i['parent'], i['parentdev'])
+        dirInode = (fInfo['parent'], fInfo['parentdev'])
         if dirInode == lastDirInode:
             path = lastDir
         else:
@@ -244,15 +246,43 @@ def listFiles(db, crypt):
             lastDir = path
             if not args.fullname:
                 print "%s:" % (path)
-        status = '[New]' if i['chainlength'] == 0 else '[Delta]'
-        name = _decryptFilename(i['name'], crypt)
+        if args.status:
+            status = '[New]   ' if fInfo['chainlength'] == 0 else '[Delta] '
+        else:
+            status = ''
         if args.fullname:
             name = os.path.join(path, name)
 
         if args.long:
-            print "    %-7s %10d %32s %s" % (status, i['size'], i['checksum'], name)
+            mode  = Util.filemode(fInfo['mode'])
+            group = Util.getGroupName(fInfo['gid'])
+            owner = Util.getUserId(fInfo['uid'])
+            mtime = Util.formatTime(fInfo['mtime'])
+            if fInfo['size'] is not None:
+                if args.human:
+                    size = "%8s" % Util.fmtSize(fInfo['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
+                else:
+                    size = "%8d" % int(fInfo['size'])
+            else:
+                size = ''           
+            print'  %s%9s %-8s %-8s %8s %12s' % (status, mode, owner, group, size, mtime),
+            if args.cksums:
+                print ' %32s ' % (fInfo['checksum'] or ''),
+            if args.chnlen:
+                print ' %4s ' % (fInfo['chainlength']),
+            if args.inode:
+                print ' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])),
+
+            print name
         else:
-            print "    %-7s %s" % (status, name)
+            print "    %s" % status,
+            if args.cksums:
+                print ' %32s ' % (fInfo['checksum'] or ''),
+            if args.chnlen:
+                print ' %4s ' % (fInfo['chainlength']),
+            if args.inode:
+                print ' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])),
+            print name
 
 
 def _bsetInfo(db, info):
@@ -426,11 +456,16 @@ def parseArgs():
     filesParser.add_argument('--long', '-l',    dest='long', default=False, action=Util.StoreBoolean,           help='Long format')
     filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=Util.StoreBoolean,   help='Print full path name in names')
     filesParser.add_argument('--previous',      dest='previous', default=False, action=Util.StoreBoolean,       help="Include files that first appear in the set, but weren't added here")
+    filesParser.add_argument('--dirs',          dest='dirs', default=False, action=Util.StoreBoolean,           help='Include directories in list')
+    filesParser.add_argument('--status',        dest='status', default=False, action=Util.StoreBoolean,         help='Include status (new/delta) in list')
+    filesParser.add_argument('--human', '-H',   dest='human', default=False, action=Util.StoreBoolean,          help='Print sizes in human readable form')
+    filesParser.add_argument('--checksums', '-c', dest='cksums', default=False, action=Util.StoreBoolean,       help='Print checksums')
+    filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=Util.StoreBoolean,        help='Print chainlengths')
+    filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=Util.StoreBoolean,          help='Print inodes')
 
     common = argparse.ArgumentParser(add_help=False)
     Config.addPasswordOptions(common)
     Config.addCommonOptions(common)
-
 
     create = argparse.ArgumentParser(add_help=False)
     create.add_argument('--schema',                 dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
