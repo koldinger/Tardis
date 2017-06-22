@@ -34,20 +34,25 @@ import socket
 import logging
 import shutil
 
+import Defaults
+
 class CacheDir(object):
-    def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None):
+    def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
         self.root = os.path.abspath(root)
         self.parts = parts
         self.partsize = partsize
         self.user  = user if user else -1
         self.group = group if group else -1
-        self.chown = True if user or group else False
+        self.chown = user or group
 
         if not os.path.isdir(self.root):
             if create:
                 os.makedirs(self.root)
                 if self.chown:
                     os.chown(self.root, self.user, self.group)
+                if skipFile:
+                    with open(os.path.join(self.root, skipFile), 'a'):
+                        pass
             else:
                 raise Exception("CacheDir does not exist: " + root)
 

@@ -87,6 +87,7 @@ pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
 journalName     = Defaults.getDefault('TARDIS_JOURNAL')
 timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
 logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
+skipFile        = Defaults.getDefault('TARDIS_SKIP')
 
 if  os.path.isabs(schemaName):
     schemaFile = schemaName
@@ -132,6 +133,7 @@ configDefaults = {
     'MaxDeltaChain'     : '5',
     'MaxChangePercent'  : '50',
     'SaveFull'          : str(False),
+    'SkipFileName'      : skipFile,
     'DBBackups'         : '3',
     'AutoPurge'         : str(False),
     'AllowClientOverrides'  :  str(True)
@@ -934,7 +936,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def getCacheDir(self):
         self.logger.debug("Using cache dir: %s", self.basedir)
-        return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group)
+        return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group, skipFile=self.server.skip)
 
     def getDB(self, client, token):
         script = None
@@ -1328,6 +1330,8 @@ class TardisServer(object):
         self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
 
         self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
+
+        self.skip           = config.get('Tardis', 'SkipFileName')
 
         self.user = None
         self.group = None

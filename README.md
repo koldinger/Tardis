@@ -58,13 +58,13 @@ Server Setup
          * cp init/tardisd.service /usr/lib/systemd/system
          * systemctl enable tardisd.service
          * start the service
-          * systemctl start tardisd.service
+           * systemctl start tardisd.service
       * SysV init
          * cp init/tardisd /etc/init.d
          * chkconfig --add tardisd
          * chkconfig tardisd on
          * start the service
-          * service tardisd start
+           * service tardisd start
 
 Server Requirements
 -------------------
@@ -162,68 +162,160 @@ Environment Variables
 
 | Variable | Description | Default | Users |
 | -------- | ----------- | ------- | ----- |
-| TARDIS_DB   | Location of the tardis database| /srv/tardis | User Tools |
-| TARDIS_PORT | Port to use to connect to the Tardis Daemon | 7420 | Client, Daemon |
-| TARDIS_DBNAME | Name of the database file containing tardis information| tardis.db | Daemon, Remote, User Tools |
-| TARDIS_SERVER |  Name (or IP address) of the tardis server| localhost | Client |
-| TARDIS_CLIENT | Name of the backup client. |Current hostname | Client, User Tools |
-| TARDIS_DAEMON_CONFIG | Name of the file containing the daemon configuration| /etc/tardis/tardisd.cfg| Daemon |
-| TARDIS_LOCAL_CONFIG | Name of the file containing the configuration when running the daemon in local mode|  /etc/tardis/tardisd.local.cfg| Daemon |
-| TARDIS_EXCLUDES| Name of the file containing patterns to exclude below the current directory.| .tardis-excludes | Client |
-| TARDIS_LOCAL_EXCLUDES| Name of the file containing patterns to exclude *only* in the local directory.| .tardis-local-excludes| Client |
+| TARDIS_DB             | Location of the tardis database| /srv/tardis | User Tools |
+| TARDIS_PORT           | Port to use to connect to the Tardis Daemon | 7420 | Client, Daemon |
+| TARDIS_DBNAME         | Name of the database file containing tardis information| tardis.db | Daemon, Remote, User Tools |
+| TARDIS_SERVER         | Name (or IP address) of the tardis server| localhost | Client |
+| TARDIS_CLIENT         | Name of the backup client. |Current hostname | Client, User Tools |
+| TARDIS_DAEMON_CONFIG  | Name of the file containing the daemon configuration| /etc/tardis/tardisd.cfg| Daemon |
+| TARDIS_LOCAL_CONFIG   | Name of the file containing the configuration when running the daemon in local mode|  /etc/tardis/tardisd.local.cfg| Daemon |
+| TARDIS_EXCLUDES       | Name of the file containing patterns to exclude below the current directory.| .tardis-excludes | Client |
+| TARDIS_LOCAL_EXCLUDES | Name of the file containing patterns to exclude *only* in the local directory.| .tardis-local-excludes| Client |
 | TARDIS_GLOBAL_EXCLUDES| Name of the file containing patterns to exclude globally| /etc/tardis/excludes| Client |
-| TARDIS_SKIPFILE| Name of a file whose presence excludes a current directory (and all directories below)| .tardis-skip| Client |
-| TARDIS_PIDFILE| File to indicate that the daemon is running.| /var/run/tardisd.pid | Daemon |
-| TARDIS_SCHEMA| File containing the schema for the database.| schema/tardis.sql | Daemon |
-| TARDIS_LS_COLORS| Description of colors for lstardis | | lstardis |
-| TARDIS_REMOTE_PORT| Port used for the HTTP Remote interface| 7430 | Remote, User Tools |
-| TARDIS_REMOTE_CONFIG | Configuration file for tardisremote| /etc/tardis/tardisremote.cfg | Remote |
-| TARDIS_REMOTE_PIDFILE |Path to the pidfile for tardisremote daemon.| /var/run/tardisremote.pid| Remote |
-| TARDIS_DEFAULTS| Location of a defaults file.| /etc/tardis/system.defaults | All |
+| TARDIS_SKIP           | Name of a file whose presence excludes a current directory (and all directories below)| .tardis-skip| Client |
+| TARDIS_PIDFILE        | File to indicate that the daemon is running.| /var/run/tardisd.pid | Daemon |
+| TARDIS_SCHEMA         | File containing the schema for the database.| schema/tardis.sql | Daemon |
+| TARDIS_LS_COLORS      | Description of colors for lstardis | | lstardis |
+| TARDIS_REMOTE_PORT    | Port used for the HTTP Remote interface| 7430 | Remote, User Tools |
+| TARDIS_REMOTE_CONFIG  | Configuration file for tardisremote| /etc/tardis/tardisremote.cfg | Remote |
+| TARDIS_REMOTE_PIDFILE | Path to the pidfile for tardisremote daemon.| /var/run/tardisremote.pid| Remote |
+| TARDIS_DEFAULTS       | Location of a defaults file.| /etc/tardis/system.defaults | All |
+| TARDIS_RECENT_SET     | Name to use for most recent, complete backup | Current | User tools |
+
+Notes:
+    * User tools are lstardis, regenerate, tardiff, and sonic.
+    * Client is the tardis app.
+    * Daemon is the tardisd app.
 
 System Defaults
 ---------------
-The above environment variables can have default values set via the system defaults file.  This file is located at /etc/tardis/system.defaults, or can be overridden by the TARDIS_DEFAULTS environment variable.  The system.defaults file is not installed by default.
+The above environment variables can have default values set via the system defaults file.  This file is located at /etc/tardis/system.defaults, or can be overridden by the TARDIS_DEFAULTS environment variable.
+The system.defaults file is not installed by default.
 
 Format is a standard .ini file, with variables in the Tardis section, and each variable specified with the names in the table above.
 
 The location of the defaults files can be overridden by the TARDIS_DEFAULTS environment variable.
 
+Configuration
+=============
+All applications in the Tardis suite can take options from multiple locations.  These locations are, in order:
+the default value, the system default, the configuration file, and the command line.
+Thus, the system default overrides the built in default, the configuration overrides either of those, and the command line arguments
+override all of the other options.  Note that some options can only be specified on the command line.
+
+Command line arguments for many tools can be specified in a file, accessed via the @ symbol.  For instance 
+    tardis @file -list
+will read _file_ as if it were arguments presented on the command line.
+
+Client Configuration Files
+==========================
+Client tools can read from multiple configuration files.
+By default, configurations are read from Tardis section, but can be overridden by using the --job option.
+
+| Name            | Default Value       | Environment Var   | Definition |
+| ---             | ------------        | ----------------- | ---------- |
+| Server          | localhost           | TARDIS_SERVER     | Server to use for backups |
+| Port            | 7420                | TARDIS_PORT       | Port to listen on |
+| Client          | hostname            | TARDIS_CLIENT     | Name of the system to backup |
+| Force           | False               |                   | Force the backup, even if another one might still be running. |
+| Full            | False               |                   | Perform a full backup (no delta's, full files for previous deltas. |
+| Timeout         | 300                 |                   | Time out (in seconds) for connections. |
+| Password        |                     |                   | Password.  Only of on the 3 password configs can be set. |
+| PasswordFile    |                     |                   | File name of a file containing the password |
+| PassswordProg   |                     |                   | Program to prompt for a password. |
+| Crypt           | True                |                   | Encrypt data in the backup.  A Password must be set to enable tihs. |
+| KeyFile         |                     |                   | File containing the keys. |
+| CompressData    | none                |                   | Compress data using this algorithm.  Choices are none, zlib, bzip, lzma |
+| CompressMin     | 4096                |                   | Minimum size file to compress. |
+| NoCompressFile  |                     | TARDIS_NOCOMPRESS | File containing a list of mime type files to not attempt to compress
+| NoCompress      |                     |                   | Mime types to not compress |
+| Local           | False               |                   | Perform a local backup.  Spawns a server as a child process. |
+| LocalServerCmd  | tardisd --config    |                   | Command for running the local server. |
+| CompressMsgs    | none                |                   | Compress messages to the server.  Choices are none, zlib, zlib-stream, snappy |
+| ChecksumContent | 0                   |                   | Always checksum files greater than this size. |
+| Purge           | False               |                   | Purge old content ||
+| IgnoreCVS       | False               |                   | Ignore source code control files (CVS, SVN, RCS, and git) |
+| SkipCaches      | False               |                   | Skip cachedir directories |
+| SendSig         | False               |                   | Always send a signature.  Only valid for non-encrypted backups. |
+| ExcludePatterns |                     |                   | Filename patterns to ignore.  Glob file format |
+| ExcludeFiles    |                     |                   | File containing patterns to ignore. |
+| ExcludeDirs     |                     |                   | Directories to exclude. |
+| GlobalExcludeFileName |               |                   | Path to a global file containing filename patterns to exclude.|
+| ExcludeFileName | .tardis-exclude     |                   | Check for this file in each directory, and exclude files which match it's pattern in current directory and all below. |
+| LocalExcludeFileName | .tardis-local-exclude |            | Same, but only in the current directory. |
+| SkipFileName    | .tardis-skip        |                   | If this file exists, skip this directory and all below. |
+| LogFiles        |                     |                   | List of files to log to. |
+| Verbosity       | 0                   |                   | Verbosity level. |
+| Stats           | False               |                   | Print some stats on the backup when complete. |
+| Report          | False               |                   | Print a list of all files backed up when complete. |
+| Directories     | .                   |                   | List of directories to backup. |
+
+
 Server Configuration File
 =========================
 The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the standard .ini file format.  There is a single section, "[Tardis]", containing all the variables.  The following configuration variables are defined:
 
-| Name       | Default Value| Definition |
-| ---        | ------------ | ---------- |
-| Port       | 7420| Port to listen on |
-| BaseDir    | /srv/tardis| Directory containing all databases handled by this server |
-| DBName     | tardis.db| Name of the database containing all metadata |
-| Schema     | schema/tardis.sql| Path to the file containing the database schema. |
-| LogFile    | None|  Filename for logging.  stderr if not specified. |
-| JournalFile| tardis.journal| Journal file for logging which files are dependent on others.  Stored in the DB directory for each client. |
-| Profile    | False| If true, a profile of each session will be generated and printed to stdout| 
-| AllowNewHosts| False|If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup. |
-| RequirePassword| False| Require all backups to have a password. |
-| LogExceptions | False | Log full detail of all exceptions, including call chain. |
-| MaxDeltaChain| 5| Maximum number of delta's to request before requesting an entire new copy of a file. |
-|MaxChangePercent| 50| Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
-| SaveFull   | False| Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
-| Single     | False |Run a single client backup session, and exit. |
-| Local      | None | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
-| Verbose    | 0| Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
-| Daemon     | False| Run as a daemon process, detaching from the initial process, and running in the background. |
-| Umask      | 2 (002)| Mode mask used when creating files in the database. |
-| User       | None| Name of the user to run as when run in daemon mode. |
-| Group      | None| Name of the group to run as when run in daemon mode.
-| PidFile    | None| Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true.
-| SSL        |False|Use SSL over the socket.
-| CertFile   | None| Path to the key file for SSL communications.  Must be set if SSL is true
-| Formats    | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order.
-| Priorities | 40, 20, 10| Priority value corresponding to the names in the Formats value.
-| KeepPeriods| 0, 180, 30| Number of days to keep for each backup type, corresponding to the names in the Formats value.
-| DBBackups  | 5| Number of backup iterations of the database to keep.
+| Name            | Default Value       | Environment Var | Definition |
+| ---             | ------------        | --------------- | ---------- |
+| Port            | 7420                | TARDIS_PORT     | Port to listen on |
+| BaseDir         | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
+| DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
+| Schema          | schema/tardis.sql   | TARDIS_SCHEMA   | Path to the file containing the database schema. |
+| LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
+| JournalFile     | tardis.journal      |                 | Journal file for logging which files are dependent on others.  Stored in the DB directory for each client. |
+| Profile         | False               |                 | If true, a profile of each session will be generated and printed to stdout| 
+| AllowNewHosts   | False               |                 | If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup. |
+| RequirePassword | False               |                 | Require all backups to have a password. |
+| LogExceptions   | False               |                 | Log full detail of all exceptions, including call chain. |
+| MaxDeltaChain   | 5                   |                 | Maximum number of delta's to request before requesting an entire new copy of a file. |
+| MaxChangePercent| 50                  |                 | Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
+| SaveFull        | False               |                 | Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
+| Single          | False               |                 | Run a single client backup session, and exit. |
+| Local           | None                |                 | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
+| Verbose         | 0                   |                 | Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
+| Daemon          | False               |                 | Run as a daemon process, detaching from the initial process, and running in the background. |
+| Umask           | 2 (002)             |                 | Mode mask used when creating files in the database. |
+| User            | None                |                 | Name of the user to run as when run in daemon mode. |
+| Group           | None                |                 | Name of the group to run as when run in daemon mode. |
+| PidFile         | None                |                 | Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true. |
+| SSL             | False               |                 | Use SSL over the socket. |
+| CertFile        | None                |                 | Path to the certificate file for SSL communications.  Must be set if SSL is true. |
+| KeyFile         | None                |                 | Path to the key file for SSL communications.  Must be set if SSL is true. |
+| SkipFileName    | .tardis-skip        | TARDIS_SKIP     | Skip file name to be created in the backup directories. |
+| Formats         | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order. |
+| Priorities      | 40, 20, 10          |                 | Priority value corresponding to the names in the Formats value. |
+| KeepPeriods     | 0, 180, 30          |                 | Number of days to keep for each backup type, corresponding to the names in the Formats value. |
+| DBBackups       | 5                   |                 | Number of backup iterations of the database to keep. |
+
+TardisRemote Configuration File
+===============================
+
+| Name            | Default Value       | Environment Var | Definition |
+| ---             | ------------        | --------------- | ---------- |
+| Port            | 7420                | TARDIS_PORT     | Port to listen on |
+| BaseDir         | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
+| DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
+| LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
+| LogExceptions   | False               |                 | Log full detail of all exceptions, including call chain. |
+| MaxDeltaChain   | 5                   |                 | Maximum number of delta's to request before requesting an entire new copy of a file. |
+| MaxChangePercent| 50                  |                 | Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
+| SaveFull        | False               |                 | Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
+| Single          | False               |                 | Run a single client backup session, and exit. |
+| Local           | None                |                 | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
+| Verbose         | 0                   |                 | Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
+| Daemon          | False               |                 | Run as a daemon process, detaching from the initial process, and running in the background. |
+| Umask           | 2 (002)             |                 | Mode mask used when creating files in the database. |
+| User            | None                |                 | Name of the user to run as when run in daemon mode. |
+| Group           | None                |                 | Name of the group to run as when run in daemon mode. |
+| PidFile         | None                |                 | Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true. |
+| SSL             | False               |                 | Use SSL over the socket. |
+| CertFile        | None                |                 | Path to the certificate file for SSL communications.  Must be set if SSL is true |
+| KeyFile         | None                |                 | Path to the key file for SSL communications.  Must be set if SSL is true |
+| Formats         | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order. |
+| Priorities      | 40, 20, 10          |                 | Priority value corresponding to the names in the Formats value. |
+| KeepPeriods     | 0, 180, 30          |                 | Number of days to keep for each backup type, corresponding to the names in the Formats value. |
+| DBBackups       | 5                   |                 | Number of backup iterations of the database to keep. |
   
-</table>
 Mounting the filesystem
 =======================
 The backup sets can be mounted as a filesystem, thus:
@@ -232,7 +324,11 @@ The backup sets can be mounted as a filesystem, thus:
 
 Password should only be set if a password is specified in the backup.  If you leave it blank (ie, password=), it will prompt you for a password during mount.
 
-Other options are available via -help.  (details TBD)
+tardisfs options are specified in a format to enable fstab mounting.  Each option is specified as `-o name=value`.  For instance, `-o database=/nfs/tardis -o client=hostname`.  Options can be specified in a fstab, such as:
+```
+tardisfs#0				/mnt/tardis/ClientName	fuse	user,noauto,default_permissions,allow_other,database=/nfs/tardis/,client=ClientName	0 2
+```
+
 
 Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
 
@@ -244,9 +340,7 @@ MacOS X Support
 ===============
 I'm in the early stages of testing Tardis on MacOS X, but it appears that, for the most part, it works, at least the client.
 
-Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Python, and librsync.  You'll also need to remove all references to pyacl and posix1e in setup.py and Tardis/Client.py.  I'll adjust the code later to do this automatically, once testing proceeds.
-
-Beyond this, it appears to function as normal.
+Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Python, and librsync.
 
 Tested only on Yosemite.
 
@@ -265,4 +359,4 @@ If the data is unencrypted, it is stored directly in the file, as either the raw
 
 If the data is encrypted, the above data is encapsulated in the following format: the first 16 bytes (128 bits) are the initilization vector for the encryption, currently AES-256-CBC.  After this comes the data, as above, encrypted.  This data is padded ala PKCS#7, in binary.  The last 64 bytes (512 bits) of the file contain an HMAC of the data (including the PAD) using HMAC-SHA512.
 
-Along with each file xxx, there is a corresponding file xxx.sig, containing the rdiff signature of the file.
+Along with each file xxx, there is a corresponding file xxx.sig, containing the rdiff signature of the file, and a file xxx.meta, which contains information allowing reconstruction of the file (if not it's filename) should the database be corrupted.
