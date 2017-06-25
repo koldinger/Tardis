@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import glob
 
 from setuptools import setup, find_packages
 
@@ -17,6 +18,8 @@ buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', 
 file('tardisversion', 'w').write(buildVersion + "\n")
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
+
+convert_scripts = glob.glob('schema/convert*.py')
 
 version = Tardis.__version__
 add_pkgs = Tardis.check_features()
@@ -37,7 +40,7 @@ setup(  name                    = 'Tardis-Backup',
                             'requests_cache', 'flask',     'tornado',       'termcolor',     'passwordmeter',   'pid',
                             'python-magic',   'urllib3',   'binaryornot',   'pyliblzma',     'python-snappy'] + add_pkgs,
         data_files = [( root + '/etc/tardis',                     [ 'tardisd.cfg', 'types.ignore', 'tardisremote.cfg' ]),
-                      ( 'schema',                                 [ 'schema/tardis.sql' ]),
+                      ( 'schema',                                 [ 'schema/tardis.sql' ] + convert_scripts),
                       ( 'info',                                   [ 'tardisversion' ]),
                       ( root + '/etc/init.d',                     [ 'init/tardisd', 'init/tardisremote' ]),
                       ( root + '/usr/lib/systemd/system',         [ 'init/tardisd.service', 'init/tardisremote.service' ]),

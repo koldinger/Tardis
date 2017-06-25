@@ -336,7 +336,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
 
 # Get the database, cachedir, and crypto object.
 
-def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
+def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False):
     crypt = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password, client)
@@ -362,7 +362,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
         else:
             dbDir = os.path.join(dbLoc, client)
         dbPath = os.path.join(dbDir, dbName)
-        tardis = TardisDB.TardisDB(dbPath, token=token)
+        tardis = TardisDB.TardisDB(dbPath, token=token, allow_upgrade=allow_upgrade)
 
     if crypt:
         if keyFile:
