@@ -7,21 +7,28 @@ import os.path
 import os
 import base64
 import hashlib
+import sys
+
+logger = None
 
 def encryptFilenames(db, crypto):
+    systemencoding = sys.getfilesystemencoding()
     conn = db.conn
     c = conn.cursor()
     c2 = conn.cursor()
-    r = c.execute("SELECT Name, NameID FROM Names")
-    while True:
-        row = r.fetchone()
-        if row is None:
-            break
-        (name, nameid) = row
-        newname = crypto.encryptFilename(name)
-        c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
-
-    conn.commit()
+    try:
+        r = c.execute("SELECT Name, NameID FROM Names")
+        while True:
+            row = r.fetchone()
+            if row is None:
+                break
+            (name, nameid) = row
+            newname = crypto.encryptFilename(name.decode(systemencoding, 'replace'))
+            c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
+        conn.commit()
+    except Exception as e:
+        logger.error("Caught exception encrypting filename %s: %s", name, str(e))
+        conn.rollback()
 
 def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac):
     f = cacheDir.open(checksum, 'rb')
@@ -52,13 +59,12 @@ def processFull(checksum, regenerator, cacheDir, nameMac, signature=True):
         data = i.read(16 * 1024)
 
 def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
-    logger = logging.getLogger('')
     logger.info("Encrypting files which chainlength = %d", chainlength)
     conn = db.conn
     c = conn.cursor()
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
 
-    r = c.execute("SELECT Checksum FROM Checksums WHERE Encrypted = 0 AND IsFile = 1 AND ChainLength = :chainlength ORDER BY CheckSum", {"chainlength": chainlength})
+    r = c.execute("SELECT Checksum, Size, Basis, Compressed FROM Checksums WHERE Encrypted = 0 AND IsFile = 1 AND ChainLength = :chainlength ORDER BY CheckSum", {"chainlength": chainlength})
     checksums = r.fetchall()
     c2 = conn.cursor()
     for row in checksums:
@@ -80,11 +86,13 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
             ost = os.stat(cacheDir.path(checksum))
             st = os.stat(cacheDir.path(checksum + ".enc"))
 
-            logger.info("{} => {}: {} -> {}".format(checksum, newCks, ost.st_size, st.st_size))
-
+            logger.debug("{} => {}: {} -> {}".format(checksum, newCks, ost.st_size, st.st_size))
 
             c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks', {"size": st.st_size, "newcks": newCks, "cks": checksum})
             c2.execute('UPDATE CheckSums SET Basis = :newcks WHERE Basis = :cks', {"newcks": newCks, "cks": checksum})
+
+            # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
+            Util.recordMetadata(cacheDir, newcks, row[1], row[3], True, st.st_size, basis=row[2], logger=logger)
 
             if not cacheDir.move(checksum, checksum + ".bak"):
                 cacheDir.remove(checksum + ".enc")
@@ -95,6 +103,7 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
                 raise Exception("Unable to rename signature file: {}".format(checksum + ".sig"))
 
             conn.commit()
+            cacheDir.remove(checksum + '.meta')
             cacheDir.remove(checksum + '.bak')
         except Exception as e:
             conn.rollback()
@@ -114,7 +123,6 @@ def generateSignatures(db, cacheDir):
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
     for row in r.fetchall():
         checksum = row[0]
-        logger = logging.getLogger('')
         sigfile = checksum + '.sig'
         if not cacheDir.exists(sigfile):
             logger.info("Generating signature for {}".format(checksum))
@@ -141,6 +149,7 @@ def processArgs():
     return parser.parse_args()
 
 def main():
+    global logger
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger('')
     args = processArgs()
