@@ -124,7 +124,7 @@ class CacheDir(object):
 
     def move(self, oldname, newname):
         try:
-            self.mkdir(self.dir(newname))
+            self.mkdir(newname)
             os.rename(self.path(oldname), self.path(newname))
             return True
         except OSError:
