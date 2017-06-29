@@ -16,6 +16,7 @@ def encryptFilenames(db, crypto):
     conn = db.conn
     c = conn.cursor()
     c2 = conn.cursor()
+    names = 0
     try:
         r = c.execute("SELECT Name, NameID FROM Names")
         while True:
@@ -25,7 +26,9 @@ def encryptFilenames(db, crypto):
             (name, nameid) = row
             newname = crypto.encryptFilename(name.decode(systemencoding, 'replace'))
             c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
+            names = names + 1
         conn.commit()
+        logger.info("Encrypted %d names", names)
     except Exception as e:
         logger.error("Caught exception encrypting filename %s: %s", name, str(e))
         conn.rollback()
@@ -34,15 +37,21 @@ def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac):
     f = cacheDir.open(checksum, 'rb')
     o = cacheDir.open(checksum + '.enc', 'wb')
     o.write(iv)
+    nb = len(iv)
     hmac.update(iv)
     for chunk, eof in Util._chunks(f, 64 * 1024):
         if eof:
             chunk = pad(chunk)
         ochunk = cipher.encrypt(chunk)
         o.write(ochunk)
+        nb = nb + len(ochunk)
         hmac.update(ochunk)
-    o.write(hmac.digest())
+    ochunk = hmac.digest()
+    o.write(ochunk)
+    nb = nb + len(ochunk)
     o.close()
+
+    return nb
 
 def processFull(checksum, regenerator, cacheDir, nameMac, signature=True):
     i = regenerator.recoverChecksum(checksum)
@@ -59,7 +68,7 @@ def processFull(checksum, regenerator, cacheDir, nameMac, signature=True):
         data = i.read(16 * 1024)
 
 def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
-    logger.info("Encrypting files which chainlength = %d", chainlength)
+    logger.info("Encrypting files with chainlength = %d", chainlength)
     conn = db.conn
     c = conn.cursor()
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
@@ -79,37 +88,28 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
             iv = crypto.getIV()
             cipher = crypto.getContentCipher(iv)
             hmac = crypto.getHash(func=hashlib.sha512)
-            encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac)
-            #biv = base64.b64encode(iv)
+            fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac)
             newCks = nameHmac.hexdigest()
 
-            ost = os.stat(cacheDir.path(checksum))
-            st = os.stat(cacheDir.path(checksum + ".enc"))
+            logger.info("Complete   {} => {} ({})".format(checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB'])))
 
-            logger.debug("{} => {}: {} -> {}".format(checksum, newCks, ost.st_size, st.st_size))
-
-            c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks', {"size": st.st_size, "newcks": newCks, "cks": checksum})
+            c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks',
+                        {"size": fSize, "newcks": newCks, "cks": checksum})
             c2.execute('UPDATE CheckSums SET Basis = :newcks WHERE Basis = :cks', {"newcks": newCks, "cks": checksum})
 
-            # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
-            Util.recordMetadata(cacheDir, newcks, row[1], row[3], True, st.st_size, basis=row[2], logger=logger)
-
-            if not cacheDir.move(checksum, checksum + ".bak"):
-                cacheDir.remove(checksum + ".enc")
-                raise Exception("Unable to move old version to backup: {} -> {}".format(checksum, checksum + ".bak"))
             if not cacheDir.move(checksum + '.enc', newCks):
-                raise Exception("Unable to rename encrypted file: {}".format(checksum))
+                raise Exception("Unable to rename encrypted file: {}".format(checksum + ".enc"))
             if not cacheDir.move(checksum + ".sig", newCks + ".sig"):
                 raise Exception("Unable to rename signature file: {}".format(checksum + ".sig"))
 
             conn.commit()
-            cacheDir.remove(checksum + '.meta')
-            cacheDir.remove(checksum + '.bak')
+            for suffix in ['.meta', '.enc', '.sig', '.basis', '']:
+                cacheDir.remove(checksum + suffix)
         except Exception as e:
             conn.rollback()
             logger.error("Unable to convert checksum: %s :: %s", checksum, e)
-            logger.exception(e)
-            raise e
+            #logger.exception(e)
+            #raise e
 
 def encryptFiles(db, crypto, cacheDir):
     conn = db.conn
@@ -128,6 +128,15 @@ def generateSignatures(db, cacheDir):
             logger.info("Generating signature for {}".format(checksum))
             makeSig(checksum, regenerator, cacheDir)
 
+def generateMetadata(db, cacheDir):
+    conn = db.conn
+    r = conn.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
+    batch = r.fetchmany(4096)
+    while batch:
+        for row in batch:
+            # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
+            Util.recordMetaData(cacheDir, row[0], row[1], row[2], row[3], row[4], basis=row[5], logger=logger)
+        batch = r.fetchmany(4096)
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Encrypt the database')
@@ -137,6 +146,7 @@ def processArgs():
 
     parser.add_argument('--filenames',      dest='filenames', action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--files',          dest='files',     action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
+    parser.add_argument('--meta',           dest='meta',      action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
     #parser.add_argument('--signatures',     dest='sigs',      action='store_true', default=False,       help='Generate signatures. Default=%(default)s')
 
     passgroup= parser.add_argument_group("Password/Encryption specification options")
@@ -172,6 +182,8 @@ def main():
         encryptFilenames(db, crypto)
     if args.files:
         encryptFiles(db, crypto, cacheDir)
+    if args.meta:
+        generateMetadata(db, cacheDir)
 
 if __name__ == "__main__":
     main()

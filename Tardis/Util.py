@@ -587,7 +587,7 @@ def saveKeys(name, client, nameKey, contentKey):
 def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
     f = None
     metaName = checksum + '.meta'
-    metaData = {'checksum': checksum, 'compressed': compressed, 'encrypted': encrypted, 'size': size, 'disksize': disksize }
+    metaData = {'checksum': checksum, 'compressed': bool(compressed), 'encrypted': bool(encrypted), 'size': size, 'disksize': disksize }
     if basis:
         metaData['basis'] = basis
     metaStr = json.dumps(metaData)
