@@ -332,6 +332,22 @@ tardisfs#0				/mnt/tardis/ClientName	fuse	user,noauto,default_permissions,allow_
 
 Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
 
+
+
+Encrypting an Unencrypted Backup
+================================
+If you've built an unencrypted backup, and wish to add encryption, this can be accomplished, primarily using the encryptDB.py application in the tools directory.  Note, this is only semi-debugged.  Use at your own risk.
+
+The following steps should be performed:
+   * Add a password to the database:
+      * `sonic setpass [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program]`
+   * Encrypt the filenames.  This step must be performed only once, unless it fails.  It should either encrypt all the filenames, or none.  If executed more than once, it will gladly doubly encrypt the passwords.  This can be a mess.
+      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --filenames`
+   * Encrypt the files.  This step can be run multiple times, and will only encrypt files which have not been encrypted already, and thus restarted.  It *SHOULD* leave the backup in a consistent state if you cancel out, but again, use at your own risk.  This takes a LONG time.  During this phase, the database should still be accessible, but some data is encrypted and some is not.  This should be transparent to any users.  You *should* even be able to run backups while this takes place.
+      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --files`
+   * Generate new metadata files.  This is optional, but can be useful should the database become corrupted.  This also takes a LONG time, but can be run entirely transparently to any other activities.
+      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --meta`
+
 Logwatch Support
 ================
 Basic logwatch support is available in the logwatch directory.  You have to install these files by hand, no support is in setup.py yet.
