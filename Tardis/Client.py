@@ -499,7 +499,7 @@ def sendContent(inode, reportType):
                     batchMessage(message, batch=False, flush=True, response=False)
                     (sSent, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
-                logger.error("Caught exception during sending of data: %s", e)
+                logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 if args.exceptions:
                     logger.exception(e)
                 raise e
