@@ -5,6 +5,7 @@ import sqlite3
 import argparse, logging
 import os.path
 import os
+import sys
 import base64
 import hashlib
 import sys
@@ -33,9 +34,11 @@ def encryptFilenames(db, crypto):
         logger.error("Caught exception encrypting filename %s: %s", name, str(e))
         conn.rollback()
 
-def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac):
+def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac, output = None):
     f = cacheDir.open(checksum, 'rb')
-    o = cacheDir.open(checksum + '.enc', 'wb')
+    if output == None:
+        output = checksum + '.enc'
+    o = cacheDir.open(output, 'wb')
     o.write(iv)
     nb = len(iv)
     hmac.update(iv)
@@ -50,11 +53,12 @@ def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac):
     o.write(ochunk)
     nb = nb + len(ochunk)
     o.close()
+    f.close()
 
     return nb
 
-def processFull(checksum, regenerator, cacheDir, nameMac, signature=True):
-    i = regenerator.recoverChecksum(checksum)
+def generateFullFileInfo(checksum, regenerator, cacheDir, nameMac, signature=True, basis=None):
+    i = regenerator.recoverChecksum(checksum, basisFile=basis)
     sig = None
     if signature:
         output = cacheDir.open(checksum + ".sig", "wb+")
@@ -66,6 +70,52 @@ def processFull(checksum, regenerator, cacheDir, nameMac, signature=True):
         if sig:
             sig.step(data)
         data = i.read(16 * 1024)
+    # Return a handle on the full file object.  Allows it to be reused in the next step
+    return i
+
+suffixes = ['','KB','MB','GB', 'TB', 'PB']
+
+def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
+    try:
+        conn = db.conn
+        c2 = conn.cursor()
+        checksum = cksInfo['checksum']
+        if cksInfo['encrypted']:
+            logger.info("    Skipping  %s", checksum)
+            return None
+
+        logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        signature = not cacheDir.exists(checksum + ".sig")
+        
+        nameHmac = crypto.getHash()
+        retFile = generateFullFileInfo(checksum, regenerator, cacheDir, nameHmac, signature, basis)
+        if basis:
+            basis.close()
+        newCks = nameHmac.hexdigest()
+        
+        logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        
+        iv = crypto.getIV()
+        cipher = crypto.getContentCipher(iv)
+        hmac = crypto.getHash(func=hashlib.sha512)
+        fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac, output=newCks)
+        logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
+
+        #cacheDir.link(checksum + '.enc', newCks, soft=False)
+        cacheDir.link(checksum + ".sig", newCks + ".sig", soft=False)
+
+        c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks',
+                    {"size": fSize, "newcks": newCks, "cks": checksum})
+        c2.execute('UPDATE CheckSums SET Basis = :newcks WHERE Basis = :cks', {"newcks": newCks, "cks": checksum})
+
+        conn.commit()
+        cacheDir.removeSuffixes(checksum, ['.meta', '.enc', '.sig', '.basis', ''])
+        return retFile
+    except Exception as e:
+        conn.rollback()
+        logger.error("Unable to convert checksum: %s :: %s", checksum, e)
+        #logger.exception(e)
+        return None
 
 def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
     logger.info("Encrypting files with chainlength = %d", chainlength)
@@ -74,41 +124,18 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
 
     r = c.execute("SELECT Checksum, Size, Basis, Compressed FROM Checksums WHERE Encrypted = 0 AND IsFile = 1 AND ChainLength = :chainlength ORDER BY CheckSum", {"chainlength": chainlength})
-    checksums = r.fetchall()
-    c2 = conn.cursor()
-    for row in checksums:
+    for row in r.fetchall():
         try:
             checksum = row[0]
-            logger.info("Encrypting %s", checksum)
-            signature = not cacheDir.exists(checksum + ".sig")
-                
-            nameHmac = crypto.getHash()
-            processFull(checksum, regenerator, cacheDir, nameHmac, signature)
-
-            iv = crypto.getIV()
-            cipher = crypto.getContentCipher(iv)
-            hmac = crypto.getHash(func=hashlib.sha512)
-            fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac)
-            newCks = nameHmac.hexdigest()
-
-            logger.info("Complete   {} => {} ({})".format(checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB'])))
-
-            c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks',
-                        {"size": fSize, "newcks": newCks, "cks": checksum})
-            c2.execute('UPDATE CheckSums SET Basis = :newcks WHERE Basis = :cks', {"newcks": newCks, "cks": checksum})
-
-            if not cacheDir.move(checksum + '.enc', newCks):
-                raise Exception("Unable to rename encrypted file: {}".format(checksum + ".enc"))
-            if not cacheDir.move(checksum + ".sig", newCks + ".sig"):
-                raise Exception("Unable to rename signature file: {}".format(checksum + ".sig"))
-
-            conn.commit()
-            for suffix in ['.meta', '.enc', '.sig', '.basis', '']:
-                cacheDir.remove(checksum + suffix)
+            logger.info("Encrypting Parent %s", checksum)
+            chain = db.getChecksumInfoChain(checksum)
+            bFile = None
+            while chain:
+                cksInfo = chain.pop()
+                bFile = processFile(cksInfo, regenerator, cacheDir, db, crypto, bFile)
         except Exception as e:
-            conn.rollback()
-            logger.error("Unable to convert checksum: %s :: %s", checksum, e)
-            #logger.exception(e)
+            logger.error("Error processing checksum: %s", checksum)
+            logger.exception(e)
             #raise e
 
 def encryptFiles(db, crypto, cacheDir):
@@ -119,6 +146,7 @@ def encryptFiles(db, crypto, cacheDir):
         encryptFilesAtLevel(db, crypto, cacheDir, level)
 
 def generateSignatures(db, cacheDir):
+    c = db.conn.cursor()
     r = c.execute("SELECT Checksum FROM Checksums")
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
     for row in r.fetchall():
@@ -130,7 +158,8 @@ def generateSignatures(db, cacheDir):
 
 def generateMetadata(db, cacheDir):
     conn = db.conn
-    r = conn.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
+    c = conn.cursor()
+    r = c.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
     batch = r.fetchmany(4096)
     while batch:
         for row in batch:
