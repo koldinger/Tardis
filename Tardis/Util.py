@@ -581,6 +581,26 @@ def saveKeys(name, client, nameKey, contentKey):
         config.write(configfile)
 
 
+###
+### Create a metadata file for file.
+###
+def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
+    f = None
+    metaName = checksum + '.meta'
+    metaData = {'checksum': checksum, 'compressed': bool(compressed), 'encrypted': bool(encrypted), 'size': size, 'disksize': disksize }
+    if basis:
+        metaData['basis'] = basis
+    metaStr = json.dumps(metaData)
+    logger.debug("Storing metadata for %s: %s", checksum, metaStr)
+
+    try:
+        f = cache.open(metaName, 'wb')
+        f.write(metaStr)
+        f.close()
+    except Exception as e:
+        logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
+
+
 class StoreBoolean(argparse.Action):
     """
     Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,

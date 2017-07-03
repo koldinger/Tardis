@@ -555,7 +555,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         self.statBytesReceived += bytesReceived
 
-        self.recordMetaData(checksum, size, compressed, encrypted, bytesReceived, basis=basis)
+        Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
 
         if output:
             try:
@@ -774,24 +774,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     _sequenceNumber = 0
 
-    def recordMetaData(self, checksum, size, compressed, encrypted, disksize, basis=None):
-        f = None
-        metaName = checksum + '.meta'
-        metaData = {'checksum': checksum, 'compressed': compressed, 'encrypted': encrypted, 'size': size, 'disksize': disksize }
-        if basis:
-            metaData['basis'] = basis
-        metaStr = json.dumps(metaData)
-        self.logger.debug("Storing metadata for %s: %s", checksum, metaStr)
-
-        try:
-            f = self.cache.open(metaName, 'wb')
-            f.write(metaStr)
-            f.close()
-        except Exception as e:
-            self.logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
-            if self.server.exceptions:
-                self.logger.exception(e)
-
     def processContent(self, message):
         """ Process a content message, including all the data content chunks """
         self.logger.debug("Processing content message: %s", message)
@@ -817,7 +799,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
-        self.recordMetaData(checksum, size, compressed, encrypted, bytesReceived)
+        Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
 
         try:
             if tempName:
