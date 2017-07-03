@@ -757,7 +757,7 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        #logger.exception(e)
     finally:
         if tardis:
             tardis.close()
