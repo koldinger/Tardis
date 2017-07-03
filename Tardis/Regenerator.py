@@ -100,7 +100,7 @@ class Regenerator(object):
         outfile.seek(0)
         return outfile
 
-    def recoverChecksum(self, cksum, authenticate=True, chain=None):
+    def recoverChecksum(self, cksum, authenticate=True, chain=None, basisFile=None):
         self.logger.debug("Recovering checksum: %s", cksum)
         cksInfo = None
         if not chain:
@@ -122,7 +122,11 @@ class Regenerator(object):
 
         try:
             if cksInfo['basis']:
-                basis = self.recoverChecksum(cksInfo['basis'], authenticate, chain)
+                if basisFile:
+                    basis = basisFile
+                    basis.seek(0)
+                else:
+                    basis = self.recoverChecksum(cksInfo['basis'], authenticate, chain)
 
                 if cksInfo['encrypted']:
                     patchfile = self.decryptFile(cksum, cksInfo['disksize'], authenticate)
@@ -138,19 +142,18 @@ class Regenerator(object):
                     patchfile = temp
                 try:
                     output = librsync.patch(basis, patchfile)
+                    #output.seek(0)
+                    return output
                 except librsync.LibrsyncError as e:
                     self.logger.error("Recovering checksum: %s : %s", cksum, e)
                     raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
-
-                #output.seek(0)
-                return output
             else:
                 if cksInfo['encrypted']:
                     output =  self.decryptFile(cksum, cksInfo['disksize'])
                 else:
                     output =  self.cacheDir.open(cksum, "rb")
 
-                if cksInfo['compressed']:
+                if cksInfo['compressed'] is not None and cksInfo['compressed'].lower() != 'none':
                     self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
                     buf = CompressedBuffer.UncompressedBufferedReader(output, compressor=cksInfo['compressed'])
