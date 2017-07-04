@@ -1075,6 +1075,18 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.info("Setting token to: %s", token)
             self.db.setToken(token)
 
+    def mkMessenger(self, sock, encoding, compress):
+        if encoding == "JSON":
+            self.messenger = Messages.JsonMessages(sock, compress=compress)
+        elif encoding == 'MSGP':
+            self.messenger = Messages.MsgPackMessages(sock, compress=compress)
+        elif encoding == "BSON":
+            self.messenger = Messages.BsonMessages(sock, compress=compress)
+        else:
+            message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
+            sock.sendall(json.dumps(message))
+            raise InitFailedException("Unknown encoding: ", encoding)
+
     def handle(self):
         printMessages = self.logger.isEnabledFor(logging.TRACE)
         started   = False
@@ -1096,28 +1108,39 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             else:
                 sock.sendall(Connection.headerString)
 
+            # Receive the initial messages.  Defines the communication parameters.
+            # Should be : { "encoding": "MSGP", "compress": "snappy" }
+
             message = sock.recv(1024)
             self.logger.debug(message)
             message = message.strip()
 
             fields = json.loads(message)
+            resp = {'status': 'OK'}
+            sock.sendall(json.dumps(resp))
+
+            self.mkMessenger(sock, fields['encoding'], fields['compress'])
+
             try:
+                fields = self.messenger.recvMessage()
                 messType    = fields['message']
                 if not messType == 'BACKUP':
                     raise InitFailedException("Unknown message type: {}".format(messType))
 
                 client      = fields['host']            # TODO: Change at client as well.
                 name        = fields['name']
-                encoding    = fields['encoding']
                 clienttime  = fields['time']
                 version     = fields['version']
 
                 autoname    = fields.get('autoname', True)
-                compress    = fields.get('compress', False)
                 full        = fields.get('full', False)
-                token       = fields.get('token', None)
                 priority    = fields.get('priority', 0)
                 force       = fields.get('force', False)
+
+                # Vestigal fields.
+                encoding    = fields['encoding']
+                compress    = fields.get('compress', False)
+                token       = fields.get('token', None)
 
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
@@ -1160,17 +1183,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     self.logger.exception(e)
                 raise InitFailedException(str(e))
 
-            if encoding == "JSON":
-                self.messenger = Messages.JsonMessages(sock, compress=compress)
-            elif encoding == 'MSGP':
-                self.messenger = Messages.MsgPackMessages(sock, compress=compress)
-            elif encoding == "BSON":
-                self.messenger = Messages.BsonMessages(sock, compress=compress)
-            else:
-                message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
-                sock.sendall(json.dumps(message))
-                raise InitFailedException("Unknown encoding: ", encoding)
-
             response = {
                 "status": "OK",
                 "sessionid": self.sessionid,
@@ -1191,7 +1203,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if contentKey:
                     response['contentKey'] = contentKey
 
-            sock.sendall(json.dumps(response))
+            self.messenger.sendMessage(response)
 
             started = True
 

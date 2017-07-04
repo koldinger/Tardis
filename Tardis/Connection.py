@@ -30,14 +30,13 @@
 
 import socket
 import json
-import uuid
 import time
 import ssl
 
 import Tardis
 import Tardis.Messages as Messages
 
-protocolVersion = "1.1"
+protocolVersion = "1.2"
 headerString    = "TARDIS " + protocolVersion
 sslHeaderString = headerString + "/SSL"
 
@@ -49,11 +48,8 @@ class Connection(object):
     filenameKey = None
     contentKey = None
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, name, encoding, priority, client, autoname, token, compress, force=False, version=0, validate=True, timeout=None, full=False):
+    def __init__(self, host, port, encoding, compress, timeout=None):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
-
-        if client is None:
-            client = socket.gethostname()
 
         # Create and open the socket
         if host:
@@ -78,42 +74,14 @@ class Connection(object):
                     pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
             elif message != headerString:
                 raise Exception("Unknown protocol: {}".format(message))
-
-            # Create a BACKUP message
-            resp = {
-                'message'   : 'BACKUP',
-                'host'      : client,
-                'encoding'  : encoding,
-                'name'      : name,
-                'priority'  : priority,
-                'autoname'  : autoname,
-                'force'     : force,
-                'time'      : time.time(),
-                'version'   : version,
-                'compress'  : compress,
-                'full'      : full
-            }
-            if token:
-                resp['token'] = token
-            # BACKUP { json message }
+            resp = { 'encoding': encoding, 'compress': compress }
             self.put(json.dumps(resp))
 
-            message = self.sock.recv(1024).strip()
+            message = self.sock.recv(256).strip()
+            print message
             fields = json.loads(message)
             if fields['status'] != 'OK':
-                errmesg = "BACKUP request failed"
-                if 'error' in fields:
-                    errmesg = errmesg + ": " + fields['error']
-                raise ConnectionException(errmesg)
-            self.sessionid      = uuid.UUID(fields['sessionid'])
-            self.clientId       = uuid.UUID(fields['clientid'])
-            self.lastTimestamp  = float(fields['prevDate'])
-            self.name           = fields['name']
-            self.new            = fields['new']
-            if 'filenameKey' in fields:
-                self.filenameKey = fields['filenameKey']
-            if 'contentKey' in fields:
-                self.contentKey = fields['contentKey']
+                raise ConnectionException("Unable to connect")
         except Exception:
             self.sock.close()
             raise
@@ -140,31 +108,13 @@ class Connection(object):
     def close(self):
         self.sock.close()
 
-    def getSessionId(self):
-        return str(self.sessionid)
-
-    def getClientId(self):
-        return str(self.clientId)
-
-    def getBackupName(self):
-        return str(self.name)
-
-    def getLastTimestap(self):
-        return self.lastTimestamp
-
-    def getKeys(self):
-        return (self.filenameKey, self.contentKey)
-
-    def isNew(self):
-        return self.new == 'NEW'
-
     def getStats(self):
         return self.stats
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force, version, timeout, full):
-        Connection.__init__(self, host, port, name, protocol, priority, client, autoname, token, compress, force=force, version=version, timeout=timeout, full=full)
+    def __init__(self, host, port, protocol, compress, timeout):
+        Connection.__init__(self, host, port, protocol, compress)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -189,20 +139,20 @@ _defaultVersion = Tardis.__buildversion__  or Tardis.__version__
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, force=False, timeout=None, version=_defaultVersion, full=False):
-        ProtocolConnection.__init__(self, host, port, name, 'JSON', priority, client, autoname, token, False, force, version, timeout, full)
+    def __init__(self, host, port, compress, timeout):
+        ProtocolConnection.__init__(self, host, port, 'JSON', False, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion, full=False):
-        ProtocolConnection.__init__(self, host, port, name, 'BSON', priority, client, autoname, token, compress, force, version, timeout, full)
+    def __init__(self, host, port, compress, timeout):
+        ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
-    def __init__(self, host, port, name, priority=0, client=None, autoname=False, token=None, compress=True, force=False, timeout=None, version=_defaultVersion, full=False):
-        ProtocolConnection.__init__(self, host, port, name, 'MSGP', priority, client, autoname, token, compress, force, version, timeout, full)
+    def __init__(self, host, port, compress, timeout):
+        ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 

@@ -50,6 +50,7 @@ import shlex
 import urlparse
 import functools
 import stat
+import uuid
 
 import magic
 import pid
@@ -149,6 +150,14 @@ noCompTypes         = []
 
 crypt               = None
 logger              = None
+
+sessionid           = None
+clientId            = None
+lastTimestamp       = None
+backupName          = None
+newBackup           = None
+filenameKey         = None
+contentKey          = None
 
 # Stats block.
 # dirs/files/links  == Number of directories/files/links backed up total
@@ -1240,7 +1249,41 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def getConnection(server, port, client, name, priority, auto, token):
+
+def startBackup(name, priority, client, autoname, force=False, version=0, validate=True, full=False):
+    global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
+    # Create a BACKUP message
+    message = {
+            'message'   : 'BACKUP',
+            'host'      : client,
+            'encoding'  : encoding,
+            'name'      : name,
+            'priority'  : priority,
+            'autoname'  : autoname,
+            'force'     : force,
+            'time'      : time.time(),
+            'version'   : version,
+            'full'      : full
+    }
+    # BACKUP { json message }
+    resp = sendAndReceive(message)
+
+    if resp['status'] != 'OK':
+        errmesg = "BACKUP request failed"
+        if 'error' in fields:
+            errmesg = errmesg + ": " + fields['error']
+        raise ConnectionException(errmesg)
+    sessionid      = uuid.UUID(resp['sessionid'])
+    clientId       = uuid.UUID(resp['clientid'])
+    lastTimestamp  = float(resp['prevDate'])
+    backupName     = resp['name']
+    newBackup      = resp['new']
+    if 'filenameKey' in resp:
+        filenameKey = resp['filenameKey']
+    if 'contentKey' in resp:
+        contentKey = resp['contentKey']
+
+def getConnection(server, port):
     #if args.protocol == 'json':
     #    conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout, full=args.full)
     #    setEncoder("base64")
@@ -1249,7 +1292,7 @@ def getConnection(server, port, client, name, priority, auto, token):
     #    setEncoder("bin")
     #elif args.protocol == 'msgp':
 
-    conn = Connection.MsgPackConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
+    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout)
     setEncoder("bin")
     return conn
 
@@ -1651,7 +1694,10 @@ def main():
 
     # Get the connection object
     try:
-        conn = getConnection(server, port, client, name, priority, auto, token)
+        conn = getConnection(server, port)
+        #startBackup(name, priority, client, autoname, force=False, version=0, validate=True, full=False):
+        # MsgPackConnection(server, port, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
+        startBackup(name, args.priority, args.client, auto, args.force)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         if args.exceptions:
@@ -1659,7 +1705,7 @@ def main():
         sys.exit(1)
 
     if verbosity or args.stats or args.report:
-        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(conn.getBackupName(), server, port, conn.getSessionId()))
+        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
     # Set up the encryption, if needed.
     if args.crypt and crypt:
@@ -1671,15 +1717,16 @@ def main():
             crypt.genKeys()
             if args.keys:
                 (f, c) = crypt.getKeys()
-                Util.saveKeys(Util.fullPath(args.keys), conn.getClientId(), f, c)
+                Util.saveKeys(Util.fullPath(args.keys), clientid, f, c)
             else:
                 sendKeys()
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
-                (f, c) = Util.loadKeys(args.keys, conn.getClientId())
+                (f, c) = Util.loadKeys(args.keys, clientid)
             else:
-                (f, c) = conn.getKeys()
+                f = filenameKey
+                c = contentKey
             if not (f and c):
                 logger.critical("Unable to load keyfile: %s", args.keys)
                 sys.exit(1)
