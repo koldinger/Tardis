@@ -27,13 +27,18 @@ and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
-Note: as of version 0.15, references to host or hostname have been changed to client to eliminate confusion betweeen host and server.
+Important Note -- Version 0.32
+==============================
+Version 0.32 changes the communications protocol in some minor ways, but is incompatible with previous versions.  The client, server, and all tools must be upgraded
+at the same time.
 
-Future Releases
-===============
-Several releases will be coming soon:
-  * 0.32.0 Next Release Candidate
-  
+Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using the Secure Remote Password (SRP)
+protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will set the database up for the new password mechanism.  Note that
+this MUST be run on the server, and requires the users password.  Usage is
+    * python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program
+
+If your backup does not use a password, this step will be skipped.  It only applies to secure backups.
+
 Installation
 ============
 Installing  up the server is relatively straightforward.
