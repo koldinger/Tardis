@@ -78,7 +78,6 @@ class Connection(object):
             self.put(json.dumps(resp))
 
             message = self.sock.recv(256).strip()
-            print message
             fields = json.loads(message)
             if fields['status'] != 'OK':
                 raise ConnectionException("Unable to connect")

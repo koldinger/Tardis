@@ -48,6 +48,7 @@ import traceback
 import signal
 import threading
 import json
+import base64
 from datetime import datetime
 
 # For profiling
@@ -181,6 +182,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         log            = logging.getLogger('Tardis')
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {'connid': self.idstr})
+        self.printMessages = True if self.logger.isEnabledFor(logging.TRACE) else False
         if self.client_address:
             self.address = self.client_address[0]
         else:
@@ -199,6 +201,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.db.setXattrs(inode, device, xattr)
         if acl:
             self.db.setAcl(inode, device, acl)
+
+    def sendMessage(self, message):
+        if self.printMessages:
+            self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(message)).encode("utf-8"))
+        self.messenger.sendMessage(message)
+
+    def recvMessage(self):
+        message = self.messenger.recvMessage()
+        if self.printMessages:
+            self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
+        return message
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -495,7 +508,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     "encoding": self.messenger.getEncoding(),
                     "checksum": chksum,
                     "size": len(sig) }
-                self.messenger.sendMessage(response)
+                self.sendMessage(response)
                 sigio = StringIO.StringIO(sig)
                 Util.sendData(self.messenger, sigio, compress=None)
                 return (None, False)
@@ -854,9 +867,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     def processSetKeys(self, message):
         filenameKey = message['filenameKey']
         contentKey  = message['contentKey']
-        token       = message['token']
+        srpSalt     = message['srpSalt']
+        srpVkey     = message['srpVkey']
 
-        ret = self.db.setKeys(token, filenameKey, contentKey)
+        ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
         response = {
             'message': 'ACKSETKEYS',
             'response': 'OK' if ret else 'FAIL'
@@ -920,7 +934,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.debug("Using cache dir: %s", self.basedir)
         return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group, skipFile=self.server.skip)
 
-    def getDB(self, client, token):
+    def getDB(self, client):
         script = None
         ret = "EXISTING"
         journal = None
@@ -938,9 +952,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         if not os.path.exists(dbfile):
             if not os.path.exists(dbdir):
                 os.makedirs(dbdir)
-            if self.server.requirePW and token is None:
-                self.logger.warning("No password specified.  Cannot create")
-                raise InitFailedException("Password required for creation")
             self.logger.debug("Initializing database for %s with file %s", client, schemaFile)
             script = schemaFile
             ret = "NEW"
@@ -952,7 +963,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                     initialize=script,
                                     backup=True,
                                     connid=connid,
-                                    token=token,
                                     user=self.server.user,
                                     group=self.server.group,
                                     numbackups=self.server.dbbackups,
@@ -1087,8 +1097,43 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             sock.sendall(json.dumps(message))
             raise InitFailedException("Unknown encoding: ", encoding)
 
+    def doSrpAuthentication(self, name, srpValueA):
+        self.logger.debug("Beginning Authentication")
+        try:
+            name = base64.b64decode(name)
+            srpValueA = base64.b64decode(srpValueA)
+
+            srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
+            if srpValueS is None or srpValueB is None:
+                raise TardisDB.AuthenticationFailed
+
+            self.logger.debug("Sending Challenge values")   
+            message = {
+                'status': 'AUTH',
+                'srpValueS': base64.b64encode(srpValueS),
+                'srpValueB': base64.b64encode(srpValueB)
+            }
+            self.sendMessage(message)
+
+            resp = self.recvMessage()
+            self.logger.debug("Received challenge response")
+            srpValueM = base64.b64decode(resp['srpValueM'])
+            srpValueHAMK = self.db.authenticate2(srpValueM)
+            message = {
+                'status': 'OK',
+                'srpValueHAMK': base64.b64encode(srpValueHAMK)
+            }
+            self.logger.debug("Authenticated")
+            return message
+        except TardisDB.AuthenticationFailed as e:
+            message = {
+                'status': 'AUTHFAIL',
+                'message': e.message
+            }
+            self.sendMessage(message)
+            raise e
+
     def handle(self):
-        printMessages = self.logger.isEnabledFor(logging.TRACE)
         started   = False
         completed = False
         starttime = datetime.now()
@@ -1119,10 +1164,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             resp = {'status': 'OK'}
             sock.sendall(json.dumps(resp))
 
+            # Create the messenger object.  From this point on, ALL communications should
+            # go through messenger, not director to the socket
             self.mkMessenger(sock, fields['encoding'], fields['compress'])
 
             try:
-                fields = self.messenger.recvMessage()
+                fields = self.recvMessage()
                 messType    = fields['message']
                 if not messType == 'BACKUP':
                     raise InitFailedException("Unknown message type: {}".format(messType))
@@ -1137,10 +1184,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 priority    = fields.get('priority', 0)
                 force       = fields.get('force', False)
 
-                # Vestigal fields.
-                encoding    = fields['encoding']
-                compress    = fields.get('compress', False)
-                token       = fields.get('token', None)
+                srpUname    = fields.get('srpUname', None)
+                srpValueA   = fields.get('srpValueA', None)
 
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
@@ -1150,10 +1195,15 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             serverName = None
             serverForceFull = False
+            authResp = {}
             try:
-                new = self.getDB(client, token)
+                newBackup = self.getDB(client)
 
                 self.setConfig()
+
+                self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
+                if srpValueA is not None and newBackup != 'NEW':
+                    authResp = self.doSrpAuthentication(srpUname, srpValueA)
 
                 self.startSession(name, force)
 
@@ -1187,11 +1237,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 "status": "OK",
                 "sessionid": self.sessionid,
                 "prevDate": str(self.db.prevBackupDate),
-                "new": new,
+                "new": newBackup,
                 "name": serverName if serverName else name,
                 "clientid": str(self.db.clientId)
                 }
-            if token:
+
+            if authResp:
+                response.update(authResp)
                 filenameKey = self.db.getConfigValue('FilenameKey')
                 contentKey  = self.db.getConfigValue('ContentKey')
 
@@ -1203,7 +1255,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if contentKey:
                     response['contentKey'] = contentKey
 
-            self.messenger.sendMessage(response)
+            self.sendMessage(response)
 
             started = True
 
@@ -1212,17 +1264,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             while not done:
                 flush = False
-                message = self.messenger.recvMessage()
-                if printMessages:
-                    self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
+                message = self.recvMessage()
                 if message["message"] == "BYE":
                     done = True
                 else:
                     (response, flush) = self.processMessage(message)
                     if response:
-                        if printMessages:
-                            self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(response)))
-                        self.messenger.sendMessage(response)
+                        self.sendMessage(response)
                 if flush:
                     self.db.commit()
 

@@ -39,6 +39,7 @@ import binascii
 from Cryptodome.Cipher import AES
 from Cryptodome.Protocol.KDF import PBKDF2
 import Cryptodome.Random
+import srp
 
 import Tardis.Defaults as Defaults
 
@@ -147,6 +148,12 @@ class TardisCrypto(object):
         cipher = AES.new(self._tokenKey, AES.MODE_ECB)
         token = base64.b64encode(cipher.encrypt(self.padzero(client)), self._altchars)
         return token
+
+    def createSRPValues(self, password, client=None):
+        if client is None:
+            client = self.client
+        salt, vkey = srp.create_salted_verification_key(client, password)
+        return salt, vkey
 
     def genKeys(self):
         self._contentKey  = self._random.read(self._keysize)

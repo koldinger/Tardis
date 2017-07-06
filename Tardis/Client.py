@@ -52,9 +52,12 @@ import functools
 import stat
 import uuid
 
+from binascii import hexlify
+
 import magic
 import pid
 import parsedatetime
+import srp
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -151,6 +154,8 @@ noCompTypes         = []
 crypt               = None
 logger              = None
 
+srpUsr              = None
+
 sessionid           = None
 clientId            = None
 lastTimestamp       = None
@@ -204,6 +209,9 @@ class CustomArgumentParser(argparse.ArgumentParser):
             yield arg
 
 class ProtocolError(Exception):
+    pass
+
+class AuthenticationFailed(Exception):
     pass
 
 def setEncoder(format):
@@ -1121,13 +1129,15 @@ def sendAndReceive(message):
     response = receiveMessage()
     return response
 
-def sendKeys():
+def sendKeys(password, client, includeKeys=True):
+    logger.debug("Sending keys")
     (f, c) = crypt.getKeys()
-    token = crypt.createToken()
+    salt, vkey = crypt.createSRPValues(password, client)
     message = { "message": "SETKEYS",
                 "filenameKey": f,
                 "contentKey": c,
-                "token": token
+                "srpSalt": salt,
+                "srpVkey": vkey
               }
     response = sendAndReceive(message)
     checkMessage(response, 'ACKSETKEYS')
@@ -1249,9 +1259,36 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
+def doSrpAuthentication(message):
+    try:
+        srpValueS = base64.b64decode(message['srpValueS'])
+        srpValueB = base64.b64decode(message['srpValueB'])
 
-def startBackup(name, priority, client, autoname, force=False, version=0, validate=True, full=False):
+        logger.debug("Received Challenge : %s, %s", hexlify(srpValueS), hexlify(srpValueB))
+
+        srpValueM = srpUsr.process_challenge(srpValueS, srpValueB)
+
+        if srpValueM is None:
+            raise AuthenticationFailed("Authentication Failed 1")
+        logger.debug("Authentication Challenge response: %s", hexlify(srpValueM))
+
+        message = {
+            'message': 'AUTH2',
+            'srpValueM': base64.b64encode(srpValueM)
+        }
+
+        resp = sendAndReceive(message)
+        srpHamk = base64.b64decode(resp['srpValueHAMK'])
+        srpUsr.verify_session(srpHamk)
+        return resp
+    except KeyError as e:
+        logger.error("Key not found %s", str(e))
+        raise AuthenticationFailed("response incomplete")
+    
+
+def startBackup(name, priority, client, autoname, force, full=False, version=0):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
+
     # Create a BACKUP message
     message = {
             'message'   : 'BACKUP',
@@ -1265,9 +1302,17 @@ def startBackup(name, priority, client, autoname, force=False, version=0, valida
             'version'   : version,
             'full'      : full
     }
+    if srpUsr:
+        srpUname, srpValueA = srpUsr.start_authentication()
+        logger.debug("Starting Authentication: %s, %s", hexlify(srpUname), hexlify(srpValueA))
+        message['srpUname']  = base64.b64encode(srpUname)           # Probably unnecessary, uname == client
+        message['srpValueA'] = base64.b64encode(srpValueA)
+
     # BACKUP { json message }
     resp = sendAndReceive(message)
 
+    if resp['status'] == 'AUTH':
+        resp = doSrpAuthentication(resp)
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
         if 'error' in fields:
@@ -1579,7 +1624,7 @@ def lockRun(server, port, client):
     return pidfile
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt, noCompTypes
+    global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr
     # Read the command line arguments.
     (args, config) = processCommandLine()
 
@@ -1628,12 +1673,9 @@ def main():
         # Purge out the original password.  Maybe it might go away.
         args.password = None
 
-        token = None
         if password:
+            srpUsr = srp.User(args.client, password)
             crypt = TardisCrypto.TardisCrypto(password, client)
-            token = crypt.createToken()
-        # Again, purge out the password for security reasons.
-        password = None
 
         # If no compression types are specified, load the list
         types = []
@@ -1695,9 +1737,7 @@ def main():
     # Get the connection object
     try:
         conn = getConnection(server, port)
-        #startBackup(name, priority, client, autoname, force=False, version=0, validate=True, full=False):
-        # MsgPackConnection(server, port, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
-        startBackup(name, args.priority, args.client, auto, args.force)
+        startBackup(name, args.priority, args.client, auto, args.force, args.full)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         if args.exceptions:
@@ -1711,7 +1751,7 @@ def main():
     if args.crypt and crypt:
         (f, c) = (None, None)
 
-        if conn.isNew():
+        if newBackup == 'NEW':
             # if new DB, generate new keys, and save them appropriately.
             logger.debug("Generating new keys")
             crypt.genKeys()
@@ -1719,7 +1759,7 @@ def main():
                 (f, c) = crypt.getKeys()
                 Util.saveKeys(Util.fullPath(args.keys), clientid, f, c)
             else:
-                sendKeys()
+                sendKeys(password, client)
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
@@ -1738,6 +1778,7 @@ def main():
         "message": "CLICONFIG",
         "args":    jsonArgs
     }
+
 
     batchMessage(message)
 

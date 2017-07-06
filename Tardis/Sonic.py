@@ -62,8 +62,7 @@ minPwStrength = 0
 logger = None
 args = None
 
-def getDB(crypt, new=False, allowRemote=True):
-    token = crypt.createToken() if crypt else None
+def getDB(crypt, password, new=False, allowRemote=True):
     loc = urlparse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
@@ -89,24 +88,26 @@ def getDB(crypt, new=False, allowRemote=True):
 
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
         schema = args.schema if new else None
-        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, token=token)
+        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema)
+        if password:
+            Util.authenticate(tardisdb, args.client, password)
 
     return (tardisdb, cache)
 
 def createClient(crypt):
     try:
-        (db, _) = getDB(None, True, allowRemote=False)
+        (db, _) = getDB(None, None, True, allowRemote=False)
         if crypt:
-            setToken(crypt)
+            setToken(crypt, password)
         return 0
     except Exception as e:
         logger.error(e)
         return 1
 
-def setToken(crypt):
+def setToken(crypt, password):
     try:
         # Must be no token specified yet
-        (db, _) = getDB(None)
+        (db, _) = getDB(None, password)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         token = crypt.createToken()
@@ -122,9 +123,9 @@ def setToken(crypt):
         logger.error(e)
         return 1
 
-def changePassword(crypt, crypt2):
+def changePassword(crypt, crypt2, password):
     try:
-        (db, _) = getDB(crypt)
+        (db, _) = getDB(crypt, password)
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
@@ -141,7 +142,7 @@ def changePassword(crypt, crypt2):
         (f, c) = crypt2.getKeys()
         if args.keys:
             db.beginTransaction()
-            db.setToken(crypt2.createToken())
+            db.setToken(crypt2.createToken(), )
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.commit()
         else:
@@ -579,7 +580,6 @@ def main():
 
         if password:
             crypt = TardisCrypto.TardisCrypto(password, args.client)
-            password = None
             args.password = None
 
         if args.command == 'create':
@@ -609,7 +609,7 @@ def main():
             return changePassword(crypt, crypt2)
 
         try:
-            (db, cache) = getDB(crypt, allowRemote=allowRemote)
+            (db, cache) = getDB(crypt, password, allowRemote=allowRemote)
             if crypt:
                 if args.keys:
                     (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))

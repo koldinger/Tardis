@@ -22,7 +22,7 @@ Tardis consists of several components:
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, python-snappy, 
+Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), srp, daemonize, parsedatetime, flask, tornado, requests, requests-cache, passwordmeter, python-snappy, 
 and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync

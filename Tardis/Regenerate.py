@@ -511,6 +511,7 @@ def main():
                         actualPath = crypt.encryptPath(path)
                     else:
                         actualPath = path
+                    logger.debug("Actual path is %s -- %s", actualPath, bset)
                     info = tardis.getFileInfoByPath(actualPath, bset)
                     if info:
                         retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)

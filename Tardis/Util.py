@@ -53,6 +53,7 @@ import urllib
 import zlib
 import bz2
 import liblzma
+import srp
 
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
@@ -340,10 +341,6 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
     crypt = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password, client)
-    password = None
-    token = None
-    if crypt:
-        token = crypt.createToken()
 
     loc = urlparse.urlparse(dataLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
@@ -352,7 +349,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
             dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         # get the RemoteURL object
-        tardis = RemoteDB.RemoteDB(dbLoc, client, token=token)
+        tardis = RemoteDB.RemoteDB(dbLoc, client)
         cache = tardis
     else:
         cacheDir = os.path.join(loc.path, client)
@@ -362,7 +359,8 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
         else:
             dbDir = os.path.join(dbLoc, client)
         dbPath = os.path.join(dbDir, dbName)
-        tardis = TardisDB.TardisDB(dbPath, token=token)
+        tardis = TardisDB.TardisDB(dbPath)
+        authenticate(tardis, client, password)
 
     if crypt:
         if keyFile:
@@ -373,6 +371,18 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
 
     return (tardis, cache, crypt)
 
+# Perform SRP authentication locally against the DB
+def authenticate(db, client, password):
+    usr      = srp.User(client, password)
+    uname, A = usr.start_authentication()
+    s, B = db.authenticate1(uname, A)
+    M = usr.process_challenge(s, B)
+    if M is None:
+        raise TardisDB.AuthenticationFailed()
+    HAMK = db.authenticate2(M)
+    usr.verify_session(HAMK)
+    if not usr.authenticated():
+        raise TardisDB.AuthenticationFailed()
 
 # Data manipulation functions
 
