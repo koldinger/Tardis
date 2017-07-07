@@ -44,9 +44,6 @@ class ConnectionException(Exception):
     pass
 
 class Connection(object):
-    lastTimestamp = None
-    filenameKey = None
-    contentKey = None
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, encoding, compress, timeout=None):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }

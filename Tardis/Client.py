@@ -958,11 +958,11 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         # Figure out which files to clone, and which to update
         if files and args.clones:
             if len(files) > args.clonethreshold:
-                newFiles = [f for f in files if max(f['ctime'], f['mtime']) >= conn.lastTimestamp]
-                oldFiles = [f for f in files if max(f['ctime'], f['mtime']) < conn.lastTimestamp]
+                newFiles = [f for f in files if max(f['ctime'], f['mtime']) >= lastTimestamp]
+                oldFiles = [f for f in files if max(f['ctime'], f['mtime']) < lastTimestamp]
             else:
                 maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
-                if maxTime < conn.lastTimestamp:
+                if maxTime < lastTimestamp:
                     oldFiles = files
                     newFiles = []
                 else:
@@ -987,7 +987,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                 cloneDir(s.st_ino, s.st_dev, oldFiles, dir)
             else:
                 if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "Dir: [A]: %s", Util.shortPath(dir))
+                    logger.log(logging.DIRS, "Dir: [B]: %s", Util.shortPath(dir))
             sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), newFiles)
 
         else:
