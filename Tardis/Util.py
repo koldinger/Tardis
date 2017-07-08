@@ -351,6 +351,8 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
         if loc.port is None:
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
             dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+        else:
+            dbLoc = dataLoc
         # get the RemoteURL object
         tardis = RemoteDB.RemoteDB(dbLoc, client, token=token)
         cache = tardis
