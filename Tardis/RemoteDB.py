@@ -33,6 +33,7 @@ import tempfile
 import sys
 import urllib
 import functools
+import base64
 
 import requests
 import requests_cache
@@ -78,9 +79,11 @@ class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
     headers = {}
+    prevBackupSet = None
 
     def __init__(self, url, host, prevSet=None, extra=None, token=None, compress=True, verify=False):
         self.logger=logging.getLogger('Remote')
+        self.logger.debug("-> %s %s", url, host)
         self.baseURL = url
         if not url.endswith('/'):
             self.baseURL += '/'
@@ -90,6 +93,8 @@ class RemoteDB(object):
         self.host = host
         self.headers = { "user-agent": "TardisDB-" + Tardis.__versionstring__ }
 
+        self.logger.debug("Connection to %s", url)
+
         # Disable insecure requests warning, if verify is disabled.
         # Generates too much output
         if not self.verify:
@@ -98,22 +103,9 @@ class RemoteDB(object):
         if compress:
             self.headers['Accept-Encoding'] = "deflate"
 
+        self.prevSet = prevSet
         self.connect()
 
-        if prevSet:
-            f = self.getBackupSetInfo(prevSet)
-            if f:
-                self.prevBackupSet = f['backupset']
-                self.prevBackupDate = f['starttime']
-                self.lastClientTime = f['clienttime']
-                self.prevBackupName = prevSet
-        else:
-            b = self.lastBackupSet()
-            self.prevBackupName = b['name']
-            self.prevBackupSet  = b['backupset']
-            self.prevBackupDate = b['starttime']
-            self.lastClientTime = b['clienttime']
-        self.logger.debug("Last Backup Set: %s %d", self.prevBackupName, self.prevBackupSet)
 
     def __del__(self):
         try:
@@ -127,12 +119,32 @@ class RemoteDB(object):
         self.session.verify = self.verify
 
         postData = { 'host': self.host }
-        if self.token:
-            postData['token'] = self.token
         self.loginData = postData
 
         response = self.session.post(self.baseURL + "login", data=postData)
         response.raise_for_status()
+
+    def authenticate1(self, uname, srpValueA):
+        postData = {
+            'srpUname':  base64.b64encode(uname),
+            'srpValueA': base64.b64encode(srpValueA)
+        }
+        response = self.session.post(self.baseURL + 'authenticate1', data=postData)
+        response.raise_for_status()
+        data = response.json()
+        srpValueS = base64.b64decode(data['srpValueS'])
+        srpValueB = base64.b64decode(data['srpValueB'])
+        return srpValueS, srpValueB
+        
+    def authenticate2(self, srpValueM):
+        postData = {
+            'srpValueM': base64.b64encode(srpValueM)
+        }
+        response = self.session.post(self.baseURL + 'authenticate2', data=postData)
+        response.raise_for_status()
+        data = response.json()
+        srpValueH = base64.b64decode(data['srpValueH'])
+        return srpValueH
 
     def close(self):
         self.logger.debug("Closing session")
@@ -140,12 +152,31 @@ class RemoteDB(object):
         r.raise_for_status()
         return r.json()
 
+    def _setPrevBackupSet(self):
+        if self.prevSet:
+            f = self.getBackupSetInfo(self.prevSet)
+            if f:
+                self.prevBackupSet = f['backupset']
+                self.prevBackupName = f['name']
+        else:
+            b = self.lastBackupSet()
+            self.prevBackupSet  = b['backupset']
+            self.prevBackupName = b['name']
+        self.logger.debug("Last Backup Set: %s %d", self.prevBackupName, self.prevBackupSet)
+        return self.prevBackupSet
+
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
             True == current, false = previous, otherwise a number is returned
         """
         if type(current) is bool:
-            return str(None) if current else str(self.prevBackupSet)
+            if current:
+                return str(None)
+            else:
+                if self.prevBackupSet:
+                    return str(self.prevBackupSet)
+                else:
+                    return str(self._setPrevBackupSet())
         else:
             return str(current)
 

@@ -38,6 +38,7 @@ import sys
 import uuid
 import srp
 import base64
+import functools
 
 from binascii import hexlify
 
@@ -53,15 +54,13 @@ class NotAuthenticatedException(Exception):
     pass
 
 # Utility functions
-def authenticated(func):
-    print "Decorating "
-    #@functools.wraps(func)
+def authenticate(func):
+    @functools.wraps(func)
     def doit(self, *args, **kwargs):
-        if _isAuthenticated(self):
-            # Try the original function
+        if self._isAuthenticated():
             return func(self, *args, **kwargs)
         else:
-            raise NotAuthenticatedException()
+            raise NotAuthenticatedException
     return doit
 
 _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
@@ -167,13 +166,21 @@ class TardisDB(object):
             self.setConfigValue('ClientID', str(uuid.uuid1()))
 
         # Start authentication here.
-        salt, vkey = self.getSrpValues()
-        if salt:
+        if self.needsAuthentication():
             authenticated = False
         else:
             self.authenticated = True
             self._completeInit()
             
+    
+    def needsAuthentication(self):
+        """ Return true if a database needs to be authenticated """
+        salt, vkey = self.getSrpValues()
+        if salt:
+            return True
+        else:
+            false
+
     def authenticate1(self, uname, srpValueA):
         salt, vkey = self.getSrpValues()
         self.srpSrv = srp.Verifier(uname, salt, vkey, srpValueA)
@@ -246,6 +253,7 @@ class TardisDB(object):
         else:
             return current
 
+    @authenticate
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
@@ -272,7 +280,7 @@ class TardisDB(object):
         r = c.fetchone()
         return r
 
-    #@authenticated
+    @authenticate
     def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None, full=False, serverID=None):
         """ Create a new backupset.  Set the current backup set to be that set. """
         c = self.cursor
@@ -296,7 +304,7 @@ class TardisDB(object):
 
         return self.currBackupSet
 
-    #@authenticated
+    @authenticate
     def setBackupSetName(self, name, priority, current=True):
         """ Change the name of a backupset.  Return True if it can be changed, false otherwise. """
         backupset = self._bset(current)
@@ -307,7 +315,7 @@ class TardisDB(object):
         except sqlite3.IntegrityError:
             return False
 
-    #@authenticated
+    @authenticate
     def setClientConfig(self, config, current=True):
         """ Store the command line from this run """
         backupset = self._bset(current)
@@ -319,7 +327,7 @@ class TardisDB(object):
             clientConfigId = r[0]
         self._execute("UPDATE Backups SET ClientConfigID = :configId WHERE BackupSet = :backupset", {"configId": clientConfigId, "backupset": backupset})
 
-    #@authenticated
+    @authenticate
     def checkBackupSetName(self, name):
         """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
         c = self.conn.execute("SELECT COUNT(*) FROM Backups WHERE Name = :name",
@@ -327,7 +335,7 @@ class TardisDB(object):
         row = c.fetchone()
         return True if row[0] == 0 else False
 
-    #@authenticated
+    @authenticate
     def getFileInfoByName(self, name, parent, current=True):
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self._bset(current)
@@ -345,7 +353,7 @@ class TardisDB(object):
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return c.fetchone()
 
-    #@authenticated
+    @authenticate
     def getFileInfoByPath(self, path, current=False, permchecker=None):
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
@@ -369,13 +377,13 @@ class TardisDB(object):
                 break
         return info
 
-    #@authenticated
+    @authenticate
     def getFileInfoByPathForRange(self, path, first, last, permchecker=None):
         sets = self._execute('SELECT BackupSet FROM Backups WHERE BackupSet BETWEEN :first AND :last ORDER BY BackupSet ASC', {'first': first, 'last': last})
         for row in sets.fetchall():
             yield (row[0], self.getFileInfoByPath(path, row[0], permchecker))
 
-    #@authenticated
+    @authenticate
     def getFileInfoForPath(self, path, current=False):
         """ Return the FileInfo structures for each file along a path """
         backupset = self._bset(current)
@@ -392,7 +400,7 @@ class TardisDB(object):
             else:
                 break
 
-    #@authenticated
+    @authenticate
     def getFileInfoByInode(self, info, current=False):
         backupset = self._bset(current)
         (inode, device) = info
@@ -405,7 +413,7 @@ class TardisDB(object):
                   {"inode": inode, "device": device, "backup": backupset})
         return c.fetchone()
 
-    #@authenticated
+    @authenticate
     def getFileInfoBySimilar(self, fileInfo, current=False):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         backupset = self._bset(current)
@@ -419,7 +427,7 @@ class TardisDB(object):
                                 temp)
         return c.fetchone()
 
-    #@authenticated
+    @authenticate
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         #self.logger.debug("Looking up file for similar info: %s", fileInfo)
@@ -434,7 +442,7 @@ class TardisDB(object):
                                 temp)
         return c.fetchone()
 
-    #@authenticated
+    @authenticate
     def getFileInfoByInodeFromPartial(self, inode):
         (ino, dev) = inode
         c = self.cursor.execute("SELECT " +
@@ -446,7 +454,7 @@ class TardisDB(object):
 
         return c.fetchone()
 
-    #@authenticated
+    @authenticate
     def setChecksum(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
                             "WHERE Inode = :inode AND Device = :device AND "
@@ -454,7 +462,7 @@ class TardisDB(object):
                             {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
         return self.cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def setXattrs(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET XattrId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
                             "WHERE Inode = :inode AND Device = :device AND "
@@ -463,7 +471,7 @@ class TardisDB(object):
         #self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return self.cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def setAcl(self, inode, device, checksum):
         self.cursor.execute("UPDATE Files SET AclId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
                             "WHERE Inode = :inode AND Device = :device AND "
@@ -473,7 +481,7 @@ class TardisDB(object):
         return self.cursor.rowcount
 
 
-    #@authenticated
+    @authenticate
     def getChecksumByInode(self, inode, device, current=True):
         backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
@@ -486,7 +494,7 @@ class TardisDB(object):
         return row[0] if row else None
         #if row: return row[0] else: return None
 
-    #@authenticated
+    @authenticate
     def getChecksumByName(self, name, parent, current=False):
         backupset = self._bset(current)
         (inode, device) = parent
@@ -502,7 +510,7 @@ class TardisDB(object):
         return row[0] if row else None
         #if row: return row[0] else: return None
 
-    #@authenticated
+    @authenticate
     def getChecksumByPath(self, name, current=False, permchecker=None):
         backupset = self._bset(current)
         self.logger.debug("Looking up checksum for path %s %d", name, backupset)
@@ -512,7 +520,7 @@ class TardisDB(object):
         else:
             return None
 
-    #@authenticated
+    @authenticate
     def getChecksumInfoByPath(self, name, current=False, permchecker=None):
         backupset = self._bset(current)
         cksum = self.getChecksumByPath(name, backupset, permchecker)
@@ -521,7 +529,7 @@ class TardisDB(object):
         else:
             return None
 
-    #@authenticated
+    @authenticate
     def getChecksumInfoChainByPath(self, name, current=False, permchecker=None):
         backupset = self._bset(current)
         cksum = self.getChecksumByPath(name, backupset, permchecker)
@@ -530,7 +538,7 @@ class TardisDB(object):
         else:
             return None
 
-    #@authenticated
+    @authenticate
     def getFirstBackupSet(self, name, current=False):
         backupset = self._bset(current)
         self.logger.debug("getFirstBackupSet (%d) %s", backupset, name)
@@ -544,7 +552,7 @@ class TardisDB(object):
         # General purpose failure
         return None
 
-    #@authenticated
+    @authenticate
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
@@ -557,7 +565,7 @@ class TardisDB(object):
                       "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
                       temp)
 
-    #@authenticated
+    @authenticate
     def updateDirChecksum(self, directory, cksid, current=True):
         bset = self._bset(current)
         (inode, device) = directory
@@ -566,7 +574,7 @@ class TardisDB(object):
                       "WHERE Inode = :inode AND DEVICE = :device AND :bset BETWEEN FirstSet AND LastSet",
                       {"inode": inode, "device": device, "cksid": cksid, "bset": bset})
 
-    #@authenticated
+    @authenticate
     def extendFile(self, parent, name, old=False, current=True):
         old = self._bset(old)
         current = self._bset(current)
@@ -578,7 +586,7 @@ class TardisDB(object):
                                { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
         return cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def extendFileInode(self, parent, inode, old=False, current=True):
         old = self._bset(old)
         current = self._bset(current)
@@ -592,7 +600,7 @@ class TardisDB(object):
                                { "parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current })
         return cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def cloneDir(self, parent, new=True, old=False):
         newBSet = self._bset(new)
         oldBSet = self._bset(old)
@@ -605,7 +613,7 @@ class TardisDB(object):
                                { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
         return cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def setNameID(self, files):
         for f in files:
             c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", f)
@@ -616,7 +624,7 @@ class TardisDB(object):
                 self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
                 f["nameid"] = self.cursor.lastrowid
 
-    #@authenticated
+    @authenticate
     def insertChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
@@ -637,7 +645,7 @@ class TardisDB(object):
                              "compressed": str(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return self.cursor.lastrowid
 
-    #@authenticated
+    @authenticate
     def updateChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed=False, disksize=None, chainlength=0):
         self.logger.debug("Updating checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
 
@@ -648,7 +656,7 @@ class TardisDB(object):
                             {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
                              "compressed": str(compressed), "chainlength": chainlength, "disksize": disksize})
 
-    #@authenticated
+    @authenticate
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
         c = self._execute("SELECT "
@@ -663,7 +671,7 @@ class TardisDB(object):
             self.logger.debug("No checksum found for %s", checksum)
             return None
 
-    #@authenticated
+    @authenticate
     def getChecksumInfoChain(self, checksum):
         """ Recover a list of all the checksums which need to be used to generate a file """
         self.logger.debug("Getting checksum info chain on: %s", checksum)
@@ -678,7 +686,7 @@ class TardisDB(object):
 
         return chain
 
-    #@authenticated
+    @authenticate
     def getNamesForChecksum(self, checksum, bset):
         """ Recover a list of names that represent a checksum """
         self.logger.debug("Recovering name for checksum %s", checksum)
@@ -691,7 +699,7 @@ class TardisDB(object):
             names.append(row[0])
         return names
 
-    #@authenticated
+    @authenticate
     def getChainLength(self, checksum):
         data = self.getChecksumInfo(checksum)
         if data:
@@ -710,7 +718,7 @@ class TardisDB(object):
             return -1
         """
 
-    #@authenticated
+    @authenticate
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
@@ -729,7 +737,7 @@ class TardisDB(object):
         #    for row in batch:
         #        yield row
 
-    #@authenticated
+    @authenticate
     def getNumDeltaFilesInDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
@@ -745,7 +753,7 @@ class TardisDB(object):
         else:
             return 0
 
-    #@authenticated
+    @authenticate
     def getDirectorySize(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
@@ -759,7 +767,7 @@ class TardisDB(object):
         else:
             return 0
 
-    #@authenticated
+    @authenticate
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
         #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
@@ -776,7 +784,7 @@ class TardisDB(object):
             for row in batch:
                 yield row
 
-    #@authenticated
+    @authenticate
     def listBackupSets(self):
         #self.logger.debug("list backup sets")
         #                 "Name AS name, BackupSet AS backupset "
@@ -791,7 +799,7 @@ class TardisDB(object):
             for row in batch:
                 yield row
 
-    #@authenticated
+    @authenticate
     def getBackupSetInfoById(self, bset):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
@@ -800,7 +808,7 @@ class TardisDB(object):
         row = c.fetchone()
         return row
 
-    #@authenticated
+    @authenticate
     def getBackupSetInfo(self, name):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
@@ -809,7 +817,7 @@ class TardisDB(object):
         row = c.fetchone()
         return row
 
-    #@authenticated
+    @authenticate
     def getBackupSetInfoForTime(self, time):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
@@ -818,7 +826,7 @@ class TardisDB(object):
         row = c.fetchone()
         return row
 
-    #@authenticated
+    @authenticate
     def getBackupSetDetails(self, bset):
         row = self._executeWithResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
         files = row[0]
@@ -854,7 +862,7 @@ class TardisDB(object):
 
         return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
 
-    #@authenticated
+    @authenticate
     def getNewFiles(self, bSet, other):
         if other:
             row = self._executeWithResult("SELECT max(BackupSet) FROM Backups WHERE BackupSet < :bset", {'bset': bSet})
@@ -867,43 +875,44 @@ class TardisDB(object):
                                {'bSet': bSet, 'pSet': pSet})
         return _fetchEm(cursor)
 
-    #@authenticated
+    @authenticate
     def setStats(self, newFiles, deltaFiles, bytesReceived, current=True):
         bset = self._bset(current)
         self._execute("UPDATE Backups SET FilesFull = :full, FilesDelta = :delta, BytesReceived = :bytes WHERE BackupSet = :bset",
                       {"bset": bset, "full": newFiles, "delta": deltaFiles, "bytes": bytesReceived})
 
-    #@authenticated
+    @authenticate
     def getConfigValue(self, key):
         return self._getConfigValue(key)
 
     def _getConfigValue(self, key):
+        self.logger.debug("Getting Config Value %s", key)
         c = self._execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
         row = c.fetchone()
         return row[0] if row else None
 
-    #@authenticated
+    @authenticate
     def setConfigValue(self, key, value):
         self._setConfigValue(key, value)
 
     def _setConfigValue(self, key, value):
         self._execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})
 
-    #@authenticated
+    @authenticate
     def delConfigValue(self, key):
         self._execute("DELETE FROM Config WHERE Key = :key", {'key': key})
 
     def getToken(self):
-        return self.getConfigValue('Token')
+        return self._getConfigValue('Token')
 
-    #@authenticated
+    @authenticate
     def setToken(self, token):
         s = hashlib.sha1()
         s.update(token)
         tokenhash = s.hexdigest()
         self.setConfigValue('Token', tokenhash)
 
-    #@authenticated
+    @authenticate
     def checkToken(self, token):
         dbToken = self.getToken()
         s = hashlib.sha1()
@@ -911,17 +920,18 @@ class TardisDB(object):
         tokenhash = s.hexdigest()
         return (dbToken == tokenhash)
 
-    #@authenticated
+    @authenticate
     def setSrpValues(self, salt, vkey):
         self.setConfigValue('SRPSalt', salt)
         self.setConfigValue('SRPVkey', vkey)
 
     def getSrpValues(self):
+        self.logger.debug("Getting SRP Values")
         salt = self._getConfigValue('SRPSalt')
         vkey = self._getConfigValue('SRPVkey')
         return salt, vkey
 
-    #@authenticated
+    @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey):
         try:
             self.beginTransaction()
@@ -941,15 +951,15 @@ class TardisDB(object):
             self.logger.exception(e)
             return False
 
-    #@authenticated
+    @authenticate
     def getKeys(self):
         return (self.getConfigValue('FilenameKey'), self.getConfigValue('ContentKey'))
 
-    #@authenticated
+    @authenticate
     def beginTransaction(self):
         self.cursor.execute("BEGIN")
 
-    #@authenticated
+    @authenticate
     def completeBackup(self):
         self._execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
         self.commit()
@@ -960,7 +970,7 @@ class TardisDB(object):
         filesDeleted = self.cursor.rowcount
         return filesDeleted
 
-    #@authenticated
+    @authenticate
     def listPurgeSets(self, priority, timestamp, current=False):
         backupset = self._bset(current)
         # Select all sets that are purgeable.
@@ -969,7 +979,7 @@ class TardisDB(object):
         for row in c:
             yield row
 
-    #@authenticated
+    @authenticate
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         backupset = self._bset(current)
         # Select all sets that are both purgeable and incomplete
@@ -981,7 +991,7 @@ class TardisDB(object):
         for row in c:
             yield row
 
-    #@authenticated
+    @authenticate
     def purgeSets(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
@@ -995,7 +1005,7 @@ class TardisDB(object):
 
         return (filesDeleted, setsDeleted)
 
-    #@authenticated
+    @authenticate
     def purgeIncomplete(self, priority, timestamp, current=False):
         """ Purge old files from the database.  Needs to be followed up with calls to remove the orphaned files """
         backupset = self._bset(current)
@@ -1010,7 +1020,7 @@ class TardisDB(object):
 
         return (filesDeleted, setsDeleted)
 
-    #@authenticated
+    @authenticate
     def deleteBackupSet(self, current=False):
         bset = self._bset(current)
         self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset})
@@ -1020,7 +1030,7 @@ class TardisDB(object):
 
         return filesDeleted
 
-    #@authenticated
+    @authenticate
     def listOrphanChecksums(self, isFile):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
@@ -1036,7 +1046,7 @@ class TardisDB(object):
             for row in batch:
                 yield row[0]
 
-    #@authenticated
+    @authenticate
     def deleteOrphanChecksums(self, isFile):
         self.cursor.execute("DELETE FROM Checksums "
                             "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
@@ -1047,7 +1057,7 @@ class TardisDB(object):
                             { 'isfile': int(isFile)} )
         return self.cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def compact(self):
         self.logger.debug("Removing unused names")
         # Purge out any unused names
@@ -1061,13 +1071,13 @@ class TardisDB(object):
             # And clean up the database
             self.conn.execute("VACUUM")
 
-    #@authenticated
+    @authenticate
     def deleteChecksum(self, checksum):
         self.logger.debug("Deleting checksum: %s", checksum)
         self.cursor.execute("DELETE FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})
         return self.cursor.rowcount
 
-    #@authenticated
+    @authenticate
     def commit(self):
         self.conn.commit()
 

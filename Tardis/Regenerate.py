@@ -520,7 +520,7 @@ def main():
                         retcode += 1
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    #logger.exception(e)
+                    logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
     except Exception as e:

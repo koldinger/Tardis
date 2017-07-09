@@ -173,11 +173,17 @@ def accumulateStat(stats, name, amount=1):
     if stats:
         stats[name] = stats.setdefault(name, 0) + amount
 
-def setupLogging(verbosity, levels=None, format = "%(levelname)s : %(message)s", stream=sys.stdout):
+def setupLogging(verbosity, levels=None, format=None, stream=sys.stdout):
     if levels is None:
         levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
+
+    if format is None:
+        if loglevel <= logging.DEBUG:
+            format = "%(levelname)s : %(filename)s:%(lineno)d: %(message)s"
+        else:
+            format = "%(levelname)s : %(message)s"
     logging.basicConfig(format=format, level=loglevel, stream=stream)
     logger = logging.getLogger('')
 
@@ -338,20 +344,26 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
 # Get the database, cachedir, and crypto object.
 
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
+    logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
     if password:
         crypt = TardisCrypto.TardisCrypto(password, client)
 
     loc = urlparse.urlparse(dataLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
+        logger.debug("Creating remote connection to %s", dataLoc)
         # If no port specified, insert the port
         if loc.port is None:
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
             dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+        else:
+            dbLoc = dataLoc
         # get the RemoteURL object
+        logger.debug("==> %s %s", dbLoc, client)
         tardis = RemoteDB.RemoteDB(dbLoc, client)
         cache = tardis
     else:
+        logger.debug("Creating direct connection to %s", dataLoc)
         cacheDir = os.path.join(loc.path, client)
         cache = CacheDir.CacheDir(cacheDir, create=False)
         if not dbLoc:
@@ -360,6 +372,8 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
             dbDir = os.path.join(dbLoc, client)
         dbPath = os.path.join(dbDir, dbName)
         tardis = TardisDB.TardisDB(dbPath)
+
+    if password:
         authenticate(tardis, client, password)
 
     if crypt:
@@ -375,12 +389,18 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
 def authenticate(db, client, password):
     usr      = srp.User(client, password)
     uname, A = usr.start_authentication()
+
     s, B = db.authenticate1(uname, A)
+
     M = usr.process_challenge(s, B)
+
     if M is None:
         raise TardisDB.AuthenticationFailed()
+
     HAMK = db.authenticate2(M)
+
     usr.verify_session(HAMK)
+
     if not usr.authenticated():
         raise TardisDB.AuthenticationFailed()
 

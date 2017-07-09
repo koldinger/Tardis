@@ -39,6 +39,7 @@ import argparse
 import ConfigParser
 import zlib
 import daemonize
+import base64
 
 from flask import Flask, Response, session, request, url_for, abort, redirect, make_response
 from tornado.wsgi import WSGIContainer
@@ -116,7 +117,7 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
     if dumps:
         string = json.dumps(string)
 
-    if compress and allowCompress:
+    if compress and allowCompress and len(string) > 1024:
         app.logger.debug("Attempting to compress: %d", len(string))
         (data, compressed) = compressMsg(string)
         response = make_response(data)
@@ -130,22 +131,32 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
     app.logger.debug("Response: %s", str(response.headers))
     return response
 
+@app.errorhandler(TardisDB.NotAuthenticatedException)
+def handleNotAuthenticated(error):
+    app.logger.info("Not Authenticated Exception: %s" + error)
+    response = make_reponse(str(error))
+    response.status_code = 401
+    return response
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         try:
             #app.logger.debug(str(request))
             host    = request.form['host']
-            token   = request.form['token'] if 'token' in request.form else None
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
-            tardis  = TardisDB.TardisDB(dbPath, token=token)
+            tardis  = TardisDB.TardisDB(dbPath)
             #session['tardis']   = tardis
             session['host']     = host
             #app.logger.debug(str(session))
             dbs[host] = tardis
             caches[host] = cache
-            return "OK"
+            if tardis.needsAuthentication():
+                status = 'AUTH'
+            else:
+                status = 'OK'
+            return createResponse({"status": status }, compress=False, cacheable=False)
         except Exception as e:
             app.logger.exception(e)
             abort(401)
@@ -157,14 +168,37 @@ def login():
         </form>
     '''
 
+@app.route('/authenticate1', methods=['POST'])
+def authenticate1():
+    db = getDB()
+    data = request.form
+    app.logger.info("Authenticate 1: Got data: " + str(data))
+    srpUname = base64.b64decode(data['srpUname'])
+    srpValueA = base64.b64decode(data['srpValueA'])
+    srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
+    resp = { "srpValueS": base64.b64encode(srpValueS), "srpValueB": base64.b64encode(srpValueB) }
+    return createResponse(resp, compress=False, cacheable=False)
+
+@app.route('/authenticate2', methods=['POST'])
+def authenticate2():
+    db = getDB()
+    data = request.form
+    app.logger.info("Authenticate 2: Got data: " + str(data))
+    srpValueM = base64.b64decode(data['srpValueM'])
+    srpValueH = db.authenticate2(srpValueM)
+    resp = { "srpValueH": base64.b64encode(srpValueH) }
+    return createResponse(resp, compress=False, cacheable=False)
+
 @app.route('/close')
 def close():
     # remove the username from the session if it's there
     #app.logger.info("close Invoked")
     host = session.pop('host', None)
-    dbs[host].close()
-    del dbs[host]
-    del caches[host]
+    if host in dbs:
+        dbs[host].close()
+        del dbs[host]
+    if host in caches:
+        del caches[host]
     ret = { 'status': 'OK' }
     return createResponse(ret)
 
