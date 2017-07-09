@@ -142,12 +142,14 @@ class TardisCrypto(object):
     def decryptFilename(self, name):
         return unicode(self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).decode(self._fsEncoding).rstrip('\0'))
 
+    """
     def createToken(self, client=None):
         if client is None:
             client = self.client
         cipher = AES.new(self._tokenKey, AES.MODE_ECB)
         token = base64.b64encode(cipher.encrypt(self.padzero(client)), self._altchars)
         return token
+    """
 
     def createSRPValues(self, password, client=None):
         if client is None:
@@ -174,8 +176,3 @@ class TardisCrypto(object):
             return (_filenameKey, _contentKey)
         else:
             return (None, None)
-
-    def setOldStyleKeys(self):
-        self._contentKey  = self._tokenKey
-        self._filenameKey = self._keyKey
-        self._filenameEnc = AES.new(self._filenameKey, AES.MODE_ECB)

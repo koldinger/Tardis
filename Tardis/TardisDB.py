@@ -916,6 +916,7 @@ class TardisDB(object):
     def delConfigValue(self, key):
         self._execute("DELETE FROM Config WHERE Key = :key", {'key': key})
 
+    """
     def getToken(self):
         return self._getConfigValue('Token')
 
@@ -933,6 +934,7 @@ class TardisDB(object):
         s.update(token)
         tokenhash = s.hexdigest()
         return (dbToken == tokenhash)
+    """
 
     @authenticate
     def setSrpValues(self, salt, vkey):

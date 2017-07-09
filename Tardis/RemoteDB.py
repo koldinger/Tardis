@@ -81,7 +81,7 @@ class RemoteDB(object):
     headers = {}
     prevBackupSet = None
 
-    def __init__(self, url, host, prevSet=None, extra=None, token=None, compress=True, verify=False):
+    def __init__(self, url, host, prevSet=None, extra=None, compress=True, verify=False):
         self.logger=logging.getLogger('Remote')
         self.logger.debug("-> %s %s", url, host)
         self.baseURL = url
@@ -89,7 +89,6 @@ class RemoteDB(object):
             self.baseURL += '/'
 
         self.verify = verify
-        self.token = token
         self.host = host
         self.headers = { "user-agent": "TardisDB-" + Tardis.__versionstring__ }
 
@@ -351,15 +350,14 @@ class RemoteDB(object):
         return (fnKey, cnKey)
 
     @reconnect
-    def setKeys(self, token, fKey, cKey):
-        postData = { 'token': token, 'FilenameKey': fKey, 'ContentKey': cKey }
+    def setKeys(self, salt, vkey, fKey, cKey):
+        postData = { 'salt': salt, 'SrpVKey': vkey, 'FilenameKey': fKey, 'ContentKey': cKey }
         response = self.session.post(self.baseURL + "setKeys", data=postData)
         response.raise_for_status()
 
     @reconnect
-    def setToken(self, token):
-        postData = { 'token': token }
-        self.token = token
+    def setSrpValues(self, salt, vkey):
+        postData = { 'salt': salt, 'vkey': vkey }
         response = self.session.post(self.baseURL + "setToken", data=postData)
         response.raise_for_status()
         return response.json()

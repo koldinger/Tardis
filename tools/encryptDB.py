@@ -195,11 +195,11 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
 
     crypto = TardisCrypto.TardisCrypto(password, args.client)
-    token = crypto.createToken()
 
-    logger.info("Created token: %s", token)
     path = os.path.join(args.database, args.client, args.dbname)
-    db = TardisDB.TardisDB(path, token=token, backup=False)
+    db = TardisDB.TardisDB(path, backup=False)
+
+    Util.authenticate(db, args.client, password)
     (f, c) = db.getKeys()
     crypto.setKeys(f, c)
 

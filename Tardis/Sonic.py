@@ -37,6 +37,7 @@ import time
 import datetime
 import pprint
 import urlparse
+import srp
 
 import parsedatetime
 import passwordmeter
@@ -74,7 +75,7 @@ def getDB(crypt, password, new=False, allowRemote=True):
             dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         else:
             dbLoc = args.database
-        tardisdb = RemoteDB.RemoteDB(dbLoc, args.client, token=token)
+        tardisdb = RemoteDB.RemoteDB(dbLoc, args.client)
         cache = tardisdb
     else:
         basedir = os.path.join(args.database, args.client)
@@ -94,38 +95,38 @@ def getDB(crypt, password, new=False, allowRemote=True):
 
     return (tardisdb, cache)
 
-def createClient(crypt):
+def createClient(crypt, password):
     try:
         (db, _) = getDB(None, None, True, allowRemote=False)
         if crypt:
-            setToken(crypt, password)
+            setPassword(crypt, password)
         return 0
     except Exception as e:
         logger.error(e)
         return 1
 
-def setToken(crypt, password):
+def setPassword(crypt, password):
     try:
         # Must be no token specified yet
         (db, _) = getDB(None, password)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
-        token = crypt.createToken()
+        (salt, vkey) = srp.create_salted_verification_key(args.client, password)
         if args.keys:
             db.beginTransaction()
-            db.setToken(token)
+            db.setSrpValues(salt, vkey)
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.commit()
         else:
-            db.setKeys(token, f, c)
+            db.setKeys(salt, vkey, f, c)
         return 0
     except Exception as e:
         logger.error(e)
         return 1
 
-def changePassword(crypt, crypt2, password):
+def changePassword(crypt, crypt2, oldpw, newpw):
     try:
-        (db, _) = getDB(crypt, password)
+        (db, _) = getDB(crypt, oldpw)
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
@@ -140,13 +141,16 @@ def changePassword(crypt, crypt2, password):
         crypt2._contentKey  = crypt._contentKey
         # Now get the encrypted versions
         (f, c) = crypt2.getKeys()
+
+        (salt, vkey) = srp.create_salted_verification_key(args.client, newpw)
+
         if args.keys:
             db.beginTransaction()
-            db.setToken(crypt2.createToken(), )
+            db.setSrpValues(salt, vkey)
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
             db.commit()
         else:
-            db.setKeys(crypt2.createToken(), f, c)
+            db.setKeys(salt, vkey, f, c)
         return 0
     except Exception as e:
         logger.error(e)
@@ -158,7 +162,7 @@ def moveKeys(db, crypt):
             logger.error("Must specify key file for key manipulation")
             return 1
         clientId = db.getConfigValue('ClientID')
-        token    = crypt.createToken()
+        salt, vkey = db.getSrpValues()
         #(db, _) = getDB(crypt)
         if args.extract:
             (f, c) = db.getKeys()
@@ -166,13 +170,13 @@ def moveKeys(db, crypt):
                 raise Exception("Unable to retrieve keys from server.  Aborting.")
             Util.saveKeys(args.keys, clientId, f, c)
             if args.deleteKeys:
-                db.setKeys(token, None, None)
+                db.setKeys(salt, vkey, None, None)
         elif args.insert:
             (f, c) = Util.loadKeys(args.keys, clientId)
             logger.info("Keys: F: %s C: %s", f, c)
             if not (f and c):
                 raise Exception("Unable to retrieve keys from key database.  Aborting.")
-            db.setKeys(token, f, c)
+            db.setKeys(salt, vkey, f, c)
             if args.deleteKeys:
                 Util.saveKeys(args.keys, clientId, None, None)
         return 0
@@ -589,7 +593,7 @@ def main():
             if not crypt:
                 logger.error("No password specified")
                 return -1
-            return setToken(crypt)
+            return setPassword(crypt)
 
         if args.command == 'chpass':
             newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
@@ -604,9 +608,7 @@ def main():
                 newpw2 = None
 
             crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
-            newpw = None
-            args.newpw = None
-            return changePassword(crypt, crypt2)
+            return changePassword(crypt, crypt2, password, newpw)
 
         try:
             (db, cache) = getDB(crypt, password, allowRemote=allowRemote)

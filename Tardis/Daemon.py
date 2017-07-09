@@ -970,10 +970,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                     journal=journal,
                                     allow_upgrade = self.server.allowUpgrades)
 
-        disabled = self.db.getConfigValue('Disabled')
-        if disabled is not None and int(disabled) != 0:
-            raise InitFailedException("Client %s is currently disabled." % client)
-
         self.regenerator = Regenerator.Regenerator(self.cache, self.db)
         return ret
 
@@ -1073,21 +1069,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Oops, nothing worked.  Didn't change the name.
         return (None, None, None, False)
 
-    def confirmToken(self, token):
-        dbToken = self.db.getToken()
-        if dbToken:
-            if not self.db.checkToken(token):
-                if token:
-                    self.logger.warning("Login attempt with invalid token: %s", token)
-                    raise InitFailedException("Password doesn't match")
-                else:
-                    self.logger.warning("No token specified for login")
-                    raise InitFailedException("Password required for login")
-        elif token:
-            self.logger.info("Setting token to: %s", token)
-            self.db.setToken(token)
-
     def mkMessenger(self, sock, encoding, compress):
+        """
+        Create the messenger object to handle communications with the client
+        """
         if encoding == "JSON":
             self.messenger = Messages.JsonMessages(sock, compress=compress)
         elif encoding == 'MSGP':
@@ -1100,6 +1085,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             raise InitFailedException("Unknown encoding: ", encoding)
 
     def doSrpAuthentication(self, name, srpValueA):
+        """
+        Perform the SPR authentication steps  Start with the name and value A passed in from the
+        connection call.
+        """
         self.logger.debug("Beginning Authentication")
         try:
             name = base64.b64decode(name)
@@ -1206,6 +1195,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
                 if srpValueA is not None and newBackup != 'NEW':
                     authResp = self.doSrpAuthentication(srpUname, srpValueA)
+
+                disabled = self.db.getConfigValue('Disabled')
+                if disabled is not None and int(disabled) != 0:
+                    raise InitFailedException("Client %s is currently disabled." % client)
 
                 self.startSession(name, force)
 

@@ -133,8 +133,8 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
 
 @app.errorhandler(TardisDB.NotAuthenticatedException)
 def handleNotAuthenticated(error):
-    app.logger.info("Not Authenticated Exception: %s" + error)
-    response = make_reponse(str(error))
+    app.logger.info("Not Authenticated Exception: %s", str(error))
+    response = make_response(str(error))
     response.status_code = 401
     return response
 
@@ -144,7 +144,6 @@ def login():
         try:
             #app.logger.debug(str(request))
             host    = request.form['host']
-<<<<<<< HEAD
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
             upgrade = request.form['upgrade'] if 'upgrade' in request.form else False
@@ -162,13 +161,14 @@ def login():
         except Exception as e:
             app.logger.exception(e)
             abort(401)
-    return '''
+    else:
+        return '''
         <form action="" method="post">
             <p><input type=text name=host>
             <p><input type=text name=token>
             <p><input type=submit value=Login>
         </form>
-    '''
+        '''
 
 @app.route('/authenticate1', methods=['POST'])
 def authenticate1():
@@ -406,22 +406,24 @@ def setKeys():
     #app.logger.info("Form: %s", str(request.form))
     try:
         db = getDB()
-        token = request.form['token']
+        salt  = request.form.get('Salt')
+        vkey  = request.form.get('SrpVKey')
         fKey  = request.form.get('FilenameKey')
         cKey  = request.form.get('ContentKey')
-        if not db.setKeys(token, fKey, cKey):
+        if not db.setKeys(salt, vkey, fKey, cKey):
             raise Exception("Unable to set keys")
         return "OK"
     except Exception as e:
         app.logger.exception(e)
         abort(403)
 
-@app.route('/setToken', methods=['POST'])
-def setToken():
+@app.route('/setSrpValues', methods=['POST'])
+def setSrpValues():
     try:
         db = getDB()
-        token = request.form['token']
-        if not db.setToken(token):
+        salt = request.form['salt']
+        vkey = request.form['vkey']
+        if not db.setSrpValues(salt, vkey):
             raise Exception("Unable to set token")
     except Exception:
         abort(403)
