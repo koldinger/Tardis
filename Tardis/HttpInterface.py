@@ -410,7 +410,7 @@ def setKeys():
         vkey  = request.form.get('SrpVKey')
         fKey  = request.form.get('FilenameKey')
         cKey  = request.form.get('ContentKey')
-        if not db.setKeys(salt, vkey, fKey, cKey):
+        if not db.setKeys(base64.b64decode(salt), base64.b64decode(vkey), fKey, cKey):
             raise Exception("Unable to set keys")
         return "OK"
     except Exception as e:

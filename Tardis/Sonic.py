@@ -90,8 +90,9 @@ def getDB(crypt, password, new=False, allowRemote=True):
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
         schema = args.schema if new else None
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema)
-        if password:
-            Util.authenticate(tardisdb, args.client, password)
+
+    if password:
+        Util.authenticate(tardisdb, args.client, password)
 
     return (tardisdb, cache)
 
@@ -127,6 +128,7 @@ def setPassword(crypt, password):
 def changePassword(crypt, crypt2, oldpw, newpw):
     try:
         (db, _) = getDB(crypt, oldpw)
+
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))

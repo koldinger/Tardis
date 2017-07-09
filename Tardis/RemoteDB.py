@@ -351,7 +351,7 @@ class RemoteDB(object):
 
     @reconnect
     def setKeys(self, salt, vkey, fKey, cKey):
-        postData = { 'salt': salt, 'SrpVKey': vkey, 'FilenameKey': fKey, 'ContentKey': cKey }
+        postData = { 'Salt': base64.b64encode(salt), 'SrpVKey': base64.b64encode(vkey), 'FilenameKey': fKey, 'ContentKey': cKey }
         response = self.session.post(self.baseURL + "setKeys", data=postData)
         response.raise_for_status()
 

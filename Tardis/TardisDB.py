@@ -163,10 +163,13 @@ class TardisDB(object):
                 self.logger.error("Could not execute initialization script %s", initialize)
                 self.logger.exception(e)
                 raise
-            self.setConfigValue('ClientID', str(uuid.uuid1()))
+            self._setConfigValue('ClientID', str(uuid.uuid1()))
+            newDB = True
+        else:
+            newDB = False
 
         # Start authentication here.
-        if self.needsAuthentication():
+        if not newDB or self.needsAuthentication():
             authenticated = False
         else:
             self.authenticated = True
