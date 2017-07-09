@@ -60,6 +60,7 @@ def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac, output = No
 def generateFullFileInfo(checksum, regenerator, cacheDir, nameMac, signature=True, basis=None):
     i = regenerator.recoverChecksum(checksum, basisFile=basis)
     sig = None
+    logger.debug("    Generating HMAC for %s.  Generating signature: %s", checksum, str(signature))
     if signature:
         output = cacheDir.open(checksum + ".sig", "wb+")
         sig = librsync.SignatureJob(output)
@@ -102,19 +103,24 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
         logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
 
         #cacheDir.link(checksum + '.enc', newCks, soft=False)
-        cacheDir.link(checksum + ".sig", newCks + ".sig", soft=False)
+        #cacheDir.link(checksum + ".sig", newCks + ".sig", soft=False)
+        cacheDir.move(checksum + ".sig", newCks + ".sig")
+        logger.debug("    Moved sig file, updating database")
 
         c2.execute('UPDATE CheckSums SET Encrypted = 1, DiskSize = :size, Checksum = :newcks WHERE Checksum = :cks',
                     {"size": fSize, "newcks": newCks, "cks": checksum})
         c2.execute('UPDATE CheckSums SET Basis = :newcks WHERE Basis = :cks', {"newcks": newCks, "cks": checksum})
 
+        logger.debug("    Ready to commit")
         conn.commit()
+        logger.debug("    Commit complete, removing files")
         cacheDir.removeSuffixes(checksum, ['.meta', '.enc', '.sig', '.basis', ''])
+        logger.debug("    Done with %s", checksum)
         return retFile
     except Exception as e:
         conn.rollback()
         logger.error("Unable to convert checksum: %s :: %s", checksum, e)
-        #logger.exception(e)
+        logger.exception(e)
         return None
 
 def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
@@ -144,6 +150,42 @@ def encryptFiles(db, crypto, cacheDir):
     z = r.fetchone()[0]
     for level in range(z, -1, -1):
         encryptFilesAtLevel(db, crypto, cacheDir, level)
+
+
+def generateDirHashes(db, crypto, cacheDir):
+    conn = db.conn
+    z = conn.cursor()
+    r = conn.execute("SELECT Inode, Device, LastSet, Names.name, Checksums.ChecksumId, Checksum "
+                     "FROM Files "
+                     "JOIN Names ON Names.NameId = Files.NameID "
+                     "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                     "WHERE Dir = 1 "
+                     "ORDER BY Checksum")
+    lastHash = None
+    batch = r.fetchmany()
+    while batch:
+        for row in batch:
+            inode = row['Inode']
+            device = row['Device']
+            last = row['LastSet']
+            oldHash = row['Checksum']
+            cksId = row['ChecksumId']
+            files = db.readDirectory((inode, device), last)
+
+            if oldHash == lastHash:
+                continue
+            lastHash = oldHash
+
+            logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
+            #logger.debug("    Directory contents: %s", str(files))
+            (newHash, newSize) = Util.hashDir(crypto, files, True, True)
+            logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
+            try:
+                if newHash != oldHash:
+                    z.execute("UPDATE Checksums SET Checksum = :newHash WHERE ChecksumId = :id", {"newHash": newHash, "id": cksId})
+            except Exception:
+                pass
+        batch = r.fetchmany()
 
 def generateSignatures(db, cacheDir):
     c = db.conn.cursor()
@@ -175,6 +217,7 @@ def processArgs():
 
     parser.add_argument('--filenames',      dest='filenames', action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--files',          dest='files',     action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
+    parser.add_argument('--dirhashes',      dest='dirhash',   action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
     parser.add_argument('--meta',           dest='meta',      action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
     #parser.add_argument('--signatures',     dest='sigs',      action='store_true', default=False,       help='Generate signatures. Default=%(default)s')
 
@@ -197,7 +240,7 @@ def main():
     crypto = TardisCrypto.TardisCrypto(password, args.client)
     token = crypto.createToken()
 
-    logger.info("Created token: %s", token)
+    #logger.info("Created token: %s", token)
     path = os.path.join(args.database, args.client, args.dbname)
     db = TardisDB.TardisDB(path, token=token, backup=False)
     (f, c) = db.getKeys()
@@ -211,6 +254,8 @@ def main():
         encryptFilenames(db, crypto)
     if args.files:
         encryptFiles(db, crypto, cacheDir)
+    if args.dirhash:
+        generateDirHashes(db, crypto, cacheDir)
     if args.meta:
         generateMetadata(db, cacheDir)
 
