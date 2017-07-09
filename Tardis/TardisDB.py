@@ -181,9 +181,6 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
         self.conn.execute("PRAGMA journal_mode=wal")
 
-        appId = self._executeWithResult("PRAGMA application_id", {})[0]
-        appId = self._executeWithResult("PRAGMA user_version", {})[0]
-
         if journal:
             self.journal = file(journal, 'a')
 
