@@ -267,6 +267,7 @@ class TardisDB(object):
         # Not doing anything yet
         raise Exception("Upgrade failed\n");
 
+    @authenticate
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
