@@ -179,7 +179,7 @@ class TardisDB(object):
         if salt:
             return True
         else:
-            false
+            False
 
     def authenticate1(self, uname, srpValueA):
         salt, vkey = self.getSrpValues()
