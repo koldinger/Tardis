@@ -121,7 +121,7 @@ class TardisDB(object):
     srpSrv          = None
     authenticated   = False
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbname)
@@ -208,8 +208,12 @@ class TardisDB(object):
 
         version = self._getConfigValue('SchemaVersion')
         if int(version) != _schemaVersion:
-            self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", dbname, int(version), _schemaVersion)
-            raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(dbname, version, _schemaVersion))
+            if allow_upgrade:
+                self.logger.info("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", dbname, int(version), _schemaVersion)
+                self.upgradeSchema(int(version))
+            else:
+                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", dbname, int(version), _schemaVersion)
+                raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(dbname, version, _schemaVersion))
 
         if self.prevSet:
             f = self.getBackupSetInfo(self.prevSet)
@@ -254,6 +258,15 @@ class TardisDB(object):
             return current
 
     @authenticate
+    def upgradeSchema(baseVersion):
+        for i in range(baseVersion, _schemaVersion):
+            name = 'convert-%dto%d' % (i, i + 1)
+            #from schema import name name
+            self.logger.info("Running conversion script from version %d, %s", i, name)
+            # TODO: Run the script
+        # Not doing anything yet
+        raise Exception("Upgrade failed\n");
+
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:

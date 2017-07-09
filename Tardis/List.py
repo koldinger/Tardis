@@ -73,7 +73,8 @@ def setColors(s):
         x = g.split('=')
         name = x[0]
         c = map(str.strip, x[1].split(','))
-        c = map(lambda x: None if x.lower() == 'none' else x, c)
+        #c = map(lambda x: None if x.lower() == 'none' else x, c)
+        c = [None if x.lower() == 'none' else x for x in c]
         if len(c) == 1:
             colors[name] = c[0]
         else:
@@ -708,6 +709,8 @@ def processArgs():
     rangegrp.add_argument('--range',        dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',        dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
+    parser.add_argument('--log-exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
+
     parser.add_argument('--verbose', '-v',      action='count', default=0, dest='verbose',                  help='Increase the verbosity')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -757,7 +760,8 @@ def main():
         pass
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if tardis:
             tardis.close()

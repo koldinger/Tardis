@@ -144,9 +144,11 @@ def login():
         try:
             #app.logger.debug(str(request))
             host    = request.form['host']
+<<<<<<< HEAD
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
-            tardis  = TardisDB.TardisDB(dbPath)
+            upgrade = request.form['upgrade'] if 'upgrade' in request.form else False
+            tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
             #session['tardis']   = tardis
             session['host']     = host
             #app.logger.debug(str(session))

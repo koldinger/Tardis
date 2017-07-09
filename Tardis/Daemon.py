@@ -137,7 +137,8 @@ configDefaults = {
     'SkipFileName'      : skipFile,
     'DBBackups'         : '3',
     'AutoPurge'         : str(False),
-    'AllowClientOverrides'  :  str(True)
+    'AllowClientOverrides'  :  str(True),
+    'AllowSchemaUpgrades'   :  str(True),
 }
 
 server = None
@@ -966,7 +967,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                                     user=self.server.user,
                                     group=self.server.group,
                                     numbackups=self.server.dbbackups,
-                                    journal=journal)
+                                    journal=journal,
+                                    allow_upgrade = self.server.allowUpgrades)
 
         disabled = self.db.getConfigValue('Disabled')
         if disabled is not None and int(disabled) != 0:
@@ -1354,6 +1356,8 @@ class TardisServer(object):
         self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
 
         self.allowOverrides = config.getboolean('Tardis', 'AllowClientOverrides')
+
+        self.allowUpgrades  = config.getboolean('Tardis', 'AllowSchemaUpgrades')
 
         self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
         self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))

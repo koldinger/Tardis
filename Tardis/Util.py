@@ -343,7 +343,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
 
 # Get the database, cachedir, and crypto object.
 
-def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
+def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False):
     logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
     if password:
@@ -371,7 +371,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None):
         else:
             dbDir = os.path.join(dbLoc, client)
         dbPath = os.path.join(dbDir, dbName)
-        tardis = TardisDB.TardisDB(dbPath)
+        tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
 
     if password:
         authenticate(tardis, client, password)
