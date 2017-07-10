@@ -312,7 +312,7 @@ If a string is passed in, returns it.
 If the string is True or empty (''), it will use the getpass function to prompt on the
 terminal.
 """
-def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
+def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False):
     methods = 0
     if password: methods += 1
     if pwurl:    methods += 1
@@ -328,6 +328,10 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True):
     if password == True or password == '':
         password = getpass.getpass(prompt=prompt)
         password.rstrip()       # Delete trailing characters
+        if confirm:
+            pw2 = getpass.getpass(prompt="Confirm password:")
+            if password != pw2:
+                raise Exception("Passwords don't match")
 
     if pwurl:
         pwf = urllib.urlopen(pwurl)

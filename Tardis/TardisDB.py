@@ -46,7 +46,7 @@ import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
 import Tardis.Rotator as Rotator
 
-# Class
+# Exception classes
 class AuthenticationFailed(Exception):
     pass
 
@@ -99,9 +99,6 @@ def _fetchEm(cursor):
         for row in batch:
             yield row
 
-# Class
-class AuthenticationFailed(Exception):
-    pass
 
 # Class TardisDB
 
@@ -157,11 +154,11 @@ class TardisDB(object):
                     self.conn.executescript(script)
             except IOError as e:
                 self.logger.error("Could not read initialization script %s", initialize)
-                self.logger.exception(e)
+                #self.logger.exception(e)
                 raise
             except sqlite3.Error as e:
                 self.logger.error("Could not execute initialization script %s", initialize)
-                self.logger.exception(e)
+                #self.logger.exception(e)
                 raise
             self._setConfigValue('ClientID', str(uuid.uuid1()))
             newDB = True
@@ -169,11 +166,14 @@ class TardisDB(object):
             newDB = False
 
         # Start authentication here.
-        if not newDB or self.needsAuthentication():
-            authenticated = False
-        else:
+        self.logger.debug("Authetication status: %s %s", not newDB, self.needsAuthentication())
+        if newDB or not self.needsAuthentication():
+            self.logger.debug("Setting authenticated true")
             self.authenticated = True
             self._completeInit()
+        else:
+            self.logger.debug("Setting authenticated false")
+            self.authenticated = False
             
     
     def needsAuthentication(self):
@@ -186,11 +186,13 @@ class TardisDB(object):
 
     def authenticate1(self, uname, srpValueA):
         salt, vkey = self.getSrpValues()
-        self.srpSrv = srp.Verifier(uname, salt, vkey, srpValueA)
+        if salt is None or vkey is None:
+            raise AuthenticationFailed("Password doesn't match")
         self.logger.debug("Beginning authentication: %s %s %s %s", hexlify(uname), hexlify(salt), hexlify(vkey), hexlify(srpValueA))
+        self.srpSrv = srp.Verifier(uname, salt, vkey, srpValueA)
         s, B = self.srpSrv.get_challenge()
         if s is None or B is None:
-            raise AuthenticationFailed()
+            raise AuthenticationFailed("Password doesn't match")
         self.logger.debug("Authentication Challenge: %s %s", hexlify(s), hexlify(B))
         return s, B
 
@@ -201,7 +203,7 @@ class TardisDB(object):
             raise AuthenticationFailed("HAMK is None")
         self.logger.debug("Authentication HAMK: %s", hexlify(HAMK))
         if not self.srpSrv.authenticated():
-            raise AuthenticationFailed("srpSrv signals not authenticated")
+            raise AuthenticationFailed("Password doesn't match")
         self.authenticated = True
         self._completeInit()
         return HAMK
@@ -967,7 +969,7 @@ class TardisDB(object):
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)
-            self.logger.exception(e)
+            #self.logger.exception(e)
             return False
 
     @authenticate

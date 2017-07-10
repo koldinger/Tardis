@@ -103,13 +103,13 @@ def createClient(crypt, password):
             setPassword(crypt, password)
         return 0
     except Exception as e:
-        logger.error(e)
+        logger.error(str(e))
         return 1
 
 def setPassword(crypt, password):
     try:
         # Must be no token specified yet
-        (db, _) = getDB(None, password)
+        (db, _) = getDB(None, None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)
@@ -121,8 +121,10 @@ def setPassword(crypt, password):
         else:
             db.setKeys(salt, vkey, f, c)
         return 0
+    except TardisDB.NotAuthenticatedException:
+        logger.error('Client %s already has a password', args.client)
     except Exception as e:
-        logger.error(e)
+        logger.error(str(e))
         return 1
 
 def changePassword(crypt, crypt2, oldpw, newpw):
@@ -155,7 +157,7 @@ def changePassword(crypt, crypt2, oldpw, newpw):
             db.setKeys(salt, vkey, f, c)
         return 0
     except Exception as e:
-        logger.error(e)
+        logger.error(str(e))
         return 1
 
 def moveKeys(db, crypt):
@@ -572,42 +574,38 @@ def main():
     crypt   = None
     cache   = None
     try:
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=(args.command != 'setPass'))
-        if args.command in ['setpass', 'create']:
-            if password and not checkPasswordStrength(password):
-                return -1
-
-            if args.password:
-                pw2 = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt='Confirm Password: ')
-                if pw2 != password:
-                    logger.error("Passwords don't match")
-                    return -1
-                pw2 = None
+        confirm = args.command in ['setpass', 'create']
+        allowNone = args.command != 'setpass'
+        try:
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
+        except Exception as e:
+            logger.critical(str(e))
+            return -1
+            
+        if confirm and password and not checkPasswordStrength(password):
+            return -1
 
         if password:
             crypt = TardisCrypto.TardisCrypto(password, args.client)
             args.password = None
 
         if args.command == 'create':
-            return createClient(crypt)
+            return createClient(crypt, password)
 
         if args.command == 'setpass':
             if not crypt:
                 logger.error("No password specified")
                 return -1
-            return setPassword(crypt)
+            return setPassword(crypt, password)
 
         if args.command == 'chpass':
-            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
-            if not checkPasswordStrength(newpw):
+            try:
+                newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False, confirm=True)
+            except Exception as e:
+                logger.critical(str(e))
                 return -1
-
-            if args.newpw is True:
-                newpw2 = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False)
-                if newpw2 != newpw:
-                    logger.error("Passwords don't match")
-                    return -1
-                newpw2 = None
+            if password and not checkPasswordStrength(newpw):
+                return -1
 
             crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
             return changePassword(crypt, crypt2, password, newpw)
