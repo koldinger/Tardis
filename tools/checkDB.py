@@ -24,12 +24,17 @@ def getdbfiles(conn, prefix):
         ret.update([i[0] for i in batch])
     return ret
 
+def hasExt(x):
+    (_, e) = os.path.splitext(x)
+    return (e is not '' and e is not None)
+
 def main():
     d = sys.argv[1]
 
-
     db = os.path.join(d, "tardis.db")
+    print "Opening DB: " + db
     conn = sqlite3.connect(db)
+    print "Connected"
 
     sigNoData = set()
     missingData = set()
@@ -45,18 +50,18 @@ def main():
             path = os.path.join(d, i, j)
             if os.path.isdir(path):
                 contents = os.listdir(path)
-                sigfiles  = set([x for x in contents if x.endswith(".sig")])
-                datafiles = set([x for x in contents if not x.endswith(".sig")])
+                metafiles = set(filter(hasExt, contents))
+                datafiles = set(filter(lambda x: not hasExt(x), contents))
 
                 alldatafiles.update(datafiles)
                 
-                #print path, " :: ", len(contents), len(sigfiles), len(datafiles), " :: ", len(dbfiles)
+                #print path, " :: ", len(contents), len(metafiles), len(datafiles), " :: ", len(dbfiles)
                 # Process the signature files
-                for sig in sigfiles:
-                    data = sig[:-4]
+                for f in metafiles:
+                    (data, _) = os.path.splitext(f)
                     if not data in datafiles:
-                        print "Signature {} without matching data file".format(sig)
-                        sigNoData.add(sig)
+                        print "{} without matching data file".format(f)
+                        sigNoData.add(f)
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)
