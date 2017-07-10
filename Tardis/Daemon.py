@@ -1188,6 +1188,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             serverForceFull = False
             authResp = {}
             try:
+                if srpValueA is None and self.server.requirePW:
+                    # Assume that the client will send the keys soon.
+                    raise InitFailedException("Password is required on this server")
+
                 newBackup = self.getDB(client)
 
                 self.setConfig()
@@ -1223,7 +1227,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.server.serverSessionID)
             except Exception as e:
                 message = {"status": "FAIL", "error": str(e)}
-                sock.sendall(json.dumps(message))
+                self.sendMessage(message)
                 if self.server.exceptions:
                     self.logger.exception(e)
                 raise InitFailedException(str(e))

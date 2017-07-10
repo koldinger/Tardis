@@ -1315,9 +1315,10 @@ def startBackup(name, priority, client, autoname, force, full=False, version=0):
         resp = doSrpAuthentication(resp)
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
-        if 'error' in fields:
-            errmesg = errmesg + ": " + fields['error']
-        raise ConnectionException(errmesg)
+        if 'error' in resp:
+            errmesg = errmesg + ": " + resp['error']
+        raise Exception(errmesg)
+
     sessionid      = uuid.UUID(resp['sessionid'])
     clientId       = uuid.UUID(resp['clientid'])
     lastTimestamp  = float(resp['prevDate'])
