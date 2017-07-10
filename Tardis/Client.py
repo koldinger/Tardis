@@ -1269,7 +1269,7 @@ def doSrpAuthentication(message):
         srpValueM = srpUsr.process_challenge(srpValueS, srpValueB)
 
         if srpValueM is None:
-            raise AuthenticationFailed("Authentication Failed 1")
+            raise AuthenticationFailed("Authentication Failed")
         logger.debug("Authentication Challenge response: %s", hexlify(srpValueM))
 
         message = {
@@ -1278,6 +1278,8 @@ def doSrpAuthentication(message):
         }
 
         resp = sendAndReceive(message)
+        if resp['status'] == 'AUTHFAIL':
+            raise AuthenticationFailed("Authentication Failed")
         srpHamk = base64.b64decode(resp['srpValueHAMK'])
         srpUsr.verify_session(srpHamk)
         return resp
