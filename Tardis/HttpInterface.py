@@ -138,6 +138,13 @@ def handleNotAuthenticated(error):
     response.status_code = 401
     return response
 
+@app.errorhandler(TardisDB.AuthenticationFailed)
+def handleNotAuthenticated(error):
+    app.logger.info("Authentication failed.  Wrong password")
+    response = make_response(str(error))
+    response.status_code = 401
+    return response
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
