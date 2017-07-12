@@ -301,6 +301,11 @@ def getChecksumInfoChain(checksum):
     db = getDB()
     return createResponse(map(makeDict, db.getChecksumInfoChain(checksum)))
 
+@app.route('/getChecksumInfoChainByPath/<int:backupset>/<path:pathname>')
+def getChecksumInfoChainByPath(pathname, backupset):
+    db = getDB()
+    return createResponse(map(makeDict, db.getChecksumInfoChainByPath(pathname, backupset)))
+
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
     #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
