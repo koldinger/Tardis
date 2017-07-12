@@ -10,7 +10,7 @@ def upgrade(conn, logger):
     t = s.fetchone()
     if int(t[0]) != version:
         logger.error("Invalid database schema version: {}".format(t[0]))
-        raise Exception("Invalid version {}.  Expected {}".format(t[0], version)
+        raise Exception("Invalid version {}.  Expected {}".format(t[0], version))
 	
 	conn.execute("ALTER TABLE Checksums ADD COLUMN Added INTEGER")
 	conn.execute("ALTER TABLE Checksums ADD COLUMN IsFile INTEGER")         # Old version only uses checksums for files.
