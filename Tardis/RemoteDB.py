@@ -39,6 +39,7 @@ import requests
 import requests_cache
 
 import Tardis
+import Tardis.TardisDB as TardisDB
 
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)
@@ -129,6 +130,10 @@ class RemoteDB(object):
             'srpValueA': base64.b64encode(srpValueA)
         }
         response = self.session.post(self.baseURL + 'authenticate1', data=postData)
+        # Check for "not authenticated", which indicates authentication failed.
+        if response.status_code == 401:
+            raise TardisDB.AuthenticationFailed("Bad Password")
+        # Catch other errors.
         response.raise_for_status()
         data = response.json()
         srpValueS = base64.b64decode(data['srpValueS'])
@@ -140,6 +145,10 @@ class RemoteDB(object):
             'srpValueM': base64.b64encode(srpValueM)
         }
         response = self.session.post(self.baseURL + 'authenticate2', data=postData)
+        # Check for "not authenticated", which indicates authentication failed.
+        if response.status_code == 401:
+            raise TardisDB.AuthenticationFailed("Bad Password")
+        # Catch other errors.
         response.raise_for_status()
         data = response.json()
         srpValueH = base64.b64decode(data['srpValueH'])
