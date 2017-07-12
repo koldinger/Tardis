@@ -65,11 +65,12 @@ def main():
                     names = map(crypto.decryptFilename, names)
                     name = crypto.decryptFilename(name)
 
-                    names = sorted(names)
-                    m = hashlib.md5()
-                    for f in names:
-                        m.update(f)
-                    checksum = m.hexdigest()
+                m = Util.getHash(crypto)
+
+                names = sorted(names)
+                for f in names:
+                    m.update(f)
+                checksum = m.hexdigest()
             else:
                 checksum = 'd41d8cd98f00b204e9800998ecf8427e'
 

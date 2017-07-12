@@ -327,9 +327,17 @@ class RemoteDB(object):
         r.raise_for_status()
 
     @reconnect
+    def getChecksumInfoChainByPath(self, name, bset, permchecker=None):
+        if not name.startswith('/'):
+            name = '/' + name
+        name = urllib.quote(name, '/')
+        r = self.session.get(self.baseURL + "getChecksumInfoChainByPath/" + str(bset) + name, headers=self.headers)
+        r.raise_for_status()
+
+    @reconnect
     def getFirstBackupSet(self, name, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + "getFirstBackupSet/" + bset + "/" + name, headers=self.headers)
+        r = self.session.get(self.baseURL + "getFirstBackupSet/" + str(bset) + "/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
 
