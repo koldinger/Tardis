@@ -43,6 +43,7 @@ import Tardis
 import Tardis.Util as Util
 import Tardis.Defaults as Defaults
 import Tardis.Config as Config
+import Tardis.TardisDB as TardisDB
 
 columns = None
 columnfmt = None
@@ -758,6 +759,10 @@ def main():
             processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=recurse)
     except KeyboardInterrupt:
         pass
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
         if args.exceptions:
