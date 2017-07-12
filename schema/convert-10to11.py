@@ -10,7 +10,7 @@ def upgrade(conn, logger):
     t = s.fetchone()
     if int(t[0]) != version:
         logger.error("Invalid database schema version: {}".format(t[0]))
-        raise Exception("Invalid version {}.  Expected {}".format(t[0], version)
+        raise Exception("Invalid version {}.  Expected {}".format(t[0], version))
 
 	conn.execute('UPDATE Checksums SET Compressed = "zlib" WHERE Compressed IS 1')
 	conn.execute('UPDATE Checksums SET Compressed = "none" WHERE Compressed IS 0')
