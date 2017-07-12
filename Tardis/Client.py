@@ -1575,7 +1575,8 @@ def main():
             logger.critical("Could not retrieve password.")
             sys.exit(1)
         # Purge out the original password.  Maybe it might go away.
-        args.password = None
+        if args.password:
+            args.password = '-- removed --'
 
         token = None
         if password:
@@ -1678,7 +1679,11 @@ def main():
             crypt.setKeys(f, c)
 
     # Send the command line
-    jsonArgs = json.dumps(vars(args), cls=Util.ArgJsonEncoder, sort_keys=True)
+    a = vars(args)
+    a['directories'] = directories
+    if a['password']:
+        a['password'] = '-- removed --'
+    jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
     message = {
         "message": "CLICONFIG",
         "args":    jsonArgs
