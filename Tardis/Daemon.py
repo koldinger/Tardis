@@ -137,7 +137,7 @@ configDefaults = {
     'DBBackups'         : '3',
     'AutoPurge'         : str(False),
     'AllowClientOverrides'  :  str(True),
-    'AllowSchemaUpgrades'   :  str(True),
+    'AllowSchemaUpgrades'   :  str(False),
 }
 
 server = None
