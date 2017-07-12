@@ -736,6 +736,19 @@ def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
     else:
         return func()
 
+def hashDir(crypt, files, cryptActive, decrypt=False):
+    """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
+    if decrypt:
+        f = list(files)
+        #print map(crypt.decryptFilename, [x['name'] for x in f])
+        filenames = sorted(map(lambda n: crypt.decryptFilename(n).encode('UTF-8'), [x['name'] for x in f]))
+    else:
+        filenames = sorted([x["name"] for x in files])
+    m = getHash(crypt, cryptActive)
+    for f in filenames:
+        m.update(f)
+    return (m.hexdigest(), len(filenames))
+
 # 'Test' code
 
 if __name__ == "__main__":

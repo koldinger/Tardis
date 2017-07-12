@@ -244,7 +244,7 @@ class TardisDB(object):
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
-        self.conn.execute("PRAGMA journal_mode=truncate")
+        self.conn.execute("PRAGMA journal_mode=wal")
 
         if self.journalName:
             self.journal = file(self.journalName, 'a')
@@ -262,8 +262,7 @@ class TardisDB(object):
         else:
             return current
 
-    @authenticate
-    def upgradeSchema(baseVersion):
+    def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
             name = 'convert-%dto%d' % (i, i + 1)
             #from schema import name name

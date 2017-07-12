@@ -951,7 +951,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
-        h = hashDir(files)
+        h = Util.hashDir(crypt, files, args.crypt)
         #logger.debug("Dir: %s (%d, %d): Hash: %s Size: %d.", Util.shortPath(dir), s.st_ino, s.st_dev, h[0], h[1])
         dirHashes[(s.st_ino, s.st_dev)] = h
 
@@ -1017,20 +1017,12 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.exception(e)
         raise
 
-def hashDir(files):
-    """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
-    filenames = sorted([x["name"] for x in files])
-    m = Util.getHash(crypt, args.crypt)
-    for f in filenames:
-        m.update(f)
-    return (m.hexdigest(), len(filenames))
-
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
     if info:
         (h, s) = info
     else:
-        (h, s) = hashDir(files)
+        (h, s) = Util.hashDir(crypt, files, args.crypt)
 
     message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
@@ -1674,7 +1666,8 @@ def main():
             logger.critical("Could not retrieve password.")
             sys.exit(1)
         # Purge out the original password.  Maybe it might go away.
-        args.password = None
+        if args.password:
+            args.password = '-- removed --'
 
         if password:
             srpUsr = srp.User(args.client, password)
@@ -1776,7 +1769,11 @@ def main():
             crypt.setKeys(f, c)
 
     # Send the command line
-    jsonArgs = json.dumps(vars(args), cls=Util.ArgJsonEncoder, sort_keys=True)
+    a = vars(args)
+    a['directories'] = directories
+    if a['password']:
+        a['password'] = '-- removed --'
+    jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
     message = {
         "message": "CLICONFIG",
         "args":    jsonArgs
