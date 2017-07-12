@@ -60,7 +60,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 12
+_schemaVersion = 11
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -197,7 +197,7 @@ class TardisDB(object):
         else:
             return current
 
-    def upgradeSchema(baseVersion):
+    def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
             name = 'convert-%dto%d' % (i, i + 1)
             #from schema import name name
