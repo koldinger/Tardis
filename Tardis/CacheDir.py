@@ -36,6 +36,9 @@ import shutil
 
 import Defaults
 
+class CacheDirDoesNotExist(Exception):
+    pass
+
 class CacheDir(object):
     def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
         self.root = os.path.abspath(root)
@@ -54,7 +57,7 @@ class CacheDir(object):
                     with open(os.path.join(self.root, skipFile), 'a'):
                         pass
             else:
-                raise Exception("CacheDir does not exist: " + root)
+                raise CacheDirDoesNotExist("CacheDir does not exist: " + root)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
