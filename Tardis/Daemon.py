@@ -921,8 +921,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return (response, flush)
 
     def getCacheDir(self):
-        self.logger.debug("Using cache dir: %s", self.basedir)
-        return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group, skipFile=self.server.skip)
+        try:
+            self.logger.debug("Using cache dir: %s", self.basedir)
+            return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group, skipFile=self.server.skip)
+        except CacheDir.CacheDirDoesNotExist as e:
+            raise InitFailedException("Server does not allow new clients")
 
     def getDB(self, client, token):
         script = None
