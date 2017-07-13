@@ -387,6 +387,11 @@ def main():
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
+        sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
         sys.exit(1)
@@ -523,6 +528,10 @@ def main():
                     logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
         #logger.exception(e)

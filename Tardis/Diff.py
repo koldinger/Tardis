@@ -340,6 +340,11 @@ def main():
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
         pass
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
+        sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
         if args.exceptions:

@@ -102,6 +102,9 @@ def createClient(crypt, password):
         if crypt:
             setPassword(crypt, password)
         return 0
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        return 1
     except Exception as e:
         logger.error(str(e))
         return 1
@@ -123,6 +126,10 @@ def setPassword(crypt, password):
         return 0
     except TardisDB.NotAuthenticatedException:
         logger.error('Client %s already has a password', args.client)
+        return 1
+    except TardisDB.AuthenticationFailed as e:
+        logger.error("Authentication failed.  Bad password")
+        return 1
     except Exception as e:
         logger.error(str(e))
         return 1
@@ -184,6 +191,9 @@ def moveKeys(db, crypt):
             if args.deleteKeys:
                 Util.saveKeys(args.keys, clientId, None, None)
         return 0
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        return 1
     except Exception as e:
         logger.error(e)
         logger.exception(e)
@@ -204,6 +214,9 @@ def listBSets(db):
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
             print "%-30s %-4d %-6s %3d  %-5s  %s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent)
+    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+        logger.error("Authentication failed.  Bad password")
+        return 1
     except Exception as e:
         logger.error(e)
         logger.exception(e)
@@ -618,6 +631,9 @@ def main():
                 else:
                     (f, c) = db.getKeys()
                 crypt.setKeys(f, c)
+        except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+            logger.error("Authentication failed.  Bad password")
+            sys.exit(1)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
             sys.exit(1)
