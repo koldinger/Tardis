@@ -58,21 +58,7 @@ def main():
             lastset  = d['lastset']
 
             files = db.readDirectory((inode, device), current=lastset)
-            names = [x['name'] for x in files]
-            nfiles = len(names)
-            if nfiles:
-                if crypto:
-                    names = map(crypto.decryptFilename, names)
-                    name = crypto.decryptFilename(name)
-
-                m = Util.getHash(crypto)
-
-                names = sorted(names)
-                for f in names:
-                    m.update(f)
-                checksum = m.hexdigest()
-            else:
-                checksum = 'd41d8cd98f00b204e9800998ecf8427e'
+            (checksum, nfiles) = Util.hashDir(crypto, files, True)
 
             print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, nfiles)
             ckinfo = db.getChecksumInfo(checksum)
