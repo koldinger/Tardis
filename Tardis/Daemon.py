@@ -136,6 +136,7 @@ configDefaults = {
     'SkipFileName'      : skipFile,
     'DBBackups'         : '3',
     'AutoPurge'         : str(False),
+    'SaveConfig'        : str(True),
     'AllowClientOverrides'  :  str(True),
     'AllowSchemaUpgrades'   :  str(False),
 }
@@ -171,6 +172,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     regenerator = None
     basedir = None
     autoPurge = False
+    saveConfig = False
     deltaPercent = 80
     forceFull = False
     saveFull = False
@@ -865,10 +867,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         return (response, True)
 
     def processClientConfig(self, message):
-        clientConfig = message['args']
-        self.logger.debug("Received client config: %s", clientConfig)
-        self.db.setClientConfig(clientConfig)
-        return (None, False)
+        if self.saveConfig:
+            clientConfig = message['args']
+            self.logger.debug("Received client config: %s", clientConfig)
+            self.db.setClientConfig(clientConfig)
+            return (None, False)
 
 
     def processMessage(self, message, transaction=True):
@@ -977,6 +980,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.maxChain       = self.server.maxChain
         self.deltaPercent   = self.server.deltaPercent
         self.autoPurge      = self.server.autoPurge
+        self.saveConfig     = self.server.saveConfig
 
         if self.server.allowOverrides:
             try:
@@ -1007,6 +1011,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 maxChain        = self.db.getConfigValue('MaxDeltaChain')
                 deltaPercent    = self.db.getConfigValue('MaxChangePercent')
                 autoPurge       = self.db.getConfigValue('AutoPurge')
+                saveConfig      = self.db.getConfigValue('SaveConfig')
 
                 if savefull is not None:
                     self.logger.debug("Overriding global save full: %s", savefull)
@@ -1020,6 +1025,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if autoPurge is not None:
                     self.logger.debug("Overriding global autopurge value: %s", bool(autoPurge))
                     self.autoPurge = bool(autoPurge)
+                if saveConfig is not None:
+                    self.logger.debug("Overriding global saveconfig value: %s", bool(autoPurge))
+                    self.saveconfig = bool(saveconfig)
             except Exception as e:
                 self.logger.error("Client %s: Unable to override global configuration: %s", self.client, str(e))
 
@@ -1316,6 +1324,7 @@ class TardisServer(object):
         self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
 
         self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
+        self.saveConfig     = config.getboolean('Tardis', 'SaveConfig')
 
         self.skip           = config.get('Tardis', 'SkipFileName')
 

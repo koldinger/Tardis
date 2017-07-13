@@ -54,7 +54,7 @@ current      = Defaults.getDefault('TARDIS_RECENT_SET')
 pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
 
 # Config keys which can be gotten or set.
-configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled']
+configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled', 'SaveConfig']
 # Extra keys that we print when everything is requested
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 

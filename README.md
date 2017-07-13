@@ -181,6 +181,7 @@ Environment Variables
 | TARDIS_REMOTE_PIDFILE | Path to the pidfile for tardisremote daemon.| /var/run/tardisremote.pid| Remote |
 | TARDIS_DEFAULTS       | Location of a defaults file.| /etc/tardis/system.defaults | All |
 | TARDIS_RECENT_SET     | Name to use for most recent, complete backup | Current | User tools |
+| TARDIS_SEND_CONFIG    | Send the running configuration to the server, mainly for debug. | True | Client
 
 Notes:
     * User tools are lstardis, regenerate, tardiff, and sonic.
@@ -229,6 +230,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | CompressMin     | 4096                |                   | Minimum size file to compress. |
 | NoCompressFile  |                     | TARDIS_NOCOMPRESS | File containing a list of mime type files to not attempt to compress
 | NoCompress      |                     |                   | Mime types to not compress |
+| SendClientConfig| True                | TARDIS_SEND_CONFIG| Send the client configuration (arguments) to the server. |
 | Local           | False               |                   | Perform a local backup.  Spawns a server as a child process. |
 | LocalServerCmd  | tardisd --config    |                   | Command for running the local server. |
 | CompressMsgs    | none                |                   | Compress messages to the server.  Choices are none, zlib, zlib-stream, snappy |
@@ -266,6 +268,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | Profile         | False               |                 | If true, a profile of each session will be generated and printed to stdout| 
 | AllowNewHosts   | False               |                 | If True, any new host can connect and create a backup set.  If false, a directory with the hostname that the client wil provide must be created prior to the client attempting to perform a backup. |
 | RequirePassword | False               |                 | Require all backups to have a password. |
+| SaveConfig      | True                |                 | Save the client's configuration, if sent. |
 | LogExceptions   | False               |                 | Log full detail of all exceptions, including call chain. |
 | MaxDeltaChain   | 5                   |                 | Maximum number of delta's to request before requesting an entire new copy of a file. |
 | MaxChangePercent| 50                  |                 | Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
