@@ -94,6 +94,7 @@ configDefaults = {
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              None,
+    'SendClientConfig':     Defaults.getDefault('TARDIS_SEND_CONFIG'),
     'CompressData':         'none',
     'CompressMin':          str(4096),
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
@@ -1402,6 +1403,9 @@ def processCommandLine():
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
+    parser.add_argument('--send-config', '-S',      dest='sendconfig', action=Util.StoreBoolean, default=c.getboolean(t, 'SendClientConfig'),
+                        help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s');
+
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  Default: %(default)s')
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
@@ -1768,19 +1772,18 @@ def main():
                 sys.exit(1)
             crypt.setKeys(f, c)
 
-    # Send the command line
-    a = vars(args)
-    a['directories'] = directories
-    if a['password']:
-        a['password'] = '-- removed --'
-    jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
-    message = {
-        "message": "CLICONFIG",
-        "args":    jsonArgs
-    }
-
-
-    batchMessage(message)
+    # Send the command line, if so desired.
+    if args.sendconfig:
+        a = vars(args)
+        a['directories'] = directories
+        if a['password']:
+            a['password'] = '-- removed --'
+        jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
+        message = {
+            "message": "CLICONFIG",
+            "args":    jsonArgs
+        }
+        batchMessage(message)
 
     # Now, do the actual work here.
     try:

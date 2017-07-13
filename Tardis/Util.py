@@ -46,6 +46,7 @@ import functools
 import pwd
 import grp
 import time
+import struct
 
 import urlparse
 import urllib
@@ -744,9 +745,17 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
         filenames = sorted(map(lambda n: crypt.decryptFilename(n).encode('UTF-8'), [x['name'] for x in f]))
     else:
         filenames = sorted([x["name"] for x in files])
+
     m = getHash(crypt, cryptActive)
+    # Generate a length, and convert it to a byte string
+    z = struct.pack("!I", len(filenames))
+    # Hash that
+    m.update(z)
     for f in filenames:
+        # For each entry, hash the name, and a null character
         m.update(f)
+        m.update('\0')
+    m.update(z)
     return (m.hexdigest(), len(filenames))
 
 # 'Test' code

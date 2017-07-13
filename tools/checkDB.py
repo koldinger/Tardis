@@ -36,7 +36,6 @@ def main():
     conn = sqlite3.connect(db)
     print "Connected"
 
-    sigNoData = set()
     missingData = set()
     unreferenced = set()
 
@@ -61,27 +60,18 @@ def main():
                     (data, _) = os.path.splitext(f)
                     if not data in datafiles:
                         print "{} without matching data file".format(f)
-                        sigNoData.add(f)
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)
         missingData.update(missing)
         for i in missing:
             print "Missing data files {}".format(i)
+
         # Find files which aren't in the DB
         unref = alldatafiles.difference(dbfiles)
         unreferenced.update(unref)
         for i in unref:
             print "Unreferenced data file: {}".format(i)
-        """
-        for dbf in dbfiles:
-            if not dbf in alldatafiles:
-                print "Unreferenced data file: {}".format(data)
-
-        for data in alldatafiles:
-            if not data in dbfiles:
-                print "Missing data files {}".format(dbf)
-        """
 
     conn.close()
 
