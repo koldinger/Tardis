@@ -22,14 +22,14 @@ Tardis consists of several components:
 * tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
 
 Tardis is currently under development, but is at beta level.
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, ~~pycurl,~~ requests, requests-cache, passwordmeter, python-snappy, 
+Tardis relies on the msgpack, xattrs, pycryptodome (pycryptodomex), daemonize, parsedatetime, flask, tornado, requests, requests-cache, passwordmeter, python-snappy, 
 and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
 Important Release Notes
 =======================
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the tools/setDirHashes.py program (or run encryptDB.py --dirhashes, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
+Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirhashes`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
 
 Future Releases
 ===============
@@ -44,10 +44,10 @@ Installation
 ============
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python developmen, and a couple other packages.
-    * Fedora: {yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp snappy-devel
-    * Ubuntu/Debian: apt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev
+    * Fedora: `{yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp snappy-devel`
+    * Ubuntu/Debian: a`pt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev`
   * Run the python setup:
-    * python setup.py install
+    * `python setup.py install`
 
 Server Setup
 ============
@@ -61,16 +61,17 @@ Server Setup
   * Create a log directory (mkdir */var/log/tardisd*)
   * Copy the appropriate startup script as desired
       * Systemd/systemctl based systems (such as Fedora 20)
-         * cp init/tardisd.service /usr/lib/systemd/system
-         * systemctl enable tardisd.service
+         * `cp init/tardisd.service /usr/lib/systemd/system`
+         * `systemctl enable tardisd.service`
          * start the service
-           * systemctl start tardisd.service
+           * `systemctl start tardisd.service`
       * SysV init
-         * cp init/tardisd /etc/init.d
-         * chkconfig --add tardisd
-         * chkconfig tardisd on
+         * `cp init/tardisd /etc/init.d`
+         * `chkconfig --add tardisd`
+         * `chkconfig tardisd on`
          * start the service
-           * service tardisd start
+           * `service tardisd start`
+     * Repeat the process with the tardisremote scripts, if you wish to support accessing the database via the remote protocol.
 
 Server Requirements
 -------------------
@@ -85,7 +86,7 @@ Running the Client
 Should probably run as root.  Basic operation is thus:
   tardis [--port <targetPort>] [--server <host>] [--ssl] /path/to/directory-to-backup <more paths here>
 Use the --ssl if your connection is SSL enabled.
-If you wish encrypted backups, add the --password or --password-file options to specify a password.  ~~Note, if you use encrypted backups, you must always specify the same password.  Tardis doesn't currently check, but you're in a heap of pain of you get it wrong.  Or at least a LOT of wasted disk space, and unreadable files.~~
+If you wish encrypted backups, add the --password or --password-file options to specify a password.
 
 Your first backup will take quite a while.  Subsequent backups will be significantly faster.
 
@@ -95,7 +96,7 @@ Adding --purge to your command line will remove old backupsets per a schedule of
 
 Note on Passwords
 =================
-There is no mechanism for recovering a lost password.  If you lose it, you're done.
+*There is no mechanism for recovering a lost password.  If you lose it, you're done.*
 
 Passwords can be changed with the sonic utility.
 
@@ -116,28 +117,28 @@ variable/configuration argument.  See below for details.
 
 Listing Versions of Files Available
 ===================================
-Files can be listed in the tardisfs, or via the lstardis application.
+Files can be listed in the `tardisfs`, or via the `lstardis` application.
 
-lstardis can list all versions of a file available.  See lstardis -h for details.
+`lstardis` can list all versions of a file available.  See `lstardis -h` for details.
 
 Comparing versions of files
 ===========================
-tardiff can directly compare two versions of a file in the database, or a file in the database, and it's corresponding version
+`tardiff` can directly compare two versions of a file in the database, or a file in the database, and it's corresponding version
 in the filesystem.
 
-See tardiff -h for details.
+See `tardiff -h` for details.
 
 Recovering Files
 ================
-Files can be recovered in two different ways: via the regenerate application, and via a tardisfs filesystem.
+Files can be recovered in two different ways: via the `regenerate` application, and via a `tardisfs` filesystem.
 
 The filesystem approach is often the easiest method.  In this technique, a filesystem is mounted which contains the results of all the backupsets.  At the top level, there is a directory for each backup set.  Underneath these directories, are the full image of the backuped directories in a standard directory tree, as they appeared at the time of the backup.  Files can easily be copied out of this tree to their desired locations.
 
-Files can also be recovered via the regenerate application. The regenerate application takes the name of the file to be recovered, and can also be given a date for which to regenerate the file.  Dates can be via the --date (-D) option, and can be specified via a large variety of forms.  For instance "regenerate -D '3 days ago' filename" will regenerate a version from 3 days earlier.  Dates can also be specified expclitly in a wide variety of formats, such as "03/15/2014" to specify March 15, 2014 (obviously).
+Files can also be recovered via the regenerate application. The regenerate application takes the name of the file to be recovered, and can also be given a date for which to regenerate the file.  Dates can be via the --date (-d) option, and can be specified via a large variety of forms.  For instance `regenerate -d '3 days ago' filename` will regenerate a version from 3 days earlier.  Dates can also be specified expclitly in a wide variety of formats, such as "03/15/2014" to specify March 15, 2014 (obviously).
 
 Regenerate can be used to recover entire directory trees.  In general, using regenerate to recover files will be siginicantly faster than rsync'ing out of tardisfs.
 
-See regenerate -h for details.
+See `regenerate -h` for details.
 
 At present, the regenerate application does NO permission checking to determine if a user has permission to read a file.  Thus, any file in the database set can be accessed by anybody with access to the backup database.  If this is a problem in your environment, it is recommended to disable the regenerate application (or at least protect the database with a password that you don't share with all users), and allow access primarily through a tardisfs filesystem controlled by the super-user.  See Mounting the Filesystem below.
 
