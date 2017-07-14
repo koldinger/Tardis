@@ -325,6 +325,7 @@ class RemoteDB(object):
     def getChecksumInfoChain(self, checksum):
         r = self.session.get(self.baseURL + "getChecksumInfoChain/" + checksum, headers=self.headers)
         r.raise_for_status()
+        return r.json()
 
     @reconnect
     def getChecksumInfoChainByPath(self, name, bset, permchecker=None):
@@ -333,6 +334,7 @@ class RemoteDB(object):
         name = urllib.quote(name, '/')
         r = self.session.get(self.baseURL + "getChecksumInfoChainByPath/" + str(bset) + name, headers=self.headers)
         r.raise_for_status()
+        return r.json()
 
     @reconnect
     def getFirstBackupSet(self, name, current=False):
