@@ -47,10 +47,13 @@ import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
 import Tardis.Rotator as Rotator
 
 # Exception classes
-class AuthenticationFailed(Exception):
+class AuthenticationException(Exception):
     pass
 
-class NotAuthenticatedException(Exception):
+class AuthenticationFailed(AuthenticationException):
+    pass
+
+class NotAuthenticated(AuthenticationException):
     pass
 
 # Utility functions
@@ -60,7 +63,7 @@ def authenticate(func):
         if self._isAuthenticated():
             return func(self, *args, **kwargs)
         else:
-            raise NotAuthenticatedException
+            raise NotAuthenticated
     return doit
 
 _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
@@ -550,7 +553,9 @@ class TardisDB(object):
     @authenticate
     def getChecksumInfoChainByPath(self, name, current=False, permchecker=None):
         backupset = self._bset(current)
+        self.logger.debug("Getting Checksum Info for %s", name)
         cksum = self.getChecksumByPath(name, backupset, permchecker)
+        self.logger.debug("Got checksum %s", name)
         if cksum:
             return self.getChecksumInfoChain(cksum)
         else:

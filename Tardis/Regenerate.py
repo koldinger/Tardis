@@ -42,6 +42,7 @@ import xattr
 import posix1e
 
 import Tardis
+import TardisDB
 import Regenerator
 import Util
 import Config
@@ -387,69 +388,70 @@ def main():
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
-    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+    except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        #if args.exceptions:
+            #logger.exception(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
         sys.exit(1)
 
-    bset = False
-
-    if args.date:
-        cal = parsedatetime.Calendar()
-        (then, success) = cal.parse(args.date)
-        if success:
-            timestamp = time.mktime(then)
-            logger.info("Using time: %s", time.asctime(then))
-            bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
-            if bsetInfo and bsetInfo['backupset'] != 1:
-                bset = bsetInfo['backupset']
-                logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
-            else:
-                logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
-                sys.exit(1)
-        else:
-            logger.critical("Could not parse date string: %s", args.date)
-            sys.exit(1)
-    elif args.backup:
-        bsetInfo = tardis.getBackupSetInfo(args.backup)
-        if bsetInfo:
-            bset = bsetInfo['backupset']
-        else:
-            logger.critical("No backupset at for name: %s", args.backup)
-            sys.exit(1)
-
-    outputdir = None
-    output    = sys.stdout
-    outname   = None
-    linkDB    = None
-
-    owMode    = overwriteNames[args.overwrite]
-
-    if args.output:
-        if len(args.files) > 1:
-            outputdir = mkOutputDir(args.output)
-        elif os.path.isdir(args.output):
-            outputdir = args.output
-        else:
-            outname = args.output
-    logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
-
-    if args.hardlinks:
-        linkDB = {}
-
-    #if args.cksum and (args.settime or args.setperm):
-        #logger.warning("Unable to set time or permissions on files specified by checksum.")
-
-    permChecker = setupPermissionChecks()
-
-    retcode = 0
-    hasher = None
-    # do the work here
     try:
+        bset = False
+
+        if args.date:
+            cal = parsedatetime.Calendar()
+            (then, success) = cal.parse(args.date)
+            if success:
+                timestamp = time.mktime(then)
+                logger.info("Using time: %s", time.asctime(then))
+                bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
+                if bsetInfo and bsetInfo['backupset'] != 1:
+                    bset = bsetInfo['backupset']
+                    logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
+                else:
+                    logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
+                    sys.exit(1)
+            else:
+                logger.critical("Could not parse date string: %s", args.date)
+                sys.exit(1)
+        elif args.backup:
+            bsetInfo = tardis.getBackupSetInfo(args.backup)
+            if bsetInfo:
+                bset = bsetInfo['backupset']
+            else:
+                logger.critical("No backupset at for name: %s", args.backup)
+                sys.exit(1)
+
+        outputdir = None
+        output    = sys.stdout
+        outname   = None
+        linkDB    = None
+
+        owMode    = overwriteNames[args.overwrite]
+
+        if args.output:
+            if len(args.files) > 1:
+                outputdir = mkOutputDir(args.output)
+            elif os.path.isdir(args.output):
+                outputdir = args.output
+            else:
+                outname = args.output
+        logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
+
+        if args.hardlinks:
+            linkDB = {}
+
+        #if args.cksum and (args.settime or args.setperm):
+            #logger.warning("Unable to set time or permissions on files specified by checksum.")
+
+        permChecker = setupPermissionChecks()
+
+        retcode = 0
+        hasher = None
+
+        # do the work here
         if args.cksum:
             for i in args.files:
                 try:
@@ -485,6 +487,12 @@ def main():
                         if args.auth:
                             logger.debug("Checking authentication")
                             outname = doAuthenticate(outname, i, hasher.hexdigest())
+
+                except TardisDB.AuthenticationException as e:
+                    logger.error("Authentication failed.  Bad password")
+                    #if args.exceptions:
+                        #logger.exception(e)
+                    sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
                     #logger.exception(e)
@@ -523,12 +531,17 @@ def main():
                     else:
                         logger.error("Could not recover info for %s", i)
                         retcode += 1
+                except TardisDB.AuthenticationException as e:
+                    logger.error("Authentication failed.  Bad password")
+                    #if args.exceptions:
+                        #logger.exception(e)
+                    sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
                     logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
-    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+    except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         if args.exceptions:
             logger.exception(e)

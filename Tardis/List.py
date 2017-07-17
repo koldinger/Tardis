@@ -759,7 +759,7 @@ def main():
             processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=recurse)
     except KeyboardInterrupt:
         pass
-    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+    except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         if args.exceptions:
             logger.exception(e)

@@ -45,6 +45,7 @@ import Tardis.Util as Util
 import Tardis.Regenerator as Regenerator
 import Tardis.Defaults as Defaults
 import Tardis.Config as Config
+import Tardis.TardisDB as TardisDB
 
 logger = None
 args = None
@@ -340,7 +341,7 @@ def main():
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
     except KeyboardInterrupt:
         pass
-    except (TardisDB.AuthenticationFailed, TardisDB.NotAuthenticatedException) as e:
+    except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         if args.exceptions:
             logger.exception(e)

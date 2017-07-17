@@ -131,7 +131,7 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
     app.logger.debug("Response: %s", str(response.headers))
     return response
 
-@app.errorhandler(TardisDB.NotAuthenticatedException)
+@app.errorhandler(TardisDB.NotAuthenticated)
 def handleNotAuthenticated(error):
     app.logger.info("Not Authenticated Exception: %s", str(error))
     response = make_response(str(error))
@@ -139,7 +139,7 @@ def handleNotAuthenticated(error):
     return response
 
 @app.errorhandler(TardisDB.AuthenticationFailed)
-def handleNotAuthenticated(error):
+def handleAuthenticationFailed(error):
     app.logger.info("Authentication failed.  Wrong password")
     response = make_response(str(error))
     response.status_code = 401

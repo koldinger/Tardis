@@ -50,6 +50,7 @@ import Tardis.Regenerator as Regenerator
 import Tardis.Util as Util
 import Tardis.Cache as Cache
 import Tardis.Defaults as Defaults
+import Tardis.TardisDB as TardisDB
 
 fuse.fuse_python_api = (0, 2)
 
@@ -185,10 +186,16 @@ class TardisFS(fuse.Fuse):
             self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
             self.files = {}
 
+            # Make sure we can get something
+            self.tardis.lastBackupSet()
+
             # Fuse variables
             self.flags = 0
             self.multithreaded = 0
 
+        except TardisDB.AuthenticationException as e:
+            self.log.critical("Authentication failed.  Bad Password")
+            sys.exit(2)
         except Exception as e:
             self.log.exception(e)
             sys.exit(2)
@@ -740,7 +747,7 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
     logger.addHandler(handler)
-    logger.setLevel(logging.WARNING)
+    logger.setLevel(logging.DEBUG)
 
     try:
         fs = TardisFS()

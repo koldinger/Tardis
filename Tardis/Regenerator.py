@@ -179,7 +179,7 @@ class Regenerator(object):
                 cksum = chain[0]['checksum']
                 return self.recoverChecksum(cksum, authenticate, chain)
             else:
-                self.logger.error("Could not locate file: %s ", filename)
+                self.logger.error("Could not locate file: %s ", name)
                 return None
         except RegenerateException as e:
             self.logger.error("Could not regenerate file: %s: %s", filename, str(e))
