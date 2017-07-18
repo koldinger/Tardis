@@ -1,3 +1,5 @@
+PRAGMA journal_mode=truncate;
+
 CREATE TABLE IF NOT EXISTS Config (
     Key             TEXT PRIMARY KEY,
     Value           TEXT NOT NULL
@@ -97,5 +99,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "11");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "12");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

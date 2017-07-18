@@ -182,7 +182,6 @@ class TardisDB(object):
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
-        self.conn.execute("PRAGMA journal_mode=wal")
 
         if journal:
             self.journal = file(journal, 'a')
