@@ -212,7 +212,7 @@ class TardisDB(object):
             name = 'convert%dto%d' % (i, i + 1)
             #from schema import name name
             converter = self._getConverter(name)
-            self.logger.info("Running conversion script from version %d, %s", i, name)
+            self.logger.debug("Running conversion script from version %d, %s", i, name)
             converter.upgrade(self.conn, self.logger)
 
     def lastBackupSet(self, completed=True):
