@@ -72,7 +72,8 @@ configDefaults = {
     'KeyFile'           : None,
     'PidFile'           : pidFile,
     'Compress'          : str(True),
-    'AllowCache'        : str(True)
+    'AllowCache'        : str(True),
+    'AllowSchemaUpgrades': str(False)
 }
 
 app = Flask(__name__)
@@ -137,9 +138,9 @@ def login():
             #app.logger.debug(str(request))
             host    = request.form['host']
             token   = request.form['token'] if 'token' in request.form else None
-            upgrade = request.form['upgrade'] if 'upgrade' in request.form else False
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
+            upgrade = config.getboolean('Tardis', 'AllowSchemaUpgrades')
             tardis  = TardisDB.TardisDB(dbPath, token=token, allow_upgrade=upgrade)
             #session['tardis']   = tardis
             session['host']     = host
