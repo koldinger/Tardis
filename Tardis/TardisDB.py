@@ -37,8 +37,8 @@ import hashlib
 import sys
 import uuid
 import srp
-import base64
 import functools
+import importlib
 
 from binascii import hexlify
 
@@ -83,7 +83,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 11
+_schemaVersion = 12
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -102,6 +102,8 @@ def _fetchEm(cursor):
         for row in batch:
             yield row
 
+
+conversionModules = {}
 
 # Class TardisDB
 
@@ -247,7 +249,6 @@ class TardisDB(object):
 
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
-        self.conn.execute("PRAGMA journal_mode=wal")
 
         if self.journalName:
             self.journal = file(self.journalName, 'a')
@@ -265,14 +266,21 @@ class TardisDB(object):
         else:
             return current
 
+    def _getConverter(self, name):
+        try:
+            converter = conversionModules[name]
+        except KeyError:
+            converter = importlib.import_module('Tardis.Converters.' + name)
+            conversionModules[name] = converter
+        return converter
+
     def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
-            name = 'convert-%dto%d' % (i, i + 1)
+            name = 'convert%dto%d' % (i, i + 1)
             #from schema import name name
-            self.logger.info("Running conversion script from version %d, %s", i, name)
-            # TODO: Run the script
-        # Not doing anything yet
-        raise Exception("Upgrade failed\n");
+            converter = self._getConverter(name)
+            self.logger.debug("Running conversion script from version %d, %s", i, name)
+            converter.upgrade(self.conn, self.logger)
 
     @authenticate
     def lastBackupSet(self, completed=True):

@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2016, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2017, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,38 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
+import sqlite3
+import sys
+import os.path
+import logging
 
-__version__ = "0.31.12"
-__buildversion__ = ''
-__versionstring__ = __version__
+import convertutils
 
-try:
-    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
-    __buildversion__ = file(versionFile, 'r').readline().strip()
-except:
-    try:
-        import subprocess
-        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip()
-    except:
-        pass
+version = 7
 
-if __buildversion__:
-    __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
+def upgrade(conn, logger):
+    convertutils.checkVersion(conn, version, logger)
 
-def check_features():
-    xattr_pkg = 'xattr'
-    acl_pkg   = 'pylibacl'
-    os_info = os.uname()
-    if os_info[0] == 'Linux':
-        return [xattr_pkg, acl_pkg]
-    elif os_info[0] == 'Darwin':
-        return [xattr_pkg]
+    conn.execute("ALTER TABLE Backups ADD COLUMN FilesFull INTEGER")
+    conn.execute("ALTER TABLE Backups ADD COLUMN FilesDelta INTEGER")
+    conn.execute("ALTER TABLE Backups ADD COLUMN BytesReceived INTEGER")
+
+    conn.execute("ALTER TABLE CheckSums ADD COLUMN Encrypted INTEGER")
+
+    conn.execute("UPDATE CheckSums SET Encrypted = 1 WHERE InitVector IS NOT NULL")
+    conn.execute("UPDATE CheckSums SET Encrypted = 0 WHERE InitVector IS NULL")
+
+    convertutils.updateVersion(conn, version, logger)
+    conn.commit()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('')
+
+    if len(sys.argv) > 1:
+        db = sys.argv[1]
     else:
-        return []
+        db = "tardis.db"
+
+    conn = sqlite3.connect(db)
+    upgrade(conn, logger)

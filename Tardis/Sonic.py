@@ -63,7 +63,7 @@ minPwStrength = 0
 logger = None
 args = None
 
-def getDB(crypt, password, new=False, allowRemote=True):
+def getDB(crypt, new=False, allowRemote=True, allowUpgrade=False):
     loc = urlparse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
@@ -89,7 +89,7 @@ def getDB(crypt, password, new=False, allowRemote=True):
 
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
         schema = args.schema if new else None
-        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema)
+        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
     if password:
         Util.authenticate(tardisdb, args.client, password)
@@ -111,7 +111,6 @@ def createClient(crypt, password):
 
 def setPassword(crypt, password):
     try:
-        # Must be no token specified yet
         (db, _) = getDB(None, None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
@@ -520,6 +519,7 @@ def parseArgs():
     subs.add_parser('orphans',      parents=[common],                                       help='Delete orphan files')
     subs.add_parser('getconfig',    parents=[common, configKeyParser],                      help='Get Config Value')
     subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
+    subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
     parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
@@ -581,7 +581,7 @@ def main():
     logger = Util.setupLogging(args.verbose)
 
     # Commands which cannot be executed on remote databases
-    allowRemote = args.command not in ['create']
+    allowRemote = args.command not in ['create', 'upgrade']
 
     db      = None
     crypt   = None
@@ -623,8 +623,11 @@ def main():
             crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
             return changePassword(crypt, crypt2, password, newpw)
 
+        upgrade = (args.command == 'upgrade')
+
         try:
-            (db, cache) = getDB(crypt, password, allowRemote=allowRemote)
+            (db, cache) = getDB(crypt, password, allowRemote=allowRemote, allowUpgrade=upgrade)
+
             if crypt:
                 if args.keys:
                     (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
@@ -656,6 +659,8 @@ def main():
             return setConfig(db)
         elif args.command == 'orphans':
             return removeOrphans(db, cache)
+        elif args.command == 'upgrade':
+            return
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
