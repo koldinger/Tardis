@@ -280,6 +280,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | MaxDeltaChain   | 5                   |                 | Maximum number of delta's to request before requesting an entire new copy of a file. |
 | MaxChangePercent| 50                  |                 | Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
 | SaveFull        | False               |                 | Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
+| AllowSchemaUpgrades | False           |                 | Allow the server to automatically upgrade the database schemas |
 | Single          | False               |                 | Run a single client backup session, and exit. |
 | Local           | None                |                 | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
 | Verbose         | 0                   |                 | Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
@@ -303,29 +304,22 @@ TardisRemote Configuration File
 | Name            | Default Value       | Environment Var | Definition |
 | ---             | ------------        | --------------- | ---------- |
 | Port            | 7420                | TARDIS_PORT     | Port to listen on |
-| BaseDir         | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
+| Database        | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
 | DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
 | LogExceptions   | False               |                 | Log full detail of all exceptions, including call chain. |
-| MaxDeltaChain   | 5                   |                 | Maximum number of delta's to request before requesting an entire new copy of a file. |
-| MaxChangePercent| 50                  |                 | Maximum percentage change in file size allowed before requesting an entire new copy of a file. |
-| SaveFull        | False               |                 | Always save entire copies of a file in the database.  Ignored if the client is sending encrypted data. |
-| Single          | False               |                 | Run a single client backup session, and exit. |
-| Local           | None                |                 | Path to a Unix Domain Socket to use.  If specified, overrides the Port value.
 | Verbose         | 0                   |                 | Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
 | Daemon          | False               |                 | Run as a daemon process, detaching from the initial process, and running in the background. |
-| Umask           | 2 (002)             |                 | Mode mask used when creating files in the database. |
 | User            | None                |                 | Name of the user to run as when run in daemon mode. |
 | Group           | None                |                 | Name of the group to run as when run in daemon mode. |
 | PidFile         | None                |                 | Path to the file indicating that a tardis daemon process is running.  Must be set if Daemon is true. |
 | SSL             | False               |                 | Use SSL over the socket. |
 | CertFile        | None                |                 | Path to the certificate file for SSL communications.  Must be set if SSL is true |
 | KeyFile         | None                |                 | Path to the key file for SSL communications.  Must be set if SSL is true |
-| Formats         | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order. |
-| Priorities      | 40, 20, 10          |                 | Priority value corresponding to the names in the Formats value. |
-| KeepPeriods     | 0, 180, 30          |                 | Number of days to keep for each backup type, corresponding to the names in the Formats value. |
-| DBBackups       | 5                   |                 | Number of backup iterations of the database to keep. |
-  
+| Compress        | True                |                 | Allow compression of data across HTTP, if the cilent accepts it. |
+| AllowCache      | True                |                 | Allow the client to cache responses to HTTP requests. |
+| AllowSchemaUpgrades | False           |                 | Allow the server to automatically upgrade the database schemas |
+
 Mounting the filesystem
 =======================
 The backup sets can be mounted as a filesystem, thus:
@@ -339,10 +333,7 @@ tardisfs options are specified in a format to enable fstab mounting.  Each optio
 tardisfs#0				/mnt/tardis/ClientName	fuse	user,noauto,default_permissions,allow_other,database=/nfs/tardis/,client=ClientName	0 2
 ```
 
-
 Due to the nature of FUSE filesystems, allowing any user to mount the filesystem can create a potential security hole, as most permissions are ignored.  The most effective way to perserve some security is to mount the filesystem as root, with the "-o allow_other -o default_permissions" options specified.  This allows all users to access the file system, and enforces standard Unix file permission checking.
-
-
 
 Encrypting an Unencrypted Backup
 ================================
