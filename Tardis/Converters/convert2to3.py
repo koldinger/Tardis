@@ -3,14 +3,12 @@ import sys
 import os.path
 import logging
 
+import convertutils
+
 version = 2
 
 def upgrade(conn, logger):
-    s = conn.execute('SELECT Value FROM Config WHERE Key = "SchemaVersion"')
-    t = s.fetchone()
-    if int(t[0]) != version:
-        logger.error("Invalid database schema version: {}".format(t[0]))
-        raise Exception("Invalid version {}.  Expected {}".format(t[0], version))
+    convertutils.checkVersion(conn, version, logger)
 
     conn.execute("ALTER TABLE Files ADD COLUMN XattrId INTEGER")
     conn.execute("ALTER TABLE Files ADD COLUMN AclId INTEGER")
@@ -61,8 +59,7 @@ def upgrade(conn, logger):
         c2.execute("UPDATE Checksums SET DiskSize = ? WHERE Checksum = ?", (size, checksum))
         x += 1
 
-    # Ugh, make sure the last element is a tuple, otherwise the string will get broken into multiple characters
-    conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", ?)', (str(version + 1),) )
+    convertutils.updateVersion(conn, version, logger)
     conn.commit()
 
 if __name__ == "__main__":
