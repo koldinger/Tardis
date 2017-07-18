@@ -36,6 +36,7 @@ import time
 import hashlib
 import sys
 import uuid
+import importlib
 
 import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
@@ -60,7 +61,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 11
+_schemaVersion = 12
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -79,6 +80,8 @@ def _fetchEm(cursor):
         for row in batch:
             yield row
 
+
+conversionModules = {}
 
 # Class TardisDB
 
@@ -197,14 +200,21 @@ class TardisDB(object):
         else:
             return current
 
+    def _getConverter(self, name):
+        try:
+            converter = conversionModules[name]
+        except KeyError:
+            converter = importlib.import_module('Tardis.Converters.' + name)
+            conversionModules[name] = converter
+        return converter
+
     def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
-            name = 'convert-%dto%d' % (i, i + 1)
+            name = 'convert%dto%d' % (i, i + 1)
             #from schema import name name
+            converter = self._getConverter(name)
             self.logger.info("Running conversion script from version %d, %s", i, name)
-            # TODO: Run the script
-        # Not doing anything yet
-        raise Exception("Upgrade failed\n");
+            converter.upgrade(self.conn, self.logger)
 
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
