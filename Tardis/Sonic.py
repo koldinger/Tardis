@@ -596,6 +596,8 @@ def main():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
         except Exception as e:
             logger.critical(str(e))
+            if args.exceptions:
+                logger.exception(e)
             return -1
             
         if confirm and password and not checkPasswordStrength(password):
@@ -631,7 +633,7 @@ def main():
         try:
             (db, cache) = getDB(crypt, password, allowRemote=allowRemote, allowUpgrade=upgrade)
 
-            if crypt:
+            if crypt and args.command != 'keys':
                 if args.keys:
                     (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
                 else:
@@ -639,9 +641,13 @@ def main():
                 crypt.setKeys(f, c)
         except TardisDB.AuthenticationException as e:
             logger.error("Authentication failed.  Bad password")
+            if args.exceptions:
+                logger.exception(e)
             sys.exit(1)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
+            if args.exceptions:
+                logger.exception(e)
             sys.exit(1)
 
         if args.command == 'keys':
