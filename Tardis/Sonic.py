@@ -164,6 +164,8 @@ def changePassword(crypt, crypt2, oldpw, newpw):
         return 0
     except Exception as e:
         logger.error(str(e))
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def moveKeys(db, crypt):
@@ -621,6 +623,8 @@ def main():
                 newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False, confirm=True)
             except Exception as e:
                 logger.critical(str(e))
+                if args.exceptions:
+                    logger.exception(e)
                 return -1
             if password and not checkPasswordStrength(newpw):
                 return -1
