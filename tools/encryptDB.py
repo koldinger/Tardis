@@ -224,18 +224,20 @@ def processArgs():
     passgroup= parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group(required=True)
     pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,       help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                          help='Read password from file')
-    pwgroup.add_argument('--password-url',  dest='passwordurl', default=None,                           help='Retrieve password from the specified URL')
+    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                          help='Retrieve password from the specified file or URL')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if (not (args.filenames or args.files or args.dirhash or args.meta)):
+        parser.error("Must specify at least one --filenames, --files, --dirhashes, or --meta")
+    return args
 
 def main():
     global logger
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger('')
     args = processArgs()
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
     crypto = TardisCrypto.TardisCrypto(password, args.client)
 
@@ -252,10 +254,10 @@ def main():
     #    generateSignatures(db, cacheDir)
     if args.filenames:
         encryptFilenames(db, crypto)
-    if args.files:
-        encryptFiles(db, crypto, cacheDir)
     if args.dirhash:
         generateDirHashes(db, crypto, cacheDir)
+    if args.files:
+        encryptFiles(db, crypto, cacheDir)
     if args.meta:
         generateMetadata(db, cacheDir)
 
