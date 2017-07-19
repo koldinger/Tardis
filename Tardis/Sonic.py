@@ -195,7 +195,8 @@ def moveKeys(db, crypt):
         return 1
     except Exception as e:
         logger.error(e)
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def listBSets(db):
@@ -218,7 +219,8 @@ def listBSets(db):
         return 1
     except Exception as e:
         logger.error(e)
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 # cache of paths we've already calculated.
@@ -521,6 +523,7 @@ def parseArgs():
     subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
     subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
+    parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
     parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -668,7 +671,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if db:
             db.close()

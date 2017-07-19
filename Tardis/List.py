@@ -710,11 +710,11 @@ def processArgs():
     rangegrp.add_argument('--range',        dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',        dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
-    parser.add_argument('--log-exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
+    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
 
-    parser.add_argument('--verbose', '-v',      action='count', default=0, dest='verbose',                  help='Increase the verbosity')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
-    parser.add_argument('--help', '-h',         action='help')
+    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose',                  help='Increase the verbosity')
+    parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
+    parser.add_argument('--help', '-h',     action='help')
 
     parser.add_argument('directories', nargs='*', default='.',                                              help='List of directories/files to list')
 

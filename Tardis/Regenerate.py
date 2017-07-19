@@ -265,7 +265,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
-        #logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
         retCode += 1
 
     return retCode
@@ -369,7 +370,8 @@ def parseArgs():
 
     parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
-    parser.add_argument('--verbose', '-v', action='count', default=0, dest='verbose', help='Increase the verbosity')
+    parser.add_argument('--exceptions',         default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
+    parser.add_argument('--verbose', '-v',      action='count', default=0, dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
@@ -495,7 +497,8 @@ def main():
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    #logger.exception(e)
+                    if args.exceptions:
+                        logger.exception(e)
                     retcode += 1
 
         else: # Not checksum, but acutal pathnames
@@ -538,7 +541,8 @@ def main():
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    logger.exception(e)
+                    if args.exceptions:
+                        logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
     except TardisDB.AuthenticationException as e:
@@ -547,7 +551,8 @@ def main():
             logger.exception(e)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        #logger.exception(e)
+        if args.exceptions:
+            logger.exception(e)
 
     if errors:
         logger.warning("%d files could not be recovered.")

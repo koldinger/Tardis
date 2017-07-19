@@ -74,15 +74,15 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--binary', '-B',       dest='binary', default=False, action=Util.StoreBoolean, help='Print differences in binary files.  Default: %(default)s')
-    parser.add_argument('--recurse', '-r',      dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
-    parser.add_argument('--list', '-l',         dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
+    parser.add_argument('--binary', '-B',   dest='binary', default=False, action=Util.StoreBoolean, help='Print differences in binary files.  Default: %(default)s')
+    parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
+    parser.add_argument('--list', '-l',     dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
-    parser.add_argument('--log-exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
-
+    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
+
     parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
 
     args = parser.parse_args(remaining)

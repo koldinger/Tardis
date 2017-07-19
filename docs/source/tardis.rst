@@ -86,7 +86,7 @@ usage: tardis [-h] [--server SERVER] [--port PORT] [--log [LOGFILES]]
               [--protocol {json,bson,msgp}] [--deltathreshold DELTATHRESHOLD]
               [--purge] [--purge-priority PURGEPRIOR]
               [--keep-days PURGEDAYS | --keep-hours PURGEHOURS | --keep-time PURGETIME]
-              [--version] [--stats] [--report] [--verbose] [--log-exceptions]
+              [--version] [--stats] [--report] [--verbose] [--exceptions]
               [directories [directories ...]]
 
 Tardis Backup Client
