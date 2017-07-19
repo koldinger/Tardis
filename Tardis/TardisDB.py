@@ -39,6 +39,7 @@ import uuid
 import srp
 import functools
 import importlib
+import Util
 
 from binascii import hexlify, unhexlify
 
@@ -972,7 +973,7 @@ class TardisDB(object):
         return salt, vkey
 
     @authenticate
-    def setKeys(self, salt, vkey, filenameKey, contentKey):
+    def setKeys(self, salt, vkey, filenameKey, contentKey, backup=True):
         try:
             os.rename
             self.beginTransaction()
@@ -985,7 +986,15 @@ class TardisDB(object):
                 self.setConfigValue('ContentKey', contentKey)
             else:
                 self.delConfigValue('ContentKey')
+            if backup:
+                # Attempt to save the keys away
+                backupName = self.dbName + ".keys"
+                r = Rotator.Rotator(rotations=0)
+                r.backup(backupName)
+                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey)
             self.commit()
+            if backup:
+                r.rotate(backupName)
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)
