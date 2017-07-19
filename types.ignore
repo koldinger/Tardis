@@ -7,6 +7,8 @@ video/3gpp
 
 # Compressed Image formats
 image/jpeg
+image/gif
+image/png
 
 # Compressed Audio
 audio/mpeg3
