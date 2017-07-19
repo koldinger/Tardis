@@ -39,11 +39,11 @@ this MUST be run on the server, and requires the users password.  Usage is
 
 If your backup does not use a password, this step will be skipped.  It only applies to secure backups.
 
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the tools/setDirHashes.py program (or run encryptDB.py --dirhashes, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
+Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the tools/setDirHashes.py program (or run encryptDB.py --dirs, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
 
 Important Release Notes
 =======================
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirhashes`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
+Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
 
 Future Releases
 ===============
@@ -356,14 +356,17 @@ If you've built an unencrypted backup, and wish to add encryption, this can be a
 The following steps should be performed:
    * Add a password to the database:
       * `sonic setpass [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program]`
-   * Encrypt the filenames.  This step must be performed only once, unless it fails.  It should either encrypt all the filenames, or none.  If executed more than once, it will gladly doubly encrypt the passwords.  This can be a mess.
-      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --filenames`
+   * Encrypt the filenames.  **This step must be performed only once, unless it fails.  It should either encrypt all the filenames, or none.  If executed more than once, it will gladly doubly encrypt the passwords.  This can be a mess.**
+      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --names`
    * Generate new directory hashes.  This step is optional, but will improve performance (and database size) on the next backup.  If interrupted, this step can be restarted.  It will regenerate any information already calculated, but this is fine, just slow.
-      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --dirhashes`
+      * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --dirs`
    * Encrypt the files.  This step can be run multiple times, and will only encrypt files which have not been encrypted already, and thus restarted.  It *SHOULD* leave the backup in a consistent state if you cancel out, but again, use at your own risk.  This takes a LONG time.  During this phase, the database should still be accessible, but some data is encrypted and some is not.  This should be transparent to any users.  You *should* even be able to run backups while this takes place.
       * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --files`
    * Generate new metadata files.  This is optional, but can be useful should the database become corrupted.  This also takes a LONG time, but can be run entirely transparently to any other activities.
       * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --meta`
+
+You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
+
 
 Logwatch Support
 ================

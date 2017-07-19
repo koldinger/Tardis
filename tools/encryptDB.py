@@ -21,6 +21,7 @@ def encryptFilenames(db, crypto):
     names = 0
     r = c.execute("SELECT COUNT(*) FROM Names")
     z = r.fetchone()[0]
+    logger.info("Encrypting %d filenames", z)
     with progressbar.ProgressBar(max_value=z) as bar:
         try:
             r = c.execute("SELECT Name, NameID FROM Names")
@@ -161,6 +162,7 @@ def encryptFiles(db, crypto, cacheDir):
     mLevel = r.fetchone()[0]
     r = conn.execute("SELECT COUNT(*) FROM CheckSums WHERE Encrypted=0 AND IsFile = 1")
     files = r.fetchone()[0]
+    logger.info("Encrypting %d files", files)
     bar = progressbar.ProgressBar(max_value=int(files))
 
     for level in range(mLevel, -1, -1):
@@ -173,6 +175,7 @@ def generateDirHashes(db, crypto, cacheDir):
     conn = db.conn
     r = conn.execute("SELECT COUNT(*) FROM Files WHERE Dir = 1")
     nDirs = r.fetchone()[0]
+    logger.info("Hashing %d directories", nDirs)
     hashes = 0
     unique = 0
     with progressbar.ProgressBar(max_value=nDirs) as bar:
@@ -230,6 +233,7 @@ def generateMetadata(db, cacheDir):
     c = conn.cursor()
     r = c.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
     metas = 0
+    logger.info("Generating metadata/recovery info for %d files", n)
     with progressbar.ProgressBar(max_value=int(n)) as bar:
         batch = r.fetchmany(4096)
         while batch:
@@ -247,11 +251,11 @@ def processArgs():
     parser.add_argument('--client', '-C',   dest='client',   default=Defaults.getDefault('TARDIS_CLIENT'),  help="Client to list on.  Default: %(default)s")
     parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
 
-    parser.add_argument('--filenames',      dest='filenames', action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
-    parser.add_argument('--files',          dest='files',     action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
-    parser.add_argument('--dirhashes',      dest='dirhash',   action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
-    parser.add_argument('--meta',           dest='meta',      action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
-    #parser.add_argument('--signatures',     dest='sigs',      action='store_true', default=False,       help='Generate signatures. Default=%(default)s')
+    parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
+    parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
+    parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
+    parser.add_argument('--meta',           dest='meta',     action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
+    parser.add_argument('--all',            dest='all',      action='store_true', default=False,       help='Perform all encyrption steps. Default=%(default)s')
 
     passgroup= parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group(required=True)
@@ -260,8 +264,8 @@ def processArgs():
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
 
     args = parser.parse_args()
-    if (not (args.filenames or args.files or args.dirhash or args.meta)):
-        parser.error("Must specify at least one --filenames, --files, --dirhashes, or --meta")
+    if (not (args.names or args.files or args.dirs or args.meta or args.all)):
+        parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
 
 def main():
@@ -284,13 +288,13 @@ def main():
 
     #if args.sigs:
     #    generateSignatures(db, cacheDir)
-    if args.filenames:
+    if args.names or args.all:
         encryptFilenames(db, crypto)
-    if args.dirhash:
+    if args.dirs or args.all:
         generateDirHashes(db, crypto, cacheDir)
-    if args.files:
+    if args.files or args.all:
         encryptFiles(db, crypto, cacheDir)
-    if args.meta:
+    if args.meta or args.all:
         generateMetadata(db, cacheDir)
 
 if __name__ == "__main__":
