@@ -1200,7 +1200,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             authResp = {}
             try:
                 if srpValueA is None and self.server.requirePW:
-                    # Assume that the client will send the keys soon.
                     raise InitFailedException("Password is required on this server")
 
                 newBackup = self.getDB(client)
@@ -1208,6 +1207,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.setConfig()
 
                 self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
+                if srpValueA is None and self.db.needsAuthentication():
+                    raise InitFailedException("No password specified")
+
                 if srpValueA is not None and newBackup != 'NEW':
                     authResp = self.doSrpAuthentication(srpUname, srpValueA)
 
