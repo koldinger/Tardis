@@ -40,7 +40,7 @@ import srp
 import functools
 import importlib
 
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 
 import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
@@ -205,7 +205,7 @@ class TardisDB(object):
         self.logger.debug("Authentication 2: Verify Session %s", hexlify(srpValueM))
         HAMK = self.srpSrv.verify_session(srpValueM)
         if HAMK is None:
-            raise AuthenticationFailed("HAMK is None")
+            raise AuthenticationFailed("Password doesn't match")
         self.logger.debug("Authentication HAMK: %s", hexlify(HAMK))
         if not self.srpSrv.authenticated():
             raise AuthenticationFailed("Password doesn't match")
@@ -927,7 +927,10 @@ class TardisDB(object):
         self._setConfigValue(key, value)
 
     def _setConfigValue(self, key, value):
-        self._execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})
+        if value is None:
+            self._execute("DELETE FROM Config WHERE Key LIKE :key", {'key': key})
+        else:
+            self._execute("INSERT OR REPLACE INTO Config (Key, Value) VALUES(:key, :value)", {'key': key, 'value': value})
 
     @authenticate
     def delConfigValue(self, key):
@@ -955,18 +958,23 @@ class TardisDB(object):
 
     @authenticate
     def setSrpValues(self, salt, vkey):
-        self.setConfigValue('SRPSalt', salt)
-        self.setConfigValue('SRPVkey', vkey)
+        self.setConfigValue('SRPSalt', hexlify(salt))
+        self.setConfigValue('SRPVkey', hexlify(vkey))
 
     def getSrpValues(self):
         self.logger.debug("Getting SRP Values")
         salt = self._getConfigValue('SRPSalt')
         vkey = self._getConfigValue('SRPVkey')
+        if salt:
+            salt = unhexlify(salt)
+        if vkey:
+            vkey = unhexlify(vkey)
         return salt, vkey
 
     @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey):
         try:
+            os.rename
             self.beginTransaction()
             self.setSrpValues(salt, vkey)
             if filenameKey:
