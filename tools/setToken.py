@@ -4,6 +4,9 @@ from Tardis import Defaults, Util, TardisDB, TardisCrypto
 import os.path
 import logging
 import argparse
+import base64
+
+from Cryptodome.Cipher import AES
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Set a token/password')
@@ -20,13 +23,18 @@ def processArgs():
 
     return parser.parse_args()
 
+def createToken(crypto, client):
+    cipher = AES.new(crypto._tokenKey, AES.MODE_ECB)
+    token = base64.b64encode(cipher.encrypt(crypto.padzero(client)), crypto._altchars)
+    return token
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordurl, args.passwordprog)
 
     crypto = TardisCrypto.TardisCrypto(password, args.client)
-    token = crypto.createToken()
+    token = createToken(crypto, args.client)
 
     path = os.path.join(args.database, args.client, args.dbname)
     db = TardisDB.TardisDB(path, backup=False)
