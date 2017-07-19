@@ -63,7 +63,7 @@ minPwStrength = 0
 logger = None
 args = None
 
-def getDB(crypt, new=False, allowRemote=True, allowUpgrade=False):
+def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
     loc = urlparse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
