@@ -67,6 +67,7 @@ def main():
 
     salt, vkey = srp.create_salted_verification_key(args.client, password)
     db.setSrpValues(salt, vkey)
+    db._setConfigValue('Token', None)
 
 if __name__ == "__main__":
     main()
