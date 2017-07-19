@@ -542,8 +542,8 @@ def handleAckMeta(message):
     done    = message.setdefault('done', {})
 
     for cks in content:
-        logger.debug("Sending meta data chunk: %s", cks)
         data = metaCache.inverse[cks][0]
+        logger.debug("Sending meta data chunk: %s -- %s", cks, data)
 
         (encrypt, pad, iv, hmac) = makeEncryptor()
         message = {
@@ -865,7 +865,8 @@ def sendDirChunks(path, inode, files):
         message["last"]  = (x + args.dirslice > len(files))
         if verbosity > 3:
             logger.debug("---- Sending chunk ----")
-        batchMessage(message, batch=False)
+        batch = (len(chunk) < args.dirslice)
+        batchMessage(message, batch=batch)
 
     sendDirHash(inode)
 

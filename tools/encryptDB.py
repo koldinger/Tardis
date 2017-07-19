@@ -9,6 +9,7 @@ import sys
 import base64
 import hashlib
 import sys
+import progressbar
 
 logger = None
 
@@ -18,21 +19,25 @@ def encryptFilenames(db, crypto):
     c = conn.cursor()
     c2 = conn.cursor()
     names = 0
-    try:
-        r = c.execute("SELECT Name, NameID FROM Names")
-        while True:
-            row = r.fetchone()
-            if row is None:
-                break
-            (name, nameid) = row
-            newname = crypto.encryptFilename(name.decode(systemencoding, 'replace'))
-            c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
-            names = names + 1
-        conn.commit()
-        logger.info("Encrypted %d names", names)
-    except Exception as e:
-        logger.error("Caught exception encrypting filename %s: %s", name, str(e))
-        conn.rollback()
+    r = c.execute("SELECT COUNT(*) FROM Names")
+    z = r.fetchone()[0]
+    with progressbar.ProgressBar(max_value=z) as bar:
+        try:
+            r = c.execute("SELECT Name, NameID FROM Names")
+            while True:
+                row = r.fetchone()
+                if row is None:
+                    break
+                (name, nameid) = row
+                newname = crypto.encryptFilename(name.decode(systemencoding, 'replace'))
+                c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
+                names = names + 1
+                bar.update(names)
+            conn.commit()
+        except Exception as e:
+            logger.error("Caught exception encrypting filename %s: %s", name, str(e))
+            conn.rollback()
+    logger.info("Encrypted %d names", names)
 
 def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac, output = None):
     f = cacheDir.open(checksum, 'rb')
@@ -65,18 +70,21 @@ def generateFullFileInfo(checksum, regenerator, cacheDir, nameMac, signature=Tru
         output = cacheDir.open(checksum + ".sig", "wb+")
         sig = librsync.SignatureJob(output)
 
-    data = i.read(16 * 1024)
+    data = i.read(64 * 1024)
     while data:
         nameMac.update(data)
         if sig:
             sig.step(data)
-        data = i.read(16 * 1024)
+        data = i.read(64 * 1024)
     # Return a handle on the full file object.  Allows it to be reused in the next step
     return i
 
 suffixes = ['','KB','MB','GB', 'TB', 'PB']
 
-def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
+numFiles = 0
+
+def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
+    global numFiles
     try:
         conn = db.conn
         c2 = conn.cursor()
@@ -85,7 +93,9 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
             logger.info("    Skipping  %s", checksum)
             return None
 
-        logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        pbar.update(numFiles)
+
+        #logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
         signature = not cacheDir.exists(checksum + ".sig")
         
         nameHmac = crypto.getHash()
@@ -94,16 +104,17 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
             basis.close()
         newCks = nameHmac.hexdigest()
         
-        logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        #logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
         
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
         hmac = crypto.getHash(func=hashlib.sha512)
         fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac, output=newCks)
-        logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
+        #logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
 
         #cacheDir.link(checksum + '.enc', newCks, soft=False)
         #cacheDir.link(checksum + ".sig", newCks + ".sig", soft=False)
+        numFiles += 1
         cacheDir.move(checksum + ".sig", newCks + ".sig")
         logger.debug("    Moved sig file, updating database")
 
@@ -123,7 +134,7 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, basis=None):
         logger.exception(e)
         return None
 
-def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
+def encryptFilesAtLevel(db, crypto, cacheDir, chainlength, pbar):
     logger.info("Encrypting files with chainlength = %d", chainlength)
     conn = db.conn
     c = conn.cursor()
@@ -133,12 +144,12 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
     for row in r.fetchall():
         try:
             checksum = row[0]
-            logger.info("Encrypting Parent %s", checksum)
+            #logger.info("Encrypting Parent %s", checksum)
             chain = db.getChecksumInfoChain(checksum)
             bFile = None
             while chain:
                 cksInfo = chain.pop()
-                bFile = processFile(cksInfo, regenerator, cacheDir, db, crypto, bFile)
+                bFile = processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, bFile)
         except Exception as e:
             logger.error("Error processing checksum: %s", checksum)
             logger.exception(e)
@@ -147,45 +158,59 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength=0):
 def encryptFiles(db, crypto, cacheDir):
     conn = db.conn
     r = conn.execute("SELECT MAX(ChainLength) FROM CheckSums")
-    z = r.fetchone()[0]
-    for level in range(z, -1, -1):
-        encryptFilesAtLevel(db, crypto, cacheDir, level)
+    mLevel = r.fetchone()[0]
+    r = conn.execute("SELECT COUNT(*) FROM CheckSums WHERE Encrypted=0 AND IsFile = 1")
+    files = r.fetchone()[0]
+    bar = progressbar.ProgressBar(max_value=int(files))
+
+    for level in range(mLevel, -1, -1):
+        encryptFilesAtLevel(db, crypto, cacheDir, level, bar)
+
+    bar.finish()
 
 
 def generateDirHashes(db, crypto, cacheDir):
     conn = db.conn
-    z = conn.cursor()
-    r = conn.execute("SELECT Inode, Device, LastSet, Names.name, Checksums.ChecksumId, Checksum "
-                     "FROM Files "
-                     "JOIN Names ON Names.NameId = Files.NameID "
-                     "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                     "WHERE Dir = 1 "
-                     "ORDER BY Checksum")
-    lastHash = None
-    batch = r.fetchmany()
-    while batch:
-        for row in batch:
-            inode = row['Inode']
-            device = row['Device']
-            last = row['LastSet']
-            oldHash = row['Checksum']
-            cksId = row['ChecksumId']
-            files = db.readDirectory((inode, device), last)
+    r = conn.execute("SELECT COUNT(*) FROM Files WHERE Dir = 1")
+    nDirs = r.fetchone()[0]
+    hashes = 0
+    unique = 0
+    with progressbar.ProgressBar(max_value=nDirs) as bar:
+        z = conn.cursor()
+        r = conn.execute("SELECT Inode, Device, LastSet, Names.name, Checksums.ChecksumId, Checksum "
+                         "FROM Files "
+                         "JOIN Names ON Names.NameId = Files.NameID "
+                         "JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
+                         "WHERE Dir = 1 "
+                         "ORDER BY Checksum")
+        lastHash = None
+        batch = r.fetchmany(10000)
+        while batch:
+            for row in batch:
+                inode = row['Inode']
+                device = row['Device']
+                last = row['LastSet']
+                oldHash = row['Checksum']
+                cksId = row['ChecksumId']
+                files = db.readDirectory((inode, device), last)
+                hashes += 1
+                if oldHash == lastHash:
+                    continue
+                lastHash = oldHash
+                unique += 1
 
-            if oldHash == lastHash:
-                continue
-            lastHash = oldHash
-
-            logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
-            #logger.debug("    Directory contents: %s", str(files))
-            (newHash, newSize) = Util.hashDir(crypto, files, True, True)
-            logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
-            try:
-                if newHash != oldHash:
-                    z.execute("UPDATE Checksums SET Checksum = :newHash WHERE ChecksumId = :id", {"newHash": newHash, "id": cksId})
-            except Exception:
-                pass
-        batch = r.fetchmany()
+                #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
+                #logger.debug("    Directory contents: %s", str(files))
+                (newHash, newSize) = Util.hashDir(crypto, files, True, True)
+                #logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
+                bar.update(hashes)
+                try:
+                    if newHash != oldHash:
+                        z.execute("UPDATE Checksums SET Checksum = :newHash WHERE ChecksumId = :id", {"newHash": newHash, "id": cksId})
+                except Exception as e:
+                    logger.error("Caught exception: %s->%s :: %s", oldHash, newHash,str(e))
+            batch = r.fetchmany()
+    logger.info("Hashed %d directories (%d unique)", hashes, unique)
 
 def generateSignatures(db, cacheDir):
     c = db.conn.cursor()
@@ -200,14 +225,21 @@ def generateSignatures(db, cacheDir):
 
 def generateMetadata(db, cacheDir):
     conn = db.conn
+    r = conn.execute("SELECT COUNT(*) FROM CheckSums WHERE IsFile = 1")
+    n = r.fetchone()[0]
     c = conn.cursor()
     r = c.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
-    batch = r.fetchmany(4096)
-    while batch:
-        for row in batch:
-            # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
-            Util.recordMetaData(cacheDir, row[0], row[1], row[2], row[3], row[4], basis=row[5], logger=logger)
+    metas = 0
+    with progressbar.ProgressBar(max_value=int(n)) as bar:
         batch = r.fetchmany(4096)
+        while batch:
+            for row in batch:
+                # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
+                Util.recordMetaData(cacheDir, row[0], row[1], row[2], row[3], row[4], basis=row[5], logger=logger)
+                metas += 1
+                bar.update(metas)
+            batch = r.fetchmany(4096)
+
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Encrypt the database')
