@@ -83,7 +83,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 12
+_schemaVersion = 13
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -131,6 +131,7 @@ class TardisDB(object):
         self.chunksize = chunksize
         self.prevSet = prevSet
         self.journalName = journal
+        self.allow_upgrade = allow_upgrade
 
         if user  is None: user = -1
         if group is None: group = -1
@@ -218,12 +219,12 @@ class TardisDB(object):
 
         version = self._getConfigValue('SchemaVersion')
         if int(version) != _schemaVersion:
-            if allow_upgrade:
-                self.logger.info("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", dbname, int(version), _schemaVersion)
+            if self.allow_upgrade:
+                self.logger.warning("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", self.dbName, int(version), _schemaVersion)
                 self.upgradeSchema(int(version))
             else:
-                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", dbname, int(version), _schemaVersion)
-                raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(dbname, version, _schemaVersion))
+                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", self.dbName, int(version), _schemaVersion)
+                raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(self.dbName, version, _schemaVersion))
 
         if self.prevSet:
             f = self.getBackupSetInfo(self.prevSet)
@@ -281,6 +282,7 @@ class TardisDB(object):
             converter = self._getConverter(name)
             self.logger.debug("Running conversion script from version %d, %s", i, name)
             converter.upgrade(self.conn, self.logger)
+            self.logger.warning("Upgraded chema to version %d", i + 1)
 
     @authenticate
     def lastBackupSet(self, completed=True):
@@ -315,10 +317,10 @@ class TardisDB(object):
         c = self.cursor
         now = time.time()
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, ClientIP, ServerSession) "
-                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :clientip, :serversessionid)",
+            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, SchemaVersion, ClientIP, ServerSession) "
+                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :schemaversion, :clientip, :serversessionid)",
                       {"name": name, "now": now, "session": session, "priority": priority, "full": full,
-                       "clienttime": clienttime, "clientversion": version, "clientip": ip,
+                       "clienttime": clienttime, "clientversion": version, "clientip": ip, "schemaversion": _schemaVersion,
                        "serversessionid": serverID,
                        "serverversion": (Tardis.__buildversion__ or Tardis.__version__)})
         except sqlite3.IntegrityError:

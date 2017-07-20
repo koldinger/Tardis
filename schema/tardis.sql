@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS Backups (
     Full            INTEGER DEFAULT 0,
     ClientVersion   TEXT,
     ServerVersion   TEXT,
+    SchemaVersion   INTEGER,
     ClientIP        TEXT,
     FilesFull       INTEGER,
     FilesDelta      INTEGER,
