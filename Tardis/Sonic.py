@@ -52,14 +52,12 @@ import Tardis.RemoteDB as RemoteDB
 import Tardis.Config as Config
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
-pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
 
 # Config keys which can be gotten or set.
 configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled', 'SaveConfig']
 # Extra keys that we print when everything is requested
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 
-minPwStrength = 0
 logger = None
 args = None
 
@@ -143,9 +141,22 @@ def setPassword(crypt, password):
             logger.exception(e)
         return 1
 
-def changePassword(crypt, crypt2, oldpw, newpw):
+def changePassword(crypt, oldpw) :
     try:
         (db, _) = getDB(crypt, oldpw)
+
+        # Get the new password
+        try:
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False, confirm=True)
+        except Exception as e:
+            logger.critical(str(e))
+            if args.exceptions:
+                logger.exception(e)
+            return -1
+        if not Util.checkPasswordStrength(newpw):
+            return -1
+
+        crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
 
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
@@ -584,16 +595,6 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
         bInfo = db.lastBackupSet()
     return bInfo
 
-def checkPasswordStrength(password):
-    strength, improvements = passwordmeter.test(password)
-    if strength < minPwStrength:
-        logger.error("Password too weak: %f", strength)
-        for i in improvements:
-            logger.info("    %s", improvements[i])
-        return False
-    else:
-        return True
-
 def main():
     global logger
     parseArgs()
@@ -607,7 +608,7 @@ def main():
     cache   = None
     try:
         confirm = args.command in ['setpass', 'create']
-        allowNone = args.command != 'setpass'
+        allowNone = args.command not in ['setpass', 'chpass']
         try:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
         except Exception as e:
@@ -616,9 +617,6 @@ def main():
                 logger.exception(e)
             return -1
             
-        if confirm and password and not checkPasswordStrength(password):
-            return -1
-
         if password:
             crypt = TardisCrypto.TardisCrypto(password, args.client)
             args.password = None
@@ -627,24 +625,16 @@ def main():
             return createClient(crypt, password)
 
         if args.command == 'setpass':
+            if not checkPasswordStrength(password):
+                return -1
+
             if not crypt:
                 logger.error("No password specified")
                 return -1
             return setPassword(crypt, password)
 
         if args.command == 'chpass':
-            try:
-                newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False, confirm=True)
-            except Exception as e:
-                logger.critical(str(e))
-                if args.exceptions:
-                    logger.exception(e)
-                return -1
-            if password and not checkPasswordStrength(newpw):
-                return -1
-
-            crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
-            return changePassword(crypt, crypt2, password, newpw)
+            return changePassword(crypt, password)
 
         upgrade = (args.command == 'upgrade')
 
