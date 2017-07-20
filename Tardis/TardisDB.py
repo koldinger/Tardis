@@ -39,7 +39,6 @@ import uuid
 import srp
 import functools
 import importlib
-import Util
 
 from binascii import hexlify, unhexlify
 
@@ -64,7 +63,7 @@ def authenticate(func):
         if self._isAuthenticated():
             return func(self, *args, **kwargs)
         else:
-            raise NotAuthenticated
+            raise NotAuthenticated("Not authenticated to database.")
     return doit
 
 _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
@@ -974,6 +973,7 @@ class TardisDB(object):
 
     @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey, backup=True):
+        import Tardis.Util as Util      # Import it here, as Util imports TardisDB
         try:
             os.rename
             self.beginTransaction()

@@ -55,6 +55,7 @@ import zlib
 import bz2
 import liblzma
 import srp
+import passwordmeter
 
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
@@ -346,6 +347,18 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
 
     return password
 
+
+def checkPasswordStrength(password):
+    pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
+    strength, improvements = passwordmeter.test(password)
+    if strength < float(pwStrMin)
+        logger.error("Password too weak: %f (%f required)", strength, minPwStrength)
+        for i in improvements:
+            logger.error("    %s", improvements[i])
+        return False
+    else:
+        return True
+
 # Get the database, cachedir, and crypto object.
 
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False):
@@ -593,9 +606,12 @@ def loadKeys(name, client):
     config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
     config.add_section(client)
     config.read(fullPath(name))
-    contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
-    nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
-    return (nameKey, contentKey)
+    try:
+        contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
+        nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
+        return (nameKey, contentKey)
+    except ConfigParser.NoOptionError as e:
+        raise Exception("No keys available for client " + client)
 
 def saveKeys(name, client, nameKey, contentKey):
     config = ConfigParser.ConfigParser()
