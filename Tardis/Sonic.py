@@ -104,9 +104,13 @@ def createClient(crypt, password):
         return 0
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except Exception as e:
         logger.error(str(e))
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def setPassword(crypt, password):
@@ -125,12 +129,18 @@ def setPassword(crypt, password):
         return 0
     except TardisDB.NotAuthenticated:
         logger.error('Client %s already has a password', args.client)
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed.  Bad password")
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except Exception as e:
         logger.error(str(e))
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def changePassword(crypt, crypt2, oldpw, newpw):
@@ -140,8 +150,12 @@ def changePassword(crypt, crypt2, oldpw, newpw):
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
             (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+            # No need to check here, loadKeys() throws exception if nothing set.
         else:
             (f, c) = db.getKeys()
+            if f is None or c is None:
+                logger.critical("No keys loaded from database.  Please specify --keys as appropriate")
+                raise Exception("No keys loaded")
         crypt.setKeys(f, c)
 
         # Grab the keys from one crypt object.
