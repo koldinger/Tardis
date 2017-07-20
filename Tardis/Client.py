@@ -1282,7 +1282,7 @@ def doSrpAuthentication(message):
         raise AuthenticationFailed("response incomplete")
     
 
-def startBackup(name, priority, client, autoname, force, full=False, version=0):
+def startBackup(name, priority, client, autoname, force, full=False, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
 
     # Create a BACKUP message
