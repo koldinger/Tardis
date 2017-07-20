@@ -351,7 +351,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
 def checkPasswordStrength(password):
     pwStrMin     = Defaults.getDefault('TARDIS_PW_STRENGTH')
     strength, improvements = passwordmeter.test(password)
-    if strength < float(pwStrMin)
+    if strength < float(pwStrMin):
         logger.error("Password too weak: %f (%f required)", strength, minPwStrength)
         for i in improvements:
             logger.error("    %s", improvements[i])
