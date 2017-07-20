@@ -37,9 +37,7 @@ protocol.  As such, the database must be changed to support the new password mec
 this MUST be run on the server, and requires the users password.  Usage is
     * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
 
-If your backup does not use a password, this step will be skipped.  It only applies to secure backups.
-
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the tools/setDirHashes.py program (or run encryptDB.py --dirs, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
+If your backup does not use a password, this step should be skipped.  It only applies to secure backups.
 
 Important Release Notes
 =======================
@@ -49,8 +47,7 @@ Future Releases
 ===============
 Several releases will be coming soon:
   * 0.32.0 Brings in a modification the communications protocol, and changes the login  mechanism to use SRP (Secure Remote Password) authentication.  **This will require simultaneous upgrades of all the tools, client and server, and manual intervention to add SRP credentials to any encrypted database.**
-  * 0.32.1 Will bring automatic database upgrades.  This should be the final new feature before 1.0
-  * 0.32.2+ Will be bug fixes, if necessary.
+  * 0.32.1+ Will be bug fixes, if necessary.
   * 1.0.0 Formal release
   * 2.0.0 Will (hopefully) introduce a web interface to allow controlling backup jobs.
   
