@@ -1758,13 +1758,13 @@ def main():
             crypt.genKeys()
             if args.keys:
                 (f, c) = crypt.getKeys()
-                Util.saveKeys(Util.fullPath(args.keys), clientid, f, c)
+                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
             else:
                 sendKeys(password, client)
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
-                (f, c) = Util.loadKeys(args.keys, clientid)
+                (f, c) = Util.loadKeys(args.keys, clientId)
             else:
                 f = filenameKey
                 c = contentKey
