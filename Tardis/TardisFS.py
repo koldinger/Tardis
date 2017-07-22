@@ -36,6 +36,7 @@ import errno   # for error number codes (ENOENT, etc)
                # - note: these must be returned as negatives
 import sys
 import logging
+import logging.handlers
 import tempfile
 import json
 import base64
@@ -64,6 +65,8 @@ _LinkContents  = 5
 _infoEnabled    = True
 
 logger = logging.getLogger("Tracer: ")
+
+logLevels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
 def tracer(func):
     def trace(*args, **kwargs):
@@ -110,6 +113,7 @@ class TardisFS(fuse.Fuse):
 
     def __init__(self, *args, **kw):
         super(TardisFS, self).__init__(*args, **kw)
+        global logger
 
         try:
             client   = Defaults.getDefault('TARDIS_CLIENT')
@@ -128,11 +132,13 @@ class TardisFS(fuse.Fuse):
             self.keys           = None
             self.dbname         = dbname
             self.dbdir          = dbdir
+            self.logfile        = None
             self.cachetime      = 60
             self.nocrypt        = False
             self.noauth         = False
             self.current        = current
             self.authenticate   = True
+            self.verbose        = 0
 
             self.crypt          = None
 
@@ -154,11 +160,27 @@ class TardisFS(fuse.Fuse):
             self.parser.add_option(mountopt="dbname",       help="Database Name")
             self.parser.add_option(mountopt="dbdir",        help="Database Directory (if different from data directory")
             self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
+            self.parser.add_option(mountopt="logfile",      help="Log to file")
+            self.parser.add_option(mountopt="verbose",      help="Logging level")
             self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
             self.parser.add_option(mountopt='noauth',       help="Disable authentication")
             self.parser.add_option(mountopt='current',      help="Name to use for most recent complete backup")
 
             res = self.parse(values=self, errex=1)
+
+            if self.logfile:
+                handler = logging.handlers.WatchedFileHandler(Util.fullPath(self.logfile))
+            else:
+                handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
+            logger.addHandler(handler)
+            verbose = int(self.verbose)
+            if verbose >= len(logLevels):
+                verbose = len(logLevels) - 1
+            elif verbose < 0:
+                verbose = 0
+
+            logger.setLevel(logLevels[verbose])
 
             self.mountpoint = res.mountpoint
 
@@ -743,12 +765,6 @@ class TardisFS(fuse.Fuse):
 
 def main():
     #logging.basicConfig()
-    logger = logging.getLogger('')
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
-
     try:
         fs = TardisFS()
     except:
