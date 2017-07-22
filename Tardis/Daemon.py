@@ -1204,8 +1204,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 newBackup = self.getDB(client)
 
-                self.setConfig()
-
                 self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
                 if srpValueA is None and self.db.needsAuthentication():
                     raise InitFailedException("No password specified")
@@ -1217,6 +1215,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if disabled is not None and int(disabled) != 0:
                     raise InitFailedException("Client %s is currently disabled." % client)
 
+                self.setConfig()
                 self.startSession(name, force)
 
                 # Create a name
