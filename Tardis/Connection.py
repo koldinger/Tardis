@@ -45,7 +45,7 @@ class ConnectionException(Exception):
 
 class Connection(object):
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, encoding, compress, timeout=None):
+    def __init__(self, host, port, encoding, compress, timeout=None, validate=False):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         # Create and open the socket
