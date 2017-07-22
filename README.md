@@ -32,15 +32,23 @@ Important Note -- Version 0.32
 Version 0.32 changes the communications protocol in some minor ways, but is incompatible with previous versions.  The client, server, and all tools must be upgraded
 at the same time.
 
-Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using the Secure Remote Password (SRP)
-protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will set the database up for the new password mechanism.  Note that
-this MUST be run on the server, and requires the users password.  Usage is
+Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using
+the Secure Remote Password (SRP) protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will
+set the database up for the new password mechanism.  Note that this MUST be run on the server, and requires the users password.  Usage is
     * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
+
+Because the database schema updates at the same point, you will also need to upgrade the schema.  The command for this is:
+    * `sonic upgrade -D cache -C client`
+Note that no password is needed.
 
 If your backup does not use a password, this step should be skipped.  It only applies to secure backups.
 
 Important Release Notes
 =======================
+0.31.12 or so changed the database journalling scheme to SQLite's "write ahead logging".  This seemed to cause problems.  If you are unable to do much with the database, execute the following command at the command line:
+    * ` % sqlite3 path/to/database/tardis.db`
+    * `sqlite> pragma journal_mode=truncate;`
+
 Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
 
 Future Releases
@@ -169,6 +177,7 @@ These include:
    * orphans -- Purge out orphanned data in the backup set.  Can be very slow running.
    * getconfig -- Get a server side configuration value, or all values.
    * setconfig -- Set a server side configuration value.
+   * upgrade -- Upgrade the database to the current version.
 
 These options are available as subcommands, for instance:
     sonic list <options>
