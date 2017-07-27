@@ -398,7 +398,7 @@ def purge(db, cache):
     else:
         pSets = db.listPurgeSets(args.priority, bset['endtime'], bset['backupset'])
 
-    names = [x['name'] for x in pSets]
+    names = [str(x['name']) for x in pSets]
     logger.debug("Names: %s", names)
     if len(names) == 0:
         print "No matching sets"
@@ -625,7 +625,7 @@ def main():
             return createClient(crypt, password)
 
         if args.command == 'setpass':
-            if not checkPasswordStrength(password):
+            if not Util.checkPasswordStrength(password):
                 return -1
 
             if not crypt:

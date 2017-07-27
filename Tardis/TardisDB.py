@@ -720,12 +720,12 @@ class TardisDB(object):
         return chain
 
     @authenticate
-    def getNamesForChecksum(self, checksum, bset):
+    def getNamesForChecksum(self, checksum):
         """ Recover a list of names that represent a checksum """
-        self.logger.debug("Recovering name for checksum %s", checksum)
+        self.logger.debug("Recovering name(s) for checksum %s", checksum)
         c = self._execute('SELECT DISTINCT Name FROM Names JOIN Files ON Names.NameID = Files.NameID JOIN Checksums ON Checksums.ChecksumID = Files.ChecksumID '
-                          'WHERE Checksums.Checksum = :checksum AND :bset BETWEEN Files.FirstSet AND Files.LastSet',
-                          {'checksum': checksum, 'bset': bset})
+                          'WHERE Checksums.Checksum = :checksum',
+                          {'checksum': checksum})
         names = []
         for row in c.fetchall():
             self.logger.debug("Found name %s", row[0])

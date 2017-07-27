@@ -315,15 +315,15 @@ def findLastPath(path, reduce):
             return bset['backupset'], tmp, bset['name']
     return (None, None, None)
 
-def recoverName(cksum, bset):
-    names = tardis.getNamesForChecksum(cksum, bset)
+def recoverName(cksum):
+    names = tardis.getNamesForChecksum(cksum)
     #print names
     if names:
-        if len(names) > 1:
-            logger.warning("Multiple (%d) names for checksum %s %s", len(names), cksum, list(names))
-        name = names[0]
         if args.crypt and crypt:
-            name = crypt.decryptFilename(name)
+            names = map(crypt.decryptFilename, names)
+        name = names[0]
+        if len(names) > 1:
+            logger.warning("Multiple (%d) names for checksum %s %s.  Choosing '%s'.", len(names), cksum, map(str, list(names)), name)
         return name
     else:
         logger.error("No name discovered for checksum %s", cksum)
@@ -461,7 +461,7 @@ def main():
                         hasher = Util.getHash(crypt)
                     ckname = i
                     if args.recovername:
-                        ckname = recoverName(i, bset)
+                        ckname = recoverName(i)
                     f = r.recoverChecksum(i, args.auth)
                     if f:
                     # Generate an output name
@@ -473,12 +473,12 @@ def main():
                             logger.debug("Writing output to %s", outname)
                             output = file(outname,  "wb")
                         try:
-                            x = f.read(16 * 1024)
+                            x = f.read(64 * 1024)
                             while x:
                                 output.write(x)
                                 if hasher:
                                     hasher.update(x)
-                                x = f.read(16 * 1024)
+                                x = f.read(64 * 1024)
                         except Exception as e:
                             logger.error("Unable to read file: {}: {}".format(i, repr(e)))
                             raise
