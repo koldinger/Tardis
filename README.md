@@ -34,11 +34,12 @@ at the same time.
 
 Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using
 the Secure Remote Password (SRP) protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will
-set the database up for the new password mechanism.  Note that this MUST be run on the server, and requires the users password.  Usage is
-    * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
+set the database up for the new password mechanism.  Note that this MUST be run on the server, and requires the users password.  Usage is:
+   * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
 
 Because the database schema updates at the same point, you will also need to upgrade the schema.  The command for this is:
-    * `sonic upgrade -D cache -C client`
+   * `sonic upgrade -D cache -C client`
+
 Note that no password is needed.
 
 If your backup does not use a password, this step should be skipped.  It only applies to secure backups.
@@ -46,15 +47,14 @@ If your backup does not use a password, this step should be skipped.  It only ap
 Important Release Notes
 =======================
 0.31.12 or so changed the database journalling scheme to SQLite's "write ahead logging".  This seemed to cause problems.  If you are unable to do much with the database, execute the following command at the command line:
-    * ` % sqlite3 path/to/database/tardis.db`
-    * `sqlite> pragma journal_mode=truncate;`
+   * ` % sqlite3 path/to/database/tardis.db`
+   * `sqlite> pragma journal_mode=truncate;`
 
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run longer than usual.  It will self correct after the first backup run.
+Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run *MUCH* longer than usual.  It will self correct after the first backup run.
 
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.32.0 Brings in a modification the communications protocol, and changes the login  mechanism to use SRP (Secure Remote Password) authentication.  **This will require simultaneous upgrades of all the tools, client and server, and manual intervention to add SRP credentials to any encrypted database.**
   * 0.32.1+ Will be bug fixes, if necessary.
   * 1.0.0 Formal release
   * 2.0.0 Will (hopefully) introduce a web interface to allow controlling backup jobs.
@@ -64,7 +64,7 @@ Installation
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python developmen, and a couple other packages.
     * Fedora: `{yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp snappy-devel openssl-devel`
-    * Ubuntu/Debian: a`pt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev`
+    * Ubuntu/Debian: a`pt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev openssl-dev`
   * Run the python setup:
     * `python setup.py install`
 
