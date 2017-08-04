@@ -59,6 +59,17 @@ Several releases will be coming soon:
   * 1.0.0 Formal release
   * 2.0.0 Will (hopefully) introduce a web interface to allow controlling backup jobs.
   
+Support
+=======
+Tardis has been done in my spare time, but still represents a significant amount of work.  If it helps you, please donate to support it's continued development.   Thanks...
+
+<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+<input type="hidden" name="cmd" value="_s-xclick">
+<input type="hidden" name="hosted_button_id" value="6AVY2B37BR69Y">
+<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
+<img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1">
+</form>
+
 Installation
 ============
 Installing  up the server is relatively straightforward.
