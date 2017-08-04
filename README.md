@@ -63,12 +63,10 @@ Support
 =======
 Tardis has been done in my spare time, but still represents a significant amount of work.  If it helps you, please donate to support it's continued development.   Thanks...
 
-<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
-<input type="hidden" name="cmd" value="_s-xclick">
-<input type="hidden" name="hosted_button_id" value="6AVY2B37BR69Y">
-<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
-<img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1">
-</form>
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6AVY2B37BR69Y
+)
+
+If you're using Tardis, I'd love to hear from you.  Please, let me know how you like it.  <eric.koldinger@gmail.com>
 
 Installation
 ============
