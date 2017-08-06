@@ -107,11 +107,12 @@ class RemoteDB(object):
         self.connect()
 
 
-    def __del__(self):
-        try:
-            self.close()
-        except Exception as e:
-            self.logger.warning("Caught exception closing: " + str(e))
+    #def __del__(self):
+    #    try:
+    #        self.close()
+    #    except Exception as e:
+    #        self.logger.warning("Caught exception closing: " + str(e))
+    #        self.logger.exception(e)
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
@@ -156,8 +157,10 @@ class RemoteDB(object):
 
     def close(self):
         self.logger.debug("Closing session")
-        r = self.session.get(self.baseURL + "close", headers=self.headers)
+        if self.session:
+            r = self.session.get(self.baseURL + "close", headers=self.headers)
         r.raise_for_status()
+        self.session = None
         return r.json()
 
     def _setPrevBackupSet(self):
