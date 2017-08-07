@@ -573,7 +573,10 @@ def sendDirHash(inode):
         }
 
     batchMessage(message)
-    del dirHashes[i]
+    try:
+        del dirHashes[i]
+    except KeyError as e:
+        logger.warning("Unable to delete Directory Hash for %s", i)
 
 def cksize(i, threshhold):
     if i in inodeDB:
