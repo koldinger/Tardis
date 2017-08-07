@@ -326,6 +326,7 @@ def printit(info, name, color, gone):
             group = Util.getGroupName(info['gid'])
             owner = Util.getUserId(info['uid'])
             mtime = Util.formatTime(info['mtime'])
+            nlinks = info['nlinks']
             if info['size'] is not None:
                 if args.human:
                     size = Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
@@ -333,7 +334,7 @@ def printit(info, name, color, gone):
                     size = "%8d" % info['size']
             else:
                 size = ''
-            doprint('  %9s %-8s %-8s %8s %12s ' % (mode, owner, group, size, mtime), color=colors['name'])
+            doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
             if args.size:
                 doprint(' %8s ' % (fsize))
             if args.inode:
