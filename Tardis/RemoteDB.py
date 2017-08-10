@@ -35,6 +35,8 @@ import urllib
 import functools
 import base64
 
+from binascii import unhexlify
+
 import requests
 import requests_cache
 
@@ -380,9 +382,15 @@ class RemoteDB(object):
     @reconnect
     def setSrpValues(self, salt, vkey):
         postData = { 'salt': salt, 'vkey': vkey }
-        response = self.session.post(self.baseURL + "setToken", data=postData)
+        response = self.session.post(self.baseURL + "setSrpValues", data=postData)
         response.raise_for_status()
         return response.json()
+
+    @reconnect
+    def getSrpValues(self):
+        salt = unhexlify(self.getConfigValue('SRPSalt'))
+        vKey = unhexlify(self.getConfigValue('SRPVkey'))
+        return (salt, vKey)
 
     @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
