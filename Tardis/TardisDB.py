@@ -83,7 +83,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 13
+_schemaVersion = 14
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
