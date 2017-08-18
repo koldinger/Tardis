@@ -1415,11 +1415,8 @@ class TardisServer(object):
             self.profiler = None
 
 #class TardisSocketServer(SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer, TardisServer):
+class TardisSocketServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer, TardisServer):
     def __init__(self):
-        if args.reuseaddr:
-            # Allow reuse of the address before timeout if requested.
-            self.allow_reuse_address = True
 
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         TardisServer.__init__(self)
@@ -1427,10 +1424,6 @@ class TardisSocketServer(SocketServer.ForkingMixIn, SocketServer.TCPServer, Tard
 
 class TardisSingleThreadedSocketServer(SocketServer.TCPServer, TardisServer):
     def __init__(self):
-        if args.reuseaddr:
-            # Allow reuse of the address before timeout if requested.
-            self.allow_reuse_address = True
-
         SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("Single Threaded TCP Server %s Running", Tardis.__versionstring__)
@@ -1480,7 +1473,10 @@ def run_server():
     global server
 
     try:
-        #server = SocketServer.TCPServer(("", config.getint('Tardis', 'Port')), TardisServerHandler)
+        if args.reuseaddr:
+            # Allow reuse of the address before timeout if requested.
+            SocketServer.TCPServer.allow_reuse_address = True
+
         if args.local:
             logger.info("Starting Server. Socket: %s", args.local)
             server = TardisDomainSocketServer()
