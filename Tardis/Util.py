@@ -47,6 +47,7 @@ import pwd
 import grp
 import time
 import struct
+import StringIO
 
 import urlparse
 import urllib
@@ -632,6 +633,14 @@ def saveKeys(name, client, nameKey, contentKey):
     with open(name, 'wb') as configfile:
         config.write(configfile)
 
+def mkKeyString(client, nameKey, contentKey):
+    config = ConfigParser.ConfigParser()
+    config.add_section(client)
+    config.set(client, 'ContentKey', contentKey)
+    config.set(client, 'FilenameKey', nameKey)
+    x = StringIO.StringIO()
+    config.write(x)
+    return x.getvalue()
 
 ###
 ### Create a metadata file for file.
