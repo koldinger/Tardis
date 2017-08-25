@@ -79,13 +79,14 @@ def addCommonOptions(parser):
     dbGroup.add_argument('--dbname', '-N',   dest='dbname',      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
     dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  If no value, uses the value of --database.  Default: %(default)s")
 
-def addPasswordOptions(parser):
+def addPasswordOptions(parser, addcrypt=True):
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password', '-P',dest='password', default=config.get(job, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=config.get(job, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
-                           help='Encrypt data.  Only valid if password is set')
+    if addcrypt:
+        passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
+                               help='Encrypt data.  Only valid if password is set')
     passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')
