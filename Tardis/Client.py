@@ -1389,10 +1389,10 @@ def processCommandLine():
 
     parser.add_argument('--client',                 dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=c.getboolean(t, 'Force'),
-                        help='Force the backup to take place, even if others are currently running')
+                        help='Force the backup to take place, even if others are currently running.  Default: %(default)s')
     parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=c.getboolean(t, 'Full'),
                         help='Perform a full backup, with no delta information. Default: %(default)s')
-    parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  No name to assign name automatically')
+    parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
     parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  Default: %(default)s')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
@@ -1403,7 +1403,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
     passgroup.add_argument('--crypt',               dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
-                           help='Encrypt data.  Only valid if password is set')
+                           help='Encrypt data.  Only valid if password is set.  Default: %(default)s')
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
@@ -1435,9 +1435,9 @@ def processCommandLine():
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',                 dest='cvs', default=c.getboolean(t, 'IgnoreCVS'), action=Util.StoreBoolean,
-                        help='Ignore files like CVS')
+                        help='Ignore files like CVS.  Default: %(default)s')
     excgrp.add_argument('--skip-caches',                dest='skipcaches', default=c.getboolean(t, 'SkipCaches'),action=Util.StoreBoolean,
-                        help='Skip directories with valid CACHEDIR.TAG files')
+                        help='Skip directories with valid CACHEDIR.TAG files.  Default: %(default)s')
     excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append', default=splitList(c.get(t, 'ExcludePatterns')),
                         help='Patterns to exclude globally (may be repeated)')
     excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',                           help='Load patterns from exclude file (may be repeated)')
@@ -1476,7 +1476,7 @@ def processCommandLine():
     parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
-    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete')
+    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  Default: %(default)s')
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
 
     prggroup = purgegroup.add_mutually_exclusive_group()
@@ -1623,7 +1623,7 @@ def lockRun(server, port, client):
     try:
         pidfile.create()
     except pid.PidFileError as e:
-        raise Exception("Tardis already running: %s", e)
+        raise Exception("Tardis already running: %s" % e)
     return pidfile
 
 def main():
@@ -1747,7 +1747,6 @@ def main():
         if args.exceptions:
             logger.exception(e)
         sys.exit(1)
-
     if verbosity or args.stats or args.report:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
