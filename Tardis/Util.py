@@ -657,6 +657,7 @@ def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis
     try:
         f = cache.open(metaName, 'wb')
         f.write(metaStr)
+        f.write('\n')
         f.close()
     except Exception as e:
         logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
