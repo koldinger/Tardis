@@ -282,7 +282,7 @@ class TardisDB(object):
             converter = self._getConverter(name)
             self.logger.debug("Running conversion script from version %d, %s", i, name)
             converter.upgrade(self.conn, self.logger)
-            self.logger.warning("Upgraded chema to version %d", i + 1)
+            self.logger.warning("Upgraded schema to version %d", i + 1)
 
     @authenticate
     def lastBackupSet(self, completed=True):
