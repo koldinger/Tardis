@@ -33,8 +33,11 @@ import os.path
 import socket
 import logging
 import shutil
+import ConfigParser
 
 import Defaults
+
+logger = logging.getLogger("CacheDir")
 
 class CacheDirDoesNotExist(Exception):
     pass
@@ -42,11 +45,10 @@ class CacheDirDoesNotExist(Exception):
 class CacheDir(object):
     def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
         self.root = os.path.abspath(root)
-        self.parts = parts
-        self.partsize = partsize
         self.user  = user if user else -1
         self.group = group if group else -1
         self.chown = user or group
+
 
         if not os.path.isdir(self.root):
             if create:
@@ -58,6 +60,27 @@ class CacheDir(object):
                         pass
             else:
                 raise CacheDirDoesNotExist("CacheDir does not exist: " + root)
+
+        # Read a config file if it exists, create it if not
+        defaults = {"parts": str(parts), "partsize": str(partsize) }
+        configFile = os.path.join(self.root, ".cachedir")
+        config = ConfigParser.ConfigParser()
+        config.read(configFile)
+        section = "CacheDir"
+        config.add_section(section)
+
+        try:
+            self.parts = int(config.get(section, "parts", vars=defaults))
+            self.partsize = int(config.get(section, "partsize", vars=defaults))
+        except ValueError:
+            logger.error("Invalid configuration.  Using defaults")
+            self.parts = 2
+            self.partsize = 2
+
+        config.set(section, "parts", self.parts)
+        config.set(section, "partssize", self.partsize)
+        with file(configFile, "w") as f:
+            config.write(f)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
@@ -138,8 +161,6 @@ class CacheDir(object):
             return True
         except OSError:
             return False
-
-logger = logging.getLogger("CacheDir")
 
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
