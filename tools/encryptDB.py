@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator
+from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
 import sqlite3
 import argparse, logging
 import os.path
@@ -204,7 +204,7 @@ def generateDirHashes(db, crypto, cacheDir):
 
                 #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
                 #logger.debug("    Directory contents: %s", str(files))
-                (newHash, newSize) = Util.hashDir(crypto, files, True, True)
+                (newHash, newSize) = Util.hashDir(crypto, files, True, decrypt=True)
                 #logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
                 bar.update(hashes)
                 try:
@@ -246,10 +246,11 @@ def generateMetadata(db, cacheDir):
 
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Encrypt the database')
-    parser.add_argument('--database', '-D', dest='database', default=Defaults.getDefault('TARDIS_DB'),      help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',   default=Defaults.getDefault('TARDIS_CLIENT'),  help="Client to list on.  Default: %(default)s")
-    parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
+    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
+
+    (_, remaining) = Config.parseConfigOptions(parser)
+    Config.addCommonOptions(parser)
+    Config.addPasswordOptions(parser, addcrypt=False)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
@@ -257,13 +258,10 @@ def processArgs():
     parser.add_argument('--meta',           dest='meta',     action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
     parser.add_argument('--all',            dest='all',      action='store_true', default=False,       help='Perform all encyrption steps. Default=%(default)s')
 
-    passgroup= parser.add_argument_group("Password/Encryption specification options")
-    pwgroup = passgroup.add_mutually_exclusive_group(required=True)
-    pwgroup.add_argument('--password', '-P',dest='password', default=None, nargs='?', const=True,       help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', dest='passwordfile', default=None,                          help='Retrieve password from the specified file or URL')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=None,                          help='Use the specified command to generate the password on stdout')
+    parser.add_argument('--help', '-h',     action='help');
 
-    args = parser.parse_args()
+    args = parser.parse_args(remaining)
+
     if (not (args.names or args.files or args.dirs or args.meta or args.all)):
         parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
