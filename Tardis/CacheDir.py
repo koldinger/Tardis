@@ -63,11 +63,12 @@ class CacheDir(object):
 
         # Read a config file if it exists, create it if not
         defaults = {"parts": str(parts), "partsize": str(partsize) }
+        section = "CacheDir"
+
         configFile = os.path.join(self.root, ".cachedir")
         config = ConfigParser.ConfigParser()
-        config.read(configFile)
-        section = "CacheDir"
         config.add_section(section)
+        config.read(configFile)
 
         try:
             self.parts = int(config.get(section, "parts", vars=defaults))
