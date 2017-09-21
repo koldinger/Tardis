@@ -81,8 +81,11 @@ class CacheDir(object):
         config.set(section, "parts", self.parts)
         config.set(section, "partssize", self.partsize)
         if create:
-            with file(configFile, "w") as f:
-                config.write(f)
+            try:
+                with file(configFile, "w") as f:
+                    config.write(f)
+            except Exception as e:
+                logger.warning("Could not write cnofigpration file: %s", configFile)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
