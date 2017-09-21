@@ -80,8 +80,9 @@ class CacheDir(object):
 
         config.set(section, "parts", self.parts)
         config.set(section, "partssize", self.partsize)
-        with file(configFile, "w") as f:
-            config.write(f)
+        if create:
+            with file(configFile, "w") as f:
+                config.write(f)
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
