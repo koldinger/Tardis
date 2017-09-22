@@ -150,6 +150,14 @@ pp = pprint.PrettyPrinter(indent=2, width=200)
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2
 
+def makeDict(row):
+    if row:
+        d = {}
+        for i in row.keys():
+            d[i] = row[i]
+        return d
+    return None
+
 class InitFailedException(Exception):
     pass
 
@@ -254,7 +262,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         else:       # Not a directory, it's a file
             # Get the last backup information
             #old = self.db.getFileInfoByName(f["name"], parent)
-            if old:
+            # Check to see if it already existed, and that there is data associated with it.
+            if old and (old['checksum'] != None):
                 fromPartial = False     # For use with the upcoming result
                 #self.logger.debug('Matching against old version for file %s (%d)', name, inode)
             elif not self.lastCompleted:
@@ -265,8 +274,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
             if old:
-                #self.logger.debug("Comparing versions: New: %s", str(f))
-                #self.logger.debug("Comparing version: Old: %s", str(old))
+                #self.logger.debug("Comparing version:  New: %s", str(f))
+                #self.logger.debug("Comparing version:  Old: %s", str(makeDict(old)))
 
                 # Got something.  If the inode, size, and mtime are the same, just keep it
                 fsize = f['size']
