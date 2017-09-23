@@ -287,7 +287,6 @@ def processChecksums(inodes):
     #handleAckSum(response)
     batchMessage(message)
 
-
 def logFileInfo(i, c):
     if i in inodeDB:
         (x, name) = inodeDB[i]
@@ -297,6 +296,9 @@ def logFileInfo(i, c):
             size = 0
         size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
         logger.log(logging.FILES, "File: [%c]: %s (%s)", c, Util.shortPath(name), size)
+        if args.crypt and crypt and logger.isEnabledFor(logging.DEBUG):
+            cname = crypt.encryptPath(name.decode(systemencoding, 'replace'))
+            logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
@@ -423,6 +425,7 @@ def processDelta(inode):
                 delta.close()
 
                 # If we have a signature, send it.
+                sigsize = 0
                 if newsig:
                     message = {
                         "message" : "SIG",
@@ -431,17 +434,14 @@ def processDelta(inode):
                     #sendMessage(message)
                     batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sSent, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
-                    x = { 'type': 'Delta', 'size': sent }
-                    if newsig:
-                        x['sigsize'] = sSent
-                    else:
-                        x['sigsize'] = 0
-
+                    x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
                     report[os.path.split(pathname)] = x
+                logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
+
             else:
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
@@ -484,6 +484,7 @@ def sendContent(inode, reportType):
 
             # Attempt to send the data.
             sig = None
+            sigsize = 0
             try:
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 progress = printProgress if args.progress else None
@@ -515,7 +516,7 @@ def sendContent(inode, reportType):
                     }
                     #sendMessage(message)
                     batchMessage(message, batch=False, flush=True, response=False)
-                    (sSent, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 if args.exceptions:
@@ -529,10 +530,9 @@ def sendContent(inode, reportType):
 
             Util.accumulateStat(stats, 'new')
             if args.report:
-                repInfo = { 'type': reportType, 'size': size, 'sigsize': 0 }
-                if sig:
-                    repInfo['sigsize'] = sSent
+                repInfo = { 'type': reportType, 'size': size, 'sigsize': sigsize }
                 report[os.path.split(pathname)] = repInfo
+            logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
     else:
         logger.debug("Unknown inode {} -- Probably linked".format(inode))
 
@@ -1494,6 +1494,7 @@ def processCommandLine():
 
     parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. Default: %(default)s')
     parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
+    parser.add_argument('--logtime',            dest='logtime', default=False, action=Util.StoreBoolean, help='Log time')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -1546,7 +1547,10 @@ def setupLogging(logfiles, verbosity):
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
 
-    formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
+    if args.logtime:
+        formatter = MessageOnlyFormatter(levels=[logging.STATS], fmt='%(asctime)s %(levelname)s: %(message)s')
+    else:
+        formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
 
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
