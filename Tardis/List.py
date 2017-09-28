@@ -609,6 +609,8 @@ def computeColumnWidth(names):
             _, width = Util.getTerminalSize()
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
             columns = width / (longestName + 4)
+            if columns == 0:
+                columns = 1
         else:
             columns = 1
 
