@@ -59,6 +59,8 @@ import pid
 import parsedatetime
 import srp
 
+import argcomplete
+
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
 import Tardis.CompressedBuffer as CompressedBuffer
@@ -479,7 +481,7 @@ def sendContent(inode, reportType):
                 else:
                     data = open(pathname, "rb")
             except IOError as e:
-                logger.error("Could not open %s: %s", pathname, e)
+                logger.warning("Could not open %s, not backed up: %s", pathname, e)
                 return
 
             # Attempt to send the data.
@@ -557,13 +559,18 @@ def handleAckMeta(message):
         progress = printProgress if args.progress else None
         Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
+_defaultHash = None
 def sendDirHash(inode):
+    global _defaultHash
+    if _defaultHash == None:
+        h = Util.getHash(crypt, args.crypt)
+        _defaultHash = '00' * h.digest_size
     i = tuple(inode)
     #try:
     #    (h,s) = dirHashes[i]
     #except KeyError:
     #    logger.error("%s, No directory hash available for inode %d on device %d", i, i[0], i[1])
-    (h,s) = dirHashes.setdefault(i, ('00000000000000000000000000000000', 0))
+    (h,s) = dirHashes.setdefault(i, (_defaultHash, 0))
 
     message = {
         'message': 'DHSH',
@@ -1500,6 +1507,8 @@ def processCommandLine():
     parser.add_argument('--help', '-h',         action='help')
 
     parser.add_argument('directories',          nargs='*', default=splitList(c.get(t, 'Directories')), help="List of directories to sync")
+
+    argcomplete.autocomplete(parser)
 
     return (parser.parse_args(remaining), c)
 
