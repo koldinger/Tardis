@@ -103,6 +103,7 @@ def doAuthenticate(outname, checksum, digest):
                 os.unlink(outname)
                 target = None
         else:
+            target = None
             action = ''
         if outname is None:
             outname = ''
