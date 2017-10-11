@@ -246,6 +246,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             old = dirhash[name]
         else:
             old = None
+        fromPartial = False
 
         if f["dir"] == 1:
             #self.logger.debug("Is a directory: %s", name)
@@ -260,17 +261,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.setXattrAcl(inode, device, xattr, acl)
             retVal = DONE
         else:       # Not a directory, it's a file
-            # Get the last backup information
-            #old = self.db.getFileInfoByName(f["name"], parent)
-            # Check to see if it already existed, and that there is data associated with it.
-            if old and (old['checksum'] != None):
-                fromPartial = False     # For use with the upcoming result
-                #self.logger.debug('Matching against old version for file %s (%d)', name, inode)
-            elif not self.lastCompleted:
+            # Check to see if there's an updated version.
+            if not self.lastCompleted:
                 # not in this directory, but lets look further in any incomplete sets if there are any
                 #self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
-                old = self.db.getFileFromPartialBackup(f)
-                if old:
+                tmp = self.db.getFileFromPartialBackup(f)
+                if tmp:
+                    old = tmp
                     fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
             if old:
@@ -807,9 +804,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             checksum = message["checksum"]
             if self.cache.exists(checksum):
                 self.logger.debug("Checksum file %s already exists", checksum)
-                # Abort read
-            else:
-                output = self.cache.open(checksum, "w")
+            output = self.cache.open(checksum, "w")
         else:
             #temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
             tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
@@ -823,22 +818,27 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
-        Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
 
         try:
             if tempName:
                 if self.cache.exists(checksum):
-                    if self.full:
-                        self.logger.debug("Replacing existing checksum file for %s", checksum)
+                    # Error check.  Sometimes files can get into the cachedir without being recorded.
+                    ckInfo = self.db.getChecksumInfo(checksum)
+                    if ckInfo is None:
+                        self.logger.warning("Checksum file %s exists, but no DB entry.  Reinserting", checksum)
                         self.cache.insert(checksum, tempName)
-                        self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                        self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                     else:
-                        self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-                        os.remove(tempName)
+                        if self.full:
+                            self.logger.debug("Replacing existing checksum file for %s", checksum)
+                            self.cache.insert(checksum, tempName)
+                            self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                        else:
+                            # Check to make sure it's recorded in the DB.  If not, reinsert
+                            self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+                            os.remove(tempName)
                 else:
-                    #self.logger.debug("Renaming %s to %s",temp.name, self.cache.path(checksum))
-                    #self.cache.mkdir(checksum)
-                    #os.rename(temp.name, self.cache.path(checksum))
+                    self.logger.debug("Inserting %s to %s",temp.name, self.cache.path(checksum))
                     self.cache.insert(checksum, tempName)
                     self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
             else:
@@ -849,6 +849,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
             self.db.setChecksum(inode, dev, checksum)
             self.statNewFiles += 1
+            # Record the metadata.  Do it here after we've inserted the file because on a full backup we could overwrite
+            # a version which had a basis without updating the base file.
+            Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
         except Exception as e:
             self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
             if self.server.exceptions:
@@ -857,9 +860,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.statBytesReceived += bytesReceived
 
         #return {"message" : "OK", "inode": message["inode"]}
-        flush = False
-        if bytesReceived > 1000000:
-            flush = True
+        flush = True if bytesReceived > 1000000 else False
         return (None, flush)
 
     def processBatch(self, message):
