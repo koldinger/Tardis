@@ -51,6 +51,7 @@ import urlparse
 import functools
 import stat
 import uuid
+import errno
 
 from binascii import hexlify
 
@@ -481,7 +482,12 @@ def sendContent(inode, reportType):
                 else:
                     data = open(pathname, "rb")
             except IOError as e:
-                logger.warning("Could not open %s, not backed up: %s", pathname, e)
+                if e.errno == errno.ENOENT:
+                    logger.warning("%s disappeared.  Not backed up", pathname)
+                elif e.errno == errno.EACCES:
+                    logger.warning("Permission denied opening: %s.  Not backed up", pathname)
+                else:
+                    logger.warning("Unable to open %s: %s", pathname, e.strerror)
                 return
 
             # Attempt to send the data.
