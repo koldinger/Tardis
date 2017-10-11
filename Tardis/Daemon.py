@@ -838,7 +838,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                             self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
                             os.remove(tempName)
                 else:
-                    self.logger.debug("Inserting %s to %s",temp.name, self.cache.path(checksum))
                     self.cache.insert(checksum, tempName)
                     self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
             else:
