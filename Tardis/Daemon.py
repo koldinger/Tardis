@@ -471,10 +471,24 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         }
         return (response, False)
 
+    def processManySigsRequest(self, message):
+        inodes = message['inodes']
+        for i in inodes:
+            (inode, dev) = i
+            self.sendSignature(inode, dev)
+        response = {
+            'message': "SIG",
+            'status' : "DONE"
+        }
+        return(response, True)
+
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
         #self.logger.debug("Processing signature request message: %s"format(str(message)))
         (inode, dev) = message["inode"]
+        return self.sendSignature(inode, dev)
+
+    def sendSignature(self, inode, dev):
         response = None
         chksum = None
         errmsg = None
@@ -512,7 +526,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 # TODO: Break the signature out of here.
                 response = {
                     "message": "SIG",
-                    "inode": inode,
+                    "inode": (inode, dev),
                     "status": "OK",
                     "encoding": self.messenger.getEncoding(),
                     "checksum": chksum,
@@ -912,6 +926,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (response, flush) = self.processDirHash(message)
         elif messageType == "SGR":
             (response, flush) = self.processSigRequest(message)
+        elif messageType == "SGS":
+            (response, flush) = self.processManySigsRequest(message)
         elif messageType == "SIG":
             (response, flush) = self.processSignature(message)
         elif messageType == "DEL":

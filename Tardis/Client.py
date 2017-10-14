@@ -327,10 +327,14 @@ def handleAckSum(response):
         sendContent(i, 'Full')
         delInode(i)
 
+    signatures = None
+    if not args.full and len(delta) != 0:
+        signatures = prefetchSigfiles(delta)
+
     for i in [tuple(x) for x in delta]:
         if logfiles:
             logFileInfo(i, 'd')
-        processDelta(i)
+        processDelta(i, signatures)
         delInode(i)
 
 def makeEncryptor():
@@ -347,110 +351,149 @@ def makeEncryptor():
         hmac = None
     return (func, pad, iv, hmac)
 
-def processDelta(inode):
+def prefetchSigfiles(inodes):
+    logger.debug("Requesting signature files: %s", str(inodes))
+    signatures = {}
+
+    message = {
+        "message": "SGS",
+        "inodes": inodes
+    }
+    setMessageID(message)
+
+    sigmessage = sendAndReceive(message)
+    checkMessage(sigmessage, "SIG")
+
+    while sigmessage['status'] == 'OK':
+        inode = tuple(sigmessage['inode'])
+        logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
+
+        sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
+        #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+        Util.receiveData(conn.sender, sigfile)
+        logger.debug("Received sig file: %d", sigfile.tell())
+        sigfile.seek(0)
+        signatures[inode] = (sigfile, sigmessage['checksum'])
+
+
+        # Get the next file in the stream
+        sigmessage = receiveMessage()
+        checkMessage(sigmessage, "SIG")
+    return signatures
+
+def fetchSignature(inode):
+    logger.debug("Requesting checksum for %s", str(inode))
+    message = {
+        "message" : "SGR",
+        "inode" : inode
+    }
+    setMessageID(message)
+
+    ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
+    ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
+    ## Follow on by more data, which is unique
+    sigmessage = sendAndReceive(message)
+
+    if sigmessage['status'] == 'OK':
+        sigfile = cStringIO.StringIO()
+        #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+        Util.receiveData(conn.sender, sigfile)
+        logger.debug("Received sig file: %d", sigfile.tell())
+        sigfile.seek(0)
+    return (sigfile, sigmessage['checksum'])
+
+
+def processDelta(inode, signatures):
     """ Generate a delta and send it """
 
     if inode in inodeDB:
         (_, pathname) = inodeDB[inode]
-        message = {
-            "message" : "SGR",
-            "inode" : inode
-        }
         if args.progress:
             printProgress("File [D]:", pathname)
-        setMessageID(message)
         logger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
-        ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
-        ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
-        ## Follow on by more data, which is unique
-        sigmessage = sendAndReceive(message)
-
-        if sigmessage['status'] == 'OK':
-            newsig = None
-            # Try to process the signature and the delta.  If we fail, send the whole content.
-            try:
-                oldchksum = sigmessage['checksum']
-                sigfile = cStringIO.StringIO()
-                #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-                Util.receiveData(conn.sender, sigfile)
-                logger.debug("Received sig file: %d", sigfile.tell())
-                sigfile.seek(0)
-
-                # If we're encrypted, we need to generate a new signature, and send it along
-                makeSig = (args.crypt and crypt) or args.signature
-
-                logger.debug("Generating delta for %s", pathname)
-
-                # Create a buffered reader object, which can generate the checksum and an actual filesize while
-                # reading the file.  And, if we need it, the signature
-                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt, args.crypt), signature=makeSig)
-                # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
-                reader.seek = lambda x, y: 0
-
-                # Generate the delta file
-                delta = librsync.delta(reader, sigfile)
-
-                # get the auxiliary info
-                checksum = reader.checksum()
-                filesize = reader.size()
-                newsig = reader.signatureFile()
-
-                # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
-                # Ugly.
-                delta.seek(0, 2)
-                deltasize = delta.tell()
-                delta.seek(0)
-            except Exception as e:
-                logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-                if args.exceptions:
-                    logger.exception(e)
-                sendContent(inode, 'Full')
-                return
-
-            if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-                (encrypt, pad, iv, hmac) = makeEncryptor()
-                Util.accumulateStat(stats, 'delta')
-                message = {
-                    "message": "DEL",
-                    "inode": inode,
-                    "size": filesize,
-                    "checksum": checksum,
-                    "basis": oldchksum,
-                    "encoding": encoding,
-                    "encrypted": (iv is not None)
-                }
-
-                batchMessage(message, flush=True, batch=False, response=False)
-                compress = (args.compress and (filesize > args.mincompsize))
-                progress = printProgress if args.progress else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
-                delta.close()
-
-                # If we have a signature, send it.
-                sigsize = 0
-                if newsig:
-                    message = {
-                        "message" : "SIG",
-                        "checksum": checksum
-                    }
-                    #sendMessage(message)
-                    batchMessage(message, flush=True, batch=False, response=False)
-                    # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
-                    newsig.close()
-
-                if args.report:
-                    x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
-                    report[os.path.split(pathname)] = x
-                logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
-
-            else:
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
-                sendContent(inode, 'Full')
+        if signatures and inode in signatures:
+            (sigfile, oldchksum) = signatures[inode]
         else:
+            (sigfile, oldchksum) = fetchSignature(inode)
+
+        try:
+            newsig = None
+            # If we're encrypted, we need to generate a new signature, and send it along
+            makeSig = (args.crypt and crypt) or args.signature
+
+            logger.debug("Generating delta for %s", pathname)
+
+            # Create a buffered reader object, which can generate the checksum and an actual filesize while
+            # reading the file.  And, if we need it, the signature
+            reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt, args.crypt), signature=makeSig)
+            # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
+            reader.seek = lambda x, y: 0
+
+            # Generate the delta file
+            delta = librsync.delta(reader, sigfile)
+            sigfile.close()
+
+            # get the auxiliary info
+            checksum = reader.checksum()
+            filesize = reader.size()
+            newsig = reader.signatureFile()
+
+            # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
+            # Ugly.
+            delta.seek(0, 2)
+            deltasize = delta.tell()
+            delta.seek(0)
+        except Exception as e:
+            logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
+            if args.exceptions:
+                logger.exception(e)
             sendContent(inode, 'Full')
+            return
+
+        if deltasize < (filesize * float(args.deltathreshold) / 100.0):
+            (encrypt, pad, iv, hmac) = makeEncryptor()
+            Util.accumulateStat(stats, 'delta')
+            message = {
+                "message": "DEL",
+                "inode": inode,
+                "size": filesize,
+                "checksum": checksum,
+                "basis": oldchksum,
+                "encoding": encoding,
+                "encrypted": (iv is not None)
+            }
+
+            batchMessage(message, flush=True, batch=False, response=False)
+            compress = (args.compress and (filesize > args.mincompsize))
+            progress = printProgress if args.progress else None
+            (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+            delta.close()
+
+            # If we have a signature, send it.
+            sigsize = 0
+            if newsig:
+                message = {
+                    "message" : "SIG",
+                    "checksum": checksum
+                }
+                #sendMessage(message)
+                batchMessage(message, flush=True, batch=False, response=False)
+                # Send the signature, generated above
+                (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                newsig.close()
+
+            if args.report:
+                x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
+                report[os.path.split(pathname)] = x
+            logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
+
+        else:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
+            sendContent(inode, 'Full')
+    else:
+        sendContent(inode, 'Full')
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
@@ -629,6 +672,11 @@ def handleAckDir(message):
         sendContent(i, 'Full')
         delInode(i)
 
+    # If there are any delta files requested, ask for them
+    signatures = None
+    if not args.full and len(delta) != 0:
+        signatures = prefetchSigfiles(delta)
+
     for i in [tuple(x) for x in delta]:
         # If doing a full backup, send the full file, else just a delta.
         if args.full:
@@ -640,7 +688,7 @@ def handleAckDir(message):
                 if i in inodeDB:
                     (x, name) = inodeDB[i]
                     logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
-            processDelta(i)
+            processDelta(i, signatures)
         delInode(i)
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
