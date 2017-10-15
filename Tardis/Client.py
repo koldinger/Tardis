@@ -393,6 +393,7 @@ def fetchSignature(inode):
     ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
     ## Follow on by more data, which is unique
     sigmessage = sendAndReceive(message)
+    checkMessage(sigmessage, "SIG")
 
     if sigmessage['status'] == 'OK':
         sigfile = cStringIO.StringIO()
@@ -400,7 +401,13 @@ def fetchSignature(inode):
         Util.receiveData(conn.sender, sigfile)
         logger.debug("Received sig file: %d", sigfile.tell())
         sigfile.seek(0)
-    return (sigfile, sigmessage['checksum'])
+        checksum = sigmessage['checksum']
+    else:
+        logger.warning("No signature file received for %s", inode)
+        sigfile = None
+        checksum = None
+
+    return (sigfile, None)
 
 
 def processDelta(inode, signatures):
@@ -417,83 +424,85 @@ def processDelta(inode, signatures):
         else:
             (sigfile, oldchksum) = fetchSignature(inode)
 
-        try:
-            newsig = None
-            # If we're encrypted, we need to generate a new signature, and send it along
-            makeSig = (args.crypt and crypt) or args.signature
+        if sigfile is not None:
+            try:
+                newsig = None
+                # If we're encrypted, we need to generate a new signature, and send it along
+                makeSig = (args.crypt and crypt) or args.signature
 
-            logger.debug("Generating delta for %s", pathname)
+                logger.debug("Generating delta for %s", pathname)
 
-            # Create a buffered reader object, which can generate the checksum and an actual filesize while
-            # reading the file.  And, if we need it, the signature
-            reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt, args.crypt), signature=makeSig)
-            # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
-            reader.seek = lambda x, y: 0
+                # Create a buffered reader object, which can generate the checksum and an actual filesize while
+                # reading the file.  And, if we need it, the signature
+                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt, args.crypt), signature=makeSig)
+                # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
+                reader.seek = lambda x, y: 0
 
-            # Generate the delta file
-            delta = librsync.delta(reader, sigfile)
-            sigfile.close()
+                # Generate the delta file
+                delta = librsync.delta(reader, sigfile)
+                sigfile.close()
 
-            # get the auxiliary info
-            checksum = reader.checksum()
-            filesize = reader.size()
-            newsig = reader.signatureFile()
+                # get the auxiliary info
+                checksum = reader.checksum()
+                filesize = reader.size()
+                newsig = reader.signatureFile()
 
-            # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
-            # Ugly.
-            delta.seek(0, 2)
-            deltasize = delta.tell()
-            delta.seek(0)
-        except Exception as e:
-            logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-            if args.exceptions:
-                logger.exception(e)
-            sendContent(inode, 'Full')
-            return
+                # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
+                # Ugly.
+                delta.seek(0, 2)
+                deltasize = delta.tell()
+                delta.seek(0)
+            except Exception as e:
+                logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
+                if args.exceptions:
+                    logger.exception(e)
+                sendContent(inode, 'Full')
+                return
 
-        if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-            (encrypt, pad, iv, hmac) = makeEncryptor()
-            Util.accumulateStat(stats, 'delta')
-            message = {
-                "message": "DEL",
-                "inode": inode,
-                "size": filesize,
-                "checksum": checksum,
-                "basis": oldchksum,
-                "encoding": encoding,
-                "encrypted": (iv is not None)
-            }
-
-            batchMessage(message, flush=True, batch=False, response=False)
-            compress = (args.compress and (filesize > args.mincompsize))
-            progress = printProgress if args.progress else None
-            (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
-            delta.close()
-
-            # If we have a signature, send it.
-            sigsize = 0
-            if newsig:
+            if deltasize < (filesize * float(args.deltathreshold) / 100.0):
+                (encrypt, pad, iv, hmac) = makeEncryptor()
+                Util.accumulateStat(stats, 'delta')
                 message = {
-                    "message" : "SIG",
-                    "checksum": checksum
+                    "message": "DEL",
+                    "inode": inode,
+                    "size": filesize,
+                    "checksum": checksum,
+                    "basis": oldchksum,
+                    "encoding": encoding,
+                    "encrypted": (iv is not None)
                 }
-                #sendMessage(message)
+
                 batchMessage(message, flush=True, batch=False, response=False)
-                # Send the signature, generated above
-                (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
-                newsig.close()
+                compress = (args.compress and (filesize > args.mincompsize))
+                progress = printProgress if args.progress else None
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+                delta.close()
 
-            if args.report:
-                x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
-                report[os.path.split(pathname)] = x
-            logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
+                # If we have a signature, send it.
+                sigsize = 0
+                if newsig:
+                    message = {
+                        "message" : "SIG",
+                        "checksum": checksum
+                    }
+                    #sendMessage(message)
+                    batchMessage(message, flush=True, batch=False, response=False)
+                    # Send the signature, generated above
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    newsig.close()
 
+                if args.report:
+                    x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
+                    report[os.path.split(pathname)] = x
+                logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
+            else:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
+                sendContent(inode, 'Full')
         else:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Delta size for %s is too large.  Sending full content: Delta: %d File: %d", Util.shortPath(pathname, 40), deltasize, filesize)
             sendContent(inode, 'Full')
     else:
-        sendContent(inode, 'Full')
+        logger.error("No inode entry for %s", inode)
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """

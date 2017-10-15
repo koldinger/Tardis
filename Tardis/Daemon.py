@@ -873,8 +873,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.statBytesReceived += bytesReceived
 
         #return {"message" : "OK", "inode": message["inode"]}
-        flush = True if bytesReceived > 1000000 else False
-        return (None, flush)
+        #flush = True if bytesReceived > 1000000 else False
+        return (None, False)
 
     def processBatch(self, message):
         batch = message['batch']
