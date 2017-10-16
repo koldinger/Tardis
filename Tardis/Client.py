@@ -650,7 +650,14 @@ def cksize(i, threshhold):
             return True
     return False
 
+allContent = []
+allDelta   = []
+allCkSum   = []
+allRefresh = []
+
 def handleAckDir(message):
+    global allContent, allDelta, allCkSum, allRefresh
+
     checkMessage(message, 'ACKDIR')
 
     content = message.setdefault("content", {})
@@ -662,20 +669,29 @@ def handleAckDir(message):
     if verbosity > 2:
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
 
+    # Prune the messages
     for i in [tuple(x) for x in done]:
         delInode(i)
 
+    allContent += content
+    allDelta   += delta
+    allCkSum   += cksum
+    allRefresh += refresh
+
+def pushFiles():
+    global allContent, allDelta, allCkSum, allRefresh
+    logger.debug("Pushing files")
     # If checksum content in NOT specified, send the data for each file
-    for i in [tuple(x) for x in content]:
+    for i in [tuple(x) for x in allContent]:
         if args.ckscontent and cksize(i, args.ckscontent):
-            cksum.append(i)
+            allCksSum.append(i)
         else:
             if logger.isEnabledFor(logging.FILES):
                 logFileInfo(i, 'N')
             sendContent(i, 'New')
             delInode(i)
 
-    for i in [tuple(x) for x in refresh]:
+    for i in [tuple(x) for x in allRefresh]:
         if logger.isEnabledFor(logging.FILES):
             logFileInfo(i, 'N')
         sendContent(i, 'Full')
@@ -683,10 +699,10 @@ def handleAckDir(message):
 
     # If there are any delta files requested, ask for them
     signatures = None
-    if not args.full and len(delta) != 0:
-        signatures = prefetchSigfiles(delta)
+    if not args.full and len(allDelta) != 0:
+        signatures = prefetchSigfiles(allDelta)
 
-    for i in [tuple(x) for x in delta]:
+    for i in [tuple(x) for x in allDelta]:
         # If doing a full backup, send the full file, else just a delta.
         if args.full:
             if logger.isEnabledFor(logging.FILES):
@@ -702,8 +718,14 @@ def handleAckDir(message):
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
-    if len(cksum) > 0:
-        processChecksums([tuple(x) for x in cksum])
+    if len(allCkSum) > 0:
+        processChecksums([tuple(x) for x in allCkSum])
+
+    # Clear out the files
+    allContent = []
+    allDelta   = []
+    allCkSum   = []
+    allRefresh = []
 
     #if message['last']:
     #    sendDirHash(message['inode'])
@@ -1211,7 +1233,7 @@ def sendKeys(password, client, includeKeys=True):
     if response['response'] != 'OK':
         logger.error("Could not set keys")
 
-def handleResponse(response):
+def handleResponse(response, doPush=True):
     msgtype = response['message']
     if msgtype == 'ACKDIR':
         handleAckDir(response)
@@ -1228,9 +1250,12 @@ def handleResponse(response):
         pass
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
-            handleResponse(ack)
+            handleResponse(ack, doPush=False)
     else:
         logger.error("Unexpected response: %s", msgtype)
+
+    if doPush:
+        pushFiles()
 
 nextMsgId = 0
 def setMessageID(message):
@@ -1705,6 +1730,7 @@ def lockRun(server, port, client):
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr
     # Read the command line arguments.
+    commandLine = ' '.join(sys.argv)
     (args, config) = processCommandLine()
 
     # Memory debugging.
@@ -1851,7 +1877,8 @@ def main():
                 sys.exit(1)
             crypt.setKeys(f, c)
 
-    # Send the command line, if so desired.
+
+    # Send the full configuration, if so desired.
     if args.sendconfig:
         a = vars(args)
         a['directories'] = directories
