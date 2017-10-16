@@ -23,6 +23,7 @@ application/x-lzip
 application/x-lzma
 application/x-lzop
 application/x-xz
+application/x-rpm
 application/x-compress
 application/x-7z-compressed
 application/x-ace-compressed
