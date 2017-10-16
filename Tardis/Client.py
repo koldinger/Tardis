@@ -1877,6 +1877,26 @@ def main():
                 sys.exit(1)
             crypt.setKeys(f, c)
 
+    # Send a command line
+    clHash = Util.getHash(crypt, args.crypt)
+    clHash.update(commandLine)
+    h = clHash.hexdigest()
+    (encrypt, pad, iv, hmac) = makeEncryptor()
+    if iv is None:
+        iv = ''
+    data = iv + encrypt(pad(commandLine))
+    if hmac:
+        hmac.update(data)
+        data = data + hmac.digest()
+
+    message = {
+        'message': 'COMMANDLINE',
+        'hash': h,
+        'line': data,
+        'size': len(commandLine),
+        'encrypted': True if iv else False
+    }
+    batchMessage(message)
 
     # Send the full configuration, if so desired.
     if args.sendconfig:

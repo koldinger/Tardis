@@ -83,7 +83,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
 
-_schemaVersion = 14
+_schemaVersion = 15
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -348,7 +348,7 @@ class TardisDB(object):
 
     @authenticate
     def setClientConfig(self, config, current=True):
-        """ Store the command line from this run """
+        """ Store the full client configuration in the database """
         backupset = self._bset(current)
         r = self._executeWithResult("SELECT ClientConfigID FROM ClientConfig WHERE ClientConfig = :config", {"config": config})
         if r is None:
@@ -357,6 +357,12 @@ class TardisDB(object):
         else:
             clientConfigId = r[0]
         self._execute("UPDATE Backups SET ClientConfigID = :configId WHERE BackupSet = :backupset", {"configId": clientConfigId, "backupset": backupset})
+
+    @authenticate
+    def setCommandLine(self, cksum, current=True):
+        """ Set a command line variable in the database """
+        backupset = self._bset(current)
+        self._execute("UPDATE Backups SET CmdLineID = :cksid WHERE BackupSet = :backupset", {'cksid': cksum, 'backupset': backupset})
 
     @authenticate
     def checkBackupSetName(self, name):
@@ -1086,9 +1092,10 @@ class TardisDB(object):
     def listOrphanChecksums(self, isFile):
         c = self.conn.execute("SELECT Checksum FROM Checksums "
                               "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
-                              "AND ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
-                              "AND ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
-                              "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
+                              "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
                               "AND IsFile = :isfile",
                               { 'isfile': int(isFile)} )
         while True:
@@ -1102,9 +1109,10 @@ class TardisDB(object):
     def deleteOrphanChecksums(self, isFile):
         self.cursor.execute("DELETE FROM Checksums "
                             "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
-                            "AND ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
-                            "AND ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
-                            "AND Checksum NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                            "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                            "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
+                            "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
+                            "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
                             "AND IsFile = :isfile",
                             { 'isfile': int(isFile)} )
         return self.cursor.rowcount

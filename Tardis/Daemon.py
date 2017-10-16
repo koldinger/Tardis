@@ -908,8 +908,24 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             clientConfig = message['args']
             self.logger.debug("Received client config: %s", clientConfig)
             self.db.setClientConfig(clientConfig)
-            return (None, False)
+        return (None, False)
 
+    def processCommandLine(self, message):
+        cksum = message['hash']
+        self.logger.debug("Received command line")
+        ckInfo = self.db.getChecksumInfo(cksum)
+        if ckInfo is None:
+            self.logger.debug("Inserting command line file")
+            f = self.cache.open(cksum, 'wb')
+            f.write(message['line'])
+            cksid = self.db.insertChecksumFile(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
+            f.close()
+        else:
+            cksid = ckInfo['checksumid']
+        self.logger.info("Command Line stored as checksum: %s => %d", cksum, cksid)
+        self.db.setCommandLine(cksid)
+
+        return (None, False)
 
     def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """
@@ -944,6 +960,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             (response, flush) = self.processPurge(message)
         elif messageType == "CLICONFIG":
             (response, flush) = self.processClientConfig(message)
+        elif messageType == "COMMANDLINE":
+            (response, flush) = self.processCommandLine(message)
         elif messageType == "META":
             (response, flush) = self.processMeta(message)
         elif messageType == "METADATA":
