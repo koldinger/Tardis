@@ -189,6 +189,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     maxChain = 0
 
     def setup(self):
+        self.statCommands = {}
         self.sessionid = str(uuid.uuid1())
         log            = logging.getLogger('Tardis')
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
