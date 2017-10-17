@@ -403,7 +403,8 @@ def fetchSignature(inode):
         sigfile.seek(0)
         checksum = sigmessage['checksum']
     else:
-        logger.warning("No signature file received for %s", inode)
+        (_, pathname) = inodeDB[inode]
+        logger.warning("No signature file received for %s: %s", inode, pathname)
         sigfile = None
         checksum = None
 
@@ -684,7 +685,7 @@ def pushFiles():
     # If checksum content in NOT specified, send the data for each file
     for i in [tuple(x) for x in allContent]:
         if args.ckscontent and cksize(i, args.ckscontent):
-            allCksSum.append(i)
+            allCkSum.append(i)
         else:
             if logger.isEnabledFor(logging.FILES):
                 logFileInfo(i, 'N')
