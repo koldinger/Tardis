@@ -215,16 +215,40 @@ def generateDirHashes(db, crypto, cacheDir):
             batch = r.fetchmany()
     logger.info("Hashed %d directories (%d unique)", hashes, unique)
 
-def generateSignatures(db, cacheDir):
+def makeSig(checksum, regenerator, cacheDir):
+    data = regenerator.recoverChecksum(checksum)
+    fname = checksum + ".sig"
+    output = cacheDir.open(fname, "wb")
+    librsync.signature(data, output)
+    output.close()
+    
+
+def generateSignatures(db, crypto, cacheDir):
     c = db.conn.cursor()
-    r = c.execute("SELECT Checksum FROM Checksums")
+
+    r = c.execute("SELECT COUNT(*) FROM CheckSums WHERE IsFile = 1")
+    n = r.fetchone()[0]
+    logger.info("Generating signature files for %d files", n)
+
     regenerator = Regenerator.Regenerator(cacheDir, db, crypto)
-    for row in r.fetchall():
-        checksum = row[0]
-        sigfile = checksum + '.sig'
-        if not cacheDir.exists(sigfile):
-            logger.info("Generating signature for {}".format(checksum))
-            makeSig(checksum, regenerator, cacheDir)
+    r = c.execute("SELECT Checksum FROM Checksums WHERE IsFile = 1")
+
+    sigs = 0
+    sigsGenned = 0
+
+    with progressbar.ProgressBar(max_value=int(n)) as bar:
+        batch = r.fetchmany(4096)
+        while batch:
+            for row in batch:
+                checksum = row[0]
+                sigfile = checksum + '.sig'
+                if not cacheDir.exists(sigfile):
+                    #logger.info("Generating signature for {}".format(checksum))
+                    makeSig(checksum, regenerator, cacheDir)
+                    sigsGenned += 1
+                sigs += 1
+                bar.update(sigs)
+            batch = r.fetchmany(4096)
 
 def generateMetadata(db, cacheDir):
     conn = db.conn
@@ -253,8 +277,9 @@ def processArgs():
     Config.addPasswordOptions(parser, addcrypt=False)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
-    parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
     parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
+    parser.add_argument('--sigs',           dest='sigs',     action='store_true', default=False,       help='Generate signature files.  Default=%(default)s')
+    parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
     parser.add_argument('--meta',           dest='meta',     action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
     parser.add_argument('--all',            dest='all',      action='store_true', default=False,       help='Perform all encyrption steps. Default=%(default)s')
 
@@ -262,7 +287,7 @@ def processArgs():
 
     args = parser.parse_args(remaining)
 
-    if (not (args.names or args.files or args.dirs or args.meta or args.all)):
+    if (not (args.names or args.files or args.dirs or args.meta or args.all or args.sigs)):
         parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
 
@@ -284,12 +309,12 @@ def main():
 
     cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
 
-    #if args.sigs:
-    #    generateSignatures(db, cacheDir)
     if args.names or args.all:
         encryptFilenames(db, crypto)
     if args.dirs or args.all:
         generateDirHashes(db, crypto, cacheDir)
+    if args.sigs or args.all:
+        generateSignatures(db, crypto, cacheDir)
     if args.files or args.all:
         encryptFiles(db, crypto, cacheDir)
     if args.meta or args.all:
