@@ -34,7 +34,6 @@ def main():
 
     if password:
         crypto = TardisCrypto.TardisCrypto(password, args.client)
-        token = crypto.createToken()
 
     path = os.path.join(args.database, args.client, args.dbname)
     db = TardisDB.TardisDB(path, token=token, backup=False)
