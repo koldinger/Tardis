@@ -13,40 +13,6 @@ import urlparse
 
 logger = None
 
-
-def getDB(client, database, crypt, password, new=False, allowRemote=True, allowUpgrade=False, dbdir=None, dbname=None, schema=None):
-    loc = urlparse.urlparse(database)
-    # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
-    if (loc.scheme == 'http') or (loc.scheme == 'https'):
-        if not allowRemote:
-            raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
-        # If no port specified, insert the port
-        if loc.port is None:
-            netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
-            dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
-        else:
-            dbLoc = database
-        tardisdb = RemoteDB.RemoteDB(dbLoc, client)
-        cache = tardisdb
-    else:
-        basedir = os.path.join(database, client)
-        if not dbdir:
-            dbdir = os.path.join(database, client)
-        else:
-            dbdir = os.path.join(dbdir, client)
-        dbfile = os.path.join(dbdir, dbname)
-        if new and os.path.exists(dbfile):
-            raise Exception("Database for client %s already exists." % (client))
-
-        cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
-        schema = schema if new else None
-        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
-
-    if password:
-        Util.authenticate(tardisdb, client, password)
-
-    return (tardisdb, cache)
-
 def reader(quiet):
     import readline
     prompt = '' if quiet else '--> '
