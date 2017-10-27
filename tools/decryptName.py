@@ -48,6 +48,7 @@ def getDB(client, database, crypt, password, new=False, allowRemote=True, allowU
     return (tardisdb, cache)
 
 def reader(quiet):
+    import readline
     prompt = '' if quiet else '--> '
     try:
         while True:
