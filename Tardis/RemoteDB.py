@@ -367,6 +367,12 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def setPriority(self, backupset, priority):
+        r = self.session.get(self.baseURL + "setPriority/" + str(backupset) + "/" + str(priority), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def getKeys(self):
         fnKey = self.getConfigValue('FilenameKey')
         cnKey = self.getConfigValue('ContentKey')

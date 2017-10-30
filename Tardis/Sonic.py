@@ -467,6 +467,10 @@ def setConfig(db):
     _printConfigKey(db, args.key)
     db.setConfigValue(args.key, args.value)
 
+def setPriority(db):
+    info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
+    db.setPriority(info['backupset'], args.priority)
+
 def parseArgs():
     global args, minPwStrength
 
@@ -535,6 +539,9 @@ def parseArgs():
     configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
     configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
 
+    priorityParser = argparse.ArgumentParser(add_help=False)
+    priorityParser.add_argument('--priority',   dest='priority', type=int, required=True,           help='New priority backup set')
+
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
     subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
@@ -548,6 +555,7 @@ def parseArgs():
     subs.add_parser('orphans',      parents=[common],                                       help='Delete orphan files')
     subs.add_parser('getconfig',    parents=[common, configKeyParser],                      help='Get Config Value')
     subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
+    subs.add_parser('priority',     parents=[common, priorityParser, bsetParser],           help='Set backupset priority')
     subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
     parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
@@ -670,6 +678,8 @@ def main():
             return purge(db, cache)
         elif args.command == 'delete':
             return deleteBsets(db, cache)
+        elif args.command == 'priority':
+            return setPriority(db)
         elif args.command == 'getconfig':
             return getConfig(db)
         elif args.command == 'setconfig':

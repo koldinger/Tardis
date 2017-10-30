@@ -944,6 +944,14 @@ class TardisDB(object):
     def delConfigValue(self, key):
         self._execute("DELETE FROM Config WHERE Key = :key", {'key': key})
 
+    @authenticate
+    def setPriority(self, bSet, priority):
+        backup = self._bset(bSet)
+        self.logger.debug("Setting backupset priority to %d for backupset %s", priority, backup)
+        self._execute("UPDATE Backups SET Priority = :priority WHERE BackupSet = :backup",
+                      {'priority': priority, 'backup': backup})
+
+
     """
     def getToken(self):
         return self._getConfigValue('Token')

@@ -415,6 +415,12 @@ def setConfigValue(name, value):
     app.logger.info("setConfigValue Invoked: %s %s", name, value)
     return createResponse(db.setConfigValue(name, value))
 
+@app.route('/setPriority/<int:backupset>/<int:priority>')
+def setPriority(backupset, priority):
+    db = getDB()
+    app.logger.info("setPriority Invoked: %s %s", backupset, priority)
+    return createResponse(db.setPriority(backupset, priority))
+
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
     #app.logger.info("Form: %s", str(request.form))
