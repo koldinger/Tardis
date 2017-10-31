@@ -1731,7 +1731,7 @@ def lockRun(server, port, client):
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr
     # Read the command line arguments.
-    commandLine = ' '.join(sys.argv)
+    commandLine = ' '.join(sys.argv) + '\n'
     (args, config) = processCommandLine()
 
     # Memory debugging.
