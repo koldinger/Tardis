@@ -371,6 +371,12 @@ class RemoteDB(object):
         r = self.session.get(self.baseURL + "setPriority/" + str(backupset) + "/" + str(priority), headers=self.headers)
         r.raise_for_status()
         return r.json()
+    
+    @reconnect
+    def setBackupsetName(self, name, priority, current=True):
+        backupset = self._bset(current)
+        r = self.session.get(self.baseURL + "setBackupSetName/" + str(backupset) + "/" + name + "/" + str(priority), headers=self.headers)
+        r.raise_for_status()
 
     @reconnect
     def getKeys(self):
