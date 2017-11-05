@@ -49,6 +49,7 @@ import Tardis.TardisDB as TardisDB
 import Tardis.TardisCrypto as TardisCrypto
 import Tardis.CacheDir as CacheDir
 import Tardis.RemoteDB as RemoteDB
+import Tardis.Regenerator as Regenerator
 import Tardis.Config as Config
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
@@ -226,9 +227,30 @@ def moveKeys(db, crypt):
             logger.exception(e)
         return 1
 
-def listBSets(db):
+_cmdLineHash = {}
+_regenerator = None
+def getCommandLine(db, commandLineCksum):
+    global _cmdLineHash, _regenerator
+    if cmdLineId is None:
+        return None
+    if cmdLineId in _cmdLineHash:
+        return _cmdLineHash[commandLineCksum]
+    if info:
+        data = _regenerator.recoverChecksum(commandLineCksum).read().strip()
+        _cmdLineHash[commandLinkCksum] = data
+        return data
+    else:
+        return None
+
+
+def listBSets(db, crypt, cache):
+    global _regenerator
     try:
+        if args.longinfo:
+            _regenerator = Regenerator.Regenerator(cache, db, crypt)
+
         last = db.lastBackupSet()
+        print "%-30s %-4s %-6s %3s  %-5s  %-24s  %-7s %6s %5s %8s  %s" % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "")
         for bset in db.listBackupSets():
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
             if bset['endtime'] is not None:
@@ -240,7 +262,12 @@ def listBSets(db):
             isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print "%-30s %-4d %-6s %3d  %-5s  %s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent)
+            print "%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent)
+            if args.longinfo:
+                commandLine = getCommandLine(db, bset['commandline'])
+                if commandLine:
+                    print "    Command Line: %s" % (commandLine)
+                    print
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         return 1
@@ -552,12 +579,15 @@ def parseArgs():
     renameParser = argparse.ArgumentParser(add_help=False)
     renameParser.add_argument('--name',         dest='newname', required=True,                      help='New name')
 
+    listParser = argparse.ArgumentParser(add_help=False)
+    listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=Util.StoreBoolean,   help='Print long info')
+
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
     subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
     subs.add_parser('chpass',       parents=[common, newPassParser],                        help='Change a password')
     subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')
-    subs.add_parser('list',         parents=[common],                                       help='List backup sets')
+    subs.add_parser('list',         parents=[common, listParser],                           help='List backup sets')
     subs.add_parser('files',        parents=[common, filesParser, bsetParser],              help='List new files in a backup set')
     subs.add_parser('info',         parents=[common, bsetParser],                           help='Print info on backup sets')
     subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],               help='Purge old backup sets')
@@ -680,7 +710,7 @@ def main():
         if args.command == 'keys':
             return moveKeys(db, crypt)
         elif args.command == 'list':
-            return listBSets(db)
+            return listBSets(db, crypt, cache)
         elif args.command == 'files':
             return listFiles(db, crypt)
         elif args.command == 'info':
