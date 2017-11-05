@@ -52,6 +52,7 @@ import functools
 import stat
 import uuid
 import errno
+import unicodedata
 
 from binascii import hexlify
 
@@ -494,6 +495,8 @@ def processDelta(inode, signatures):
 
                 if args.report:
                     x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
+                    # Convert to Unicode, and normalize any characters, so lengths become reasonable
+                    name = unicodedata.normalize('NFD', unicode(pathname.decode('utf-8')))
                     report[os.path.split(pathname)] = x
                 logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
             else:
