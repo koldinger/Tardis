@@ -110,7 +110,10 @@ def flushLine():
     """
     global line
     if line:
-        print line.encode(fsEncoding, 'replace').rstrip()     # clear out any trailing spaces
+        try:
+            print line.encode(fsEncoding, 'replace').rstrip()     # clear out any trailing spaces
+        except Exception as e:
+            print line.rstrip()
         line=''
 
 def makeFakeRootInfo():
