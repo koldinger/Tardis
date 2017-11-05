@@ -62,6 +62,10 @@ errors = 0
 tardis = None
 args = None
 
+fsencoding = sys.getfilesystemencoding()
+reload(sys)
+sys.setdefaultencoding(fsencoding)
+
 def checkOverwrite(name, info):
     if os.path.exists(name):
         if owMode == OW_NEVER:
@@ -120,7 +124,6 @@ def notSame(a, b, string):
 def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, authenticate=True):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
-    Note that path is for debugging only.
     """
     retCode = 0
     outname = None
@@ -140,8 +143,10 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             if outname and not checkOverwrite(outname, info):
                 skip = True
-                logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
-
+                try:
+                    logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
+                except Exception:
+                    pass
 
             # First, determine if we're in a linking situation
             if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
@@ -159,9 +164,12 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     #logger.error("Cannot regenerate directory %s without outputdir specified", path)
                     raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
 
-                logger.info("Processing directory %s", Util.shortPath(path))
+                try:
+                    logger.info("Processing directory %s", Util.shortPath(path))
+                except Exception:
+                    pass
 
-                contents = tardis.readDirectory((info['inode'], info['device']), bset)
+                contents = list(tardis.readDirectory((info['inode'], info['device']), bset))
 
                 # Make sure an output directory is specified (really only useful at the top level)
                 if not os.path.exists(outname):
@@ -176,13 +184,19 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
                     # Decrypt filename, and make it UTF-8.
                     if args.crypt and crypt:
-                        name = crypt.decryptFilename(name)
-                    #name = name.decode('utf-8')
+                        name = unicode(crypt.decryptFilename(name))
+                    else:
+                        name = unicode(name, 'utf8')
 
                     # Recurse into the child, if it exists.
                     if childInfo:
-                        if args.recurse or not childInfo['dir']:
-                            recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                        try:
+                            if args.recurse or not childInfo['dir']:
+                                recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                        except Exception as e:
+                            logger.error("Could not recover %s in %s", name, path)
+                            if args.exceptions:
+                                logger.exception(e)
                     else:
                         retCode += 1
             elif not skip:
