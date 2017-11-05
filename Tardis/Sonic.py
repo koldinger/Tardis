@@ -231,13 +231,13 @@ _cmdLineHash = {}
 _regenerator = None
 def getCommandLine(db, commandLineCksum):
     global _cmdLineHash, _regenerator
-    if cmdLineId is None:
+    if commandLineCksum is None:
         return None
-    if cmdLineId in _cmdLineHash:
+    if commandLineCksum in _cmdLineHash:
         return _cmdLineHash[commandLineCksum]
-    if info:
+    if commandLineCksum:
         data = _regenerator.recoverChecksum(commandLineCksum).read().strip()
-        _cmdLineHash[commandLinkCksum] = data
+        _cmdLineHash[commandLineCksum] = data
         return data
     else:
         return None
