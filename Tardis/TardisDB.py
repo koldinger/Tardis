@@ -81,7 +81,12 @@ _fileInfoJoin =    "FROM Files " \
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
-                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived "
+                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline "
+
+_backupSetInfoJoin = "FROM Backups JOIN Checksums ON Checksums.ChecksumID = Backups.CmdLineId "
+
+_checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
+                      "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
 _schemaVersion = 15
 
@@ -96,12 +101,11 @@ def _splitpath(path):
 
 def _fetchEm(cursor):
     while True:
-        batch = cursor.fetchmany()
+        batch = cursor.fetchmany(10000)
         if not batch:
             break
         for row in batch:
             yield row
-
 
 conversionModules = {}
 
@@ -290,11 +294,13 @@ class TardisDB(object):
         if completed:
             c = self.cursor.execute("SELECT " +
                                     _backupSetInfoFields +
-                                    "FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
+                                    _backupSetInfoJoin +
+                                    "WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
             c = self.cursor.execute("SELECT " +
                                     _backupSetInfoFields +
-                                    "FROM Backups ORDER BY BackupSet DESC LIMIT 1")
+                                    _backupSetInfoJoin +
+                                    "ORDER BY BackupSet DESC LIMIT 1")
         row = c.fetchone()
         return row
 
@@ -698,9 +704,8 @@ class TardisDB(object):
     @authenticate
     def getChecksumInfo(self, checksum):
         self.logger.debug("Getting checksum info on: %s", checksum)
-        c = self._execute("SELECT "
-                          "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, "
-                          "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
+        c = self._execute("SELECT " +
+                          _checksumInfoFields  +
                           "FROM Checksums WHERE CheckSum = :checksum",
                           {"checksum": checksum})
         row = c.fetchone()
@@ -829,7 +834,7 @@ class TardisDB(object):
         #                 "Name AS name, BackupSet AS backupset "
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
-                          "FROM Backups "
+                          _backupSetInfoJoin +
                           "ORDER BY backupset ASC", {})
         while True:
             batch = c.fetchmany(self.chunksize)
@@ -842,7 +847,8 @@ class TardisDB(object):
     def getBackupSetInfoById(self, bset):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
-                          "FROM Backups WHERE BackupSet = :bset",
+                          _backupSetInfoJoin +
+                          "WHERE BackupSet = :bset",
                           { "bset": bset })
         row = c.fetchone()
         return row
@@ -851,7 +857,8 @@ class TardisDB(object):
     def getBackupSetInfo(self, name):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
-                          "FROM Backups WHERE Name = :name",
+                          _backupSetInfoJoin +
+                          "WHERE Name = :name",
                           { "name": name })
         row = c.fetchone()
         return row
@@ -860,7 +867,8 @@ class TardisDB(object):
     def getBackupSetInfoForTime(self, time):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
-                          "FROM Backups WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
+                          _backupSetInfoJoin +
+                          "WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
                           { "time": time })
         row = c.fetchone()
         return row
@@ -1040,7 +1048,10 @@ class TardisDB(object):
     def listPurgeSets(self, priority, timestamp, current=False):
         backupset = self._bset(current)
         # Select all sets that are purgeable.
-        c = self.cursor.execute("SELECT " + _backupSetInfoFields + " FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+        c = self.cursor.execute("SELECT " +
+                                _backupSetInfoFields + 
+                                _backupSetInfoJoin +
+                                " WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield row
@@ -1051,8 +1062,10 @@ class TardisDB(object):
         # Select all sets that are both purgeable and incomplete
         # Note: For some reason that I don't understand, the timestamp must be cast into a string here, to work with the coalesce operator
         # If it comes from the HTTPInterface as a string, the <= timestamp doesn't seem to work.
-        c = self.cursor.execute("SELECT " + _backupSetInfoFields +
-                                " FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+        c = self.cursor.execute("SELECT " +
+                                _backupSetInfoFields +
+                                _backupSetInfoJoin +
+                                "WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield row
