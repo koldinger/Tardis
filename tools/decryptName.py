@@ -57,15 +57,16 @@ def main():
             data = reader(args.quiet)
 
     for i in data:
-        if not args.quiet:
-            print i, " \t => \t",
-        try:
-            if (args.encrypt):
-                print crypto.encryptPath(i)
-            else:
-                print crypto.decryptPath(i)
-        except Exception as e:
-            print "Caught exception: " + str(e)
+        if i:
+            if not args.quiet:
+                print i, " \t => \t",
+            try:
+                if (args.encrypt):
+                    print crypto.encryptPath(i)
+                else:
+                    print crypto.decryptPath(i)
+            except Exception as e:
+                print "Caught exception: " + str(e)
 
 
 if __name__ == "__main__":
