@@ -736,6 +736,13 @@ class ArgJsonEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder(self, obj)
 
+# Stream Handler which will always clear the line before printing
+class ClearingStreamHandler(logging.StreamHandler):
+    def emit(self, record):
+        _ansiClearEol = '\x1b[K'
+
+        self.stream.write(_ansiClearEol)
+        super(ClearingStreamHandler, self).emit(record)
 
 # Class to have a two directional dictionary.
 
@@ -764,6 +771,8 @@ def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
     else:
         return func()
 
+_hashMagic = struct.pack("!I", 0xffeeddcc)
+
 def hashDir(crypt, files, cryptActive, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
@@ -774,6 +783,9 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
         filenames = sorted([x["name"] for x in files])
 
     m = getHash(crypt, cryptActive)
+    # Insert "magic" number to help prevent collisions
+    m.update(_hashMagic)
+    # Insert a magic number
     # Generate a length, and convert it to a byte string
     z = struct.pack("!I", len(filenames))
     # Hash that
@@ -783,6 +795,8 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
         m.update(f)
         m.update('\0')
     m.update(z)
+    # Again, Insert "magic" number to help prevent collisions
+    m.update(_hashMagic)
     return (m.hexdigest(), len(filenames))
 
 # 'Test' code

@@ -1655,16 +1655,17 @@ def setupLogging(logfiles, verbosity):
 
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
+
     for logfile in logfiles:
         if type(logfile) is str:
             if logfile == ':STDERR:':
-                handler = logging.StreamHandler(sys.stderr)
+                handler = Util.ClearingStreamHandler(sys.stderr)
             elif logfile == ':STDOUT:':
-                handler = logging.StreamHandler(sys.stdout)
+                handler = Util.ClearingStreamHandler(sys.stdout)
             else:
                 handler = logging.handlers.WatchedFileHandler(Util.fullPath(logfile))
         else:
-            handler = logging.StreamHandler(logfile)
+            handler = Util.ClearingStreamHandler(logfile)
 
         handler.setFormatter(formatter)
         logging.root.addHandler(handler)
