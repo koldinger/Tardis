@@ -83,7 +83,7 @@ _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime 
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline "
 
-_backupSetInfoJoin = "FROM Backups JOIN Checksums ON Checksums.ChecksumID = Backups.CmdLineId "
+_backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.ChecksumID = Backups.CmdLineId "
 
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
