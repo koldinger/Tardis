@@ -69,6 +69,8 @@ class Connection(object):
                 self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
                 if validate:
                     pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
+            elif not message:
+                raise Exception("No header string.")
             elif message != headerString:
                 raise Exception("Unknown protocol: {}".format(message))
             resp = { 'encoding': encoding, 'compress': compress }
