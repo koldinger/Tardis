@@ -738,10 +738,19 @@ class ArgJsonEncoder(json.JSONEncoder):
 
 # Stream Handler which will always clear the line before printing
 class ClearingStreamHandler(logging.StreamHandler):
+    clearLines = False
+
+    def __init__(self, stream = None):
+        super(ClearingStreamHandler, self).__init__(stream)
+        if stream == None: stream = sys.stderr
+        self.clearLines = os.isatty(stream.fileno())
+
     def emit(self, record):
         _ansiClearEol = '\x1b[K'
 
-        self.stream.write(_ansiClearEol)
+        if self.clearLines:
+            self.stream.write(_ansiClearEol)
+
         super(ClearingStreamHandler, self).emit(record)
 
 # Class to have a two directional dictionary.
