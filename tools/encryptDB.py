@@ -293,6 +293,7 @@ def processArgs():
 
 def main():
     global logger
+    progressbar.streams.wrap_stderr()
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger('')
     args = processArgs()
