@@ -978,25 +978,36 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return (response, flush)
 
-    def getCacheDir(self):
+    def getCacheDir(self, create):
         try:
             self.logger.debug("Using cache dir: %s", self.basedir)
-            return CacheDir.CacheDir(self.basedir, 2, 2, create=self.server.allowNew, user=self.server.user, group=self.server.group, skipFile=self.server.skip)
+            return CacheDir.CacheDir(self.basedir, 2, 2,
+                                     create=(self.server.allowNew and create),
+                                     user=self.server.user,
+                                     group=self.server.group,
+                                     skipFile=self.server.skip)
         except CacheDir.CacheDirDoesNotExist as e:
-            raise InitFailedException("Server does not allow new clients")
+            if not self.server.allowNew:
+                raise InitFailedException("Server does not allow new clients")
+            else:
+                raise InitFailedException("Must request new client (--create))")
 
-    def getDB(self, client):
+    def getDB(self, client, create):
         script = None
         ret = "EXISTING"
         journal = None
         self.client     = client
         self.basedir    = os.path.join(self.server.basedir, client)
+
         dbdir           = os.path.join(self.server.dbdir, client)
         dbname          = self.server.dbname.format({'client': client})
 
         dbfile          = os.path.join(dbdir, dbname)
+        if create and os.path.exists(dbfile):
+            raise InitFailedException("Cannot create client %s.  Already exists" % (client))
 
-        self.cache = self.getCacheDir()
+
+        self.cache = self.getCacheDir(create)
 
         connid = {'connid': self.idstr }
 
@@ -1229,6 +1240,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 full        = fields.get('full', False)
                 priority    = fields.get('priority', 0)
                 force       = fields.get('force', False)
+                create      = fields.get('create', False)
 
                 srpUname    = fields.get('srpUname', None)
                 srpValueA   = fields.get('srpValueA', None)
@@ -1246,7 +1258,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if srpValueA is None and self.server.requirePW:
                     raise InitFailedException("Password is required on this server")
 
-                newBackup = self.getDB(client)
+                newBackup = self.getDB(client, create)
 
                 self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
                 if srpValueA is None and self.db.needsAuthentication():

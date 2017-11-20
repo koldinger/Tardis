@@ -1382,7 +1382,7 @@ def doSrpAuthentication(message):
         raise AuthenticationFailed("response incomplete")
     
 
-def startBackup(name, priority, client, autoname, force, full=False, version=Tardis.__versionstring__):
+def startBackup(name, priority, client, autoname, force, full=False, create=False, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
 
     # Create a BACKUP message
@@ -1396,7 +1396,8 @@ def startBackup(name, priority, client, autoname, force, full=False, version=Tar
             'force'     : force,
             'time'      : time.time(),
             'version'   : version,
-            'full'      : full
+            'full'      : full,
+            'create'    : create
     }
     if srpUsr:
         srpUname, srpValueA = srpUsr.start_authentication()
@@ -1490,6 +1491,8 @@ def processCommandLine():
     parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=c.getboolean(t, 'Full'),
                         help='Perform a full backup, with no delta information. Default: %(default)s')
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
+    parser.add_argument('--create',                 dest='create', default=False, action=Util.StoreBoolean,             help='Create a new client.')
+
     parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  Default: %(default)s')
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
@@ -1846,7 +1849,7 @@ def main():
     # Get the connection object
     try:
         conn = getConnection(server, port)
-        startBackup(name, args.priority, args.client, auto, args.force, args.full)
+        startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         if args.exceptions:
