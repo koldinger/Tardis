@@ -1,6 +1,4 @@
 #! /usr/bin/python
-# PYTHON_ARGCOMPLETE_OK
-
 from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
 import sqlite3
 import argparse, logging

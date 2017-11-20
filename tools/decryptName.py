@@ -1,5 +1,4 @@
 #! /usr/bin/python
-
 from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, RemoteDB
 import sqlite3
 import argparse, logging
@@ -10,8 +9,6 @@ import base64
 import hashlib
 import progressbar
 import urlparse
-
-import argcomplete
 
 logger = None
 
