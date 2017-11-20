@@ -61,9 +61,6 @@ import pid
 import parsedatetime
 import srp
 
-import argcomplete
-import genzshcomp
-
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
 import Tardis.CompressedBuffer as CompressedBuffer
