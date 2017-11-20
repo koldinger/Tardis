@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# PYTHON_ARGCOMPLETE_OK
 
 from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
 import sqlite3
@@ -284,6 +285,8 @@ def processArgs():
     parser.add_argument('--all',            dest='all',      action='store_true', default=False,       help='Perform all encyrption steps. Default=%(default)s')
 
     parser.add_argument('--help', '-h',     action='help');
+
+    Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
 

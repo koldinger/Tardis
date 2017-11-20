@@ -11,6 +11,8 @@ import hashlib
 import progressbar
 import urlparse
 
+import argcomplete
+
 logger = None
 
 def reader(quiet):
@@ -34,6 +36,8 @@ def processArgs():
 
     parser.add_argument('--help', '-h',     action='help');
     parser.add_argument('names',          nargs='*', help="List of pathnames to decrypt")
+
+    Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
 

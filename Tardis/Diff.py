@@ -85,6 +85,7 @@ def parseArgs():
 
     parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
 
+    Util.addGenCompletions(parser)
     args = parser.parse_args(remaining)
 
     #print args

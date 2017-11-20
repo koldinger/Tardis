@@ -96,6 +96,8 @@ def processArgs():
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
 
+    Util.addGenCompletions(parser)
+
     return parser.parse_args(remaining)
 
 def main():

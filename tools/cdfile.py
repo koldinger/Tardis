@@ -4,9 +4,13 @@ from Tardis import CacheDir
 import argparse
 import sys
 
+
 parser = argparse.ArgumentParser(description="Generate file paths in a cache dir directory", add_help=True)
 parser.add_argument('--base', '-b', dest='base', default='.', help='Base CacheDir directory')
 parser.add_argument('files', nargs='*', help='List of files to print')
+
+Util.addGenCompletions(parser)
+
 args = parser.parse_args()
 
 c = CacheDir.CacheDir(args.base)

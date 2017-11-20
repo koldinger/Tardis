@@ -58,6 +58,7 @@ import liblzma
 import srp
 import passwordmeter
 
+
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
 import Tardis.Defaults as Defaults
@@ -66,6 +67,12 @@ import Tardis.TardisDB as TardisDB
 import Tardis.TardisCrypto as TardisCrypto
 import Tardis.CacheDir as CacheDir
 import Tardis.RemoteDB as RemoteDB
+
+try:
+    import genzshcomp
+except ImportError:
+    genzshcomp = None
+
 
 logger = logging.getLogger('UTIL')
 
@@ -708,6 +715,20 @@ class Toggle(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         new_value = not argparse._ensure_value(namespace, self.dest, False)
         setattr(namespace, self.dest, new_value)
+
+class GenShellCompletions(argparse.Action):
+    """
+    Class to generate arguments and exit
+    """
+    def __call__(self, parser, namespace, values, option_string=None):
+        path = os.path.split(sys.argv[0])[1]
+        c = genzshcomp.CompletionGenerator(path, parser, parser_type='argparse', output_format=values)
+        print c.get()
+        sys.exit(0)
+
+def addGenCompletions(parser):
+    if genzshcomp:
+        parser.add_argument('--gencompletions',  dest='gencomps',    default=None, const='zsh', nargs='?', choices=['bash', 'zsh', 'list'], help=argparse.SUPPRESS, action=GenShellCompletions)
 
 # Help formatter to handle the StoreBoolean options.
 # Only handles overriding the basic HelpFormatter class.

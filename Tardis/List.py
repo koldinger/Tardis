@@ -726,6 +726,8 @@ def processArgs():
 
     parser.add_argument('directories', nargs='*', default='.',                                              help='List of directories/files to list')
 
+    Util.addGenCompletions(parser)
+
     return parser.parse_args(remaining)
 
 def main():

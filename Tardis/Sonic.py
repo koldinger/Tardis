@@ -604,6 +604,8 @@ def parseArgs():
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
+    Util.addGenCompletions(parser)
+
     args = parser.parse_args(remaining)
 
     # And load the required strength for new passwords.  NOT specifiable on the command line.

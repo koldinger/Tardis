@@ -62,6 +62,7 @@ import parsedatetime
 import srp
 
 import argcomplete
+import genzshcomp
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -1598,9 +1599,9 @@ def processCommandLine():
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
 
-    parser.add_argument('directories',          nargs='*', default=splitList(c.get(t, 'Directories')), help="List of directories to sync")
+    Util.addGenCompletions(parser)
 
-    argcomplete.autocomplete(parser)
+    parser.add_argument('directories',          nargs='*', default=splitList(c.get(t, 'Directories')), help="List of directories to sync")
 
     return (parser.parse_args(remaining), c)
 
