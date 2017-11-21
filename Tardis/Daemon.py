@@ -1102,7 +1102,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         # Check if the previous backup session completed.
         prev = self.db.lastBackupSet(completed=False)
-        if prev['endtime'] is None:
+        if prev['endtime'] is None or self.server.checkSession(prev['session']):
             if force:
                 self.logger.warning("Staring session %s while previous backup still warning: %s", name, prev['name'])
             else:
