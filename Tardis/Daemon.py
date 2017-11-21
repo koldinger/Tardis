@@ -204,8 +204,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.server.umask)
 
+
     def finish(self):
         self.logger.info("Ending session %s from %s", self.sessionid, self.address)
+        self.server.rmSession(self.sessionid)
 
     def setXattrAcl(self, inode, device, xattr, acl):
         self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
@@ -1104,7 +1106,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if force:
                 self.logger.warning("Staring session %s while previous backup still warning: %s", name, prev['name'])
             else:
-                raise InitFailedException("Previous backup session still running: {}.  Run with --force to force starting the new backup".format(prev['name']))
+                if self.server.checkSession(prev['session']):
+                    raise InitFailedException("Previous backup session still running: {}.  Run with --force to force starting the new backup".format(prev['name']))
+                else:
+                    self.logger.warning('Previous session for client %s (%s) did not complete.', self.client, prev['session'])
 
         # Mark if the last secssion was completed
         self.lastCompleted = prev['completed']
@@ -1250,6 +1255,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
             except KeyError as e:
                 raise InitFailedException(str(e))
+
+            self.server.addSession(self.sessionid, client)
 
             serverName = None
             serverForceFull = False
@@ -1448,6 +1455,8 @@ class TardisServer(object):
         self.user = None
         self.group = None
 
+        self.sessions = {}
+
         # If the User or Group is set, attempt to determine the users
         # Note, these will throw exeptions if the User or Group is unknown.  Will get
         # passed up.
@@ -1469,6 +1478,15 @@ class TardisServer(object):
             self.profiler = cProfile.Profile()
         else:
             self.profiler = None
+
+    def addSession(self, sessionId, client):
+        self.sessions[sessionId] = client
+
+    def rmSession(self, sessionId):
+        del self.sessions[sessionId]
+
+    def checkSession(self, sessionId):
+        return sessionId in self.sessions
 
 #class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer, TardisServer):
