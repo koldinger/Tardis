@@ -989,6 +989,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
         return (response, flush)
 
+    def genPaths(self):
+        self.basedir    = os.path.join(self.server.basedir, self.client)
+        dbdir           = os.path.join(self.server.dbdir, self.client)
+        dbname          = self.server.dbname.format({'client': self.client})
+        dbfile          = os.path.join(dbdir, dbname)
+        return (dbdir, dbfile)
+
     def getCacheDir(self, create):
         try:
             self.logger.debug("Using cache dir: %s", self.basedir)
@@ -1007,13 +1014,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         script = None
         ret = "EXISTING"
         journal = None
-        self.client     = client
-        self.basedir    = os.path.join(self.server.basedir, client)
 
-        dbdir           = os.path.join(self.server.dbdir, client)
-        dbname          = self.server.dbname.format({'client': client})
-
-        dbfile          = os.path.join(dbdir, dbname)
+        (dbdir, dbfile) = self.genPaths()
 
         if create and os.path.exists(dbfile):
             raise InitFailedException("Cannot create client %s.  Already exists" % (client))
@@ -1164,6 +1166,23 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             sock.sendall(json.dumps(message))
             raise InitFailedException("Unknown encoding: ", encoding)
 
+    def doGetKeys(self):
+        try:
+            message = {"status": "NEEDKEYS"}
+            self.sendMessage(message)
+            resp = self.recvMessage()
+            self.checkMessage(resp, "SETKEYS")
+
+            filenameKey = resp['filenameKey']
+            contentKey  = resp['contentKey']
+            srpSalt     = resp['srpSalt']
+            srpVkey     = resp['srpVkey']
+            # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+            return(srpSalt, srpVkey, filenameKey, contentKey)
+
+        except KeyError as e:
+            raise InitFailedException(e.message)
+
     def doSrpAuthentication(self):
         """
         Perform the SPR authentication steps  Start with the name and value A passed in from the
@@ -1267,6 +1286,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             except KeyError as e:
                 raise InitFailedException(str(e))
 
+            self.client = client
             self.server.addSession(self.sessionid, client)
 
             serverName = None
@@ -1275,10 +1295,20 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             keys = None
 
             try:
+                (_, dbfile) = self.genPaths()
+                if create and os.path.exists(dbfile):
+                    raise InitFailedException("Client %s already exists" % client)
+
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
 
                 newBackup = self.getDB(client, create)
+
+                if keys:
+                    self.logger.debug("Setting keys into new client DB")
+                    (srpSalt, srpVkey, filenameKey, contentKey) = keys
+                    ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+                    keys = None
 
                 self.logger.debug("Ready for authentication")
                 if self.db.needsAuthentication():

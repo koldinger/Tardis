@@ -1353,13 +1353,33 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def doSrpAuthentication():
+def setCrypto(confirm):
     global srpUsr, crypt
+    password = Util.getPassword(True, None, None, "Password for %s:" % (args.client), confirm=confirm, allowNone = False)
+    srpUsr = srp.User(args.client, password)
+    crypt = TardisCrypto.TardisCrypto(password, args.client)
+    return password
+
+def doSendKeys(password):
+    if srpUsr is None:
+        password = setCrypto(True)
+    logger.debug("Sending keys")
+    crypt.genKeys()
+    (f, c) = crypt.getKeys()
+    salt, vkey = crypt.createSRPValues(password, args.client)
+    message = { "message": "SETKEYS",
+                "filenameKey": f,
+                "contentKey": c,
+                "srpSalt": salt,
+                "srpVkey": vkey
+              }
+    resp = sendAndReceive(message)
+    return resp
+
+def doSrpAuthentication():
     try:
         if srpUsr is None:
-            password = Util.getPassword(True, None, None, "Password for %s:" % (args.client))
-            srpUsr = srp.User(args.client, password)
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
+            setCrypto(False)
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", hexlify(srpUname), hexlify(srpValueA))
@@ -1402,7 +1422,7 @@ def doSrpAuthentication():
         raise AuthenticationFailed("response incomplete")
     
 
-def startBackup(name, priority, client, autoname, force, full=False, create=False, version=Tardis.__versionstring__):
+def startBackup(name, priority, client, autoname, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
 
     # Create a BACKUP message
@@ -1423,6 +1443,8 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
     # BACKUP { json message }
     resp = sendAndReceive(message)
 
+    if resp['status'] == 'NEEDKEYS':
+        resp = doSendKeys(password)
     if resp['status'] == 'AUTH':
         resp = doSrpAuthentication()
     if resp['status'] != 'OK':
@@ -1864,7 +1886,7 @@ def main():
     # Get the connection object
     try:
         conn = getConnection(server, port)
-        startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create)
+        startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         if args.exceptions:
@@ -1879,13 +1901,18 @@ def main():
 
         if newBackup == 'NEW':
             # if new DB, generate new keys, and save them appropriately.
-            logger.debug("Generating new keys")
-            crypt.genKeys()
-            if args.keys:
-                (f, c) = crypt.getKeys()
-                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+            if password:
+                logger.debug("Generating new keys")
+                crypt.genKeys()
+                if args.keys:
+                    (f, c) = crypt.getKeys()
+                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+                else:
+                    sendKeys(password, client)
             else:
-                sendKeys(password, client)
+                if args.keys:
+                    (f, c) = crypt.getKeys()
+                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
         else:
             # Otherwise, load the keys from the appropriate place
             if args.keys:
