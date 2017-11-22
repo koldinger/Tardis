@@ -161,6 +161,9 @@ def makeDict(row):
 class InitFailedException(Exception):
     pass
 
+class ProtocolError(Exception):
+    pass
+
 class TardisServerHandler(SocketServer.BaseRequestHandler):
     numfiles = 0
     logger   = None
@@ -187,6 +190,12 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
     saveFull = False
     lastCompleted = None
     maxChain = 0
+
+    def checkMessage(self, message, expected):
+        """ Check that a message is of the expected type.  Throw an exception if not """
+        if not message['message'] == expected:
+            logger.critical("Expected {} message, received {}".format(expected, message['message']))
+            raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
 
     def setup(self):
         self.statCommands = {}
@@ -1005,9 +1014,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         dbname          = self.server.dbname.format({'client': client})
 
         dbfile          = os.path.join(dbdir, dbname)
+
         if create and os.path.exists(dbfile):
             raise InitFailedException("Cannot create client %s.  Already exists" % (client))
-
 
         self.cache = self.getCacheDir(create)
 
@@ -1155,15 +1164,19 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             sock.sendall(json.dumps(message))
             raise InitFailedException("Unknown encoding: ", encoding)
 
-    def doSrpAuthentication(self, name, srpValueA):
+    def doSrpAuthentication(self):
         """
         Perform the SPR authentication steps  Start with the name and value A passed in from the
         connection call.
         """
         self.logger.debug("Beginning Authentication")
         try:
-            name = base64.b64decode(name)
-            srpValueA = base64.b64decode(srpValueA)
+            message = {"status": "AUTH"}
+            self.sendMessage(message)
+            autha = self.recvMessage()
+            self.checkMessage(autha, "AUTH1")
+            name = base64.b64decode(autha['srpUname'])
+            srpValueA = base64.b64decode(autha['srpValueA'])
 
             srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
             if srpValueS is None or srpValueB is None:
@@ -1171,7 +1184,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             self.logger.debug("Sending Challenge values")   
             message = {
-                'status': 'AUTH',
+                'status': 'OK',
                 'srpValueS': base64.b64encode(srpValueS),
                 'srpValueB': base64.b64encode(srpValueB)
             }
@@ -1179,6 +1192,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             resp = self.recvMessage()
             self.logger.debug("Received challenge response")
+            self.checkMessage(resp, "AUTH2")
             srpValueM = base64.b64decode(resp['srpValueM'])
             srpValueHAMK = self.db.authenticate2(srpValueM)
             message = {
@@ -1247,9 +1261,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 force       = fields.get('force', False)
                 create      = fields.get('create', False)
 
-                srpUname    = fields.get('srpUname', None)
-                srpValueA   = fields.get('srpValueA', None)
-
                 self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
             except ValueError as e:
                 raise InitFailedException("Cannot parse JSON field: {}".format(message))
@@ -1261,18 +1272,17 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             serverName = None
             serverForceFull = False
             authResp = {}
+            keys = None
+
             try:
-                if srpValueA is None and self.server.requirePW:
-                    raise InitFailedException("Password is required on this server")
+                if self.server.requirePW and create and self.server.allowNew:
+                    keys = self.doGetKeys()
 
                 newBackup = self.getDB(client, create)
 
-                self.logger.debug("Ready for authentication: %s, %s", srpValueA, newBackup)
-                if srpValueA is None and self.db.needsAuthentication():
-                    raise InitFailedException("No password specified")
-
-                if srpValueA is not None and newBackup != 'NEW':
-                    authResp = self.doSrpAuthentication(srpUname, srpValueA)
+                self.logger.debug("Ready for authentication")
+                if self.db.needsAuthentication():
+                    authResp = self.doSrpAuthentication()
 
                 disabled = self.db.getConfigValue('Disabled')
                 if disabled is not None and int(disabled) != 0:

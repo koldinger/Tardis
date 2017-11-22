@@ -1353,10 +1353,29 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def doSrpAuthentication(message):
+def doSrpAuthentication():
+    global srpUsr, crypt
     try:
-        srpValueS = base64.b64decode(message['srpValueS'])
-        srpValueB = base64.b64decode(message['srpValueB'])
+        if srpUsr is None:
+            password = Util.getPassword(True, None, None, "Password for %s:" % (args.client))
+            srpUsr = srp.User(args.client, password)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
+
+        srpUname, srpValueA = srpUsr.start_authentication()
+        logger.debug("Starting Authentication: %s, %s", hexlify(srpUname), hexlify(srpValueA))
+        message = {
+            'message': 'AUTH1',
+            'srpUname': base64.b64encode(srpUname),           # Probably unnecessary, uname == client
+            'srpValueA': base64.b64encode(srpValueA),
+            }
+        resp = sendAndReceive(message)
+
+        if resp['status'] == 'AUTHFAIL':
+            raise AuthenticationFailed("Authentication Failed")
+
+
+        srpValueS = base64.b64decode(resp['srpValueS'])
+        srpValueB = base64.b64decode(resp['srpValueB'])
 
         logger.debug("Received Challenge : %s, %s", hexlify(srpValueS), hexlify(srpValueB))
 
@@ -1364,6 +1383,7 @@ def doSrpAuthentication(message):
 
         if srpValueM is None:
             raise AuthenticationFailed("Authentication Failed")
+
         logger.debug("Authentication Challenge response: %s", hexlify(srpValueM))
 
         message = {
@@ -1399,17 +1419,12 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             'full'      : full,
             'create'    : create
     }
-    if srpUsr:
-        srpUname, srpValueA = srpUsr.start_authentication()
-        logger.debug("Starting Authentication: %s, %s", hexlify(srpUname), hexlify(srpValueA))
-        message['srpUname']  = base64.b64encode(srpUname)           # Probably unnecessary, uname == client
-        message['srpValueA'] = base64.b64encode(srpValueA)
 
     # BACKUP { json message }
     resp = sendAndReceive(message)
 
     if resp['status'] == 'AUTH':
-        resp = doSrpAuthentication(resp)
+        resp = doSrpAuthentication()
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
         if 'error' in resp:
@@ -1786,7 +1801,7 @@ def main():
             args.password = '-- removed --'
 
         if password:
-            srpUsr = srp.User(args.client, password)
+            srpUsr = srp.User(client, password)
             crypt = TardisCrypto.TardisCrypto(password, client)
 
         # If no compression types are specified, load the list
