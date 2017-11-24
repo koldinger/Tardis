@@ -179,6 +179,12 @@ def login():
         </form>
         '''
 
+@app.route('/needsAuthentication')
+def needsAuthentication():
+    db = getDB()
+    resp = db.needsAuthentication()
+    return createResponse(resp, compress=False, cacheable=True)
+
 @app.route('/authenticate1', methods=['POST'])
 def authenticate1():
     db = getDB()

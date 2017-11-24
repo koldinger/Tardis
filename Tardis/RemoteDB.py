@@ -127,6 +127,12 @@ class RemoteDB(object):
         response = self.session.post(self.baseURL + "login", data=postData)
         response.raise_for_status()
 
+    def needsAuthentication(self):
+        r = self.session.get(self.baseURL + "needsAuthentication")
+        r.raise_for_status()
+        print r.json()
+        return r.json()
+
     def authenticate1(self, uname, srpValueA):
         postData = {
             'srpUname':  base64.b64encode(uname),

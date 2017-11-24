@@ -372,8 +372,6 @@ def checkPasswordStrength(password):
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False):
     logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
-    if password:
-        crypt = TardisCrypto.TardisCrypto(password, client)
 
     loc = urlparse.urlparse(dataLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
@@ -399,10 +397,18 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
         dbPath = os.path.join(dbDir, dbName)
         tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
 
-    if password:
-        authenticate(tardis, client, password)
+    needsAuth = tardis.needsAuthentication()
+    if needsAuth and password is None:
+        password = getPassword(True, None, None, "Password for %s: " % client)
 
-    if crypt:
+    if password:
+        if needsAuth:
+            authenticate(tardis, client, password)
+        else:
+            raise TardisDB.AuthenticationFailed()
+
+        # Password specified, so create the crypto unit
+        crypt = TardisCrypto.TardisCrypto(password, client)
         if keyFile:
             (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
         else:
