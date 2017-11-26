@@ -36,7 +36,7 @@ import ssl
 import Tardis
 import Tardis.Messages as Messages
 
-protocolVersion = "1.2"
+protocolVersion = "1.3"
 headerString    = "TARDIS " + protocolVersion
 sslHeaderString = headerString + "/SSL"
 

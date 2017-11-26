@@ -1414,6 +1414,8 @@ def doSrpAuthentication():
         resp = sendAndReceive(message)
         if resp['status'] == 'AUTHFAIL':
             raise AuthenticationFailed("Authentication Failed")
+        elif resp['status'] != 'OK':
+            raise Exception(resp['error'])
         srpHamk = base64.b64decode(resp['srpValueHAMK'])
         srpUsr.verify_session(srpHamk)
         return resp
@@ -1814,7 +1816,8 @@ def main():
 
         # Load any password info
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client))
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
+                                        confirm=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.")
             sys.exit(1)
