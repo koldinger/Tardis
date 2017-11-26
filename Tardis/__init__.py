@@ -30,12 +30,12 @@
 
 import os
 
-__version__ = "0.32.1"
+__version__ = "0.33.0"
 __buildversion__ = ''
 __versionstring__ = __version__
 
 try:
-    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    parentDir     = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
     __buildversion__ = file(versionFile, 'r').readline().strip()
 except:
