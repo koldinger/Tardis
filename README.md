@@ -27,6 +27,13 @@ and termcolor packages, and their associated libraries.
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
+Important Note -- Version 0.33
+==============================
+New clients must be created with the `tardis --create` or `sonic create` options.
+If a password is required, tardis will prompt for one.
+
+0.33's communications protocol is slightly incompatible with previous versions.   Please upgrade both client and server simultaneously.
+
 Important Note -- Version 0.32
 ==============================
 Version 0.32 changes the communications protocol in some minor ways, but is incompatible with previous versions.  The client, server, and all tools must be upgraded
@@ -55,7 +62,7 @@ Post 0.31.11 changes the directory hashing scheme.  It is recommended that you r
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.32.1+ Will be bug fixes, if necessary.
+  * 0.33.1+ Will be bug fixes, if necessary.
   * 1.0.0 Formal release
   * 2.0.0 Will (hopefully) introduce a web interface to allow controlling backup jobs.
   
@@ -112,15 +119,13 @@ Typically, a faster processor and more memory will lead to shorter backup times,
 Running the Client
 ==================
 Should probably run as root.  Basic operation is thus:
-  tardis [--port <targetPort>] [--server <host>] [--ssl] /path/to/directory-to-backup <more paths here>
-Use the --ssl if your connection is SSL enabled.
-If you wish encrypted backups, add the --password or --password-file options to specify a password.
+  tardis [--port <targetPort>] [--server <host>] /path/to/directory-to-backup <more paths here>
+If you wish encrypted backups, add a password (via the --password, --password-file, or --password-prog options) to enable encryption.  Note that passwords can be added at a later point, and the database encrypted at that point, but it is a very slow operation.
 
+On your first backup, add the --create flag to initialize the backup set.
 Your first backup will take quite a while.  Subsequent backups will be significantly faster.
 
 Once you have an initial backup in place, put this in your cron job to run daily.
-You can also run hourly incremental backups with a -H option instead of the -A above.
-Adding --purge to your command line will remove old backupsets per a schedule of hourly's after a day, daily's after 30 days, weekly's after 6 months, and monthly's never.
 
 Note on Passwords
 =================
