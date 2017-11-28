@@ -1353,16 +1353,17 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def setCrypto(confirm):
+def setCrypto(confirm, strength=False):
     global srpUsr, crypt
-    password = Util.getPassword(True, None, None, "Password for %s:" % (args.client), confirm=confirm, allowNone = False)
+    password = Util.getPassword(True, None, None, "Password for %s:" % (args.client),
+                                confirm=confirm, strength=strength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.TardisCrypto(password, args.client)
     return password
 
 def doSendKeys(password):
     if srpUsr is None:
-        password = setCrypto(True)
+        password = setCrypto(True, True)
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1817,7 +1818,7 @@ def main():
         # Load any password info
         try:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
-                                        confirm=args.create)
+                                        confirm=args.create, strength=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.")
             sys.exit(1)

@@ -322,7 +322,7 @@ If a string is passed in, returns it.
 If the string is True or empty (''), it will use the getpass function to prompt on the
 terminal.
 """
-def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False):
+def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, strength=False):
     methods = 0
     if password: methods += 1
     if pwurl:    methods += 1
@@ -352,6 +352,13 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         a = shlex.split(pwprog)
         output = subprocess.check_output(a)
         password = output.split('\n')[0].rstrip()
+
+    if not allowNone and not password:
+        raise Exception("Password required")
+
+    if strength and password:
+        if not checkPasswordStrength(password):
+            raise Exception("Password not strong enough")
 
     return password
 

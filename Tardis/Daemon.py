@@ -1302,7 +1302,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
 
+
                 newBackup = self.getDB(client, create)
+
+                if self.server.requirePW and not self.db.needsAuthentication():
+                    raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
 
                 if keys:
                     self.logger.debug("Setting keys into new client DB")

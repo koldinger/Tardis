@@ -148,13 +148,12 @@ def changePassword(crypt, oldpw) :
 
         # Get the new password
         try:
-            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client), allowNone=False, confirm=True)
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client),
+                                     allowNone=False, confirm=True, strength=True)
         except Exception as e:
             logger.critical(str(e))
             if args.exceptions:
                 logger.exception(e)
-            return -1
-        if not Util.checkPasswordStrength(newpw):
             return -1
 
         crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
