@@ -130,7 +130,6 @@ class RemoteDB(object):
     def needsAuthentication(self):
         r = self.session.get(self.baseURL + "needsAuthentication")
         r.raise_for_status()
-        print r.json()
         return r.json()
 
     def authenticate1(self, uname, srpValueA):
