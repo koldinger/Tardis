@@ -1399,9 +1399,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
 
-                # Autopurge if it's set.
-                if self.autoPurge and not self.purged:
-                    self.processPurge()
 
             completed = True
         except InitFailedException as e:
@@ -1415,10 +1412,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         finally:
             sock.close()
             if started:
+                self.db.setClientEndTime()
+                # Autopurge if it's set.
+                if self.autoPurge and not self.purged and completed:
+                    self.processPurge()
                 self.endSession()
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
-            endtime = datetime.now()
 
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
@@ -1431,6 +1431,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             if started:
                 (count, size, _) = Util.removeOrphans(self.db, self.cache)
+                endtime = datetime.now()
+
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
                 self.logger.info("New or replaced files:    %d", self.statNewFiles)
                 self.logger.info("Updated files:            %d", self.statUpdFiles)

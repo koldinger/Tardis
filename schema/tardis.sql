@@ -18,11 +18,14 @@ CREATE TABLE IF NOT EXISTS Backups (
     BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT,
     StartTime       TEXT,
     EndTime         TEXT,
+    PurgeTime       TEXT,
+    ClientEndTime   TEXT,
     ClientTime      TEXT,
     Session         TEXT UNIQUE,
     Completed       INTEGER DEFAULT 0,
     Priority        INTEGER DEFAULT 1,
     Full            INTEGER DEFAULT 0,
+    Vacuumed        INTEGER DEFAULT 0,
     ClientVersion   TEXT,
     ServerVersion   TEXT,
     SchemaVersion   INTEGER,
@@ -104,5 +107,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "15");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "16");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

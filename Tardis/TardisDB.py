@@ -88,7 +88,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 15
+_schemaVersion = 16
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -1143,14 +1143,17 @@ class TardisDB(object):
         self.logger.debug("Removing unused names")
         # Purge out any unused names
         self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files)")
+        vacuumed = False
 
         # Check if we've hit an interval where we want to do a vacuum
         bset = self._bset(True)
         interval = self.getConfigValue("VacuumInterval")
-        if interval and bset % int(interval):
+        if interval and (bset % int(interval)) == 0:
             self.logger.debug("Vaccuuming database")
             # And clean up the database
             self.conn.execute("VACUUM")
+            vacuumed = True
+        self.conn.execute("UPDATE Backups SET Vacuumed = :vacuumed WHERE BackupSet = :backup", {"backup": self.currBackupSet, "vacuumed": vacuumed})
 
     @authenticate
     def deleteChecksum(self, checksum):
@@ -1161,6 +1164,12 @@ class TardisDB(object):
     @authenticate
     def commit(self):
         self.conn.commit()
+
+    @authenticate
+    def setClientEndTime(self):
+        if self.currBackupSet:
+            self.conn.execute("UPDATE Backups SET ClientEndTime = :now WHERE BackupSet = :backup",
+                              { "now": time.time(), "backup": self.currBackupSet })
 
     def close(self, completeBackup=False):
         #self.logger.debug("Closing DB: %s", self.dbName)
