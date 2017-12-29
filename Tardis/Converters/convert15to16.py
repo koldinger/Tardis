@@ -12,7 +12,7 @@ def upgrade(conn, logger):
 
     conn.execute("ALTER TABLE Backups ADD COLUMN PurgeTime TEXT")
     conn.execute("ALTER TABLE Backups ADD COLUMN ClientEndTime TEXT")
-    conn.execute("ALTER TABLE Backups ADD COLUMN Vacuumed INTEGER")
+    conn.execute("ALTER TABLE Backups ADD COLUMN Vacuumed INTEGER DEFAULT 0")
 
     convertutils.updateVersion(conn, version, logger)
     conn.commit()
