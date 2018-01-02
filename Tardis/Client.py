@@ -413,7 +413,7 @@ def fetchSignature(inode):
 def processDelta(inode, signatures):
     """ Generate a delta and send it """
 
-    if inode in inodeDB:
+    try:
         (_, pathname) = inodeDB[inode]
         if args.progress:
             printProgress("File [D]:", pathname)
@@ -503,8 +503,10 @@ def processDelta(inode, signatures):
                 sendContent(inode, 'Full')
         else:
             sendContent(inode, 'Full')
-    else:
+    except KeyError as e:
         logger.error("No inode entry for %s", inode)
+        if args.exceptions:
+            logger.exception(e)
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
@@ -644,6 +646,8 @@ def sendDirHash(inode):
         del dirHashes[i]
     except KeyError as e:
         logger.warning("Unable to delete Directory Hash for %s", i)
+        if args.exceptions:
+            logger.exception(e)
 
 def cksize(i, threshhold):
     if i in inodeDB:
