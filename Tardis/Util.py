@@ -501,6 +501,8 @@ def _chunks(stream, chunksize):
         last = chunk
     yield (last, True)
 
+_transmissionTime = 0
+
 def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
     """
     Send a block of data, optionally encrypt and/or compress it before sending
@@ -514,6 +516,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
     ck = None
     sig = None
 
+    start = time.time()
     if progress:
         # Set the chunksize
         if progressPeriod % chunksize != 0:
@@ -550,6 +553,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         if hmac:
             sender.sendMessage(hmac.digest(), raw=True)
             accumulateStat(stats, 'dataSent', hmac.digest_size)
+
     except Exception as e:
         status = "Fail"
         #logger = logging.getLogger('Data')
@@ -571,6 +575,9 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         #print message
         sender.sendMessage(message)
         stream = None
+        end = time.time()
+        global _transmissionTime
+        _transmissionTime += end - start
     return size, ck, sig
 
 def receiveData(receiver, output):
