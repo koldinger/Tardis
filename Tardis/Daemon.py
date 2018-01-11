@@ -941,7 +941,10 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         self.logger.info("Command Line stored as checksum: %s => %d", cksum, cksid)
         self.db.setCommandLine(cksid)
 
-        return (None, False)
+        response = {
+            'message': 'ACKCMDLN'
+        }
+        return (response, False)
 
     def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """

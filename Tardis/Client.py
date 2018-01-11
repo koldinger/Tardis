@@ -1280,6 +1280,12 @@ def handleResponse(response, doPush=True):
     elif msgtype == 'ACKDHSH':
         # TODO: Respond
         pass
+    elif msgtype == 'ACKCLICONFIG':
+        # Ignore
+        pass
+    elif msgtype == 'ACKCMDLN':
+        # Ignore
+        pass
     elif msgtype == 'ACKBTCH':
         for ack in response['responses']:
             handleResponse(ack, doPush=False)
