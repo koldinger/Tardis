@@ -475,7 +475,8 @@ def processDelta(inode, signatures):
                     "encrypted": (iv is not None)
                 }
 
-                batchMessage(message, flush=True, batch=False, response=False)
+                sendMessage(message)
+                #batchMessage(message, flush=True, batch=False, response=False)
                 compress = (args.compress and (filesize > args.mincompsize))
                 progress = printProgress if args.progress else None
                 (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
@@ -488,8 +489,8 @@ def processDelta(inode, signatures):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                    #sendMessage(message)
-                    batchMessage(message, flush=True, batch=False, response=False)
+                    sendMessage(message)
+                    #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
                     (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
                     newsig.close()
