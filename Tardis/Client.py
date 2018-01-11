@@ -255,8 +255,11 @@ def filelist(dir, excludes):
         yield f
 
 def delInode(inode):
+    if args.loginodes:
+        args.loginodes.write(str(inode) + "\n")
     if inode in inodeDB:
         del inodeDB[inode]
+
 
 def processChecksums(inodes):
     """ Generate checksums for requested checksum files """
@@ -328,7 +331,7 @@ def handleAckSum(response):
 
     signatures = None
     if not args.full and len(delta) != 0:
-        signatures = prefetchSigfiles(delta)
+        signatures = prefetchSigFiles(delta)
 
     for i in [tuple(x) for x in delta]:
         if logfiles:
@@ -350,7 +353,7 @@ def makeEncryptor():
         hmac = None
     return (func, pad, iv, hmac)
 
-def prefetchSigfiles(inodes):
+def prefetchSigFiles(inodes):
     logger.debug("Requesting signature files: %s", str(inodes))
     signatures = {}
 
@@ -515,6 +518,7 @@ def sendContent(inode, reportType):
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
+            logger.debug("Sending content for %s -- %s", inode, pathname)
             if args.progress:
                 printProgress("File [N]:", pathname)
             mode = fileInfo["mode"]
@@ -560,8 +564,8 @@ def sendContent(inode, reportType):
                         logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
                         compress = False
                 makeSig = (args.crypt and crypt) or args.signature
-                #sendMessage(message)
-                batchMessage(message, batch=False, flush=True, response=False)
+                sendMessage(message)
+                #batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
                                                       encrypt, pad, hasher=Util.getHash(crypt, args.crypt),
                                                       chunksize=args.chunksize,
@@ -578,8 +582,8 @@ def sendContent(inode, reportType):
                         "message" : "SIG",
                         "checksum": checksum
                     }
-                    #sendMessage(message)
-                    batchMessage(message, batch=False, flush=True, response=False)
+                    sendMessage(message)
+                    #batchMessage(message, batch=False, flush=True, response=False)
                     (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
@@ -647,7 +651,7 @@ def sendDirHash(inode):
     except KeyError as e:
         logger.warning("Unable to delete Directory Hash for %s", i)
         if args.exceptions:
-            logger.exception(e)
+            logger.exception("No directory hash entry for %s", i)
 
 def cksize(i, threshhold):
     if i in inodeDB:
@@ -706,7 +710,7 @@ def pushFiles():
     # If there are any delta files requested, ask for them
     signatures = None
     if not args.full and len(allDelta) != 0:
-        signatures = prefetchSigfiles(allDelta)
+        signatures = prefetchSigFiles(allDelta)
 
     for i in [tuple(x) for x in allDelta]:
         # If doing a full backup, send the full file, else just a delta.
@@ -914,22 +918,37 @@ def flushClones():
 
 def sendBatchMsgs():
     global batchMsgs
-    logger.debug("Sending %d batch messages", len(batchMsgs))
-    message = {
-        'message' : 'BATCH',
-        'batch': batchMsgs
-    }
-    setMessageID(message)
-    logger.debug("BATCH Starting. %s commands", len(batchMsgs))
+    batchSize = len(batchMsgs)
+    if batchSize == 1:
+        # If there's only one, don't batch it up, just send it.
+        response = sendAndReceive(batchMsgs[0])
+    else:
+        logger.debug("Sending %d batch messages", len(batchMsgs))
+        message = {
+            'message'  : 'BATCH',
+            'batchsize': batchSize,
+            'batch'    : batchMsgs
+        }
+        msgId = setMessageID(message)
+        logger.debug("BATCH Starting. %s commands", len(batchMsgs))
+
+
+        response = sendAndReceive(message)
+        checkMessage(response, 'ACKBTCH')
+        respSize = len(response['responses'])
+        logger.debug("Got response.  %d responses", respSize)
+        if respSize != batchSize:
+            logger.error("Response size does not equal batch size: ID: %d B: %d R: %d", msgId, batchSize, respSize)
+            if logger.isEnabledFor(logging.DEBUG):
+                msgs = set([x['msgid'] for x in batchMsgs])
+                resps = set([x['respid'] for x in response['responses']])
+                diffs1 = msgs.difference(resps)
+                logger.debug("Missing Messages: %s", str(list(diffs1)))
+        logger.debug("BATCH Ending.")
 
     batchMsgs = []
-
-    response = sendAndReceive(message)
-    checkMessage(response, 'ACKBTCH')
     # Process the response messages
-    logger.debug("Got response.  %d responses", len(response['responses']))
     handleResponse(response)
-    logger.debug("BATCH Ending.")
 
 def flushBatchMsgs():
     if len(batchMsgs):
@@ -1219,9 +1238,15 @@ def receiveMessage():
         logger.debug("Receive: %s", str(response))
     return response
 
+waittime = 0
+
 def sendAndReceive(message):
+    global waittime
+    s = time.time()
     sendMessage(message)
     response = receiveMessage()
+    e = time.time()
+    waittime += e - s
     return response
 
 def sendKeys(password, client, includeKeys=True):
@@ -1263,11 +1288,12 @@ def handleResponse(response, doPush=True):
     if doPush:
         pushFiles()
 
-nextMsgId = 0
+_nextMsgId = 0
 def setMessageID(message):
-    global nextMsgId
-    message['msgid'] = nextMsgId
-    nextMsgId += 1
+    global _nextMsgId
+    message['msgid'] = _nextMsgId
+    _nextMsgId += 1
+    return message['msgid']
 
 def batchMessage(message, batch=True, flush=False, response=True):
     setMessageID(message)
@@ -1618,6 +1644,7 @@ def processCommandLine():
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s'))
 
     parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
+    parser.add_argument('--loginodes',              dest='loginodes', default=None, type=argparse.FileType('w'), help=_d('Log inode actions, and messages'))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  Default: %(default)s')
@@ -1736,6 +1763,9 @@ def printStats(starttime, endtime):
     logger.log(logging.STATS, "Data Sent:   Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
     logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
     logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+
+    logger.log(logging.STATS, "Wait Times:  {:}".format(str(datetime.timedelta(0, waittime))))
+    logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
 
 
 def printReport():
