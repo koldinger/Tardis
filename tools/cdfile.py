@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-from Tardis import CacheDir
+from Tardis import CacheDir, Util
 import argparse
 import sys
 
