@@ -920,7 +920,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             clientConfig = message['args']
             self.logger.debug("Received client config: %s", clientConfig)
             self.db.setClientConfig(clientConfig)
-        return (None, False)
+        response = {
+            'message': 'ACKCLICONFIG',
+            'saved': self.saveConfig
+        }
+        return (response, False)
 
     def processCommandLine(self, message):
         cksum = message['hash']
