@@ -477,7 +477,7 @@ def processDelta(inode, signatures):
 
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
-                compress = (args.compress and (filesize > args.mincompsize))
+                compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 progress = printProgress if args.progress else None
                 (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
                 delta.close()
@@ -622,7 +622,7 @@ def handleAckMeta(message):
         }
 
         sendMessage(message)
-        compress = (args.compress and (len(data) > args.mincompsize))
+        compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
         progress = printProgress if args.progress else None
         Util.sendData(conn.sender, cStringIO.StringIO(data), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
 
