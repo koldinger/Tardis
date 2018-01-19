@@ -176,7 +176,7 @@ contentKey          = None
 # Example: If you have 100 files, and 99 of them are already backed up (ie, one new), backed would be 100, but new would be 1.
 # dataSent is the compressed and encrypted size of the files (or deltas) sent in this run, but dataBacked is the total size of
 # the files.
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0}
+stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0, 'gone': 0, 'denied': 0 }
 
 report = {}
 
@@ -265,7 +265,7 @@ def processChecksums(inodes):
     """ Generate checksums for requested checksum files """
     files = []
     for inode in inodes:
-        if inode in inodeDB:
+        try:
             (_, pathname) = inodeDB[inode]
             if args.progress:
                 printProgress("File [C]:", pathname)
@@ -276,13 +276,20 @@ def processChecksums(inodes):
             if stat.S_ISLNK(mode):
                 m.update(os.readlink(pathname))
             else:
-                with open(pathname, "rb") as file:
-                    for chunk in iter(functools.partial(file.read, args.chunksize), ''):
-                        m.update(chunk)
+                try:
+                    with open(pathname, "rb") as file:
+                        for chunk in iter(functools.partial(file.read, args.chunksize), ''):
+                            m.update(chunk)
+                except IOError as e:
+                    logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
+                    if args.exceptions:
+                        logger.exception(e)
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
-        else:
+        except KeyError as e:
             logger.error("Unable to process checksum for %s, not found in inodeDB", str(inode))
+            if args.exceptions:
+                logger.exception(e)
     message = {
         "message": "CKS",
         "files": files
@@ -545,10 +552,13 @@ def sendContent(inode, reportType):
             except IOError as e:
                 if e.errno == errno.ENOENT:
                     logger.warning("%s disappeared.  Not backed up", pathname)
+                    Util.accumulateStat(stats, 'gone')
                 elif e.errno == errno.EACCES:
                     logger.warning("Permission denied opening: %s.  Not backed up", pathname)
+                    Util.accumulateStat(stats, 'denied')
                 else:
                     logger.warning("Unable to open %s: %s", pathname, e.strerror)
+                    Util.accumulateStat(stats, 'denied')
                 return
 
             # Attempt to send the data.
@@ -632,6 +642,7 @@ def sendDirHash(inode):
     if _defaultHash == None:
         h = Util.getHash(crypt, args.crypt)
         _defaultHash = '00' * h.digest_size
+
     i = tuple(inode)
     #try:
     #    (h,s) = dirHashes[i]
@@ -650,9 +661,12 @@ def sendDirHash(inode):
     try:
         del dirHashes[i]
     except KeyError as e:
-        logger.warning("Unable to delete Directory Hash for %s", i)
-        if args.exceptions:
-            logger.exception("No directory hash entry for %s", i)
+        pass
+        # This kindof isn't an error.   The BatchMessages call can cause the sendDirHashes to be sent again, which ends up deleteing
+        # the message before it's deleted here.
+        #logger.warning("Unable to delete Directory Hash for %s", i)
+        #if args.exceptions:
+        #    logger.exception("No directory hash entry for %s", i)
 
 def cksize(i, threshhold):
     if i in inodeDB:
@@ -1133,6 +1147,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         #traceback.print_exc()
     except (IOError) as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
+        if args.exceptions:
+            logger.exception(e)
         raise
     except Exception as e:
         # TODO: Clean this up
@@ -1298,6 +1314,7 @@ def handleResponse(response, doPush=True):
 _nextMsgId = 0
 def setMessageID(message):
     global _nextMsgId
+    #message['sessionid'] = str(sessionid)
     message['msgid'] = _nextMsgId
     _nextMsgId += 1
     return message['msgid']
@@ -1764,12 +1781,16 @@ def printStats(starttime, endtime):
     duration = endtime - starttime
     duration = datetime.timedelta(duration.days, duration.seconds, duration.seconds - (duration.seconds % 100000))          # Truncate the microseconds
 
-    logger.log(logging.STATS, "Runtime:     {}".format(duration))
-    logger.log(logging.STATS, "Backed Up:   Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-    logger.log(logging.STATS, "Files Sent:  Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-    logger.log(logging.STATS, "Data Sent:   Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
-    logger.log(logging.STATS, "Messages:    Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-    logger.log(logging.STATS, "Data Sent:   {:}".format(Util.fmtSize(stats['dataSent'])))
+    logger.log(logging.STATS, "Runtime:          {}".format(duration))
+    logger.log(logging.STATS, "Backed Up:        Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
+    logger.log(logging.STATS, "Files Sent:       Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
+    logger.log(logging.STATS, "Data Sent:        Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
+    logger.log(logging.STATS, "Messages:         Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
+    logger.log(logging.STATS, "Data Sent:        {:}".format(Util.fmtSize(stats['dataSent'])))
+
+    if (stats['denied'] or stats['gone']):
+        logger.log(logging.STATS, "Files Not Sent:   Disappeared: {:,}  Permission Denied: {:,}".format(stats['gone'], stats['denied']))
+
 
     logger.log(logging.STATS, "Wait Times:  {:}".format(str(datetime.timedelta(0, waittime))))
     logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
