@@ -287,6 +287,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | ExcludeFileName | .tardis-exclude     |                   | Check for this file in each directory, and exclude files which match it's pattern in current directory and all below. |
 | LocalExcludeFileName | .tardis-local-exclude |            | Same, but only in the current directory. |
 | SkipFileName    | .tardis-skip        |                   | If this file exists, skip this directory and all below. |
+| ExcludeNoAccess | True                |                   | Exclude files to which the user doesn't have access/permission. |
 | LogFiles        |                     |                   | List of files to log to. |
 | Verbosity       | 0                   |                   | Verbosity level. |
 | Stats           | False               |                   | Print some stats on the backup when complete. |
