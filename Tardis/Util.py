@@ -617,6 +617,10 @@ _uidForPerm = os.getuid()
 _groupForPerm = os.getgroups()
 
 def checkPermission(pUid, pGid, mode, uid=_uidForPerm, groups=_groupForPerm):
+    # Check for super user.   Hack, this isn't really right, but still.
+    # Assumes *nix permission system.   May not work on Windows or Mac.
+    if uid == 0:
+        return True
     if stat.S_ISDIR(mode):
         if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
             return True
@@ -632,7 +636,6 @@ def checkPermission(pUid, pGid, mode, uid=_uidForPerm, groups=_groupForPerm):
         elif stat.S_IROTH & mode:
             return True
     return False
-
 
 """
 Load a key file.
