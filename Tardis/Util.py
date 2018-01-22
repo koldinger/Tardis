@@ -611,6 +611,29 @@ def receiveData(receiver, output):
         compressed = chunk['compressed']
     return (bytesReceived, status, size, checksum, compressed)
 
+
+# Function to determine whether we can execute a function
+_uidForPerm = os.getuid()
+_groupForPerm = os.getgroups()
+
+def checkPermission(pUid, pGid, mode, uid=_uidForPerm, groups=_groupForPerm):
+    if stat.S_ISDIR(mode):
+        if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
+            return True
+        elif (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
+            return True
+        elif (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
+            return True
+    else:
+        if (uid == pUid) and (stat.S_IRUSR & mode):
+            return True
+        elif (pGid in groups) and (stat.S_IRGRP & mode):
+            return True
+        elif stat.S_IROTH & mode:
+            return True
+    return False
+
+
 """
 Load a key file.
 Key files are config databases, where each section is keyed by the clientID from the server.  Each secition needs to contain two entries, a ContentKey

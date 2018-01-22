@@ -116,6 +116,7 @@ configDefaults = {
     'ExcludeFileName':      Defaults.getDefault('TARDIS_EXCLUDES'),
     'LocalExcludeFileName': Defaults.getDefault('TARDIS_LOCAL_EXCLUDES'),
     'SkipFileName':         Defaults.getDefault('TARDIS_SKIP'),
+    'ExcludeNoAccess':      str(True),
     'LogFiles':             None,
     'Verbosity':            str(0),
     'Stats':                str(False),
@@ -773,6 +774,11 @@ def mkFileInfo(dir, name):
     pathname = os.path.join(dir, name)
     s = os.lstat(pathname)
     mode = s.st_mode
+    # If we don't want to even create dir entries for things we can't access, just return None 
+    # if we can't access the file itself
+    if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
+        return None
+
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
         if args.crypt and crypt:
             name = crypt.encryptFilename(name.decode(systemencoding, 'replace'))
@@ -1644,6 +1650,8 @@ def processCommandLine():
                         help='Load local exclude files from this.  Default: %(default)s')
     excgrp.add_argument('--skip-file-name',             dest='skipfile', default=c.get(t, 'SkipFileName'),
                         help='File to indicate to skip a directory.  Default: %(default)s')
+    excgrp.add_argument('--exclude-no-access',          dest='skipNoAccess', default=c.get(t, 'ExcludeNoAccess'), action=Util.StoreBoolean,
+                        help="Exclude files to which the runner has no permission- won't generate directory entry. Default: %(default)s")
     excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action=Util.StoreBoolean, default=False,
                         help='Ignore the global exclude file')
 
