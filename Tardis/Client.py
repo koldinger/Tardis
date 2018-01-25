@@ -1809,7 +1809,7 @@ def printReport():
     length = 0
     logger.log(logging.STATS, "")
     if report:
-        length = reduce(max, map(len, map(lambda x:x[0], report)))
+        length = reduce(max, map(len, map(lambda x:x[1], report)))
         length = max(length, 50)
         fmts = ['','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 2)
