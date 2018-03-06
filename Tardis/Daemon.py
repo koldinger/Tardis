@@ -509,6 +509,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         info = self.db.getFileInfoByInode((inode, dev), current=True)
         if info:
             chksum = self.db.getChecksumByName(info["name"], (info["parent"], info["parentdev"]))      ### Assumption: Current parent is same as old
+        else:
+            self.logger.error("No Checksum Info available for %s in (%d, %d)", info['name'], info['parent'], info['parentdev'])
 
         if chksum:
             try:
