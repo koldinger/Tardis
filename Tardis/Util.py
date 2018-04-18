@@ -820,6 +820,18 @@ class ClearingStreamHandler(logging.StreamHandler):
 
         super(ClearingStreamHandler, self).emit(record)
 
+# AN exception logging mechanism
+class ExceptionLogger:
+    def __init__(self, logger, logExceptions):
+        self.logger = logger
+        self.logExceptions = logExceptions
+
+    def log(exception):
+        if logExceptions:
+            self.logger.exception(exception)
+
+
+
 # Class to have a two directional dictionary.
 
 class bidict(dict):

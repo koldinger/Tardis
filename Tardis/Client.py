@@ -157,6 +157,7 @@ noCompTypes         = []
 
 crypt               = None
 logger              = None
+exceptionLogger     = None
 
 srpUsr              = None
 
@@ -283,14 +284,12 @@ def processChecksums(inodes):
                             m.update(chunk)
                 except IOError as e:
                     logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
-                    if args.exceptions:
-                        logger.exception(e)
+                    exceptionLogger.log(e)
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
         except KeyError as e:
             logger.error("Unable to process checksum for %s, not found in inodeDB", str(inode))
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
     message = {
         "message": "CKS",
         "files": files
@@ -465,8 +464,7 @@ def processDelta(inode, signatures):
                 delta.seek(0)
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-                if args.exceptions:
-                    logger.exception(e)
+                exceptionLogger.log(e)
                 sendContent(inode, 'Full')
                 return
 
@@ -517,8 +515,7 @@ def processDelta(inode, signatures):
             sendContent(inode, 'Full')
     except KeyError as e:
         logger.error("No inode entry for %s", inode)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
@@ -599,8 +596,7 @@ def sendContent(inode, reportType):
                     (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
-                if args.exceptions:
-                    logger.exception(e)
+                exceptionLogger.log(e)
                 raise e
             finally:
                 if data is not None:
@@ -870,8 +866,7 @@ def getDirContents(dir, dirstat, excludes=[]):
             except Exception as e:
                 ## Is this necessary?  Fold into above?
                 logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
-                if args.exceptions:
-                    logger.exception(e)
+                exceptionLogger.log(e)
     except (IOError, OSError) as e:
         logger.error("Error reading directory %s: %s" ,dir, str(e))
 
@@ -1153,13 +1148,11 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         #traceback.print_exc()
     except (IOError) as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         raise
     except Exception as e:
         # TODO: Clean this up
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         raise
 
 def cloneDir(inode, device, files, path, info=None):
@@ -1737,8 +1730,8 @@ def parseServerInfo(args):
 
     return (server, port, client)
 
-def setupLogging(logfiles, verbosity):
-    global logger
+def setupLogging(logfiles, verbosity, logExceptions):
+    global logger, exceptionLogger
 
     # Define a couple custom logging levels
     logging.STATS = logging.INFO + 1
@@ -1779,6 +1772,8 @@ def setupLogging(logfiles, verbosity):
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
     logger.setLevel(loglevel)
+
+    exceptionLogger = Util.ExceptionLogger(logger, logExceptions)
 
     # Create a special logger just for messages
     return logger
@@ -1856,7 +1851,7 @@ def main():
 
     # Set up logging
     verbosity=args.verbose if args.verbose else 0
-    setupLogging(args.logfiles, verbosity)
+    setupLogging(args.logfiles, verbosity, args.exceptions)
 
     starttime = datetime.datetime.now()
     subserver = None
@@ -1941,8 +1936,7 @@ def main():
         logger.debug("Rootdir is: %s", rootdir)
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         sys.exit(1)
 
     # Open the connection
@@ -1963,8 +1957,7 @@ def main():
         startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         sys.exit(1)
     if verbosity or args.stats or args.report:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
@@ -2067,12 +2060,10 @@ def main():
         conn.close()
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
 
     if args.progress:
         print ' ' +  _startOfLine + _ansiClearEol + _startOfLine,
@@ -2086,14 +2077,14 @@ def main():
     if args.sanity:
         # Sanity checks.  Enable for debugging.
         if len(cloneContents) != 0:
-            logger.warning("Warning: Some cloned directories not processed: %d", len(cloneContents))
+            logger.warning("Some cloned directories not processed: %d", len(cloneContents))
             for key in cloneContents:
                 (path, files) = cloneContents[key]
                 print "{}:: {}".format(path, len(files))
 
         # This next one is usually non-zero, for some reason.  Enable to debug.
         if len(inodeDB) != 0:
-            logger.warning("Warning: %d InodeDB entries not processed", len(inodeDB))
+            logger.warning("%d InodeDB entries not processed", len(inodeDB))
             for key in inodeDB.keys():
                 (_, path) = inodeDB[key]
                 print "{}:: {}".format(key, path)
