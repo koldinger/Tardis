@@ -33,7 +33,6 @@ import logging
 import os
 import os.path
 import time
-import hashlib
 import sys
 import uuid
 import srp
@@ -959,26 +958,6 @@ class TardisDB(object):
         self._execute("UPDATE Backups SET Priority = :priority WHERE BackupSet = :backup",
                       {'priority': priority, 'backup': backup})
 
-
-    """
-    def getToken(self):
-        return self._getConfigValue('Token')
-
-    @authenticate
-    def setToken(self, token):
-        s = hashlib.sha1()
-        s.update(token)
-        tokenhash = s.hexdigest()
-        self.setConfigValue('Token', tokenhash)
-
-    @authenticate
-    def checkToken(self, token):
-        dbToken = self.getToken()
-        s = hashlib.sha1()
-        s.update(token)
-        tokenhash = s.hexdigest()
-        return (dbToken == tokenhash)
-    """
 
     @authenticate
     def setSrpValues(self, salt, vkey):
