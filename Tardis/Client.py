@@ -60,6 +60,7 @@ import magic
 import pid
 import parsedatetime
 import srp
+import colorlog
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -68,6 +69,7 @@ import Tardis.Connection as Connection
 import Tardis.Util as Util
 import Tardis.Defaults as Defaults
 import Tardis.librsync as librsync
+import Tardis.MultiFormatter as MultiFormatter
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -307,7 +309,7 @@ def logFileInfo(i, c):
         else:
             size = 0
         size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-        logger.log(logging.FILES, "File: [%c]: %s (%s)", c, Util.shortPath(name), size)
+        logger.log(logging.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         if args.crypt and crypt and logger.isEnabledFor(logging.DEBUG):
             cname = crypt.encryptPath(name.decode(systemencoding, 'replace'))
             logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
@@ -325,7 +327,7 @@ def handleAckSum(response):
         if logfiles:
             if i in inodeDB:
                 (x, name) = inodeDB[i]
-                logger.log(logging.FILES, "File: [C]: %s", Util.shortPath(name))
+                logger.log(logging.FILES, "[C]: %s", Util.shortPath(name))
         delInode(i)
 
     # First, then send content for any files which don't
@@ -734,7 +736,7 @@ def pushFiles():
             if logger.isEnabledFor(logging.FILES):
                 if i in inodeDB:
                     (x, name) = inodeDB[i]
-                    logger.log(logging.FILES, "File: [D]: %s", Util.shortPath(name))
+                    logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
             processDelta(i, signatures)
         delInode(i)
 
@@ -888,7 +890,7 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if logdirs:
-                logger.log(logging.DIRS, "Dir: [R]: %s", Util.shortPath(path))
+                logger.log(logging.DIRS, "[R]: %s", Util.shortPath(path))
             sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
         else:
@@ -1121,17 +1123,17 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             if oldFiles:
                 # There are oldfiles.  Hash them.
                 if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "Dir: [A]: %s", Util.shortPath(dir))
+                    logger.log(logging.DIRS, "[A]: %s", Util.shortPath(dir))
                 cloneDir(s.st_ino, s.st_dev, oldFiles, dir)
             else:
                 if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "Dir: [B]: %s", Util.shortPath(dir))
+                    logger.log(logging.DIRS, "[B]: %s", Util.shortPath(dir))
             sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), newFiles)
 
         else:
             # everything is old
             if logger.isEnabledFor(logging.DIRS):
-                logger.log(logging.DIRS, "Dir: [C]: %s", Util.shortPath(dir))
+                logger.log(logging.DIRS, "[C]: %s", Util.shortPath(dir))
             cloneDir(s.st_ino, s.st_dev, oldFiles, dir, info=h)
 
         # Make sure we're not at maximum depth
@@ -1691,6 +1693,7 @@ def processCommandLine():
     parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. Default: %(default)s')
     parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
     parser.add_argument('--logtime',            dest='logtime', default=False, action=Util.StoreBoolean, help='Log time')
+    parser.add_argument('--logcolor',           dest='logcolor', default=True, action=Util.StoreBoolean, help='Generate colored logs')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -1745,34 +1748,62 @@ def setupLogging(logfiles, verbosity, logExceptions):
 
     levels = [logging.STATS, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
 
-    if args.logtime:
-        formatter = MessageOnlyFormatter(levels=[logging.STATS], fmt='%(asctime)s %(levelname)s: %(message)s')
-    else:
-        formatter = MessageOnlyFormatter(levels=[logging.INFO, logging.FILES, logging.DIRS, logging.STATS])
+    # Create some default colors
+    colors = colorlog.default_log_colors.copy()
+    colors.update({
+                    'STAT': 'cyan',
+                    'DIR':  'cyan,bold',
+                    'FILE': 'cyan',
+                    'DEBUG': 'green'
+                  })
 
+    msgOnlyFmt = '%(message)s'
+    if args.logtime:
+        #formatter = MessageOnlyFormatter(levels=[logging.STATS], fmt='%(asctime)s %(levelname)s: %(message)s')
+        formats = { logging.STATS: msgOnlyFmt }
+        defaultFmt = '%(asctime)s %(levelname)s: %(message)s'
+        cDefaultFmt = '%(asctime)s %(log_color)s%(levelname)s%(reset)s: %(message)s'
+    else:
+        formats = { logging.INFO: msgOnlyFmt, logging.STATS: msgOnlyFmt }
+        defaultFmt = '%(levelname)s: %(message)s'
+        cDefaultFmt = '%(log_color)s%(levelname)s%(reset)s: %(message)s'
+
+    # If no log file specified, log to stderr
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
 
+    # Generate a handler and formatter for each logfile
     for logfile in logfiles:
         if type(logfile) is str:
             if logfile == ':STDERR:':
+                isatty = os.isatty(sys.stderr.fileno())
                 handler = Util.ClearingStreamHandler(sys.stderr)
             elif logfile == ':STDOUT:':
+                isatty = os.isatty(sys.stdout.fileno())
                 handler = Util.ClearingStreamHandler(sys.stdout)
             else:
+                isatty = False
                 handler = logging.handlers.WatchedFileHandler(Util.fullPath(logfile))
         else:
+            isatty = os.isatty(logfile.fileno())
             handler = Util.ClearingStreamHandler(logfile)
+
+        if isatty and args.logcolor:
+            formatter = MultiFormatter.MultiFormatter(default_fmt=cDefaultFmt, formats=formats, baseclass=colorlog.ColoredFormatter, log_colors=colors, reset=True)
+        else:
+            formatter = MultiFormatter.MultiFormatter(default_fmt=defaultFmt, formats=formats)
 
         handler.setFormatter(formatter)
         logging.root.addHandler(handler)
 
     # Default logger
     logger = logging.getLogger('')
+
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
     logger.setLevel(loglevel)
 
+    # Mark if we're logging exceptions
     exceptionLogger = Util.ExceptionLogger(logger, logExceptions)
 
     # Create a special logger just for messages

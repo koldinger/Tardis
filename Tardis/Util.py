@@ -827,7 +827,7 @@ class ExceptionLogger:
         self.logExceptions = logExceptions
 
     def log(self, exception):
-        if logExceptions:
+        if self.logExceptions:
             self.logger.exception(exception)
 
 
