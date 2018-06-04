@@ -145,7 +145,7 @@ configDefaults = {
 server = None
 logger = None
 
-pp = pprint.PrettyPrinter(indent=2, width=200)
+pp = pprint.PrettyPrinter(indent=2, width=1000)
 
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2
@@ -686,11 +686,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 done.append(f['inode'])
             else:
                 # FIXME: TODO: If no checksum, should we request a delta???
-                old = self.db.getFileInfoByInode((inode, dev))
-                if old and old['chainlength'] < self.maxChain:
-                    delta.append(f['inode'])
-                else:
-                    content.append(f['inode'])
+                #old = self.db.getFileInfoByInode((inode, dev))
+                #if old and old['chainlength'] < self.maxChain:
+                    #delta.append(f['inode'])
+                #else:
+                content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",
