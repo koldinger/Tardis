@@ -31,6 +31,7 @@
 import os
 import sys
 import os.path
+import signal
 import logging
 import logging.handlers
 import fnmatch
@@ -1023,32 +1024,42 @@ _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 
 def initProgressBar():
-    _, width = Util.getTerminalSize()
     global _progressBarFormat, _windowWidth
+    try:
+        _handle_resize(None, None)
+        signal.signal(signal.SIGWINCH, _handle_resize)
+        signal.siginterrupt(signal.SIGWINCH, False)
+    except Exception as e:
+        print "oops -- " + str(e)
+        pass
 
+def _handle_resize(sig, frame):
+    global _progressBarFormat, _windowWidth
+    (_, width) = Util.getTerminalSize()
     if width < 110:
         _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s '
     else:
         _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
     _windowWidth = width
 
-    #logger.warning("Initializing progress bar.  Width: %d. Path Width: %d.  Format: %s",
-    #            width, _progressPathWidth, _progressBarFormat)
-    #print _progressBarFormat
-    #sys.exit()
 
 _lastInfo = (None, None)                # STATIC for printProgress
+_lastProgressTime = 0
 
 def printProgress(header=None, name=None):
-    global _lastInfo
-    bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
+    global _lastInfo, _lastProgressTime
+    now = time.time()
+    if ((now - _lastProgressTime) > 0.25):
+        _lastProgressTime = now
+        bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
 
-    width = _windowWidth - len(bar) - 4
-    print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
+        width = _windowWidth - len(bar) - 4
+        print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
+        sys.stdout.flush()
+
     if header or name:
         #update the last info
         _lastInfo = (header or _lastInfo[0], name or _lastInfo[1])
-    sys.stdout.flush()
 
 processedDirs = set()
 
@@ -1283,34 +1294,39 @@ def sendKeys(password, client, includeKeys=True):
         logger.error("Could not set keys")
 
 def handleResponse(response, doPush=True):
-    msgtype = response['message']
-    if msgtype == 'ACKDIR':
-        handleAckDir(response)
-    elif msgtype == 'ACKCLN':
-        handleAckClone(response)
-    elif msgtype == 'ACKPRG':
-        pass
-    elif msgtype == 'ACKSUM':
-        handleAckSum(response)
-    elif msgtype == 'ACKMETA':
-        handleAckMeta(response)
-    elif msgtype == 'ACKDHSH':
-        # TODO: Respond
-        pass
-    elif msgtype == 'ACKCLICONFIG':
-        # Ignore
-        pass
-    elif msgtype == 'ACKCMDLN':
-        # Ignore
-        pass
-    elif msgtype == 'ACKBTCH':
-        for ack in response['responses']:
-            handleResponse(ack, doPush=False)
-    else:
-        logger.error("Unexpected response: %s", msgtype)
+    try:
+        msgtype = response['message']
+        if msgtype == 'ACKDIR':
+            handleAckDir(response)
+        elif msgtype == 'ACKCLN':
+            handleAckClone(response)
+        elif msgtype == 'ACKPRG':
+            pass
+        elif msgtype == 'ACKSUM':
+            handleAckSum(response)
+        elif msgtype == 'ACKMETA':
+            handleAckMeta(response)
+        elif msgtype == 'ACKDHSH':
+            # TODO: Respond
+            pass
+        elif msgtype == 'ACKCLICONFIG':
+            # Ignore
+            pass
+        elif msgtype == 'ACKCMDLN':
+            # Ignore
+            pass
+        elif msgtype == 'ACKBTCH':
+            for ack in response['responses']:
+                handleResponse(ack, doPush=False)
+        else:
+            logger.error("Unexpected response: %s", msgtype)
 
-    if doPush:
-        pushFiles()
+        if doPush:
+            pushFiles()
+    except Exception as e:
+        logger.error("Error handling response %d %s: %s", response.get('msgid'), response.get('message'), e.message)
+        exceptionLogger.log(e)
+
 
 _nextMsgId = 0
 def setMessageID(message):
