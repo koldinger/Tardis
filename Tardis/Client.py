@@ -1854,11 +1854,11 @@ def printReport():
         length = reduce(max, map(len, map(lambda x:x[1], report)))
         length = max(length, 50)
         fmts = ['','KB','MB','GB', 'TB', 'PB']
-        fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 2)
-        fmt2 = '  %-{}s %-6s %-10s %-10s'.format(length)
-        fmt3 = '  %-{}s %-6s %-10s'.format(length)
+        fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
+        fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
+        fmt3 = '  %-{}s   %-6s %-10s'.format(length)
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
-        logger.log(logging.STATS, fmt, '-' * (length + 2), '-' * 6, '-' * 10, '-' * 10)
+        logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
             r = report[i]
             (d, f) = i
