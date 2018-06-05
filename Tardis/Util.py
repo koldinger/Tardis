@@ -57,7 +57,7 @@ import bz2
 import liblzma
 import srp
 import passwordmeter
-
+import colorlog
 
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
@@ -191,12 +191,20 @@ def setupLogging(verbosity, levels=None, format=None, stream=sys.stdout):
 
     if format is None:
         if loglevel <= logging.DEBUG:
-            format = "%(levelname)s : %(filename)s:%(lineno)d: %(message)s"
+            format = "%(log_color)s%(levelname)s%(reset)s : %(filename)s:%(lineno)d: %(message)s"
         else:
-            format = "%(levelname)s : %(message)s"
-    logging.basicConfig(format=format, level=loglevel, stream=stream)
-    logger = logging.getLogger('')
+            format = "%(log_color)s%(levelname)s%(reset)s : %(message)s"
 
+    colors = colorlog.default_log_colors.copy()
+    colors.update({ 'DEBUG': 'green' })
+
+    formatter = colorlog.TTYColoredFormatter(format, log_colors=colors)
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    logging.root.addHandler(handler)
+
+    logger = logging.getLogger("")
+    logger.setLevel(loglevel)
     return logger
 
 # Functions for reducing a path.
