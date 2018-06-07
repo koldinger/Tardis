@@ -57,6 +57,7 @@ import StringIO
 import pstats
 
 import daemonize
+import colorlog
 
 import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
@@ -1576,7 +1577,10 @@ def setupLogging():
         logger = logging.getLogger('')
     else:
         logger = logging.getLogger('')
-        logFormat = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+        if args.logfile or args.daemon:
+            logFormat = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+        else:
+            logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s")
 
         verbosity = args.verbose
 
@@ -1730,6 +1734,7 @@ def main():
         try:
             run_server()
         except KeyboardInterrupt:
+            logger.warning("Killed by Keyboard")
             pass
         except Exception as e:
             logger.critical("Unable to run server: {}".format(e))
