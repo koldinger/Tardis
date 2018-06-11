@@ -50,6 +50,7 @@ columnfmt = None
 args = None
 curcolor = None
 logger = None
+exceptionLogger = None
 backupSets = []
 
 line = ''
@@ -731,11 +732,12 @@ def processArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global args, logger
+    global args, logger, exceptionLogger
     tardis = None
     try:
         args = processArgs()
         logger = Util.setupLogging(args.verbose)
+        exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
@@ -771,12 +773,10 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     finally:
         if tardis:
             tardis.close()

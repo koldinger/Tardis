@@ -48,6 +48,7 @@ import Tardis.Config as Config
 import Tardis.TardisDB as TardisDB
 
 logger = None
+exceptionLogger = None
 args = None
 
 current = Defaults.getDefault('TARDIS_RECENT_SET')
@@ -289,14 +290,15 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
         runDiff(f1, f2, fName, then, now)
     except Exception as e:
         logger.error("Error occurred during diffing of %s: %s", path, str(e))
-        #logger.exception(e)
+        exceptionLogger.log(e)
 
 def main():
-    global logger
+    global logger, exceptionLogger
     tardis = None
     try:
         parseArgs()
         logger = Util.setupLogging(args.verbose)
+        exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
@@ -344,13 +346,11 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     finally:
         if tardis:
             tardis.close()
