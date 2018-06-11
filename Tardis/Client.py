@@ -1454,7 +1454,7 @@ def doSrpAuthentication():
             setCrypto(False)
 
         srpUname, srpValueA = srpUsr.start_authentication()
-        logger.debug("Starting Authentication: %s, %s", hexlify(srpUname), hexlify(srpValueA))
+        logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
         message = {
             'message': 'AUTH1',
             'srpUname': base64.b64encode(srpUname),           # Probably unnecessary, uname == client
@@ -1545,7 +1545,6 @@ def getConnection(server, port):
     #    conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
     #    setEncoder("bin")
     #elif args.protocol == 'msgp':
-
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout)
     setEncoder("bin")
     return conn
@@ -1678,8 +1677,8 @@ def processCommandLine():
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  Default: %(default)s'))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  Default: %(default)s'))
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=1000,            help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
-    comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
-                        help=_d('Protocol for data transfer.  Default: %(default)s'))
+    #comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
+    #                    help=_d('Protocol for data transfer.  Default: %(default)s'))
     comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
                         help=_d('Always send a signature.  Default: %(default)s'))
 
@@ -1888,262 +1887,268 @@ def lockRun(server, port, client):
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr
     # Read the command line arguments.
-    commandLine = ' '.join(sys.argv) + '\n'
-    (args, config) = processCommandLine()
-
-    # Memory debugging.
-    # Enable only if you really need it.
-    #from dowser import launch_memory_usage_server
-    #launch_memory_usage_server()
-
-    # Set up logging
-    verbosity=args.verbose if args.verbose else 0
-    setupLogging(args.logfiles, verbosity, args.exceptions)
-
-    starttime = datetime.datetime.now()
-    subserver = None
-
-    if args.progress:
-        initProgressBar()
-
     try:
-        # Get the actual names we're going to use
-        (server, port, client) = parseServerInfo(args)
+        commandLine = ' '.join(sys.argv) + '\n'
+        (args, config) = processCommandLine()
 
-        if args.exclusive:
-            lockRun(server, port, client)
+        # Memory debugging.
+        # Enable only if you really need it.
+        #from dowser import launch_memory_usage_server
+        #launch_memory_usage_server()
 
-        # Figure out the name and the priority of this backupset
-        (name, priority, auto) = setBackupName(args)
+        # Set up logging
+        verbosity=args.verbose if args.verbose else 0
+        setupLogging(args.logfiles, verbosity, args.exceptions)
 
-        # Load the excludes
-        loadExcludes(args)
+        starttime = datetime.datetime.now()
+        subserver = None
 
-        # Load any excluded directories
-        loadExcludedDirs(args)
+        if args.progress:
+            initProgressBar()
 
-        # Error check the purge parameter.  Disable it if need be
-        #if args.purge and not (purgeTime is not None or auto):
-        #   logger.error("Must specify purge days with this option set")
-        #   args.purge=False
-
-        # Load any password info
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
-                                        confirm=args.create, strength=args.create)
-        except Exception as e:
-            logger.critical("Could not retrieve password.")
-            sys.exit(1)
-        # Purge out the original password.  Maybe it might go away.
-        if args.password:
-            args.password = '-- removed --'
+            # Get the actual names we're going to use
+            (server, port, client) = parseServerInfo(args)
 
-        if password:
-            srpUsr = srp.User(client, password)
-            crypt = TardisCrypto.TardisCrypto(password, client)
+            if args.exclusive:
+                lockRun(server, port, client)
 
-        # If no compression types are specified, load the list
-        types = []
-        for i in args.nocompressfile:
+            # Figure out the name and the priority of this backupset
+            (name, priority, auto) = setBackupName(args)
+
+            # Load the excludes
+            loadExcludes(args)
+
+            # Load any excluded directories
+            loadExcludedDirs(args)
+
+            # Error check the purge parameter.  Disable it if need be
+            #if args.purge and not (purgeTime is not None or auto):
+            #   logger.error("Must specify purge days with this option set")
+            #   args.purge=False
+
+            # Load any password info
             try:
-                logger.debug("Reading types to ignore from: %s", i)
-                data = map(Util.stripComments, file(i, 'r').readlines())
-                types = types + [x for x in data if len(x)]
+                password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
+                                            confirm=args.create, strength=args.create)
             except Exception as e:
-                logger.error("Could not load nocompress types list from: %s", i)
-                raise e
-        types = types + args.nocompress
-        noCompTypes = set(types)
-        logger.debug("Types to ignore: %s", sorted(noCompTypes))
+                logger.critical("Could not retrieve password.")
+                sys.exit(1)
+            # Purge out the original password.  Maybe it might go away.
+            if args.password:
+                args.password = '-- removed --'
 
-        # Calculate the base directories
-        directories = list(itertools.chain.from_iterable(map(glob.glob, map(Util.fullPath, args.directories))))
-        if args.basepath == 'common':
-            rootdir = os.path.commonprefix(directories)
-            # If the rootdir is actually one of the directories, back off one directory
-            if rootdir in directories:
-                rootdir  = os.path.split(rootdir)[0]
-        elif args.basepath == 'full':
-            rootdir = '/'
-        else:
-            # None, just using the final component of the pathname.
-            # Check that each final component is unique, or will cause server error.
-            names = {}
-            errors = False
-            for i in directories:
-                name = os.path.split(i)[1]
-                if name in names:
-                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, name, names[name])
-                    errors = True
-                else:
-                    names[name] = i
-            if errors:
-                raise Exception('All paths must have a unique final directory name if basepath is none')
-            rootdir = None
-        logger.debug("Rootdir is: %s", rootdir)
-    except Exception as e:
-        logger.critical("Unable to initialize: %s", (str(e)))
-        exceptionLogger.log(e)
-        sys.exit(1)
+            if password:
+                srpUsr = srp.User(client, password)
+                crypt = TardisCrypto.TardisCrypto(password, client)
 
-    # Open the connection
+            # If no compression types are specified, load the list
+            types = []
+            for i in args.nocompressfile:
+                try:
+                    logger.debug("Reading types to ignore from: %s", i)
+                    data = map(Util.stripComments, file(i, 'r').readlines())
+                    types = types + [x for x in data if len(x)]
+                except Exception as e:
+                    logger.error("Could not load nocompress types list from: %s", i)
+                    raise e
+            types = types + args.nocompress
+            noCompTypes = set(types)
+            logger.debug("Types to ignore: %s", sorted(noCompTypes))
 
-    # If we're using a local connection, create the domain socket, and start the server running.
-    if args.local:
-        tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
-        port = tempsocket
-        server = None
-        subserver = runServer(args.serverprog, tempsocket)
-        if subserver is None:
-            logger.critical("Unable to create server")
+            # Calculate the base directories
+            directories = list(itertools.chain.from_iterable(map(glob.glob, map(Util.fullPath, args.directories))))
+            if args.basepath == 'common':
+                rootdir = os.path.commonprefix(directories)
+                # If the rootdir is actually one of the directories, back off one directory
+                if rootdir in directories:
+                    rootdir  = os.path.split(rootdir)[0]
+            elif args.basepath == 'full':
+                rootdir = '/'
+            else:
+                # None, just using the final component of the pathname.
+                # Check that each final component is unique, or will cause server error.
+                names = {}
+                errors = False
+                for i in directories:
+                    name = os.path.split(i)[1]
+                    if name in names:
+                        logger.error("%s directory name (%s) is not unique.  Collides with %s", i, name, names[name])
+                        errors = True
+                    else:
+                        names[name] = i
+                if errors:
+                    raise Exception('All paths must have a unique final directory name if basepath is none')
+                rootdir = None
+            logger.debug("Rootdir is: %s", rootdir)
+        except Exception as e:
+            logger.critical("Unable to initialize: %s", (str(e)))
+            exceptionLogger.log(e)
             sys.exit(1)
 
-    # Get the connection object
-    try:
-        conn = getConnection(server, port)
-        startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
-    except Exception as e:
-        logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
-        exceptionLogger.log(e)
-        sys.exit(1)
-    if verbosity or args.stats or args.report:
-        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
+        # Open the connection
 
-    # Set up the encryption, if needed.
-    if args.crypt and crypt:
-        (f, c) = (None, None)
-
-        if newBackup == 'NEW':
-            # if new DB, generate new keys, and save them appropriately.
-            if password:
-                logger.debug("Generating new keys")
-                crypt.genKeys()
-                if args.keys:
-                    (f, c) = crypt.getKeys()
-                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-                else:
-                    sendKeys(password, client)
-            else:
-                if args.keys:
-                    (f, c) = crypt.getKeys()
-                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-        else:
-            # Otherwise, load the keys from the appropriate place
-            if args.keys:
-                (f, c) = Util.loadKeys(args.keys, clientId)
-            else:
-                f = filenameKey
-                c = contentKey
-            if not (f and c):
-                logger.critical("Unable to load keyfile: %s", args.keys)
+        # If we're using a local connection, create the domain socket, and start the server running.
+        if args.local:
+            tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
+            port = tempsocket
+            server = None
+            subserver = runServer(args.serverprog, tempsocket)
+            if subserver is None:
+                logger.critical("Unable to create server")
                 sys.exit(1)
-            crypt.setKeys(f, c)
 
-    # Send a command line
-    clHash = Util.getHash(crypt, args.crypt)
-    clHash.update(commandLine)
-    h = clHash.hexdigest()
-    (encrypt, pad, iv, hmac) = makeEncryptor()
-    if iv is None:
-        iv = ''
-    data = iv + encrypt(pad(commandLine))
-    if hmac:
-        hmac.update(data)
-        data = data + hmac.digest()
+        # Get the connection object
+        try:
+            conn = getConnection(server, port)
+            startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
+        except Exception as e:
+            logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
+            exceptionLogger.log(e)
+            sys.exit(1)
+        if verbosity or args.stats or args.report:
+            logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
-    message = {
-        'message': 'COMMANDLINE',
-        'hash': h,
-        'line': data,
-        'size': len(commandLine),
-        'encrypted': True if iv else False
-    }
-    batchMessage(message)
+        # Set up the encryption, if needed.
+        if args.crypt and crypt:
+            (f, c) = (None, None)
 
-    # Send the full configuration, if so desired.
-    if args.sendconfig:
-        a = vars(args)
-        a['directories'] = directories
-        if a['password']:
-            a['password'] = '-- removed --'
-        jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
+            if newBackup == 'NEW':
+                # if new DB, generate new keys, and save them appropriately.
+                if password:
+                    logger.debug("Generating new keys")
+                    crypt.genKeys()
+                    if args.keys:
+                        (f, c) = crypt.getKeys()
+                        Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+                    else:
+                        sendKeys(password, client)
+                else:
+                    if args.keys:
+                        (f, c) = crypt.getKeys()
+                        Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+            else:
+                # Otherwise, load the keys from the appropriate place
+                if args.keys:
+                    (f, c) = Util.loadKeys(args.keys, clientId)
+                else:
+                    f = filenameKey
+                    c = contentKey
+                if not (f and c):
+                    logger.critical("Unable to load keyfile: %s", args.keys)
+                    sys.exit(1)
+                crypt.setKeys(f, c)
+
+        # Send a command line
+        clHash = Util.getHash(crypt, args.crypt)
+        clHash.update(commandLine)
+        h = clHash.hexdigest()
+        (encrypt, pad, iv, hmac) = makeEncryptor()
+        if iv is None:
+            iv = ''
+        data = iv + encrypt(pad(commandLine))
+        if hmac:
+            hmac.update(data)
+            data = data + hmac.digest()
+
         message = {
-            "message": "CLICONFIG",
-            "args":    jsonArgs
+            'message': 'COMMANDLINE',
+            'hash': h,
+            'line': data,
+            'size': len(commandLine),
+            'encrypted': True if iv else False
         }
         batchMessage(message)
 
-    # Now, do the actual work here.
-    try:
-        # Now, process all the actual directories
-        for directory in directories:
-            # skip if already processed.
-            if directory in processedDirs:
-                continue
-            # Create the fake directory entry(s) for this.
-            if rootdir:
-                createPrefixPath(rootdir, directory)
-                root = rootdir
-            else:
-                (root, name) = os.path.split(directory)
-                f = mkFileInfo(root, name)
-                sendDirEntry(0, 0, [f])
-            # And run the directory
-            recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
+        # Send the full configuration, if so desired.
+        if args.sendconfig:
+            a = vars(args)
+            a['directories'] = directories
+            if a['password']:
+                a['password'] = '-- removed --'
+            jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
+            message = {
+                "message": "CLICONFIG",
+                "args":    jsonArgs
+            }
+            batchMessage(message)
 
-        # If any metadata, clone or batch requests still lying around, send them now
-        if newmeta:
-            batchMessage(makeMetaMessage())
-        flushClones()
-        while flushBatchMsgs():
-            pass
+        # Now, do the actual work here.
+        try:
+            # Now, process all the actual directories
+            for directory in directories:
+                # skip if already processed.
+                if directory in processedDirs:
+                    continue
+                # Create the fake directory entry(s) for this.
+                if rootdir:
+                    createPrefixPath(rootdir, directory)
+                    root = rootdir
+                else:
+                    (root, name) = os.path.split(directory)
+                    f = mkFileInfo(root, name)
+                    sendDirEntry(0, 0, [f])
+                # And run the directory
+                recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
 
-        # Send a purge command, if requested.
-        if args.purge:
-            if args.purgetime:
-                sendPurge(False)
-            else:
-                sendPurge(True)
-        conn.close()
-    except KeyboardInterrupt as e:
-        logger.warning("Backup Interupted")
-        exceptionLogger.log(e)
+            # If any metadata, clone or batch requests still lying around, send them now
+            if newmeta:
+                batchMessage(makeMetaMessage())
+            flushClones()
+            while flushBatchMsgs():
+                pass
+
+            # Send a purge command, if requested.
+            if args.purge:
+                if args.purgetime:
+                    sendPurge(False)
+                else:
+                    sendPurge(True)
+            conn.close()
+        except KeyboardInterrupt as e:
+            logger.warning("Backup Interupted")
+            raise
+        except Exception as e:
+            logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
+            exceptionLogger.log(e)
+
+        if args.progress:
+            print ' ' +  _startOfLine + _ansiClearEol + _startOfLine,
+
+        if args.local:
+            logger.info("Waiting for server to complete")
+            subserver.wait()        # Should I do communicate?
+
+        endtime = datetime.datetime.now()
+
+        if args.sanity:
+            # Sanity checks.  Enable for debugging.
+            if len(cloneContents) != 0:
+                logger.warning("Some cloned directories not processed: %d", len(cloneContents))
+                for key in cloneContents:
+                    (path, files) = cloneContents[key]
+                    print "{}:: {}".format(path, len(files))
+
+            # This next one is usually non-zero, for some reason.  Enable to debug.
+            if len(inodeDB) != 0:
+                logger.warning("%d InodeDB entries not processed", len(inodeDB))
+                for key in inodeDB.keys():
+                    (_, path) = inodeDB[key]
+                    print "{}:: {}".format(key, path)
+
+        # Print stats and files report
+        if args.stats:
+            printStats(starttime, endtime)
+        if args.report:
+            printReport()
+
+        if args.local:
+            os.unlink(tempsocket)
+    except KeyboardInterrupt:
+        pass
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         exceptionLogger.log(e)
-
-    if args.progress:
-        print ' ' +  _startOfLine + _ansiClearEol + _startOfLine,
-
-    if args.local:
-        logger.info("Waiting for server to complete")
-        subserver.wait()        # Should I do communicate?
-
-    endtime = datetime.datetime.now()
-
-    if args.sanity:
-        # Sanity checks.  Enable for debugging.
-        if len(cloneContents) != 0:
-            logger.warning("Some cloned directories not processed: %d", len(cloneContents))
-            for key in cloneContents:
-                (path, files) = cloneContents[key]
-                print "{}:: {}".format(path, len(files))
-
-        # This next one is usually non-zero, for some reason.  Enable to debug.
-        if len(inodeDB) != 0:
-            logger.warning("%d InodeDB entries not processed", len(inodeDB))
-            for key in inodeDB.keys():
-                (_, path) = inodeDB[key]
-                print "{}:: {}".format(key, path)
-
-    # Print stats and files report
-    if args.stats:
-        printStats(starttime, endtime)
-    if args.report:
-        printReport()
-
-    if args.local:
-        os.unlink(tempsocket)
 
 if __name__ == '__main__':
     sys.exit(main())
