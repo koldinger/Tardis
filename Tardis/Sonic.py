@@ -60,6 +60,7 @@ configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'Max
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 
 logger = None
+exceptionLogger = None
 args = None
 
 def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
@@ -90,7 +91,9 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
         schema = args.schema if new else None
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
-    if password:
+    if tardisdb.needsAuthentication:
+        if password is None:
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
         Util.authenticate(tardisdb, args.client, password)
 
     return (tardisdb, cache)
@@ -103,13 +106,11 @@ def createClient(crypt, password):
         return 0
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
 
 def setPassword(crypt, password):
@@ -128,18 +129,15 @@ def setPassword(crypt, password):
         return 0
     except TardisDB.NotAuthenticated:
         logger.error('Client %s already has a password', args.client)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
 
 def changePassword(crypt, oldpw) :
@@ -152,8 +150,7 @@ def changePassword(crypt, oldpw) :
                                      allowNone=False, confirm=True, strength=True)
         except Exception as e:
             logger.critical(str(e))
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
             return -1
 
         crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
@@ -189,8 +186,7 @@ def changePassword(crypt, oldpw) :
         return 0
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
 
 def moveKeys(db, crypt):
@@ -222,8 +218,7 @@ def moveKeys(db, crypt):
         return 1
     except Exception as e:
         logger.error(e)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
 
 _cmdLineHash = {}
@@ -272,8 +267,7 @@ def listBSets(db, crypt, cache):
         return 1
     except Exception as e:
         logger.error(e)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         return 1
 
 # cache of paths we've already calculated.
@@ -646,9 +640,10 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
     return bInfo
 
 def main():
-    global logger
+    global logger, exceptionLogger, args
     parseArgs()
     logger = Util.setupLogging(args.verbose)
+    exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
     # Commands which cannot be executed on remote databases
     allowRemote = args.command not in ['create', 'upgrade']
@@ -663,8 +658,7 @@ def main():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
         except Exception as e:
             logger.critical(str(e))
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
             return -1
             
         if password:
@@ -699,13 +693,11 @@ def main():
                 crypt.setKeys(f, c)
         except TardisDB.AuthenticationException as e:
             logger.error("Authentication failed.  Bad password")
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
             sys.exit(1)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
             sys.exit(1)
 
         if args.command == 'keys':
@@ -739,8 +731,7 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     finally:
         if db:
             db.close()
