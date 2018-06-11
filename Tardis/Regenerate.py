@@ -48,6 +48,7 @@ import Util
 import Config
 
 logger  = None
+exceptionLogger = None
 crypt = None
 OW_NEVER = 0
 OW_ALWAYS = 1
@@ -195,8 +196,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                                 recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                         except Exception as e:
                             logger.error("Could not recover %s in %s", name, path)
-                            if args.exceptions:
-                                logger.exception(e)
+                            exceptionLogger.log(e)
                     else:
                         retCode += 1
             elif not skip:
@@ -280,8 +280,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
         retCode += 1
 
     return retCode
@@ -397,9 +396,10 @@ def parseArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global logger, crypt, tardis, args, owMode
+    global logger, crypt, tardis, args, owMode, exceptionLogger
     args = parseArgs()
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
+    exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
@@ -409,8 +409,7 @@ def main():
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        #if args.exceptions:
-            #logger.exception(e)
+        exceptionLogger.log(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
@@ -509,13 +508,11 @@ def main():
 
                 except TardisDB.AuthenticationException as e:
                     logger.error("Authentication failed.  Bad password")
-                    #if args.exceptions:
-                        #logger.exception(e)
+                    exceptionLogger.log(e)
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    if args.exceptions:
-                        logger.exception(e)
+                    exceptionLogger.log(e)
                     retcode += 1
 
         else: # Not checksum, but acutal pathnames
@@ -553,23 +550,19 @@ def main():
                         retcode += 1
                 except TardisDB.AuthenticationException as e:
                     logger.error("Authentication failed.  Bad password")
-                    #if args.exceptions:
-                        #logger.exception(e)
+                    exceptionLogger.log(e)
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    if args.exceptions:
-                        logger.exception(e)
+                    exceptionLogger.log(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        if args.exceptions:
-            logger.exception(e)
+        exceptionLogger.log(e)
 
     if errors:
         logger.warning("%d files could not be recovered.")
