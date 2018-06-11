@@ -171,7 +171,7 @@ class MsgPackMessages(BinMessages):
         if raw:
             super(MsgPackMessages, self).sendMessage(message, compress=compress, raw=True)
         else:
-            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=True), compress=compress)
+            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=False), compress=compress)
 
     def recvMessage(self, raw=False):
         if raw:
