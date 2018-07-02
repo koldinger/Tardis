@@ -255,7 +255,9 @@ def filelist(dir, excludes):
     for p in excludes:
         remove = [x for x in fnmatch.filter(files, p)]
         if len(remove):
+            logger.debug("Excluding files from directory %s: %s", dir, remove)
             files = set(files) - set(remove)
+    logger.debug("Returning %d files", len(files))
     for f in files:
         yield f
 
@@ -272,8 +274,8 @@ def processChecksums(inodes):
     for inode in inodes:
         try:
             (_, pathname) = inodeDB[inode]
-            if args.progress:
-                printProgress("File [C]:", pathname)
+
+            printProgress("File [C]:", pathname)
 
             m = Util.getHash(crypt, args.crypt)
             s = os.lstat(pathname)
@@ -428,8 +430,7 @@ def processDelta(inode, signatures):
 
     try:
         (_, pathname) = inodeDB[inode]
-        if args.progress:
-            printProgress("File [D]:", pathname)
+        printProgress("File [D]:", pathname)
         logger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
         if signatures and inode in signatures:
@@ -527,11 +528,14 @@ def sendContent(inode, reportType):
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
-            logger.debug("Sending content for %s -- %s", inode, pathname)
-            if args.progress:
-                printProgress("File [N]:", pathname)
             mode = fileInfo["mode"]
             filesize = fileInfo["size"]
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Sending content for %s (%s) -- %s", inode, Util.fmtSize(filesize), Util.shortPath(pathname, 60))
+
+            printProgress("File [N]:", pathname)
+
             if stat.S_ISDIR(mode):
                 return
             (encrypt, pad, iv, hmac) = makeEncryptor()
@@ -1025,13 +1029,14 @@ _startOfLine = '\r'
 
 def initProgressBar():
     global _progressBarFormat, _windowWidth
-    try:
-        _handle_resize(None, None)
-        signal.signal(signal.SIGWINCH, _handle_resize)
-        signal.siginterrupt(signal.SIGWINCH, False)
-    except Exception as e:
-        print "oops -- " + str(e)
-        pass
+    if args.progress:
+        try:
+            _handle_resize(None, None)
+            signal.signal(signal.SIGWINCH, _handle_resize)
+            signal.siginterrupt(signal.SIGWINCH, False)
+        except Exception as e:
+            print "oops -- " + str(e)
+            pass
 
 def _handle_resize(sig, frame):
     global _progressBarFormat, _windowWidth
@@ -1048,14 +1053,15 @@ _lastProgressTime = 0
 
 def printProgress(header=None, name=None):
     global _lastInfo, _lastProgressTime
-    now = time.time()
-    if ((now - _lastProgressTime) > 0.25):
-        _lastProgressTime = now
-        bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
+    if args.progress:
+        now = time.time()
+        if ((now - _lastProgressTime) > 0.25):
+            _lastProgressTime = now
+            bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
 
-        width = _windowWidth - len(bar) - 4
-        print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
-        sys.stdout.flush()
+            width = _windowWidth - len(bar) - 4
+            print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
+            sys.stdout.flush()
 
     if header or name:
         #update the last info
