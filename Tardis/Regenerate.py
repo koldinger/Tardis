@@ -115,6 +115,8 @@ def doAuthenticate(outname, checksum, digest):
         logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
                         outname, checksum, digest, action)
         return target
+    else:
+        return outname
 
 def notSame(a, b, string):
     if a == b:
@@ -247,6 +249,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             if outname and args.setperm:
                 try:
+                    logger.debug("Setting permissions on %s to %o", outname, info['mode'])
                     os.chmod(outname, info['mode'])
                 except Exception as e:
                     logger.warning("Unable to set permissions for %s", outname)
