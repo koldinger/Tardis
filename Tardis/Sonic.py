@@ -91,7 +91,7 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
         schema = args.schema if new else None
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
-    if tardisdb.needsAuthentication:
+    if tardisdb.needsAuthentication():
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
         Util.authenticate(tardisdb, args.client, password)
