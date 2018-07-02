@@ -63,7 +63,7 @@ class Connection(object):
 
         try:
             # Receive a string.  TARDIS proto=1.0
-            message = self.sock.recv(32).strip()
+            message = str(self.sock.recv(32).strip(), 'utf8')
             if message == sslHeaderString:
                 # Overwrite self.sock
                 self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
@@ -74,7 +74,7 @@ class Connection(object):
             elif message != headerString:
                 raise Exception("Unknown protocol: {}".format(message))
             resp = { 'encoding': encoding, 'compress': compress }
-            self.put(json.dumps(resp))
+            self.put(bytes(json.dumps(resp), 'utf8'))
 
             message = self.sock.recv(256).strip()
             fields = json.loads(message)
@@ -159,9 +159,9 @@ if __name__ == "__main__":
     Test Code
     """
     conn = JsonConnection("localhost", 9999, "HiMom")
-    print conn.getSessionId()
+    print(conn.getSessionId())
     conn.send({ 'x' : 1 })
-    print conn.receive()
+    print(conn.receive())
     conn.send({ 'y' : 2 })
-    print conn.receive()
+    print(conn.receive())
     conn.close()

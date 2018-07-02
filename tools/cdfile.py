@@ -16,4 +16,4 @@ args = parser.parse_args()
 c = CacheDir.CacheDir(args.base)
 
 for i in args.files:
-    print c.path(i)
+    print(c.path(i))

@@ -43,7 +43,8 @@ import base64
 import time
 import stat    # for file properties
 
-import fuse
+#import fuse
+from fuse import FUSE, FuseOSError, Operations
 
 import Tardis
 import Tardis.CacheDir as CacheDir
@@ -53,6 +54,7 @@ import Tardis.Cache as Cache
 import Tardis.Defaults as Defaults
 import Tardis.TardisDB as TardisDB
 
+print(fuse.fuse_python_api)
 fuse.fuse_python_api = (0, 2)
 
 _BackupSetInfo = 0
@@ -69,11 +71,14 @@ logger = logging.getLogger("Tracer: ")
 logLevels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
 def tracer(func):
+    @functools.wraps(func)
     def trace(*args, **kwargs):
         if _infoEnabled:
             logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
         try:
-            return func(*args, **kwargs)
+            x = func(*args, **kwargs)
+            logger.info("COMPLETE %s:(%s %s) => %s", func.__name__, str(args)[1:-1], str(kwargs)[1:-1], str(x)[:32])
+            return x
         except Exception as e:
             logger.error("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
             logger.error("%s raised exception %s: %s", func.__name__, e.__class__.__name__, str(e))
@@ -85,6 +90,7 @@ def getDepth(path):
     """
     Return the depth of a given path, zero-based from root ('/')
     """
+    logger.debug("getDepth: %s", path)
     if path ==  '/':
         return 0
     else:
@@ -100,7 +106,7 @@ def getParts(path):
     else:
         return path.strip("/").split('/', 1)
 
-class TardisFS(fuse.Fuse):
+class TardisFS(Operations):
     """
     FUSE filesystem to read data from a Tardis Backup Database
     """
@@ -142,8 +148,7 @@ class TardisFS(fuse.Fuse):
 
             self.crypt          = None
 
-            logging.basicConfig(level=logging.WARNING)
-            self.log = logging.getLogger("TardisFS")
+            # logging.basicConfig(level=logging.WARNING)
 
             self.parser.add_option("--database", '-D',      help="Path to the Tardis database directory")
             self.parser.add_option("--client", '-C',        help="Client to load database for")
@@ -182,6 +187,8 @@ class TardisFS(fuse.Fuse):
 
             logger.setLevel(logLevels[verbose])
 
+            self.log = logging.getLogger("TardisFS")
+
             self.mountpoint = res.mountpoint
 
             self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
@@ -216,10 +223,10 @@ class TardisFS(fuse.Fuse):
             self.multithreaded = 0
 
         except TardisDB.AuthenticationException as e:
-            self.log.critical("Authentication failed.  Bad Password")
+            logger.critical("Authentication failed.  Bad Password")
             sys.exit(2)
         except Exception as e:
-            self.log.exception(e)
+            logger.exception(e)
             sys.exit(2)
 
     def __del__(self):
@@ -230,10 +237,7 @@ class TardisFS(fuse.Fuse):
         return self.name
 
     def fsEncodeName(self, name):
-        if isinstance(name, bytes):
-            return name
-        else:
-            return name.encode(self.fsencoding)
+        return name
 
     def getBackupSetInfo(self, b):
         key = (_BackupSetInfo, b)
@@ -347,7 +351,7 @@ class TardisFS(fuse.Fuse):
             target = self.lastBackupSet(False)
             timestamp = float(target['starttime'])
             st = fuse.Stat()
-            st.st_mode = stat.S_IFDIR | 0555
+            st.st_mode = stat.S_IFDIR | 0o555
             st.st_ino = 0
             st.st_dev = 0
             st.st_nlink = 32
@@ -365,7 +369,7 @@ class TardisFS(fuse.Fuse):
             if lead[0] == self.current:
                 target = self.lastBackupSet(True)
                 timestamp = float(target['endtime'])
-                st.st_mode = stat.S_IFLNK | 0755
+                st.st_mode = stat.S_IFLNK | 0o755
                 st.st_ino = 1
                 st.st_dev = 0
                 st.st_nlink = 1
@@ -382,7 +386,7 @@ class TardisFS(fuse.Fuse):
                 if f:
                     st = fuse.Stat()
                     timestamp = float(f['starttime'])
-                    st.st_mode = stat.S_IFDIR | 0555
+                    st.st_mode = stat.S_IFDIR | 0o555
                     st.st_ino = int(float(f['starttime']))
                     st.st_dev = 0
                     st.st_nlink = 2
@@ -530,12 +534,14 @@ class TardisFS(fuse.Fuse):
                 subpath = self.crypt.encryptPath(subpath)
             f = self.regenerator.recoverFile(subpath, b['backupset'], nameEncrypted=True, authenticate=self.authenticate)
             if f:
+                logger.debug("Opened file %s", path)
                 try:
                     f.flush()
                     f.seek(0)
-                except (AttributeError, IOError):
+                except (AttributeError, IOError) as e:
+                    logger.exception(e)
                     bytesCopied = 0
-                    self.log.debug("Copying file to tempfile")
+                    logger.debug("Copying file to tempfile")
                     temp = tempfile.TemporaryFile()
                     chunk = f.read(65536)
                     while chunk:
@@ -543,12 +549,13 @@ class TardisFS(fuse.Fuse):
                         temp.write(chunk)
                         chunk = f.read(65536)
                     f.close()
-                    self.log.debug("Copied %d bytes to tempfile", bytesCopied)
+                    logger.debug("Copied %d bytes to tempfile", bytesCopied)
                     temp.flush()
                     temp.seek(0)
                     f = temp
 
                 self.files[path] = {"file": f, "opens": 1}
+                logger.debug("Set files[%s] => %s", path, str(self.files[path]))
                 return 0
         # Otherwise.....
         return -errno.ENOENT
@@ -557,11 +564,16 @@ class TardisFS(fuse.Fuse):
     @tracer
     def read ( self, path, length, offset ):
         #self.log.info('CALL read {} {} {}'.format(path, length, offset))
+        path = self.fsEncodeName(path)
         f = self.files[path]["file"]
         if f:
             f.seek(offset)
-            return f.read(length)
-        return -errno.EINVAL
+            data = f.read(length)
+            logger.debug("Actually read %d bytes of %s", len(data), type(data))
+            return data
+        else:
+            logger.warning("No file for path %s", path)
+            return -errno.EINVAL
 
     @tracer
     def readlink ( self, path ):
@@ -574,7 +586,7 @@ class TardisFS(fuse.Fuse):
             return link
         if path == '/' + self.current:
             target = self.lastBackupSet(True)
-            self.log.debug("Path: %s Target: %s %s", path, target['name'], target['backupset'])
+            logger.debug("Path: %s Target: %s %s", path, target['name'], target['backupset'])
             link = str(target['name'])
             self.cache.insert(key, link)
             return link
@@ -681,7 +693,7 @@ class TardisFS(fuse.Fuse):
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                return retFunc(self.attrMap.keys())
+                return retFunc(list(self.attrMap.keys()))
 
         if getDepth(path) > 1:
             parts = getParts(path)
@@ -698,8 +710,8 @@ class TardisFS(fuse.Fuse):
                         f = self.regenerator.recoverChecksum(info['xattrs'], authenticate=self.authenticate)
                         xattrs = json.loads(f.read())
                         self.log.debug("Xattrs: %s", str(xattrs))
-                        attrs += map(str, xattrs.keys())
-                        self.log.debug("Adding xattrs: %s", xattrs.keys())
+                        attrs += list(map(str, list(xattrs.keys())))
+                        self.log.debug("Adding xattrs: %s", list(xattrs.keys()))
                         self.log.info("Xattrs: %s", str(attrs))
                         self.log.info("Returning: %s", str(retFunc(attrs)))
 
@@ -722,7 +734,7 @@ class TardisFS(fuse.Fuse):
             if attr in self.attrMap:
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
-                if self.attrMap[attr] in b.keys():
+                if self.attrMap[attr] in list(b.keys()):
                     return retFunc(b[self.attrMap[attr]])
 
         if depth > 1:

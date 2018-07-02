@@ -33,9 +33,10 @@ import os.path
 import socket
 import logging
 import shutil
-import ConfigParser
+import configparser
 
-import Defaults
+from . import Defaults
+from functools import reduce
 
 logger = logging.getLogger("CacheDir")
 
@@ -66,7 +67,7 @@ class CacheDir(object):
         section = "CacheDir"
 
         configFile = os.path.join(self.root, ".cachedir")
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.add_section(section)
         config.read(configFile)
 
@@ -78,14 +79,14 @@ class CacheDir(object):
             self.parts = 2
             self.partsize = 2
 
-        config.set(section, "parts", self.parts)
-        config.set(section, "partssize", self.partsize)
+        config.set(section, "parts", str(self.parts))
+        config.set(section, "partssize", str(self.partsize))
         if create:
             try:
-                with file(configFile, "w") as f:
+                with open(configFile, "w") as f:
                     config.write(f)
             except Exception as e:
-                logger.warning("Could not write cnofigpration file: %s", configFile)
+                logger.warning("Could not write configpration file: %s: %s", configFile, str(e))
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
@@ -171,15 +172,15 @@ if __name__ == "__main__":
     test = "abcdefghijklmnop"
     path = os.path.join("cache", socket.gethostname())
     c = CacheDir(path, 4, 2, True)
-    print c.comps(test)
-    print c.dirPath(test)
-    print c.path(test)
-    print c.exists(test)
+    print(c.comps(test))
+    print(c.dirPath(test))
+    print(c.path(test))
+    print(c.exists(test))
 
     try:
         c.open(test, "r")
     except IOError as ex:
-        print "Caught IOError"
+        print("Caught IOError")
 
     with c.open(test, "w") as fd:
         fd.write("I'm henry the 8'th I am\n")
@@ -187,5 +188,5 @@ if __name__ == "__main__":
 
     with c.open(test, "r") as fd:
         for line in fd:
-            print line,
-    print c.exists(test)
+            print(line, end=' ')
+    print(c.exists(test))

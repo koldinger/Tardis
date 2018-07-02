@@ -91,7 +91,7 @@ _schemaVersion = 16
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
-    return dict(y.items() + x)
+    return dict(list(y.items()) + x)
 
 def _splitpath(path):
     """ Split a path into chunks, recursively """
@@ -197,12 +197,12 @@ class TardisDB(object):
         salt, vkey = self.getSrpValues()
         if salt is None or vkey is None:
             raise AuthenticationFailed("Password doesn't match")
-        self.logger.debug("Beginning authentication: %s %s %s %s", hexlify(uname), hexlify(salt), hexlify(vkey), hexlify(srpValueA))
+        #self.logger.debug("Beginning authentication: %s %s %s %s", hexlify(uname), hexlify(salt), hexlify(vkey), hexlify(srpValueA))
         self.srpSrv = srp.Verifier(uname, salt, vkey, srpValueA)
         s, B = self.srpSrv.get_challenge()
         if s is None or B is None:
             raise AuthenticationFailed("Password doesn't match")
-        self.logger.debug("Authentication Challenge: %s %s", hexlify(s), hexlify(B))
+        #self.logger.debug("Authentication Challenge: %s %s", hexlify(s), hexlify(B))
         return s, B
 
     def authenticate2(self, srpValueM):
@@ -255,7 +255,7 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
 
         if self.journalName:
-            self.journal = file(self.journalName, 'a')
+            self.journal = open(self.journalName, 'a')
 
         # Make sure the permissions are set the way we want, if that's specified.
         if self.user != -1 or self.group != -1:
@@ -600,7 +600,7 @@ class TardisDB(object):
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
-        fields = {"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev}.items()
+        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev}.items())
         temp = _addFields(fields, fileInfo)
         self.setNameID([temp])
         self._execute("INSERT INTO Files "
@@ -886,7 +886,7 @@ class TardisDB(object):
         prevSet = row[0] if row else 0
 
         row = self._executeWithResult("SELECT MIN(BackupSet) FROM Backups WHERE BackupSet > :bset", {'bset': bset})
-        nextSet = row[0] if row[0] else sys.maxint
+        nextSet = row[0] if row[0] else sys.maxsize
 
         self.logger.debug("PrevSet: %s, NextSet: %s", prevSet, nextSet)
         # Count of files that first appeared in this version.  May be delta's
@@ -1001,7 +1001,7 @@ class TardisDB(object):
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)
-            #self.logger.exception(e)
+            self.logger.exception(e)
             return False
 
     @authenticate
@@ -1130,6 +1130,7 @@ class TardisDB(object):
         if interval and (bset % int(interval)) == 0:
             self.logger.debug("Vaccuuming database")
             # And clean up the database
+            self.conn.commit()  # Just in case there's a transaction outstanding, for no apparent reason
             self.conn.execute("VACUUM")
             vacuumed = True
         self.conn.execute("UPDATE Backups SET Vacuumed = :vacuumed WHERE BackupSet = :backup", {"backup": self.currBackupSet, "vacuumed": vacuumed})
@@ -1184,8 +1185,8 @@ if __name__ == "__main__":
     db = TardisDB(sys.argv[1])
     db.newBackupSet(sys.argv[2], str(uuid.uuid1()))
     rec =  db.getFileInfoByName("File1", 1)
-    print rec
-    print db.getFileInfoByInode(2)
+    print(rec)
+    print(db.getFileInfoByInode(2))
     info = {
         "name"  : "Dir",
         "inode" : 1,

@@ -42,13 +42,12 @@ import xattr
 import posix1e
 
 import Tardis
-import TardisDB
-import Regenerator
-import Util
-import Config
+from Tardis import TardisDB
+from Tardis import Regenerator
+from Tardis import Util
+from Tardis import Config
 
 logger  = None
-exceptionLogger = None
 crypt = None
 OW_NEVER = 0
 OW_ALWAYS = 1
@@ -62,10 +61,6 @@ errors = 0
 
 tardis = None
 args = None
-
-fsencoding = sys.getfilesystemencoding()
-reload(sys)
-sys.setdefaultencoding(fsencoding)
 
 def checkOverwrite(name, info):
     if os.path.exists(name):
@@ -185,9 +180,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
                     # Decrypt filename, and make it UTF-8.
                     if args.crypt and crypt:
-                        name = unicode(crypt.decryptFilename(name))
+                        name = crypt.decryptFilename(name)
                     else:
-                        name = unicode(name, 'utf8')
+                        name = name
 
                     # Recurse into the child, if it exists.
                     if childInfo:
@@ -196,7 +191,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                                 recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                         except Exception as e:
                             logger.error("Could not recover %s in %s", name, path)
-                            exceptionLogger.log(e)
+                            if args.exceptions:
+                                logger.exception(e)
                     else:
                         retCode += 1
             elif not skip:
@@ -224,9 +220,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         if outname:
                             # Generate an output name
                             logger.debug("Writing output to %s", outname)
-                            output = file(outname,  "wb")
+                            output = open(outname,  "wb")
                         else:
-                            output = sys.stdout
+                            output = sys.stdout.buffer
                         try:
                             x = i.read(16 * 1024)
                             while x:
@@ -239,7 +235,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                             raise
                         finally:
                             i.close()
-                            if output is not sys.stdout:
+                            if output is not sys.stdout.buffer:
                                 output.close()
 
                         if authenticate:
@@ -280,7 +276,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         retCode += 1
 
     return retCode
@@ -373,7 +370,7 @@ def parseArgs():
     parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
     parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
 
-    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
+    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
     parser.add_argument('--set-times', dest='settime', default=True, action=Util.StoreBoolean,      help='Set file times to match original file. Default: %(default)s')
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file. Default: %(default)s')
@@ -396,10 +393,9 @@ def parseArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global logger, crypt, tardis, args, owMode, exceptionLogger
+    global logger, crypt, tardis, args, owMode
     args = parseArgs()
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
-    exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
@@ -409,7 +405,8 @@ def main():
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        #if args.exceptions:
+            #logger.exception(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
@@ -443,7 +440,7 @@ def main():
                 sys.exit(1)
 
         outputdir = None
-        output    = sys.stdout
+        output    = sys.stdout.buffer
         outname   = None
         linkDB    = None
 
@@ -483,11 +480,11 @@ def main():
                     # Generate an output name
                         if outname:
                             # Note, this should ONLY be true if only one file
-                            output = file(outname,  "wb")
+                            output = open(outname,  "wb")
                         elif outputdir:
                             outname = os.path.join(outputdir, ckname)
                             logger.debug("Writing output to %s", outname)
-                            output = file(outname,  "wb")
+                            output = open(outname,  "wb")
                         try:
                             x = f.read(64 * 1024)
                             while x:
@@ -500,7 +497,7 @@ def main():
                             raise
                         finally:
                             f.close()
-                            if output is not sys.stdout:
+                            if output is not sys.stdout.buffer:
                                 output.close()
                         if args.auth:
                             logger.debug("Checking authentication")
@@ -508,17 +505,19 @@ def main():
 
                 except TardisDB.AuthenticationException as e:
                     logger.error("Authentication failed.  Bad password")
-                    exceptionLogger.log(e)
+                    #if args.exceptions:
+                        #logger.exception(e)
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    exceptionLogger.log(e)
+                    if args.exceptions:
+                        logger.exception(e)
                     retcode += 1
 
         else: # Not checksum, but acutal pathnames
             for i in args.files:
                 try:
-                    i = unicode(os.path.abspath(i).decode('utf-8'))
+                    i = os.path.abspath(i)
                     logger.info("Processing %s", Util.shortPath(i))
                     path = None
                     f = None
@@ -546,23 +545,27 @@ def main():
                     if info:
                         retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
                     else:
-                        logger.error("Could not recover info for %s", i)
+                        logger.error("Could not recover info for %s (File not found)", i)
                         retcode += 1
                 except TardisDB.AuthenticationException as e:
                     logger.error("Authentication failed.  Bad password")
-                    exceptionLogger.log(e)
+                    #if args.exceptions:
+                        #logger.exception(e)
                     sys.exit(1)
                 except Exception as e:
                     logger.error("Could not recover: %s: %s", i, e)
-                    exceptionLogger.log(e)
+                    if args.exceptions:
+                        logger.exception(e)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
 
     if errors:
         logger.warning("%d files could not be recovered.")

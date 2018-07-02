@@ -13,7 +13,6 @@ import progressbar
 logger = None
 
 def encryptFilenames(db, crypto):
-    systemencoding = sys.getfilesystemencoding()
     conn = db.conn
     c = conn.cursor()
     c2 = conn.cursor()
@@ -29,13 +28,14 @@ def encryptFilenames(db, crypto):
                 if row is None:
                     break
                 (name, nameid) = row
-                newname = crypto.encryptFilename(name.decode(systemencoding, 'replace'))
+                newname = crypto.encryptFilename(name)
                 c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
                 names = names + 1
                 bar.update(names)
             conn.commit()
         except Exception as e:
             logger.error("Caught exception encrypting filename %s: %s", name, str(e))
+            logger.exception(e)
             conn.rollback()
     logger.info("Encrypted %d names", names)
 

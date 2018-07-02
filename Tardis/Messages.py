@@ -54,12 +54,12 @@ class Messages(object):
         self.__stats = stats
 
     def receiveBytes(self, n):
-        msg = ''
+        msg = bytearray()
         while len(msg) < n:
             chunk = self.__socket.recv(n-len(msg))
-            if chunk == '':
+            if chunk == b'':
                 raise RuntimeError("socket connection broken")
-            msg = msg + chunk
+            msg.extend(chunk)
         if self.__stats != None:
             self.__stats['bytesRecvd'] += len(msg)
         return msg
@@ -171,13 +171,14 @@ class MsgPackMessages(BinMessages):
         if raw:
             super(MsgPackMessages, self).sendMessage(message, compress=compress, raw=True)
         else:
-            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=False), compress=compress)
+            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=True), compress=compress)
 
     def recvMessage(self, raw=False):
         if raw:
             message = super(MsgPackMessages, self).recvMessage()
         else:
-            message = msgpack.unpackb(super(MsgPackMessages, self).recvMessage())
+            mess = super(MsgPackMessages, self).recvMessage()
+            message = msgpack.unpackb(mess, encoding='utf-8')
         return message
 
     def encode(self, data):

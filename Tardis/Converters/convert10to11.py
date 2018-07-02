@@ -33,7 +33,7 @@ import sys
 import os.path
 import logging
 
-import convertutils
+from . import convertutils
 
 version = 10
 

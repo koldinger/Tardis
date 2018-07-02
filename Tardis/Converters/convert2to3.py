@@ -33,7 +33,7 @@ import sys
 import os.path
 import logging
 
-import convertutils
+from . import convertutils
 
 version = 2
 
@@ -48,7 +48,7 @@ def upgrade(conn, logger):
     conn.execute('INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "3")')
 
 
-    print "Setting chain lengths"
+    print("Setting chain lengths")
     conn.execute("UPDATE Checksums SET ChainLength = 0 WHERE Basis IS NULL")
 
     rnd = 0
@@ -56,7 +56,7 @@ def upgrade(conn, logger):
     while True:
         c = conn.execute("SELECT COUNT(*) FROM Checksums WHERE ChainLength IS NULL")
         r = c.fetchone()
-        print "Round %d: Remaining empty chainlengths: %d" % (rnd, r[0])
+        print("Round %d: Remaining empty chainlengths: %d" % (rnd, r[0]))
         rnd += 1
         if r[0] == 0:
             break
@@ -66,13 +66,13 @@ def upgrade(conn, logger):
                      "Basis IN (SELECT Checksum FROM Checksums WHERE Chainlength IS NOT NULL)")
 
 
-    print "Setting data sizes"
+    print("Setting data sizes")
     cache = CacheDir.CacheDir(os.path.dirname(db))
 
     c = conn.execute("SELECT COUNT(*) FROM Checksums WHERE DiskSize IS NULL")
     r = c.fetchone()
     numrows = r[0]
-    print numrows
+    print(numrows)
 
     # Get all non-sized files.  Order by checksum so that we can get locality in the directories we read
     c = conn.execute("SELECT Checksum FROM Checksums WHERE DiskSize IS NULL ORDER BY Checksum")

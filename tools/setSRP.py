@@ -20,7 +20,7 @@ def getToken(db):
 def checkToken(db, token):
     dbToken = getToken(db)
     if dbToken is None:
-        print "No token in DB.  Password is not set."
+        print("No token in DB.  Password is not set.")
         return False
     s = hashlib.sha1()
     s.update(token)

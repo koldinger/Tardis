@@ -30,18 +30,18 @@
 
 import os
 
-__version__ = "0.34.1"
+__version__ = '1.1.0'
 __buildversion__ = ''
 __versionstring__ = __version__
 
 try:
     parentDir     = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
-    __buildversion__ = file(versionFile, 'r').readline().strip()
+    __buildversion__ = str(file(versionFile, 'r').readline()).strip()
 except:
     try:
         import subprocess
-        __buildversion__ = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip()
+        __buildversion__ = str(subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip(), 'utf-8')
     except:
         pass
 

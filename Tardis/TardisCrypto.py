@@ -42,6 +42,7 @@ import Cryptodome.Random
 import srp
 
 import Tardis.Defaults as Defaults
+from functools import reduce
 
 class TardisCrypto(object):
     _contentKey  = None
@@ -53,7 +54,7 @@ class TardisCrypto(object):
     _fsEncoding  = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
-    _altchars    = '#@'
+    _altchars    = b'#@'
 
     ivLength    = _blocksize
 
@@ -62,8 +63,8 @@ class TardisCrypto(object):
         if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
 
-        self.client = client
-        self.salt = hashlib.sha256(client).digest()
+        self.client = bytes(client, 'utf8')
+        self.salt = hashlib.sha256(self.client).digest()
         keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
         self._tokenKey   = keys[self._keysize:]                                       # And the other one
@@ -87,18 +88,18 @@ class TardisCrypto(object):
         if length is None:
             length = len(data)
         pad = self._blocksize - (length % self._blocksize)
-        data += chr(pad) * pad
+        data += bytes(chr(pad) * pad, 'utf8')
         return data
 
     def unpad(self, data):
         #if validate:
             #self.checkpad(data)
-        l = ord(data[-1])
+        l = data[-1]
         x = len(data) - l
         return data[:x]
 
     def checkpad(self, data):
-        l = ord(data[-1])
+        l = data[-1]
         # Make sure last L bytes are all set to L
         pad = chr(l) * l
         if data[-l:] != pad:
@@ -109,7 +110,7 @@ class TardisCrypto(object):
         if remainder == 0:
             return x
         else:
-            return x + (self._blocksize - remainder) * '\0'
+            return x + (self._blocksize - remainder) * b'\0'
 
     def encryptPath(self, path):
         rooted = False
@@ -136,11 +137,11 @@ class TardisCrypto(object):
         return encpath
 
     def encryptFilename(self, name):
-        n = self.padzero(bytes(name.encode(self._fsEncoding)))
-        return base64.b64encode(self._filenameEnc.encrypt(n), self._altchars)
+        n = self.padzero(bytes(name, 'utf8'))
+        return str(base64.b64encode(self._filenameEnc.encrypt(n), self._altchars), 'utf8')
 
     def decryptFilename(self, name):
-        return unicode(self._filenameEnc.decrypt(base64.b64decode(str(name), self._altchars)).decode(self._fsEncoding).rstrip('\0'))
+        return str(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)), 'utf8').rstrip('\0')
 
     """
     def createToken(self, client=None):
@@ -171,8 +172,8 @@ class TardisCrypto(object):
     def getKeys(self):
         if self._filenameKey and self._contentKey:
             cipher = AES.new(self._keyKey, AES.MODE_ECB)
-            _contentKey  = base64.b64encode(cipher.encrypt(self._contentKey))
-            _filenameKey = base64.b64encode(cipher.encrypt(self._filenameKey))
+            _contentKey  = str(base64.b64encode(cipher.encrypt(self._contentKey)), 'utf8')
+            _filenameKey = str(base64.b64encode(cipher.encrypt(self._filenameKey)), 'utf8')
             return (_filenameKey, _contentKey)
         else:
             return (None, None)

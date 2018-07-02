@@ -31,7 +31,7 @@
 import os
 import logging
 import argparse
-import ConfigParser
+import configparser
 import sys
 import subprocess
 import hashlib
@@ -47,14 +47,14 @@ import pwd
 import grp
 import time
 import struct
-import StringIO
+import io
 
-import urlparse
-import urllib
+import urllib.parse
+import urllib.request, urllib.parse, urllib.error
 
 import zlib
 import bz2
-import liblzma
+import lzma
 import srp
 import passwordmeter
 import colorlog
@@ -162,7 +162,7 @@ def shortPath(path, width=80):
             suffix = ''
         length = len(main) - len(suffix) - 5
         length = min(length, width - 4)
-        retPath   = main[0:length/2] + "..." + main[-(length/2):]
+        retPath   = main[0:length // 2] + "..." + main[-(length // 2):]
         if suffix:
             retPath = '.'.join([retPath, suffix])
 
@@ -236,7 +236,7 @@ def reducePath(tardis, bset, path, reduceBy, crypt=None):
     element which occurs in the root directory.
     """
     #logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
-    if reduceBy == sys.maxint:
+    if reduceBy == sys.maxsize:
         reduceBy = findDirInRoot(tardis, bset, path, crypt)
     if reduceBy:
         #logger.debug("Reducing path by %d entries: %s", reduceBy, path)
@@ -319,7 +319,7 @@ def filemode(mode):
 
 def getTerminalSize():
     rows, columns = os.popen('stty size', 'r').read().split()
-    return int(rows), int(columns)
+    return (int(rows), int(columns))
 
 """
 Retrieve a password.
@@ -352,7 +352,8 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
                 raise Exception("Passwords don't match")
 
     if pwurl:
-        pwf = urllib.urlopen(pwurl)
+        loc = urllib.parse.urlunparse(urllib.parse.urlparse(pwurl, scheme='file'))
+        pwf = urllib.request.urlopen(loc)
         password = pwf.readline().rstrip()
         pwf.close()
 
@@ -388,13 +389,13 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
     logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
 
-    loc = urlparse.urlparse(dataLoc)
+    loc = urllib.parse.urlparse(dataLoc)
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
         logger.debug("Creating remote connection to %s", dataLoc)
         # If no port specified, insert the port
         if loc.port is None:
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
-            dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+            dbLoc = urllib.parse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         else:
             dbLoc = dataLoc
         # get the RemoteURL object
@@ -502,8 +503,8 @@ def removeOrphans(db, cache):
 # Data transmission functions
 
 def _chunks(stream, chunksize):
-    last = ''
-    for chunk in iter(functools.partial(stream.read, chunksize), ''):
+    last = b''
+    for chunk in iter(functools.partial(stream.read, chunksize), b''):
         if last:
             yield (last, False)
         last = chunk
@@ -568,7 +569,7 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         #logger.exception(e)
         raise e
     finally:
-        sender.sendMessage('', raw=True)
+        sender.sendMessage(b'', raw=True)
         compressed = compress if stream.isCompressed() else "None"
         size = stream.size()
 
@@ -604,11 +605,11 @@ def receiveData(receiver, output):
         # logger.debug("Chunk: %s", str(chunk))
         if len(chunk) == 0:
             break
-        bytes = receiver.decode(chunk)
+        data = receiver.decode(chunk)
         if output:
-            output.write(bytes)
+            output.write(data)
             output.flush()
-        bytesReceived += len(bytes)
+        bytesReceived += len(data)
 
     chunk = receiver.recvMessage()
     status = chunk['status']
@@ -665,7 +666,7 @@ def _updateLen(value, length):
     return res
 
 def loadKeys(name, client):
-    config = ConfigParser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
+    config = configparser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
     client = str(client)
     config.add_section(client)
     config.read(fullPath(name))
@@ -673,11 +674,11 @@ def loadKeys(name, client):
         contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
         nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
         return (nameKey, contentKey)
-    except ConfigParser.NoOptionError as e:
+    except configparser.NoOptionError as e:
         raise Exception("No keys available for client " + client)
 
 def saveKeys(name, client, nameKey, contentKey):
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.add_section(client)
     config.read(name)
 
@@ -691,15 +692,15 @@ def saveKeys(name, client, nameKey, contentKey):
     else:
         config.remove_option(client, 'FilenameKey')
 
-    with open(name, 'wb') as configfile:
+    with open(name, 'w') as configfile:
         config.write(configfile)
 
 def mkKeyString(client, nameKey, contentKey):
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.add_section(client)
     config.set(client, 'ContentKey', contentKey)
     config.set(client, 'FilenameKey', nameKey)
-    x = StringIO.StringIO()
+    x = io.StringIO()
     config.write(x)
     return x.getvalue()
 
@@ -716,7 +717,7 @@ def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis
     logger.debug("Storing metadata for %s: %s", checksum, metaStr)
 
     try:
-        f = cache.open(metaName, 'wb')
+        f = cache.open(metaName, 'w')
         f.write(metaStr)
         f.write('\n')
         f.close()
@@ -777,7 +778,7 @@ class GenShellCompletions(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         path = os.path.split(sys.argv[0])[1]
         c = genzshcomp.CompletionGenerator(path, parser, parser_type='argparse', output_format=values)
-        print c.get()
+        print(c.get())
         sys.exit(0)
 
 def addGenCompletions(parser):
@@ -801,7 +802,7 @@ class HelpFormatter(argparse.HelpFormatter):
 
 class ArgJsonEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, types.FileType):
+        if isinstance(obj, io.IOBase):
             if obj == sys.stderr:
                 return "<stderr>"
             elif obj == sys.stdout:
@@ -846,7 +847,7 @@ class bidict(dict):
     def __init__(self, *args, **kwargs):
         super(bidict, self).__init__(*args, **kwargs)
         self.inverse = {}
-        for key, value in self.iteritems():
+        for key, value in self.items():
             self.inverse.setdefault(value,[]).append(key)
 
     def __setitem__(self, key, value):
@@ -874,7 +875,7 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
     if decrypt:
         f = list(files)
         #print map(crypt.decryptFilename, [x['name'] for x in f])
-        filenames = sorted(map(lambda n: crypt.decryptFilename(n).encode('UTF-8'), [x['name'] for x in f]))
+        filenames = sorted([crypt.decryptFilename(n) for n in [x['name'] for x in f]])
     else:
         filenames = sorted([x["name"] for x in files])
 
@@ -888,8 +889,8 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
     m.update(z)
     for f in filenames:
         # For each entry, hash the name, and a null character
-        m.update(f)
-        m.update('\0')
+        m.update(bytes(f, 'utf8'))
+        m.update(b'\0')
     m.update(z)
     # Again, Insert "magic" number to help prevent collisions
     m.update(_hashMagic)
@@ -904,4 +905,4 @@ if __name__ == "__main__":
     p.add_argument("-x", action=Toggle, help="Whatever")
 
     args = p.parse_args()
-    print args
+    print(args)

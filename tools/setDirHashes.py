@@ -59,7 +59,7 @@ def main():
             files = db.readDirectory((inode, device), current=lastset)
             (checksum, nfiles) = Util.hashDir(crypto, files, True)
 
-            print("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, nfiles)
+            print(("%-20s (%d, %d) [%d %d] -- %s %d") % (name, inode, device, firstset, lastset, checksum, nfiles))
             ckinfo = db.getChecksumInfo(checksum)
             if ckinfo:
                 cksid = ckinfo['checksumid']

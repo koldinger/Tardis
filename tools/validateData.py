@@ -22,7 +22,7 @@ try:
 except:
     pass
 
-print "Loaded %d checksums." % (len(checked))
+print("Loaded %d checksums." % (len(checked)))
 
 output = file('output', 'a')
 valid = file('valid', 'a')
@@ -43,7 +43,7 @@ def validate(root, client, dbname, password):
     cur = conn.execute("SELECT count(*) FROM CheckSums WHERE IsFile = 1")
     row = cur.fetchone()
     num = row[0]
-    print "Checksums: %d" % (num)
+    print("Checksums: %d" % (num))
 
     cur = conn.execute("SELECT Checksum FROM CheckSums WHERE IsFile = 1 ORDER BY Checksum ASC");
     pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
@@ -67,7 +67,7 @@ def validate(root, client, dbname, password):
                             d = f.read(128 * 1024)
                         res = m.hexdigest()
                         if res != checksum:
-                            print "Checksums don't match.  Expected: %s, result %s" % (checksum, res)
+                            print("Checksums don't match.  Expected: %s, result %s" % (checksum, res))
                             checked[checksum] = 0
                             output.write(checksum + '\n')
                             output.flush()
@@ -75,13 +75,13 @@ def validate(root, client, dbname, password):
                             checked[checksum] = 1
                             valid.write(checksum + "\n")
                 except Exception as e:
-                    print "Caught exception processing %s: %s" % (checksum, str(e))
+                    print("Caught exception processing %s: %s" % (checksum, str(e)))
                     output.write(checksum + '\n')
                     output.flush()
 
             row = cur.fetchone()
         except sqlite3.OperationalError as e:
-            print "Caught operational error.  DB is probably locked.  Sleeping for a bit"
+            print("Caught operational error.  DB is probably locked.  Sleeping for a bit")
             time.sleep(90)
     pbar.finish()
 

@@ -38,8 +38,8 @@ import argparse
 import uuid
 import logging
 import logging.config
-import ConfigParser
-import SocketServer
+import configparser
+import socketserver
 import ssl
 import pprint
 import tempfile
@@ -53,7 +53,7 @@ from datetime import datetime
 
 # For profiling
 import cProfile
-import StringIO
+import io
 import pstats
 
 import daemonize
@@ -154,7 +154,7 @@ logging.MSGS  = logging.DEBUG - 2
 def makeDict(row):
     if row:
         d = {}
-        for i in row.keys():
+        for i in list(row.keys()):
             d[i] = row[i]
         return d
     return None
@@ -165,7 +165,7 @@ class InitFailedException(Exception):
 class ProtocolError(Exception):
     pass
 
-class TardisServerHandler(SocketServer.BaseRequestHandler):
+class TardisServerHandler(socketserver.BaseRequestHandler):
     numfiles = 0
     logger   = None
     sessionid = None
@@ -228,13 +228,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
     def sendMessage(self, message):
         if self.printMessages:
-            self.logger.log(logging.TRACE, "Sending:\n" + str(pp.pformat(message)).encode("utf-8"))
+            self.logger.log(logging.TRACE, "Sending:\n" + pp.pformat(message))
         self.messenger.sendMessage(message)
 
     def recvMessage(self):
         message = self.messenger.recvMessage()
         if self.printMessages:
-            self.logger.log(logging.TRACE, "Received:\n" + str(pp.pformat(message)).encode("utf-8"))
+            self.logger.log(logging.TRACE, "Received:\n" + pp.pformat(message))
         return message
 
     def checkFile(self, parent, f, dirhash):
@@ -547,11 +547,13 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                     "checksum": chksum,
                     "size": len(sig) }
                 self.sendMessage(response)
-                sigio = StringIO.StringIO(sig)
+                sigio = io.BytesIO(sig)
                 Util.sendData(self.messenger, sigio, compress=None)
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
+                if args.exceptions:
+                    logger.exception(e)
                 errmsg = str(e)
 
         if response is None:
@@ -731,9 +733,9 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         checksum = message['checksum']
         if self.cache.exists(checksum):
             self.logger.debug("Checksum file %s already exists", checksum)
-            output = StringIO.StringIO()        # Accumulate into a throwaway string
+            output = io.BytesIO()        # Accumulate into a throwaway string
         else:
-            output = self.cache.open(checksum, "w")
+            output = self.cache.open(checksum, "wb")
 
         encrypted = message.get('encrypted', False)
 
@@ -839,7 +841,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
             self._sequenceNumber += 1
             self.logger.debug("Sending output to temporary file %s", tempName)
-            output = file(tempName, 'wb')
+            output = open(tempName, 'wb')
 
         encrypted = message.get('encrypted', False)
 
@@ -955,8 +957,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
         # Stats
         self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
-        if transaction:
-            self.db.beginTransaction()
+        #if transaction:
+        #    self.db.beginTransaction()
 
         if messageType == "DIR":
             (response, flush) = self.processDir(message)
@@ -1078,16 +1080,16 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 if formats:
                     self.logger.debug("Overriding global name formats: %s", formats)
-                    self.formats        = map(string.strip, formats.split(','))
+                    self.formats        = list(map(string.strip, formats.split(',')))
                 if priorities:
                     self.logger.debug("Overriding global priorities: %s", priorities)
-                    self.priorities     = map(int, priorities.split(','))
+                    self.priorities     = list(map(int, priorities.split(',')))
                 if keepDays:
                     self.logger.debug("Overriding global keep days: %s", keepDays)
-                    self.keep           = map(int, keepDays.split(','))
+                    self.keep           = list(map(int, keepDays.split(',')))
                 if forceFull:
                     self.logger.debug("Overriding global force full: %s", forceFull)
-                    self.forceFull      = map(int, forceFull.split(','))
+                    self.forceFull      = list(map(int, forceFull.split(',')))
 
                 numFormats = len(self.formats)
                 if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
@@ -1173,7 +1175,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             self.messenger = Messages.BsonMessages(sock, compress=compress)
         else:
             message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
-            sock.sendall(json.dumps(message))
+            sock.sendall(bytes(json.dumps(message), 'utf-8'))
             raise InitFailedException("Unknown encoding: ", encoding)
 
     def doGetKeys(self):
@@ -1253,21 +1255,21 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             sock.settimeout(args.timeout)
 
             if self.server.ssl:
-                sock.sendall(Connection.sslHeaderString)
+                sock.sendall(bytes(Connection.sslHeaderString, 'utf-8'))
                 sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
             else:
-                sock.sendall(Connection.headerString)
+                sock.sendall(bytes(Connection.headerString, 'utf-8'))
 
             # Receive the initial messages.  Defines the communication parameters.
             # Should be : { "encoding": "MSGP", "compress": "snappy" }
 
             message = sock.recv(1024)
             self.logger.debug(message)
-            message = message.strip()
+            message = str(message, 'utf-8').strip()
 
             fields = json.loads(message)
             resp = {'status': 'OK'}
-            sock.sendall(json.dumps(resp))
+            sock.sendall(bytes(json.dumps(resp), 'utf-8'))
 
             # Create the messenger object.  From this point on, ALL communications should
             # go through messenger, not director to the socket
@@ -1275,6 +1277,7 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
             try:
                 fields = self.recvMessage()
+                print(fields)
                 messType    = fields['message']
                 if not messType == 'BACKUP':
                     raise InitFailedException("Unknown message type: {}".format(messType))
@@ -1311,7 +1314,6 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
 
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
-
 
                 newBackup = self.getDB(client, create)
 
@@ -1433,11 +1435,11 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
                 self.server.profiler.disable()
-                s = StringIO.StringIO()
+                s = io.StringIO()
                 sortby = 'cumulative'
                 ps = pstats.Stats(self.server.profiler, stream=s).sort_stats(sortby)
                 ps.print_stats()
-                print s.getvalue()
+                print(s.getvalue())
 
             if started:
                 (count, size, _) = Util.removeOrphans(self.db, self.cache)
@@ -1452,6 +1454,8 @@ class TardisServerHandler(SocketServer.BaseRequestHandler):
                 self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
 
                 self.logger.debug("Removing orphans")
+
+                self.db.commit()
                 self.db.compact()
 
             if self.db:
@@ -1487,10 +1491,10 @@ class TardisServer(object):
 
         self.allowUpgrades  = config.getboolean('Tardis', 'AllowSchemaUpgrades')
 
-        self.formats        = map(string.strip, config.get('Tardis', 'Formats').split(','))
-        self.priorities     = map(int, config.get('Tardis', 'Priorities').split(','))
-        self.keep           = map(int, config.get('Tardis', 'KeepDays').split(','))
-        self.forceFull      = map(int, config.get('Tardis', 'ForceFull').split(','))
+        self.formats        = list(map(str.strip, config.get('Tardis', 'Formats').split(',')))
+        self.priorities     = list(map(int, config.get('Tardis', 'Priorities').split(',')))
+        self.keep           = list(map(int, config.get('Tardis', 'KeepDays').split(',')))
+        self.forceFull      = list(map(int, config.get('Tardis', 'ForceFull').split(',')))
 
         numFormats = len(self.formats)
         if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
@@ -1545,22 +1549,22 @@ class TardisServer(object):
         return sessionId in self.sessions
 
 #class TardisSocketServer(SocketServer.TCPServer):
-class TardisSocketServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer, TardisServer):
+class TardisSocketServer(socketserver.ThreadingMixIn, socketserver.TCPServer, TardisServer):
     def __init__(self):
 
-        SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
+        socketserver.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("TCP Server %s Running", Tardis.__versionstring__)
 
-class TardisSingleThreadedSocketServer(SocketServer.TCPServer, TardisServer):
+class TardisSingleThreadedSocketServer(socketserver.TCPServer, TardisServer):
     def __init__(self):
-        SocketServer.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
+        socketserver.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("Single Threaded TCP Server %s Running", Tardis.__versionstring__)
 
-class TardisDomainSocketServer(SocketServer.UnixStreamServer, TardisServer):
+class TardisDomainSocketServer(socketserver.UnixStreamServer, TardisServer):
     def __init__(self):
-        SocketServer.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
+        socketserver.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("Unix Domain Socket %s Server Running", Tardis.__versionstring__)
 
@@ -1608,7 +1612,7 @@ def run_server():
     try:
         if args.reuseaddr:
             # Allow reuse of the address before timeout if requested.
-            SocketServer.TCPServer.allow_reuse_address = True
+            socketserver.TCPServer.allow_reuse_address = True
 
         if args.local:
             logger.info("Starting Server. Socket: %s", args.local)
@@ -1655,7 +1659,7 @@ def processArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Tardis'
-    config = ConfigParser.ConfigParser(configDefaults)
+    config = configparser.ConfigParser(configDefaults)
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
@@ -1711,7 +1715,7 @@ def main():
     try:
         logger = setupLogging()
     except Exception as e:
-        print >> sys.stderr, "Unable to initialize logging: {}".format(str(e))
+        print("Unable to initialize logging: {}".format(str(e)), file=sys.stderr)
         if args.exceptions:
             traceback.print_exc()
         sys.exit(1)

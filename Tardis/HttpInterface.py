@@ -36,7 +36,7 @@ import logging
 import logging.handlers
 import json
 import argparse
-import ConfigParser
+import configparser
 import zlib
 import daemonize
 import base64
@@ -101,14 +101,14 @@ def getDB():
 def makeDict(row):
     if row:
         d = {}
-        for i in row.keys():
+        for i in list(row.keys()):
             d[i] = row[i]
         return d
     return None
 
 def compressMsg(string, threshold=1024):
     if len(string) > threshold:
-        comp = zlib.compress(string)
+        comp = zlib.compress(bytes(string), 'utf8')
         if len(comp) < len(string):
             app.logger.debug("Compressed %d to %d", len(string), len(comp))
             return (comp, True)
@@ -190,10 +190,10 @@ def authenticate1():
     db = getDB()
     data = request.form
     app.logger.info("Authenticate 1: Got data: " + str(data))
-    srpUname = base64.b64decode(data['srpUname'])
+    srpUname = data['srpUname']
     srpValueA = base64.b64decode(data['srpValueA'])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
-    resp = { "srpValueS": base64.b64encode(srpValueS), "srpValueB": base64.b64encode(srpValueB) }
+    resp = { "srpValueS": str(base64.b64encode(srpValueS), 'utf8'), "srpValueB": str(base64.b64encode(srpValueB), 'utf8') }
     return createResponse(resp, compress=False, cacheable=False)
 
 @app.route('/authenticate2', methods=['POST'])
@@ -203,7 +203,7 @@ def authenticate2():
     app.logger.info("Authenticate 2: Got data: " + str(data))
     srpValueM = base64.b64decode(data['srpValueM'])
     srpValueH = db.authenticate2(srpValueM)
-    resp = { "srpValueH": base64.b64encode(srpValueH) }
+    resp = { "srpValueH": str(base64.b64encode(srpValueH), 'utf8') }
     return createResponse(resp, compress=False, cacheable=False)
 
 @app.route('/close')
@@ -349,12 +349,12 @@ def getChecksumInfo(checksum):
 def getChecksumInfoChain(checksum):
     #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
-    return createResponse(map(makeDict, db.getChecksumInfoChain(checksum)))
+    return createResponse(list(map(makeDict, db.getChecksumInfoChain(checksum))))
 
 @app.route('/getChecksumInfoChainByPath/<int:backupset>/<path:pathname>')
 def getChecksumInfoChainByPath(pathname, backupset):
     db = getDB()
-    return createResponse(map(makeDict, db.getChecksumInfoChainByPath(pathname, backupset)))
+    return createResponse(list(map(makeDict, db.getChecksumInfoChainByPath(pathname, backupset))))
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
@@ -522,7 +522,7 @@ def processArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Tardis'
-    config = ConfigParser.ConfigParser(configDefaults)
+    config = configparser.ConfigParser(configDefaults)
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
@@ -578,7 +578,7 @@ def setupLogging():
 
 def setup():
     global args, config, logger, allowCompress, allowCache
-    logging.basicConfig(loglevel=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     (args, config) = processArgs()
     logger = setupLogging()
     if args.compress:

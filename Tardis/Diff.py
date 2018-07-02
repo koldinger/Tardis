@@ -48,7 +48,6 @@ import Tardis.Config as Config
 import Tardis.TardisDB as TardisDB
 
 logger = None
-exceptionLogger = None
 args = None
 
 current = Defaults.getDefault('TARDIS_RECENT_SET')
@@ -72,7 +71,7 @@ def parseArgs():
     diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,         help='Generate context diff')
     diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',              help='Generate NDiff style diff')
 
-    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxint, type=int, nargs='?',   metavar='N',
+    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
     parser.add_argument('--binary', '-B',   dest='binary', default=False, action=Util.StoreBoolean, help='Print differences in binary files.  Default: %(default)s')
@@ -114,6 +113,8 @@ def setcolor(line):
     return color
 
 def isBinary(lines, numLines = 128):
+    #TODO Fixme.  binaryornot doesn't seem to work for binary strings.
+    return False
     lineNo = 0
     numLines = min(numLines, len(lines))
     while lineNo < numLines:
@@ -123,20 +124,26 @@ def isBinary(lines, numLines = 128):
     return False
 
 def runDiff(f1, f2, name, then, now):
+    # Read the lines in the files.
+    # note that at this point, they're all binary blobs
     l1 = f1.readlines()
     l2 = f2.readlines()
 
     # If we only want to list files, just see if the 
     if args.list and l1 != l2:
-        color = 'yellow' if args.color else 'white'
+        color = 'yellow' if args.color else None
         termcolor.cprint('File {} (versions {} and {}) differs.'.format(name, then, now), color)
         return
 
     if not args.binary and (isBinary(l1) or isBinary(l2)):
         if l1 != l2:
-            color = 'yellow' if args.color else 'white'
+            color = 'yellow' if args.color else None
             termcolor.cprint('Binary file {} (versions {} and {}) differs.'.format(name, then, now), color)
         return
+
+    # Convert the binary blobs to strings so that 
+    l1 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l1))
+    l2 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l2))
 
     if args.ndiff:
         diffs = difflib.ndiff(l1, l2)
@@ -198,7 +205,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
     names1 = ([x['name'] for x in entries1])
     if crypt:
-        names1 = map(crypt.decryptFilename, names1)
+        names1 = list(map(crypt.decryptFilename, names1))
     #names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
@@ -207,8 +214,8 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
         entries2 = tardis.readDirectory((info2['inode'], info2['device']), bsets[1]['backupset'])
         names2 = [x['name'] for x in entries2]
         if crypt:
-            names2 = map(crypt.decryptFilename, names2)
-        names2 = map(lambda x: x.decode('utf-8'), names2)
+            names2 = list(map(crypt.decryptFilename, names2))
+        names2 = [x.decode('utf-8') for x in names2]
         names2 = sorted(names2)
         otherName = bsets[1]['name']
     else:
@@ -282,7 +289,7 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
             else:
                 logger.debug("Opening %s", path)
                 try:
-                    f2 = file(path, "rb")
+                    f2 = open(path, "rb")
                 except IOError as e:
                     logger.error("Could not open %s: %s", path, str(e))
                     return
@@ -290,15 +297,14 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
         runDiff(f1, f2, fName, then, now)
     except Exception as e:
         logger.error("Error occurred during diffing of %s: %s", path, str(e))
-        exceptionLogger.log(e)
+        logger.exception(e)
 
 def main():
-    global logger, exceptionLogger
+    global logger
     tardis = None
     try:
         parseArgs()
         logger = Util.setupLogging(args.verbose)
-        exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
@@ -331,7 +337,6 @@ def main():
             now = time.asctime() + '  (filesystem)'
 
         for f in args.files:
-            f = unicode(f.decode(sys.getfilesystemencoding()))
             if bsets[1] is None and os.path.isdir(f):
                 diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
@@ -346,11 +351,13 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if tardis:
             tardis.close()

@@ -31,7 +31,7 @@
 import sys
 import zlib
 import bz2
-import liblzma
+import lzma
 
 import Tardis.librsync as librsync
 
@@ -49,7 +49,7 @@ class _NullCompressor(object):
     def flush(self):
         return None
 
-_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (liblzma.LZMACompressor, liblzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
+_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
 
 # Pick a selected compressor or decompressor
 def _updateAlg(alg):
@@ -69,7 +69,7 @@ def getDecompressor(alg='zlib'):
     return _compressors[alg][1]()
 
 def getCompressors():
-    return _compressors.keys()
+    return list(_compressors.keys())
 
 class BufferedReader(object):
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, signature=False):
@@ -98,7 +98,7 @@ class BufferedReader(object):
         #if self.buffer:
         #    avail = len(self.buffer)
         #print "read called: {}  {} bytes available".format(size, avail)
-        out = ""
+        out = b''
         left = size
         while len(out) < size:
             #print "read loop: so far: {}".format(len(out))
@@ -147,8 +147,8 @@ class CompressedBufferedReader(BufferedReader):
 
     def _get(self):
         #print "_get called"
-        ret = ''
-        uncomp = ''
+        ret = b''
+        uncomp = b''
         if self.stream:
             while not ret:
                 buf = self.stream.read(self.chunksize)
@@ -235,7 +235,7 @@ class UncompressedBufferedReader(BufferedReader):
         return None
 
 if __name__ == "__main__":
-    print "Opening {}".format(sys.argv[1])
+    print("Opening {}".format(sys.argv[1]))
     x = CompressedBufferedReader(file(sys.argv[1], "rb"))
     #line = x.get()
     with file(sys.argv[2], "wb") as f:
@@ -246,4 +246,4 @@ if __name__ == "__main__":
             #line = x.get()
             line = x.read(16384)
 
-    print x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum()
+    print(x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum())

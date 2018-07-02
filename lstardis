@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! env/bin/python3
 # -*- coding: utf-8 -*-
 
 from Tardis import List

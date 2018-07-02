@@ -50,7 +50,6 @@ columnfmt = None
 args = None
 curcolor = None
 logger = None
-exceptionLogger = None
 backupSets = []
 
 line = ''
@@ -70,11 +69,11 @@ fsEncoding = sys.getfilesystemencoding()
 
 def setColors(s):
     groups = s.split(':')
-    groups = map(str.strip, groups)
+    groups = list(map(str.strip, groups))
     for g in groups:
         x = g.split('=')
-        name = x[0]
-        c = map(str.strip, x[1].split(','))
+        name = str(x[0])
+        c = list(map(str.strip, x[1].split(',')))
         #c = map(lambda x: None if x.lower() == 'none' else x, c)
         c = [None if x.lower() == 'none' else x for x in c]
         if len(c) == 1:
@@ -83,7 +82,7 @@ def setColors(s):
             c = [None if i == '' else i for i in c]
             colors[name] = tuple(c)
 
-def doprint(string='', color=None, eol=False):
+def doprint(text='', color=None, eol=False):
     """
     Add some characters to a line to be printed.  If eol is True, print the line and restart.
     Color can either be a color (red, blue, green, etc), or a tuple.
@@ -94,15 +93,15 @@ def doprint(string='', color=None, eol=False):
     global line
     if args.colors and color:
         if isinstance(color, str):
-            line += termcolor.colored(string, color)
+            line += termcolor.colored(str(text), color)
         else:
-            line += termcolor.colored(string, color[0], color[1], attrs=list(color[2:]))
+            line += termcolor.colored(str(text), color[0], color[1], attrs=list(color[2:]))
     else:
-        line += string
+        line += str(text)
 
-    #print "Line so far: ", line
+    #print(line)
     if eol:
-        print line.rstrip()     # clear out any trailing spaces
+        print(line.rstrip())
         line=''
 
 def flushLine():
@@ -111,10 +110,7 @@ def flushLine():
     """
     global line
     if line:
-        try:
-            print line.encode(fsEncoding, 'replace').rstrip()     # clear out any trailing spaces
-        except Exception as e:
-            print line.rstrip()
+        print(line.rstrip())     # clear out any trailing spaces
         line=''
 
 def makeFakeRootInfo():
@@ -134,7 +130,7 @@ def makeFakeRootInfo():
             "mtime"         : 0,
             "ctime"         : 0,
             "atime"         : 0,
-            "mode"          : 0755,
+            "mode"          : 0o755,
             "uid"           : 0,
             "gid"           : 0,
             "nlinks"        : 1,
@@ -173,6 +169,7 @@ def collectFileInfo(filename, tardis, crypt):
         fSet = backupSets[0]['backupset']
         lSet = backupSets[-1]['backupset']
         for (bset, info) in tardis.getFileInfoByPathForRange(lookup, fSet, lSet):
+            logger.debug("Bset: %s, info: %s", bset, info)
             fInfos[bset] = info
 
     return fInfos
@@ -190,8 +187,7 @@ def collectDirContents(tardis, dirlist, crypt):
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
         dirInfo = {}
         for y in x:
-            name = crypt.decryptFilename(y['name']) if crypt else y['name']
-            name = name.decode(fsEncoding)
+            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'])
             dirInfo[name] = y
             names.add(name)
         contents[bset['backupset']] = dirInfo
@@ -238,7 +234,8 @@ def collectDirContents2(tardis, dirList, crypt):
         #print "Reading for (%d, %d) : %d => %d" %(dinfo['inode'], dinfo['device'], first, last)
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
-            name = crypt.decryptFilename(y['name']) if crypt else y['name']
+            logger.debug("Processing %s", y['name'])
+            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'])
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:
@@ -358,7 +355,7 @@ def printit(info, name, color, gone):
             doprint(' ' + cksum, color=colors['name'])
         if args.chnlen:
             doprint(' ' + chnlen, color=colors['name'])
-        doprint('', eol=True)
+        doprint(' ', eol=True)
     else:
         column += 1
         if column == columns:
@@ -422,6 +419,7 @@ def printVersions(fInfos):
         if args.versions == 'last' or args.versions == 'none' or (args.versions == 'change' and not (new or gone or broken)) or (gone and not args.deletions) or (broken and not args.broken):
             continue
 
+        logger.debug("Bset: %s", bset)
         printit(info, bset['name'], color, gone)
 
     if args.versions == 'last':
@@ -482,7 +480,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
                 fInfos = getInfoByName(contents, name)
                 dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
                 if len(dirs):
-                    print
+                    print()
                     processFile(os.path.join(filename, name), fInfos, tardis, crypt, printContents=printContents, recurse=recurse-1, first=True, eol=True)
                 flushLine()
 
@@ -533,7 +531,7 @@ def pruneBackupSetsByRange():
             if endRange == -1:
                 sys.exit(1)
     else:
-        endRange = sys.maxint
+        endRange = sys.maxsize
 
     if endRange < startRange:
         doprint("Invalid range.  Start must be before end", color=colors['error'], eol=True)
@@ -580,12 +578,12 @@ def pruneBackupSetsByDateRange(tardis):
             if endSet:
                 endRange = endSet['backupset']
             else:
-                endRange = sys.maxint
+                endRange = sys.maxsize
         else:
             doprint("Invalid time: %s" % daterange[1], color=colors['error'], eol=True)
             sys.exit(1)
     else:
-        endRange = sys.maxint
+        endRange = sys.maxsize
         endTime = time.time()
 
     doprint("Starttime: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(startTime)), color=colors['header'], eol=True)
@@ -602,23 +600,25 @@ def computeColumnWidth(names):
     """
     Given a list of names, compute the columns widths
     """
-    if len(names) == 0:
+    if len(list(names)) == 0:
         return (1, '%s')
-    longestName = max(map(len, names))
+    longestName = max(list(map(len, names)), default=0)
 
     if args.columns:
         columns = args.columns
     else:
         if os.isatty(sys.stdout.fileno()):
-            _, width = Util.getTerminalSize()
+            (_, width) = Util.getTerminalSize()
+            logger.info("Setting width to %d", width)
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
-            columns = width / (longestName + 4)
+            columns = int(width / (longestName + 4))
             if columns == 0:
                 columns = 1
         else:
             columns = 1
 
     fmt = "%%-%ds  " % (longestName + 2)
+    logger.info("Setting columns to %d", columns)
 
     return (columns, fmt)
 
@@ -635,7 +635,7 @@ def setupDisplay(tardis):
     elif args.daterange:
         pruneBackupSetsByDateRange(tardis)
 
-    bsetNames = map(lambda x: x['name'], backupSets)
+    bsetNames = [x['name'] for x in backupSets]
 
     (columns, columnfmt) = computeColumnWidth(bsetNames)
 
@@ -707,11 +707,11 @@ def processArgs():
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
-    parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxint, type=int,               help='Maximum depth to recurse directories')
+    parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,               help='Maximum depth to recurse directories')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
-    parser.add_argument('--reduce',         dest='reduce',      default=0, type=int, const=sys.maxint, nargs='?',
+    parser.add_argument('--reduce',         dest='reduce',      default=0, type=int, const=sys.maxsize, nargs='?',
                         help='Reduce paths by N directories.  No value for smart reduction')
     parser.add_argument('--realpath',       dest='realpath',    default=True, action=Util.StoreBoolean,     help='Use the full path, expanding symlinks to their actual path components')
 
@@ -732,12 +732,11 @@ def processArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global args, logger, exceptionLogger
+    global args, logger
     tardis = None
     try:
         args = processArgs()
         logger = Util.setupLogging(args.verbose)
-        exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
@@ -763,7 +762,7 @@ def main():
             directories = args.directories
 
         for d in directories:
-            d = unicode(os.path.abspath(d).decode(fsEncoding))
+            d = os.path.abspath(d)
             if args.realpath:
                 d = os.path.realpath(d)
             fInfos = collectFileInfo(d, tardis, crypt)
@@ -773,10 +772,12 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if tardis:
             tardis.close()

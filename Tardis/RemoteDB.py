@@ -31,7 +31,7 @@
 import logging
 import tempfile
 import sys
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import functools
 import base64
 
@@ -134,8 +134,8 @@ class RemoteDB(object):
 
     def authenticate1(self, uname, srpValueA):
         postData = {
-            'srpUname':  base64.b64encode(uname),
-            'srpValueA': base64.b64encode(srpValueA)
+            'srpUname':  uname,
+            'srpValueA': str(base64.b64encode(srpValueA), 'utf8')
         }
         response = self.session.post(self.baseURL + 'authenticate1', data=postData)
         # Check for "not authenticated", which indicates authentication failed.
@@ -150,7 +150,7 @@ class RemoteDB(object):
         
     def authenticate2(self, srpValueM):
         postData = {
-            'srpValueM': base64.b64encode(srpValueM)
+            'srpValueM': str(base64.b64encode(srpValueM), 'utf8')
         }
         response = self.session.post(self.baseURL + 'authenticate2', data=postData)
         # Check for "not authenticated", which indicates authentication failed.
@@ -204,7 +204,7 @@ class RemoteDB(object):
         r.raise_for_status()
         for i in r.json():
             self.logger.debug("Returning %s", str(i))
-            i['name'] = fs_encode(i['name'])
+            #i['name'] = (i['name'])
             yield i
 
     @reconnect
@@ -215,7 +215,7 @@ class RemoteDB(object):
 
     @reconnect
     def getBackupSetInfo(self, name):
-        name = urllib.quote(name, '')
+        name = urllib.parse.quote(name, '')
         r = self.session.get(self.baseURL + "getBackupSetInfo/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -228,7 +228,7 @@ class RemoteDB(object):
 
     @reconnect
     def getBackupSetDetails(self, name):
-        name = urllib.quote(str(name), '')
+        name = urllib.parse.quote(str(name), '')
         r = self.session.get(self.baseURL + "getBackupSetDetails/" + str(name), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -243,7 +243,7 @@ class RemoteDB(object):
     def getFileInfoByName(self, name, parent, current=True):
         bset = self._bset(current)
         (inode, device) = parent
-        name = urllib.quote(name, '/')
+        name = urllib.parse.quote(name, '/')
         r = self.session.get(self.baseURL + "getFileInfoByName/" + bset + "/" + str(device) + "/" + str(inode) + "/" + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -262,7 +262,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        path = urllib.quote(path, '/')
+        path = urllib.parse.quote(path, '/')
         r = self.session.get(self.baseURL + "getFileInfoByPath/" + bset + path, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -271,7 +271,7 @@ class RemoteDB(object):
     def getFileInfoByPathForRange(self, path, first, last, permchecker=None):
         if not path.startswith('/'):
             path = '/' + path
-        path = urllib.quote(path, '/')
+        path = urllib.parse.quote(path, '/')
         r = self.session.get(self.baseURL + "getFileInfoByPathForRange/" + str(first) + '/' + str(last) + path, headers=self.headers)
         r.raise_for_status()
         for i in r.json():
@@ -320,7 +320,7 @@ class RemoteDB(object):
         bset = self._bset(current)
         if not path.startswith('/'):
             path = '/' + path
-        path = urllib.quote(path, '/')
+        path = urllib.parse.quote(path, '/')
         r = self.session.get(self.baseURL + "getChecksumByPath/" + bset + path, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -341,7 +341,7 @@ class RemoteDB(object):
     def getChecksumInfoChainByPath(self, name, bset, permchecker=None):
         if not name.startswith('/'):
             name = '/' + name
-        name = urllib.quote(name, '/')
+        name = urllib.parse.quote(name, '/')
         r = self.session.get(self.baseURL + "getChecksumInfoChainByPath/" + str(bset) + name, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -451,7 +451,7 @@ class RemoteDB(object):
 
     @reconnect
     def open(self, checksum, mode):
-        temp = tempfile.SpooledTemporaryFile("wb")
+        temp = tempfile.SpooledTemporaryFile(max_size=64 * 1024, mode="wb")
         r = self.session.get(self.baseURL + "getFileData/" + checksum, stream=True)
         r.raise_for_status()
         #self.logger.debug("%s", str(r.headers))

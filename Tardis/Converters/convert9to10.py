@@ -34,7 +34,7 @@ import os.path
 from Tardis import CacheDir
 import logging
 
-import convertutils
+from . import convertutils
 
 version = 9
 

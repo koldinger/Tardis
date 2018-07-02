@@ -43,7 +43,7 @@ class Rotator(object):
 
     def backup(self, name):
         if os.path.exists(name):
-            with file(name, 'rb') as infile:
+            with open(name, 'rb') as infile:
                 newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
                 stat = os.stat(name)
                 if self.compress and stat.st_size >= self.compress:
@@ -52,7 +52,7 @@ class Rotator(object):
                     outfile = gzip.open(newname, "wb")
                 else:
                     self.logger.debug("Copying %s to %s", name, newname)
-                    outfile = file(newname, 'wb')
+                    outfile = open(newname, 'wb')
                 try:
                     shutil.copyfileobj(infile, outfile)
                 finally:

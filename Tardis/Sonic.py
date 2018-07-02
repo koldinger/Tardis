@@ -36,7 +36,7 @@ import sys
 import time
 import datetime
 import pprint
-import urlparse
+import urllib.parse
 import srp
 
 import parsedatetime
@@ -60,11 +60,10 @@ configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'Max
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
 
 logger = None
-exceptionLogger = None
 args = None
 
 def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
-    loc = urlparse.urlparse(args.database)
+    loc = urllib.parse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
         if not allowRemote:
@@ -72,7 +71,7 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
         # If no port specified, insert the port
         if loc.port is None:
             netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
-            dbLoc = urlparse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
+            dbLoc = urllib.parse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         else:
             dbLoc = args.database
         tardisdb = RemoteDB.RemoteDB(dbLoc, args.client)
@@ -91,9 +90,7 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
         schema = args.schema if new else None
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
-    if tardisdb.needsAuthentication:
-        if password is None:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
+    if password:
         Util.authenticate(tardisdb, args.client, password)
 
     return (tardisdb, cache)
@@ -106,11 +103,13 @@ def createClient(crypt, password):
         return 0
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def setPassword(crypt, password):
@@ -129,15 +128,18 @@ def setPassword(crypt, password):
         return 0
     except TardisDB.NotAuthenticated:
         logger.error('Client %s already has a password', args.client)
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed.  Bad password")
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def changePassword(crypt, oldpw) :
@@ -150,7 +152,8 @@ def changePassword(crypt, oldpw) :
                                      allowNone=False, confirm=True, strength=True)
         except Exception as e:
             logger.critical(str(e))
-            exceptionLogger.log(e)
+            if args.exceptions:
+                logger.exception(e)
             return -1
 
         crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
@@ -186,7 +189,8 @@ def changePassword(crypt, oldpw) :
         return 0
     except Exception as e:
         logger.error(str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 def moveKeys(db, crypt):
@@ -218,7 +222,8 @@ def moveKeys(db, crypt):
         return 1
     except Exception as e:
         logger.error(e)
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 _cmdLineHash = {}
@@ -244,7 +249,7 @@ def listBSets(db, crypt, cache):
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
-        print "%-30s %-4s %-6s %3s  %-5s  %-24s  %-7s %6s %5s %8s  %s" % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "")
+        print("%-30s %-4s %-6s %3s  %-5s  %-24s  %-7s %6s %5s %8s  %s" % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
         for bset in db.listBackupSets():
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
             if bset['endtime'] is not None:
@@ -256,18 +261,19 @@ def listBSets(db, crypt, cache):
             isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print "%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent)
+            print("%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 if commandLine:
-                    print "    Command Line: %s" % (commandLine)
-                    print
+                    print("    Command Line: %s" % (commandLine))
+                    print()
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         return 1
     except Exception as e:
         logger.error(e)
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
         return 1
 
 # cache of paths we've already calculated.
@@ -315,7 +321,7 @@ def listFiles(db, crypt):
             lastDirInode = dirInode
             lastDir = path
             if not args.fullname:
-                print "%s:" % (path)
+                print("%s:" % (path))
         if args.status:
             status = '[New]   ' if fInfo['chainlength'] == 0 else '[Delta] '
         else:
@@ -335,51 +341,51 @@ def listFiles(db, crypt):
                     size = "%8d" % int(fInfo['size'])
             else:
                 size = ''           
-            print'  %s%9s %-8s %-8s %8s %12s' % (status, mode, owner, group, size, mtime),
+            print('  %s%9s %-8s %-8s %8s %12s' % (status, mode, owner, group, size, mtime), end=' ')
             if args.cksums:
-                print ' %32s ' % (fInfo['checksum'] or ''),
+                print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
             if args.chnlen:
-                print ' %4s ' % (fInfo['chainlength']),
+                print(' %4s ' % (fInfo['chainlength']), end=' ')
             if args.inode:
-                print ' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])),
+                print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
 
-            print name
+            print(name)
         else:
-            print "    %s" % status,
+            print("    %s" % status, end=' ')
             if args.cksums:
-                print ' %32s ' % (fInfo['checksum'] or ''),
+                print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
             if args.chnlen:
-                print ' %4s ' % (fInfo['chainlength']),
+                print(' %4s ' % (fInfo['chainlength']), end=' ')
             if args.inode:
-                print ' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])),
-            print name
+                print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+            print(name)
 
 
 def _bsetInfo(db, info):
-    print "Backupset       : %s (%d)" % ((info['name']), info['backupset'])
-    print "Completed       : %s" % ('True' if info['completed'] else 'False')
+    print("Backupset       : %s (%d)" % ((info['name']), info['backupset']))
+    print("Completed       : %s" % ('True' if info['completed'] else 'False'))
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
-    print "StartTime       : %s" % (t)
+    print("StartTime       : %s" % (t))
     if info['endtime'] is not None:
         t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['endtime'])))
         duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
-        print "EndTime         : %s" % (t)
-        print "Duration        : %s" % (duration)
-    print "SW Versions     : C:%s S:%s" % (info['clientversion'], info['serverversion'])
-    print "Client IP       : %s" % (info['clientip'])
+        print("EndTime         : %s" % (t))
+        print("Duration        : %s" % (duration))
+    print("SW Versions     : C:%s S:%s" % (info['clientversion'], info['serverversion']))
+    print("Client IP       : %s" % (info['clientip']))
     details = db.getBackupSetDetails(info['backupset'])
     (files, dirs, size, newInfo, endInfo) = details
-    print "Files           : %d" % (files)
-    print "Directories     : %d" % (dirs)
-    print "Total Size      : %s" % (Util.fmtSize(size))
+    print("Files           : %d" % (files))
+    print("Directories     : %d" % (dirs))
+    print("Total Size      : %s" % (Util.fmtSize(size)))
 
-    print "New Files       : %d" % (newInfo[0])
-    print "New File Size   : %s" % (Util.fmtSize(newInfo[1]))
-    print "New File Space  : %s" % (Util.fmtSize(newInfo[2]))
+    print("New Files       : %d" % (newInfo[0]))
+    print("New File Size   : %s" % (Util.fmtSize(newInfo[1])))
+    print("New File Space  : %s" % (Util.fmtSize(newInfo[2])))
 
-    print "Purgeable Files : %d" % (endInfo[0])
-    print "Purgeable Size  : %s" % (Util.fmtSize(endInfo[1]))
-    print "Purgeable Space : %s" % (Util.fmtSize(endInfo[2]))
+    print("Purgeable Files : %d" % (endInfo[0]))
+    print("Purgeable Size  : %s" % (Util.fmtSize(endInfo[1])))
+    print("Purgeable Space : %s" % (Util.fmtSize(endInfo[2])))
 
 def bsetInfo(db):
     printed = False
@@ -392,18 +398,18 @@ def bsetInfo(db):
         first = True
         for info in db.listBackupSets():
             if not first:
-                print "------------------------------------------------"
+                print("------------------------------------------------")
             _bsetInfo(db, info)
             first = False
             printed = True
     if printed:
-        print "\n * Purgeable numbers are estimates only"
+        print("\n * Purgeable numbers are estimates only")
 
 def confirm():
     if not args.confirm:
         return True
     else:
-        print "Proceed (y/n): ",
+        print("Proceed (y/n): ", end=' ')
         yesno = sys.stdin.readline().strip().upper()
         return yesno == 'YES' or yesno == 'Y'
 
@@ -421,10 +427,10 @@ def purge(db, cache):
     names = [str(x['name']) for x in pSets]
     logger.debug("Names: %s", names)
     if len(names) == 0:
-        print "No matching sets"
+        print("No matching sets")
         return
 
-    print "Sets to be deleted:"
+    print("Sets to be deleted:")
     pprint.pprint(names)
 
     if confirm():
@@ -432,7 +438,7 @@ def purge(db, cache):
             (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
         else:
             (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset['endtime'], bset['backupset'])
-        print "Purged %d sets, containing %d files" % (setsDeleted, filesDeleted)
+        print("Purged %d sets, containing %d files" % (setsDeleted, filesDeleted))
         removeOrphans(db, cache)
 
 def deleteBsets(db, cache):
@@ -448,12 +454,12 @@ def deleteBsets(db, cache):
         bsets.append(bset)
 
     names = [b['name'] for b in bsets]
-    print "Sets to be deleted: %s" % (names)
+    print("Sets to be deleted: %s" % (names))
     if confirm():
         filesDeleted = 0
         for bset in bsets:
             filesDeleted = filesDeleted + db.deleteBackupSet(bset['backupset'])
-        print "Deleted %d files" % (filesDeleted)
+        print("Deleted %d files" % (filesDeleted))
         removeOrphans(db, cache)
 
 def removeOrphans(db, cache):
@@ -465,11 +471,11 @@ def removeOrphans(db, cache):
         rounds = r['rounds']
     else:
         count, size, rounds = Util.removeOrphans(db, cache)
-    print "Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds)
+    print("Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds))
 
 def _printConfigKey(db, key):
     value = db.getConfigValue(key)
-    print "%-18s: %s" % (key, value)
+    print("%-18s: %s" % (key, value))
 
 
 def getConfig(db):
@@ -483,7 +489,7 @@ def getConfig(db):
         _printConfigKey(db, i)
 
 def setConfig(db):
-    print "Old Value: ",
+    print("Old Value: ", end=' ')
     _printConfigKey(db, args.key)
     db.setConfigValue(args.key, args.value)
 
@@ -600,6 +606,9 @@ def parseArgs():
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
+    if args.command == None:
+        parser.print_help()
+        sys.exit(0)
 
     # And load the required strength for new passwords.  NOT specifiable on the command line.
     #minPwStrength = c.getfloat(t, 'PwStrMin')
@@ -640,10 +649,9 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
     return bInfo
 
 def main():
-    global logger, exceptionLogger, args
+    global logger
     parseArgs()
     logger = Util.setupLogging(args.verbose)
-    exceptionLogger = Util.ExceptionLogger(logger, args.exceptions)
 
     # Commands which cannot be executed on remote databases
     allowRemote = args.command not in ['create', 'upgrade']
@@ -658,7 +666,8 @@ def main():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
         except Exception as e:
             logger.critical(str(e))
-            exceptionLogger.log(e)
+            if args.exceptions:
+                logger.exception(e)
             return -1
             
         if password:
@@ -693,11 +702,13 @@ def main():
                 crypt.setKeys(f, c)
         except TardisDB.AuthenticationException as e:
             logger.error("Authentication failed.  Bad password")
-            exceptionLogger.log(e)
+            if args.exceptions:
+                logger.exception(e)
             sys.exit(1)
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
-            exceptionLogger.log(e)
+            if args.exceptions:
+                logger.exception(e)
             sys.exit(1)
 
         if args.command == 'keys':
@@ -731,7 +742,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        exceptionLogger.log(e)
+        if args.exceptions:
+            logger.exception(e)
     finally:
         if db:
             db.close()

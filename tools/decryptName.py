@@ -8,7 +8,7 @@ import sys
 import base64
 import hashlib
 import progressbar
-import urlparse
+import urllib.parse
 
 logger = None
 
@@ -17,7 +17,7 @@ def reader(quiet):
     prompt = '' if quiet else '--> '
     try:
         while True:
-            yield raw_input(prompt)
+            yield input(prompt)
     except EOFError:
         return
 
@@ -53,21 +53,21 @@ def main():
     if not data:
         tty = os.isatty(0)
         if not tty:
-            data = map(str.strip, sys.stdin.readlines())
+            data = list(map(str.strip, sys.stdin.readlines()))
         else:
             data = reader(args.quiet)
 
     for i in data:
         if i:
             if not args.quiet:
-                print i, " \t => \t",
+                print(i, " \t => \t", end=' ')
             try:
                 if (args.encrypt):
-                    print crypto.encryptPath(i)
+                    print(crypto.encryptPath(i))
                 else:
-                    print crypto.decryptPath(i)
+                    print(crypto.decryptPath(i))
             except Exception as e:
-                print "Caught exception: " + str(e)
+                print("Caught exception: " + str(e))
 
 
 if __name__ == "__main__":

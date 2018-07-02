@@ -76,8 +76,8 @@ class Cache(object):
 
     def flush(self):
         now = time.time()
-        i = self.cache.iteritems()
-        z = i.next()
+        i = iter(self.cache.items())
+        z = next(i)
         try:
             while z:
                 (_, item) = z
@@ -85,7 +85,7 @@ class Cache(object):
                 if timeout > now:
                     return
                 self.cache.popitem(False)
-                z = i.next()
+                z = next(i)
         except:
             # If something goes wrong, just punt.
             pass
@@ -98,12 +98,12 @@ if __name__ == "__main__":
     for i in range(0, 5):
         c.insert(i, i * 100)
     for i in range(0, 10):
-        print i, " :: ", c.retrieve(i)
-    print "----"
+        print(i, " :: ", c.retrieve(i))
+    print("----")
     for i in range(5, 10):
         c.insert(i, i * 100)
     for i in range(0, 10):
-        print i, " :: ", c.retrieve(i)
+        print(i, " :: ", c.retrieve(i))
     time.sleep(2)
     for i in range(0, 10):
-        print i, " :: ", c.retrieve(i)
+        print(i, " :: ", c.retrieve(i))

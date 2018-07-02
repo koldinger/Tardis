@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import socket
-import ConfigParser
+import configparser
 import os
 
 SECTION = 'Tardis'
@@ -67,7 +67,7 @@ try:
 except KeyError:
     _default_file = _defaults['TARDIS_DEFAULTS']
 
-_parser = ConfigParser.ConfigParser(_defaults)
+_parser = configparser.ConfigParser(_defaults)
 _parser.add_section(SECTION)                       # Keep it happy later.
 _parser.read(_default_file)
 
@@ -77,10 +77,10 @@ def getDefault(var):
     else:
         try:
             return _parser.get(SECTION, var)
-        except ConfigParser.Error:
+        except configparser.Error:
             return None
 
 if __name__ == "__main__":
-    print _default_file
+    print(_default_file)
     for i in _defaults:
-        print "%-24s: %s" % (i, getDefault(i))
+        print("%-24s: %s" % (i, getDefault(i)))

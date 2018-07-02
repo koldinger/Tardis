@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 
 import os
 import subprocess
@@ -15,7 +15,8 @@ jokes.
 '''
 
 buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
-file('tardisversion', 'w').write(buildVersion + "\n")
+with open('tardisversion', 'w') as f:
+    f.write(str(buildVersion) + "\n")
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
 
@@ -38,7 +39,7 @@ setup(  name                    = 'Tardis-Backup',
         zip_safe                = False,
         install_requires = ['msgpack-python', 'daemonize', 'parsedatetime', 'pycryptodomex', 'requests_cache',
                             'requests',       'flask',     'tornado',       'termcolor',     'passwordmeter',   'pid',
-                            'python-magic',   'urllib3',   'binaryornot',   'pyliblzma',     'python-snappy',   'srp',
+                            'python-magic',   'urllib3',   'binaryornot',   'python-snappy',   'srp',
                             'colorlog',       'progressbar2',   'reportlab', 'qrcode'         ] + add_pkgs,
         data_files = [( root + '/etc/tardis',                     [ 'tardisd.cfg-template', 'types.ignore', 'tardisremote.cfg-template' ]),
                       ( 'schema',                                 [ 'schema/tardis.sql' ] + convert_scripts),

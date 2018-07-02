@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 
 import os, os.path
 import sys
@@ -32,15 +32,15 @@ def main():
     d = sys.argv[1]
 
     db = os.path.join(d, "tardis.db")
-    print "Opening DB: " + db
+    print("Opening DB: " + db)
     conn = sqlite3.connect(db)
-    print "Connected"
+    print("Connected")
 
     missingData = set()
     unreferenced = set()
 
     for i in hexcount(0, 256, 2):
-        print "Starting: ", i
+        print("Starting: ", i)
         # Get all the files which start with i
         dbfiles = getdbfiles(conn, i)
         alldatafiles = set()
@@ -50,7 +50,7 @@ def main():
             if os.path.isdir(path):
                 contents = os.listdir(path)
                 metafiles = set(filter(hasExt, contents))
-                datafiles = set(filter(lambda x: not hasExt(x), contents))
+                datafiles = set([x for x in contents if not hasExt(x)])
 
                 alldatafiles.update(datafiles)
                 
@@ -59,19 +59,19 @@ def main():
                 for f in metafiles:
                     (data, _) = os.path.splitext(f)
                     if not data in datafiles:
-                        print "{} without matching data file".format(f)
+                        print("{} without matching data file".format(f))
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)
         missingData.update(missing)
         for i in missing:
-            print "Missing data files {}".format(i)
+            print("Missing data files {}".format(i))
 
         # Find files which aren't in the DB
         unref = alldatafiles.difference(dbfiles)
         unreferenced.update(unref)
         for i in unref:
-            print "Unreferenced data file: {}".format(i)
+            print("Unreferenced data file: {}".format(i))
 
     conn.close()
 

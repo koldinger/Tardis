@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import sys
-import ConfigParser
+import configparser
 
 import Tardis.Defaults as Defaults
 import Tardis.Util as Util
@@ -50,7 +50,7 @@ configDefaults = {
     'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
 }
 
-config = ConfigParser.ConfigParser(configDefaults)
+config = configparser.ConfigParser(configDefaults)
 job = None
 
 def parseConfigOptions(parser):

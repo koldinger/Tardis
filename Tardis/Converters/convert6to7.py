@@ -33,7 +33,7 @@ import sys
 import os.path
 import logging
 from Tardis import CacheDir
-import convertutils
+from . import convertutils
 
 version = 6
 
