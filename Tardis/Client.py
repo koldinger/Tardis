@@ -1330,7 +1330,7 @@ def handleResponse(response, doPush=True):
         if doPush:
             pushFiles()
     except Exception as e:
-        logger.error("Error handling response %d %s: %s", response.get('msgid'), response.get('message'), e.message)
+        logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e.message)
         exceptionLogger.log(e)
 
 
