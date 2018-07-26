@@ -62,9 +62,9 @@ Post 0.31.11 changes the directory hashing scheme.  It is recommended that you r
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 0.33.1+ Will be bug fixes, if necessary.
   * 1.0.0 Formal release
-  * 2.0.0 Will (hopefully) introduce a web interface to allow controlling backup jobs.
+  * 1.1.0 Port to Python3
+  * 1.2.0 Asynchronous protocol allowing simultaneous client and server operation
   
 Support
 =======
