@@ -118,10 +118,10 @@ class BinMessages(Messages):
         if (n & 0x80000000) != 0:
             n &= 0x7fffffff
             comp = True
-        bytes = self.receiveBytes(n)
+        data = self.receiveBytes(n)
         if comp:
-            bytes = self.decompress(bytes)
-        return bytes
+            data = self.decompress(bytes(data))
+        return data
 
 class TextMessages(Messages):
     def __init__(self, socket, stats=None):
