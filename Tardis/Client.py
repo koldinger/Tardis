@@ -35,6 +35,7 @@ import signal
 import logging
 import logging.handlers
 import fnmatch
+import re
 import glob
 import itertools
 import json
@@ -253,11 +254,7 @@ def filelist(dir, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
     files = map(fs_encode, os.listdir(dir))
     for p in excludes:
-        remove = [x for x in fnmatch.filter(files, p)]
-        if len(remove):
-            logger.debug("Excluding files from directory %s: %s", dir, remove)
-            files = set(files) - set(remove)
-    logger.debug("Returning %d files", len(files))
+        files = filter(lambda x: not p.match(x), files)
     for f in files:
         yield f
 
@@ -1231,16 +1228,18 @@ def setBackupName(args):
 
     return (name, priority, auto)
 
+def mkExcludePattern(pattern):
+    return re.compile(fnmatch.translate(pattern))
+
 def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
     try:
         with open(name) as f:
-            excludes = [x.rstrip('\n') for x in f.readlines()]
+            excludes = [mkExcludePattern(x.rstrip('\n')) for x in f.readlines()]
         return excludes
     except IOError as e:
         #traceback.print_exc()
         return []
-
 
 
 # Load all the excludes we might want
@@ -1249,9 +1248,9 @@ def loadExcludes(args):
     if not args.ignoreglobalexcludes:
         globalExcludes.extend(loadExcludeFile(globalExcludeFile))
     if args.cvs:
-        globalExcludes.extend(cvsExcludes)
+        globalExcludes.extend(map(mkExcludePattern, cvsExcludes))
     if args.excludes:
-        globalExcludes.extend(args.excludes)
+        globalExcludes.extend(map(mkExcludePattern, args.excludes))
     if args.excludefiles:
         for f in args.excludefiles:
             globalExcludes.extend(loadExcludeFile(f))
