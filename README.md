@@ -358,7 +358,7 @@ TardisRemote Configuration File
 
 | Name            | Default Value       | Environment Var | Definition |
 | ---             | ------------        | --------------- | ---------- |
-| Port            | 7420                | TARDIS_PORT     | Port to listen on |
+| Port            | 7420                | TARDIS_REMOTE_PORT     | Port to listen on |
 | Database        | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
 | DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
