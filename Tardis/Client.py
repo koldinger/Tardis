@@ -1330,6 +1330,7 @@ def handleResponse(response, doPush=True):
             pushFiles()
     except Exception as e:
         logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e.message)
+        logger.error(response)
         exceptionLogger.log(e)
 
 
@@ -1846,7 +1847,7 @@ def printStats(starttime, endtime):
         logger.log(logging.STATS, "Files Not Sent:   Disappeared: {:,}  Permission Denied: {:,}".format(stats['gone'], stats['denied']))
 
 
-    logger.log(logging.STATS, "Wait Times:  {:}".format(str(datetime.timedelta(0, waittime))))
+    logger.log(logging.STATS, "Wait Times:   {:}".format(str(datetime.timedelta(0, waittime))))
     logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
 
 
