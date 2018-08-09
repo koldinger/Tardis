@@ -126,7 +126,7 @@ class TardisDB(object):
     srpSrv          = None
     authenticated   = False
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False, check_threads=True):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbname)
@@ -148,7 +148,7 @@ class TardisDB(object):
         self.backup = backup
         self.numbackups = numbackups
 
-        conn = sqlite3.connect(self.dbName)
+        conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
         conn.text_factory = str
         conn.row_factory= sqlite3.Row
 

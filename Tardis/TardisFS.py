@@ -37,6 +37,7 @@ import errno   # for error number codes (ENOENT, etc)
 import sys
 import logging
 import logging.handlers
+import argparse
 import tempfile
 import json
 import base64
@@ -44,7 +45,7 @@ import time
 import stat    # for file properties
 
 #import fuse
-from fuse import FUSE, FuseOSError, Operations
+from Tardis.fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
 import Tardis.CacheDir as CacheDir
@@ -53,9 +54,8 @@ import Tardis.Util as Util
 import Tardis.Cache as Cache
 import Tardis.Defaults as Defaults
 import Tardis.TardisDB as TardisDB
-
-print(fuse.fuse_python_api)
-fuse.fuse_python_api = (0, 2)
+import Tardis.Config as Config
+import Tardis.TardisCrypto as TardisCrypto
 
 _BackupSetInfo = 0
 _LastBackupSet = 1
@@ -66,7 +66,7 @@ _LinkContents  = 5
 
 _infoEnabled    = True
 
-logger = logging.getLogger("Tracer: ")
+logger = None
 
 logLevels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
@@ -106,7 +106,7 @@ def getParts(path):
     else:
         return path.strip("/").split('/', 1)
 
-class TardisFS(Operations):
+class TardisFS(LoggingMixIn, Operations):
     """
     FUSE filesystem to read data from a Tardis Backup Database
     """
@@ -116,118 +116,32 @@ class TardisFS(Operations):
     backupsets = {}
     dirInfo = {}
     fsencoding = sys.getfilesystemencoding()
+    name = "TardisFS"
 
-    def __init__(self, *args, **kw):
-        super(TardisFS, self).__init__(*args, **kw)
-        global logger
+    client   = Defaults.getDefault('TARDIS_CLIENT')
+    database = Defaults.getDefault('TARDIS_DB')
+    dbdir    = Defaults.getDefault('TARDIS_DBDIR') % { 'TARDIS_DB': database }          # HACK
+    dbname   = Defaults.getDefault('TARDIS_DBNAME')
+    current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
-        try:
-            client   = Defaults.getDefault('TARDIS_CLIENT')
-            database = Defaults.getDefault('TARDIS_DB')
-            dbdir    = Defaults.getDefault('TARDIS_DBDIR') % { 'TARDIS_DB': database }          # HACK
-            dbname   = Defaults.getDefault('TARDIS_DBNAME')
-            current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
-            # Parameters
-            self.database       = database
-            self.client         = client
-            self.repoint        = False
-            self.password       = None
-            self.pwfile         = None
-            self.pwprog         = None
-            self.keys           = None
-            self.dbname         = dbname
-            self.dbdir          = dbdir
-            self.logfile        = None
-            self.cachetime      = 60
-            self.nocrypt        = False
-            self.noauth         = False
-            self.current        = current
-            self.authenticate   = True
-            self.verbose        = 0
+    def __init__(self, db, cache, crypto, args):
+        self.cacheDir = cache
+        self.crypt = crypto
+        self.tardis = db
 
-            self.crypt          = None
+        # Create a regenerator.
+        self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
+        self.files = {}
 
-            # logging.basicConfig(level=logging.WARNING)
+        # Set up some caches.
+        self.cachetime  = 60
 
-            self.parser.add_option("--database", '-D',      help="Path to the Tardis database directory")
-            self.parser.add_option("--client", '-C',        help="Client to load database for")
-            self.parser.add_option("--password", '-P',      help="Password for this archive (use '-o password=' to prompt for password)")
-            self.parser.add_option("--keys",                help="Load keys from the specified file")
+        self.cache      = Cache.Cache(0, float(self.cachetime))
+        self.fileCache  = Cache.Cache(0, float(self.cachetime), 'FileCache')
 
-            self.parser.add_option(mountopt="database",     help="Path to the Tardis database directory")
-            self.parser.add_option(mountopt="client",       help="Client to load database for")
-            self.parser.add_option(mountopt="password",     help="Password for this archive (use '-o password=' to prompt for password)")
-            self.parser.add_option(mountopt="pwfile",       help="Read password for this archive from the file.  Can be a URL (HTTP/HTTPS or FTP)")
-            self.parser.add_option(mountopt="pwprog",       help="Use the specified program to generate the password on stdout")
-            self.parser.add_option(mountopt="keys",         help="Load keys from the specified file")
-            self.parser.add_option(mountopt="repoint",      help="Make absolute links relative to backupset")
-            self.parser.add_option(mountopt="dbname",       help="Database Name")
-            self.parser.add_option(mountopt="dbdir",        help="Database Directory (if different from data directory")
-            self.parser.add_option(mountopt="cachetime",    help="Lifetime of cached elements in seconds")
-            self.parser.add_option(mountopt="logfile",      help="Log to file")
-            self.parser.add_option(mountopt="verbose",      help="Logging level")
-            self.parser.add_option(mountopt='nocrypt',      help="Disable encryption")
-            self.parser.add_option(mountopt='noauth',       help="Disable authentication")
-            self.parser.add_option(mountopt='current',      help="Name to use for most recent complete backup")
+        self.authenticate = True
 
-            res = self.parse(values=self, errex=1)
-
-            if self.logfile:
-                handler = logging.handlers.WatchedFileHandler(Util.fullPath(self.logfile))
-            else:
-                handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("%(levelname)s : %(name)s : %(message)s"))
-            logger.addHandler(handler)
-            verbose = int(self.verbose)
-            if verbose >= len(logLevels):
-                verbose = len(logLevels) - 1
-            elif verbose < 0:
-                verbose = 0
-
-            logger.setLevel(logLevels[verbose])
-
-            self.log = logging.getLogger("TardisFS")
-
-            self.mountpoint = res.mountpoint
-
-            self.name = "TardisFS:<{}/{}>".format(self.database, self.client)
-
-            password = Util.getPassword(self.password, self.pwfile, self.pwprog, prompt="Password for %s: " % (self.client))
-            self.password = None
-
-            self.cache      = Cache.Cache(0, float(self.cachetime))
-            self.fileCache  = Cache.Cache(0, float(self.cachetime), 'FileCache')
-
-            #if password:
-            #    self.crypt = TardisCrypto.TardisCrypto(password, self.client)
-            (self.tardis, self.cacheDir, self.crypt) = Util.setupDataConnection(self.database, self.client, password, self.keys, self.dbname, self.dbdir)
-            password = None
-
-            # Remove the crypto object if not encyrpting files.
-            if self.nocrypt or self.nocrypt is None:
-                self.crypt = None
-
-            if self.noauth or self.noauth is None:
-                self.authenticate = False
-
-            # Create a regenerator.
-            self.regenerator = Regenerator.Regenerator(self.cacheDir, self.tardis, crypt=self.crypt)
-            self.files = {}
-
-            # Make sure we can get something
-            self.tardis.lastBackupSet()
-
-            # Fuse variables
-            self.flags = 0
-            self.multithreaded = 0
-
-        except TardisDB.AuthenticationException as e:
-            logger.critical("Authentication failed.  Bad Password")
-            sys.exit(2)
-        except Exception as e:
-            logger.exception(e)
-            sys.exit(2)
 
     def __del__(self):
         if self.tardis:
@@ -320,14 +234,8 @@ class TardisFS(Operations):
         # Return it
         return f
 
-    @tracer
-    def fsinit(self):
-        global _infoEnabled
-        _infoEnabled = logger.isEnabledFor(logging.INFO)
-        pass
-
-    @tracer
-    def getattr(self, path):
+    #@tracer
+    def getattr(self, path, fh=None):
         """
         - st_mode (protection bits)
         - st_ino (inode number)
@@ -342,7 +250,7 @@ class TardisFS(Operations):
                     or the time of creation on Windows).
         """
 
-        #self.log.info("CALL getattr: %s",  path)
+        self.log.info("CALL getattr: %s",  path)
         path = self.fsEncodeName(path)
 
         depth = getDepth(path) # depth of path, zero-based from root
@@ -350,87 +258,91 @@ class TardisFS(Operations):
             # Fake the root
             target = self.lastBackupSet(False)
             timestamp = float(target['starttime'])
-            st = fuse.Stat()
-            st.st_mode = stat.S_IFDIR | 0o555
-            st.st_ino = 0
-            st.st_dev = 0
-            st.st_nlink = 32
-            st.st_uid = 0
-            st.st_gid = 0
-            st.st_size = 4096
-            st.st_atime = timestamp
-            st.st_mtime = timestamp
-            st.st_ctime = timestamp
+            st = {
+                'st_mode': stat.S_IFDIR | 0o555,
+                'st_ino': 0,
+                'st_dev': 0,
+                'st_nlink': 32,
+                'st_uid': 0,
+                'st_gid': 0,
+                'st_size': 4096,
+                'st_atime': timestamp,
+                'st_mtime': timestamp,
+                'st_ctime': timestamp,
+            }
             return st
         elif depth == 1:
             # Root directory contents
             lead = getParts(path)
-            st = fuse.Stat()
             if lead[0] == self.current:
                 target = self.lastBackupSet(True)
                 timestamp = float(target['endtime'])
-                st.st_mode = stat.S_IFLNK | 0o755
-                st.st_ino = 1
-                st.st_dev = 0
-                st.st_nlink = 1
-                st.st_uid = 0
-                st.st_gid = 0
-                st.st_size = 4096
-                st.st_atime = timestamp
-                st.st_mtime = timestamp
-                st.st_ctime = timestamp
+                st = {
+                    'st_mode': stat.S_IFLNK | 0o755,
+                    'st_ino': 1,
+                    'st_dev': 0,
+                    'st_nlink': 1,
+                    'st_uid': 0,
+                    'st_gid': 0,
+                    'st_size': 4096,
+                    'st_atime': timestamp,
+                    'st_mtime': timestamp,
+                    'st_ctime': timestamp
+                }
                 return st
             else:
                 f = self.getBackupSetInfo(lead[0])
                 #self.log.debug("Got backupset info for %s: %s", lead[0], str(f))
                 if f:
-                    st = fuse.Stat()
                     timestamp = float(f['starttime'])
-                    st.st_mode = stat.S_IFDIR | 0o555
-                    st.st_ino = int(float(f['starttime']))
-                    st.st_dev = 0
-                    st.st_nlink = 2
-                    st.st_uid = 0
-                    st.st_gid = 0
-                    st.st_size = 4096
-                    st.st_atime = timestamp
-                    st.st_mtime = timestamp
-                    st.st_ctime = timestamp
+                    st = {
+                        'st_mode': stat.S_IFDIR | 0o555,
+                        'st_ino': int(float(f['starttime'])),
+                        'st_dev': 0,
+                        'st_nlink': 2,
+                        'st_uid': 0,
+                        'st_gid': 0,
+                        'st_size': 4096,
+                        'st_atime': timestamp,
+                        'st_mtime': timestamp,
+                        'st_ctime': timestamp
+                    }
                     return st
         else:
             f = self.getFileInfoByPath(path)
             if f:
-                st = fuse.Stat()
-                st.st_mode = f["mode"]
-                st.st_ino = f["inode"]
-                st.st_dev = 0
-                st.st_nlink = f["nlinks"]
-                st.st_uid = f["uid"]
-                st.st_gid = f["gid"]
+                st = {
+                    'st_mode': f["mode"],
+                    'st_ino': f["inode"],
+                    'st_dev': 0,
+                    'st_nlink': f["nlinks"],
+                    'st_uid': f["uid"],
+                    'st_gid': f["gid"],
+                    'st_atime': f["mtime"],
+                    'st_mtime': f["mtime"],
+                    'st_ctime': f["ctime"]
+                }
                 if f["size"] is not None:
-                    st.st_size = int(f["size"])
+                    st['st_size'] = int(f["size"])
                 elif f["dir"]:
-                    st.st_size = 4096       # Arbitrary number
+                    st['st_size'] = 4096       # Arbitrary number
                 else:
-                    st.st_size = 0
-                st.st_atime = f["mtime"]
-                st.st_mtime = f["mtime"]
-                st.st_ctime = f["ctime"]
+                    st['st_size'] = 0
                 return st
-        return -errno.ENOENT
+        raise FuseOSError(errno.ENOENT)
 
 
-    @tracer
-    def getdir(self, _):
-        """
-        return: [[('file1', 0), ('file2', 0), ... ]]
-        """
-        #self.log.info('CALL getdir {}'.format(path))
-        return -errno.ENOSYS
+    #@tracer
+    #def getdir(self, _, fh):
+        #"""
+        #return: [[('file1', 0), ('file2', 0), ... ]]
+        #"""
+        ##self.log.info('CALL getdir {}'.format(path))
+        #raise FuseOSError(errno.ENOSYS)
 
-    @tracer
+    #@tracer
     def readdir(self, path, offset):
-        #self.log.info("CALL readdir %s Offset: %d", path, offset)
+        self.log.info("CALL readdir %s Offset: %d", path, offset)
         parent = None
 
         path = self.fsEncodeName(path)
@@ -438,12 +350,12 @@ class TardisFS(Operations):
         key = (_DirContents, path)
         dirents = self.cache.retrieve(key)
         if not dirents:
-            dirents = [('.', stat.S_IFDIR), ('..', stat.S_IFDIR)]
+            dirents = ['.', '..']
             depth = getDepth(path)
             if depth == 0:
-                dirents.append((self.current, stat.S_IFLNK))
+                dirents.append(self.current)
                 entries = self.tardis.listBackupSets()
-                dirents.extend([(y['name'], stat.S_IFDIR) for y in entries])
+                dirents.extend([y['name'] for y in entries])
             else:
                 parts = getParts(path)
                 if depth == 1:
@@ -465,53 +377,53 @@ class TardisFS(Operations):
                     name = self.fsEncodeName(name)
                     p = os.path.join(path, name)
                     self.fileCache.insert(p, e, now=now)
-                    dirents.append((name, e['mode']))
+                    dirents.append(name)
             self.cache.insert(key, dirents)
 
         #self.log.debug("Direntries: %s", str(dirents))
 
         # Now, return each entry in the list.
         for e in dirents:
-            (name, mode) = e
+            name = e
             #self.log.debug("readdir %s yielding dir entry for %s.  Mode: %s. Type: %s ", path, e, mode, type(mode))
-            yield fuse.Direntry(name, type=stat.S_IFMT(mode))
+            yield name
 
-    @tracer
+    #@tracer
     def mythread ( self ):
         #self.log.info('mythread')
-        return -errno.ENOSYS
+        raise FuseOSError(errno.ENOSYS)
 
-    @tracer
+    #@tracer
     def chmod ( self, path, mode ):
         #self.log.info('CALL chmod {} {}'.format(path, oct(mode)))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def chown ( self, path, uid, gid ):
         #self.log.info( 'CALL chown {} {} {}'.format(path, uid, gid))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def fsync ( self, path, isFsyncFile ):
         #self.log.info( 'CALL fsync {} {}'.format(path, isFsyncFile))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def link ( self, targetPath, linkPath ):
         #self.log.info( 'CALL link {} {}'.format(targetPath, linkPath))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def mkdir ( self, path, mode ):
         #self.log.info( 'CALL mkdir {} {}'.format(path, oct(mode)))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def mknod ( self, path, mode, dev ):
         #self.log.info( 'CALL mknod {} {} {}'.format(path, oct(mode), dev))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def open ( self, path, flags ):
         #self.log.info('CALL open {} {})'.format(path, flags))
         path = self.fsEncodeName(path)
@@ -519,7 +431,7 @@ class TardisFS(Operations):
         depth = getDepth(path) # depth of path, zero-based from root
 
         if depth < 2:
-            return -errno.ENOENT
+            raise FuseOSError(errno.ENOENT)
 
         # TODO: Lock this
         if path in self.files:
@@ -558,11 +470,11 @@ class TardisFS(Operations):
                 logger.debug("Set files[%s] => %s", path, str(self.files[path]))
                 return 0
         # Otherwise.....
-        return -errno.ENOENT
+        raise FuseOSError(errno.ENOENT)
 
 
-    @tracer
-    def read ( self, path, length, offset ):
+    #@tracer
+    def read ( self, path, length, offset, fh ):
         #self.log.info('CALL read {} {} {}'.format(path, length, offset))
         path = self.fsEncodeName(path)
         f = self.files[path]["file"]
@@ -573,9 +485,9 @@ class TardisFS(Operations):
             return data
         else:
             logger.warning("No file for path %s", path)
-            return -errno.EINVAL
+            raise FuseOSError(errno.EINVAL)
 
-    @tracer
+    #@tracer
     def readlink ( self, path ):
         #self.log.info('CALL readlink {}'.format(path))
         path = self.fsEncodeName(path)
@@ -606,9 +518,9 @@ class TardisFS(Operations):
                         link = os.path.join(self.mountpoint, parts[0], os.path.relpath(link, "/"))
                 self.cache.insert(key, link)
                 return link
-        return -errno.ENOENT
+        raise FuseOSError(errno.ENOENT)
 
-    @tracer
+    #@tracer
     def release ( self, path, flags ):
         path = self.fsEncodeName(path)
 
@@ -618,59 +530,48 @@ class TardisFS(Operations):
                 self.files[path]["file"].close()
                 del self.files[path]
             return 0
-        return -errno.EINVAL
+        raise FuseOSError(errno.EINVAL)
 
-    @tracer
+    #@tracer
     def rename ( self, oldPath, newPath ):
         #self.log.info('CALL rename {} {}'.format(oldPath, newPath))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
+    #@tracer
     def rmdir ( self, path ):
         #self.log.info('CALL rmdir {}'.format(path))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
-    @tracer
-    def statfs ( self ):
+    #@tracer
+    def statfs ( self, path ):
         """ StatFS """
-        #self.log.info('CALL statfs: %s', self.path)
-        if isinstance(self.cacheDir, CacheDir):
+        self.log.info('CALL statfs: %s', path)
+
+        if isinstance(self.cacheDir, CacheDir.CacheDir):
+            print("STATFS path " + self.cacheDir.root)
             fs = os.statvfs(self.cacheDir.root)
 
-            st = fuse.Stat()
-            st.f_bsize   = fs.f_bsize
-            st.f_frsize  = fs.f_frsize
-            st.f_blocks  = fs.f_blocks
-            st.f_bfree   = fs.f_bfree
-            st.f_bavail  = fs.f_bavail
-            st.f_files   = fs.f_files
-            st.f_ffree   = fs.f_ffree
-            st.f_favail  = fs.f_favail
-            st.f_flag    = fs.f_flag
-            st.f_namemax = fs.f_namemax
-            return st
+            return dict((key, getattr(fs, key)) for key in (
+                'f_bavail', 'f_bfree', 'f_blocks', 'f_bsize', 'f_favail',
+                'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
         else:
-            return -errno.EINVAL
+            raise FuseOSError(errno.EINVAL)
 
     def symlink ( self, targetPath, linkPath ):
         #self.log.info('CALL symlink {} {}'.format(path, linkPath))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
     def truncate ( self, path, size ):
         #self.log.info('CALL truncate {} {}'.format(path, size))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
     def unlink ( self, path ):
         #self.log.info('CALL unlink {}'.format(path))
-        return -errno.EROFS
-
-    def utime ( self, path, times ):
-        #self.log.info('CALL utime {} {} '.format(path, str(times)))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
     def write ( self, path, buf, offset ):
         #self.log.info('CALL write {} {} {}'.format(path, offset, len(buf)))
-        return -errno.EROFS
+        raise FuseOSError(errno.EROFS)
 
     # Map extrenal attribute names for the top level directories to backupset info names
     attrMap = {
@@ -680,7 +581,7 @@ class TardisFS(Operations):
         'user.session'  : 'session'
     }
 
-    @tracer
+    #@tracer
     def listxattr ( self, path, size ):
         path = self.fsEncodeName(path)
         self.log.info('CALL listxattr %s %d', path, size)
@@ -719,7 +620,7 @@ class TardisFS(Operations):
 
         return None
 
-    @tracer
+    #@tracer
     def getxattr (self, path, attr, size):
         path = self.fsEncodeName(path)
         #self.log.info('CALL getxattr: %s %s %s', path, attr, size)
@@ -775,26 +676,45 @@ class TardisFS(Operations):
 
         return 0
 
+def processArgs():
+    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
+
+    (_, remaining) = Config.parseConfigOptions(parser)
+    Config.addCommonOptions(parser)
+    Config.addPasswordOptions(parser, addcrypt=False)
+
+    parser.add_argument('mountpoint',       nargs=1, help="List of directories to sync")
+    parser.add_argument('--help', '-h',     action='help');
+
+    Util.addGenCompletions(parser)
+
+    args = parser.parse_args(remaining)
+    return args
+
 def main():
-    #logging.basicConfig()
-    try:
-        fs = TardisFS()
-    except:
-        sys.exit(1)
+    global logger
+    args = processArgs()
 
-    fs.flags = 0
-    fs.multithreaded = 0
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    try:
-        logger.debug("TardsFS Version: %s", Tardis.__versionstring__)
-        logger.debug("Database: %s", fs.database)
-        logger.debug("Client: %s", fs.client)
-        logger.debug("MountPoint: %s", fs.mountpoint)
-        logger.debug("DBName: %s", fs.dbname)
-        logger.debug("Repoint Links: %s", fs.repoint)
-        fs.main()
-    except Exception as e:
-        logger.exception(e)
+    if password:
+        crypto = TardisCrypto.TardisCrypto(password, args.client)
+    else:
+        crypto = None
+
+    path = os.path.join(args.database, args.client, args.dbname)
+    db = TardisDB.TardisDB(path, backup=False, check_threads=False)
+    cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+
+    if crypto:
+        Util.authenticate(db, args.client, password)
+        (f, c) = db.getKeys()
+        crypto.setKeys(f, c)
+
+    logger = Util.setupLogging(3)
+
+    fs = TardisFS(db, cacheDir, crypto, args)
+    fuse = FUSE(fs, args.mountpoint[0], debug=True, nothreads=True, foreground=True, allow_other=True)
 
 if __name__ == "__main__":
     main()
