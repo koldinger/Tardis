@@ -175,7 +175,7 @@ class TardisDB(object):
             newDB = False
 
         # Start authentication here.
-        self.logger.debug("Authetication status: %s %s", not newDB, self.needsAuthentication())
+        self.logger.debug("Authentication status: %s %s", not newDB, self.needsAuthentication())
         if newDB or not self.needsAuthentication():
             self.logger.debug("Setting authenticated true")
             self.authenticated = True
