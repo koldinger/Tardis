@@ -250,7 +250,7 @@ class TardisFS(LoggingMixIn, Operations):
                     or the time of creation on Windows).
         """
 
-        self.log.info("CALL getattr: %s",  path)
+        #self.log.info("CALL getattr: %s",  path)
         path = self.fsEncodeName(path)
 
         depth = getDepth(path) # depth of path, zero-based from root
@@ -342,7 +342,7 @@ class TardisFS(LoggingMixIn, Operations):
 
     #@tracer
     def readdir(self, path, offset):
-        self.log.info("CALL readdir %s Offset: %d", path, offset)
+        #self.log.info("CALL readdir %s Offset: %d", path, offset)
         parent = None
 
         path = self.fsEncodeName(path)
@@ -544,11 +544,8 @@ class TardisFS(LoggingMixIn, Operations):
 
     #@tracer
     def statfs ( self, path ):
-        """ StatFS """
-        self.log.info('CALL statfs: %s', path)
-
+        #self.log.info('CALL statfs: %s', path)
         if isinstance(self.cacheDir, CacheDir.CacheDir):
-            print("STATFS path " + self.cacheDir.root)
             fs = os.statvfs(self.cacheDir.root)
 
             return dict((key, getattr(fs, key)) for key in (
@@ -621,13 +618,10 @@ class TardisFS(LoggingMixIn, Operations):
         return None
 
     #@tracer
-    def getxattr (self, path, attr, size):
+    #def getxattr (self, path, attr, size, *args):
+    def getxattr(self, path, attr, position=0):
         path = self.fsEncodeName(path)
         #self.log.info('CALL getxattr: %s %s %s', path, attr, size)
-        if size == 0:
-            retFunc = lambda x: len(str(x))
-        else:
-            retFunc = str
 
         depth = getDepth(path)
 
@@ -636,7 +630,7 @@ class TardisFS(LoggingMixIn, Operations):
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
                 if self.attrMap[attr] in list(b.keys()):
-                    return retFunc(b[self.attrMap[attr]])
+                    return b[self.attrMap[attr]]
 
         if depth > 1:
             parts = getParts(path)
@@ -650,20 +644,20 @@ class TardisFS(LoggingMixIn, Operations):
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
                     #self.log.debug(str(checksum))
                     if checksum:
-                        return retFunc(checksum)
+                        return checksum
             elif attr == 'user.tardis_since':
                 if b:
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
                     #self.log.debug(str(since))
                     if since:
-                        return retFunc(since)
+                        return since
             elif attr == 'user.tardis_chain':
                 info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
                 #self.log.debug(str(checksum))
                 if info:
                     chain = str(info['chainlength'])
                     self.log.debug(str(chain))
-                    return retFunc(chain)
+                    return chain
             else:
                 # Must be an imported value.  Let's generate it.
                 info = self.getFileInfoByPath(path)
@@ -672,9 +666,22 @@ class TardisFS(LoggingMixIn, Operations):
                     xattrs = json.loads(f.read())
                     if attr in xattrs:
                         value = base64.b64decode(xattrs[attr])
-                        return retFunc(value)
+                        return value
 
         return 0
+
+def processMountOpts(mountopts):
+    kwargs = {}
+    if mountopts:
+        for i in mountopts:
+            opts = i.split(',')
+            for j in opts:
+                x = j.split('=', 1)
+                if len(x) == 1:
+                    kwargs[x[0]] = True
+                else:
+                    kwargs[x[0]] = x[1]
+    return kwargs
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
@@ -683,38 +690,56 @@ def processArgs():
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser, addcrypt=False)
 
+    parser.add_argument('-o',               dest='mountopts', action='append',help='Standard mount -o options')
+    parser.add_argument('-d',               dest='debug', action='store_true', default=False, help='Run in FUSE debug mode')
+    parser.add_argument('-f',               dest='foreground', action='store_true', default=False, help='Remain in foreground')
+
+    parser.add_argument('--verbose', '-v',  dest='verbose', action='count', default=0, help="Increase verbosity")
+    parser.add_argument('--help', '-h',     action='help')
+
     parser.add_argument('mountpoint',       nargs=1, help="List of directories to sync")
-    parser.add_argument('--help', '-h',     action='help');
 
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
+
     return args
+
+def delTardisKeys(kwargs):
+    keys = ['password', 'passwordfile', 'passwordprog', 'database', 'client', 'keys', 'dbname', 'dbdir']
+    for i in keys:
+        kwargs.pop(i, None)
 
 def main():
     global logger
     args = processArgs()
+    kwargs = processMountOpts(args.mountopts)
+    logger = Util.setupLogging(args.verbose)
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
+    try:
+        dargs = vars(args)
+        def aorb(name):
+            return kwargs.get(name) or dargs.get(name)
 
-    if password:
-        crypto = TardisCrypto.TardisCrypto(password, args.client)
-    else:
-        crypto = None
+        password = Util.getPassword(aorb('password'), aorb('passwordfile'), aorb('passwordprog'), prompt="Password for %s: " % (aorb('client')))
+        args.password = None
+        (tardis, cache, crypt) = Util.setupDataConnection(aorb('database'), aorb('client'), password, aorb('keys'), aorb('dbname'), aorb('dbdir'))
 
-    path = os.path.join(args.database, args.client, args.dbname)
-    db = TardisDB.TardisDB(path, backup=False, check_threads=False)
-    cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+        r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
+    except TardisDB.AuthenticationException as e:
+        logger.error("Authentication failed.  Bad password")
+        #if args.exceptions:
+            #logger.exception(e)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("DB Conneciton failed: %s", e)
+        sys.exit(1)
 
-    if crypto:
-        Util.authenticate(db, args.client, password)
-        (f, c) = db.getKeys()
-        crypto.setKeys(f, c)
+    delTardisKeys(kwargs)
+    print(kwargs)
 
-    logger = Util.setupLogging(3)
-
-    fs = TardisFS(db, cacheDir, crypto, args)
-    fuse = FUSE(fs, args.mountpoint[0], debug=True, nothreads=True, foreground=True, allow_other=True)
+    fs = TardisFS(tardis, cache, crypt, args)
+    fuse = FUSE(fs, args.mountpoint[0], debug=args.debug, nothreads=True, foreground=args.foreground, **kwargs)
 
 if __name__ == "__main__":
     main()
