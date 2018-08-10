@@ -312,7 +312,7 @@ class RemoteDB(object):
         r = self.session.get(self.baseURL + "getNewFiles/" + str(bset) + "/" + str(other), headers=self.headers)
         r.raise_for_status()
         for i in r.json():
-            i['name'] = fs_encode(i['name'])
+            i['name'] = str(i['name'])
             yield i
 
     @reconnect
