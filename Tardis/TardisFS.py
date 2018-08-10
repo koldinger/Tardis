@@ -579,19 +579,15 @@ class TardisFS(LoggingMixIn, Operations):
     }
 
     #@tracer
-    def listxattr ( self, path, size ):
+    #def listxattr ( self, path, size ):
+    def listxattr(self, path):
         path = self.fsEncodeName(path)
-        self.log.info('CALL listxattr %s %d', path, size)
-        if size == 0:
-            retFunc = lambda x: len("".join(x)) + len(str(x))
-        else:
-            retFunc = lambda x: x
-
+        #self.log.info('CALL listxattr %s %d', path, size)
         if getDepth(path) == 1:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
-                return retFunc(list(self.attrMap.keys()))
+                return list(self.attrMap.keys())
 
         if getDepth(path) > 1:
             parts = getParts(path)
@@ -611,9 +607,9 @@ class TardisFS(LoggingMixIn, Operations):
                         attrs += list(map(str, list(xattrs.keys())))
                         self.log.debug("Adding xattrs: %s", list(xattrs.keys()))
                         self.log.info("Xattrs: %s", str(attrs))
-                        self.log.info("Returning: %s", str(retFunc(attrs)))
+                        self.log.info("Returning: %s", str(attrs))
 
-                    return retFunc(attrs)
+                    return attrs
 
         return None
 
@@ -621,7 +617,8 @@ class TardisFS(LoggingMixIn, Operations):
     #def getxattr (self, path, attr, size, *args):
     def getxattr(self, path, attr, position=0):
         path = self.fsEncodeName(path)
-        #self.log.info('CALL getxattr: %s %s %s', path, attr, size)
+        self.log.info('CALL getxattr: %s %s', path, attr)
+        attr = str(attr)
 
         depth = getDepth(path)
 
@@ -630,7 +627,7 @@ class TardisFS(LoggingMixIn, Operations):
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
                 if self.attrMap[attr] in list(b.keys()):
-                    return b[self.attrMap[attr]]
+                    return str(b[self.attrMap[attr]])
 
         if depth > 1:
             parts = getParts(path)
@@ -642,22 +639,21 @@ class TardisFS(LoggingMixIn, Operations):
             if attr == 'user.tardis_checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                    #self.log.debug(str(checksum))
+                    self.log.debug("Got checksum {}", str(checksum))
                     if checksum:
-                        return checksum
+                        return bytes(str(checksum), 'utf-8')
             elif attr == 'user.tardis_since':
                 if b:
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
-                    #self.log.debug(str(since))
+                    self.log.debug(str(since))
                     if since:
-                        return since
+                        return bytes(str(since), 'utf-8')
             elif attr == 'user.tardis_chain':
                 info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
                 #self.log.debug(str(checksum))
                 if info:
-                    chain = str(info['chainlength'])
-                    self.log.debug(str(chain))
-                    return chain
+                    chain = info['chainlength']
+                    return bytes(str(chain), 'utf-8')
             else:
                 # Must be an imported value.  Let's generate it.
                 info = self.getFileInfoByPath(path)
@@ -666,9 +662,10 @@ class TardisFS(LoggingMixIn, Operations):
                     xattrs = json.loads(f.read())
                     if attr in xattrs:
                         value = base64.b64decode(xattrs[attr])
-                        return value
+                        return bytes(str(value), 'utf-8')
 
-        return 0
+        self.log.debug("Getxattr -- default return value")
+        return ""
 
 def processMountOpts(mountopts):
     kwargs = {}
@@ -706,7 +703,7 @@ def processArgs():
     return args
 
 def delTardisKeys(kwargs):
-    keys = ['password', 'passwordfile', 'passwordprog', 'database', 'client', 'keys', 'dbname', 'dbdir']
+    keys = ['password', 'pwfile', 'pwprog', 'database', 'client', 'keys', 'dbname', 'dbdir']
     for i in keys:
         kwargs.pop(i, None)
 
@@ -717,13 +714,18 @@ def main():
     logger = Util.setupLogging(args.verbose)
 
     try:
-        dargs = vars(args)
-        def aorb(name):
-            return kwargs.get(name) or dargs.get(name)
+        argsDict = vars(args)
+        def getarg(name):
+            """ Extract a value from either the kwargs, or the regular args """
+            return kwargs.get(name) or argsDict.get(name)
 
-        password = Util.getPassword(aorb('password'), aorb('passwordfile'), aorb('passwordprog'), prompt="Password for %s: " % (aorb('client')))
+        # Extract the password file and program, if they exist.  Names differ, so getarg doesn't work.
+        pwfile = kwargs.get('pwfile') or argsDict.get('passwordfile')
+        pwprog = kwargs.get('pwprog') or argsDict.get('passwordprog')
+
+        password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt="Password for %s: " % (getarg('client')))
         args.password = None
-        (tardis, cache, crypt) = Util.setupDataConnection(aorb('database'), aorb('client'), password, aorb('keys'), aorb('dbname'), aorb('dbdir'))
+        (tardis, cache, crypt) = Util.setupDataConnection(getarg('database'), getarg('client'), password, getarg('keys'), getarg('dbname'), getarg('dbdir'))
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
@@ -736,7 +738,6 @@ def main():
         sys.exit(1)
 
     delTardisKeys(kwargs)
-    print(kwargs)
 
     fs = TardisFS(tardis, cache, crypt, args)
     fuse = FUSE(fs, args.mountpoint[0], debug=args.debug, nothreads=True, foreground=args.foreground, **kwargs)
