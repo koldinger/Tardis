@@ -108,7 +108,7 @@ def makeDict(row):
 
 def compressMsg(string, threshold=1024):
     if len(string) > threshold:
-        comp = zlib.compress(bytes(string), 'utf8')
+        comp = zlib.compress(bytes(string, 'utf8'))
         if len(comp) < len(string):
             app.logger.debug("Compressed %d to %d", len(string), len(comp))
             return (comp, True)
@@ -189,7 +189,7 @@ def needsAuthentication():
 def authenticate1():
     db = getDB()
     data = request.form
-    app.logger.info("Authenticate 1: Got data: " + str(data))
+    app.logger.debug("Authenticate 1: Got data: " + str(data))
     srpUname = data['srpUname']
     srpValueA = base64.b64decode(data['srpValueA'])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
@@ -200,7 +200,7 @@ def authenticate1():
 def authenticate2():
     db = getDB()
     data = request.form
-    app.logger.info("Authenticate 2: Got data: " + str(data))
+    app.logger.debug("Authenticate 2: Got data: " + str(data))
     srpValueM = base64.b64decode(data['srpValueM'])
     srpValueH = db.authenticate2(srpValueM)
     resp = { "srpValueH": str(base64.b64encode(srpValueH), 'utf8') }
