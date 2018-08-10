@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! env/bin/python3
 from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
 import sqlite3
 import argparse, logging
