@@ -255,9 +255,8 @@ def filelist(dir, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
     files = os.listdir(dir)
     for p in excludes:
-        files = filter(lambda x: not p.match(x), files)
-    for f in files:
-        yield f
+        files = itertools.filterfalse(p.match, files)
+    return files
 
 def delInode(inode):
     if args.loginodes:
@@ -1060,8 +1059,8 @@ def printProgress(header=None, name=None):
             bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
 
             width = _windowWidth - len(bar) - 4
-            print bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine,
-            sys.stdout.flush()
+
+            print(bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine, end='', flush=True)
 
     if header or name:
         #update the last info
@@ -1708,8 +1707,8 @@ def processCommandLine():
 
     parser.add_argument('--stats',              action=Util.StoreBoolean, dest='stats', default=c.getboolean(t, 'Stats'),
                         help='Print stats about the transfer.  Default=%(default)s')
-    parser.add_argument('--report',             action=Util.StoreBoolean, dest='report', default=c.getboolean(t, 'Report'),
-                        help='Print a report on all files transferred.  Default=%(default)s')
+    parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default='none', nargs='?',
+                        help='Print a report on all files or directories transferred.  Default=%(default)s')
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
@@ -1854,9 +1853,10 @@ def printStats(starttime, endtime):
     logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
 
 
-def printReport():
-    lastDir = ''
+def printReport(repFormat):
+    lastDir = None
     length = 0
+    numFiles = 0
     logger.log(logging.STATS, "")
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
@@ -1865,18 +1865,26 @@ def printReport():
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
         fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s   %-6s %-10s'.format(length)
+        fmt4 = '  %5d files'
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
             r = report[i]
             (d, f) = i
+            numFiles += 1
             if d != lastDir:
+                if repFormat == 'dirs' and lastDir:
+                    logger.log(logging.STATS, fmt4, numFiles)
+                numFiles = 0
                 logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
                 lastDir = d
-            if r['sigsize']:
-                logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
-            else:
-                logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+            if repFormat == 'all':
+                if r['sigsize']:
+                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+                else:
+                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+        if repFormat == 'dirs' and lastDir:
+            logger.log(logging.STATS, fmt4, numFiles)
     else:
         logger.log(logging.STATS, "No files backed up")
 
@@ -2146,8 +2154,8 @@ def main():
     # Print stats and files report
     if args.stats:
         printStats(starttime, endtime)
-    if args.report:
-        printReport()
+    if args.report != 'none':
+        printReport(args.report)
 
     if args.local:
         os.unlink(tempsocket)
