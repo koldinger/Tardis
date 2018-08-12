@@ -483,13 +483,20 @@ def main():
                         ckname = recoverName(i)
                     f = r.recoverChecksum(i, args.auth)
                     if f:
+                        logger.info("Recovering checksum %s", ckname)
                     # Generate an output name
                         if outputdir:
                             outname = os.path.join(outputdir, ckname)
+                            if os.path.exists(outname) and owMode == OW_NEVER:
+                                logger.warning("File %s exists.  Skipping", outname)
+                                continue
                             logger.debug("Writing output to %s", outname)
                             output = file(outname,  "wb")
                         elif outname:
                             # Note, this should ONLY be true if only one file
+                            if os.path.exists(outname) and owMode == OW_NEVER:
+                                logger.warning("File %s exists.  Skipping", outname)
+                                continue
                             output = file(outname,  "wb")
                         try:
                             x = f.read(64 * 1024)
