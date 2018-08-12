@@ -484,12 +484,12 @@ def main():
                     f = r.recoverChecksum(i, args.auth)
                     if f:
                     # Generate an output name
-                        if outname:
-                            # Note, this should ONLY be true if only one file
-                            output = file(outname,  "wb")
-                        elif outputdir:
+                        if outputdir:
                             outname = os.path.join(outputdir, ckname)
                             logger.debug("Writing output to %s", outname)
+                            output = file(outname,  "wb")
+                        elif outname:
+                            # Note, this should ONLY be true if only one file
                             output = file(outname,  "wb")
                         try:
                             x = f.read(64 * 1024)
