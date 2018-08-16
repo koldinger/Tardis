@@ -80,9 +80,11 @@ Installation
 Installing  up the server is relatively straightforward.
   * Install librsync, python fuse, and python developmen, and a couple other packages.
     * Fedora: `{yum|dnf} install librsync libacl-devel libffi-devel python-devel python-fuse python-setuptools gmp snappy-devel openssl-devel`
-    * Ubuntu/Debian: a`pt-get install librsync1 libacl1-dev libffi-dev python-dev python-fuse libcurl4-openssl-dev python-setuptools libgmp3-dev libsnappy-dev openssl-dev`
+    * Ubuntu/Debian: `apt-get install librsync1 libacl1-dev libffi-dev python3-dev python3-cffi python3-setuptools libcurl4-openssl-dev python3-setuptools libgmp3-dev libsnappy-dev`
   * Run the python setup:
-    * `python setup.py install`
+    * `python3 setup.py install`
+    * Note, on Debian based systems, add the `--install-layout deb` optios
+      * `python3 setup.py install --install-layout deb`
 
 Server Setup
 ============
