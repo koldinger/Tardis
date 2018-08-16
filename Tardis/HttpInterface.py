@@ -190,7 +190,7 @@ def authenticate1():
     db = getDB()
     data = request.form
     app.logger.debug("Authenticate 1: Got data: " + str(data))
-    srpUname = data['srpUname']
+    srpUname = base64.b64decode(data['srpUname'])
     srpValueA = base64.b64decode(data['srpValueA'])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
     resp = { "srpValueS": str(base64.b64encode(srpValueS), 'utf8'), "srpValueB": str(base64.b64encode(srpValueB), 'utf8') }

@@ -134,7 +134,7 @@ class RemoteDB(object):
 
     def authenticate1(self, uname, srpValueA):
         postData = {
-            'srpUname':  uname,
+            'srpUname':  str(base64.b64encode(bytes(uname, 'utf8')), 'utf8'),
             'srpValueA': str(base64.b64encode(srpValueA), 'utf8')
         }
         response = self.session.post(self.baseURL + 'authenticate1', data=postData)
