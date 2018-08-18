@@ -451,7 +451,7 @@ class RemoteDB(object):
 
     @reconnect
     def open(self, checksum, mode):
-        temp = tempfile.SpooledTemporaryFile(max_size=64 * 1024, mode="wb")
+        temp = tempfile.SpooledTemporaryFile(max_size=64 * 1024)
         r = self.session.get(self.baseURL + "getFileData/" + checksum, stream=True)
         r.raise_for_status()
         #self.logger.debug("%s", str(r.headers))
