@@ -521,7 +521,8 @@ def processDelta(inode, signatures):
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
 
-    if inode in inodeDB:
+    #if inode in inodeDB:
+    try:
         checksum = None
         (fileInfo, pathname) = inodeDB[inode]
         if pathname:
@@ -601,7 +602,7 @@ def sendContent(inode, reportType):
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
-                raise e
+                #raise e
             finally:
                 if data is not None:
                     data.close()
@@ -613,8 +614,9 @@ def sendContent(inode, reportType):
                 repInfo = { 'type': reportType, 'size': size, 'sigsize': sigsize }
                 report[os.path.split(pathname)] = repInfo
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
-    else:
-        logger.debug("Unknown inode {} -- Probably linked".format(inode))
+    except KeyError as e:
+        logger.error("No inode entry for %s", inode)
+        exceptionLogger.log(e)
 
 def handleAckMeta(message):
     checkMessage(message, 'ACKMETA')
