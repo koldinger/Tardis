@@ -55,6 +55,7 @@ import stat
 import uuid
 import errno
 import unicodedata
+import pprint
 
 from binascii import hexlify
 
@@ -515,7 +516,7 @@ def processDelta(inode, signatures):
         else:
             sendContent(inode, 'Full')
     except KeyError as e:
-        logger.error("No inode entry for %s", inode)
+        logger.error("ProcessDelta: No inode entry for %s", inode)
         exceptionLogger.log(e)
 
 def sendContent(inode, reportType):
@@ -615,7 +616,7 @@ def sendContent(inode, reportType):
                 report[os.path.split(pathname)] = repInfo
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
     except KeyError as e:
-        logger.error("No inode entry for %s", inode)
+        logger.error("SendContent: No inode entry for %s", inode)
         exceptionLogger.log(e)
 
 def handleAckMeta(message):
@@ -1331,8 +1332,8 @@ def handleResponse(response, doPush=True):
         if doPush:
             pushFiles()
     except Exception as e:
-        logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e.message)
-        logger.error(response)
+        logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e)
+        logger.error(pprint.pformat(respons, width=5000, depth=4))
         exceptionLogger.log(e)
 
 
