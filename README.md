@@ -5,12 +5,55 @@ A Time Machine style backup system.
 
 Tardis is a system for making incremental backups of filesystems, much like Apple's TimeMachine.
 
-Tardis began due to some frustrations with using pure rsync to do backups.  Tardis is more efficient with disk space,
-it's able to coalesce duplicate copies of files, and stores file metadata separately from file data.  Tardis is also aimed
-at having a relatively compact server, capable of running on small machines, such as a Raspberry PI.  Tardis is (hopefully)
-relatively platform independent, although it's only been tested on linux so far.  It should work on MacOS, and should be
-easy ported to Windows.
+Like TimeMachine, Tardis is aimed primarily at "live backups", namely a backup taken periodically, and available for quick recovery, typically stored on attached or online disks, or rather than being stored on archival backup media, such as tapes.
 
+Tardis runs in a client/server mode, normally using a remote backup server (client and server can be the same machine).   The server is relatively lightweight, and runs fine on a Raspberry Pi 2 or better machine.
+
+Quick Start
+===========
+Installation
+------------
+* Pick machines to use as both your client and server.   They can be the same machine, but if you want to backup to your client machine, it is recommended that you backup to a drive that you only use for backups, so that a failure of your main drive(s) will not cause a loss of your backups.
+* Install the tardis package on your client and server machines.
+  * `python setup.py install`
+  * If this doesn't work, you may need to install additional packages that this installer can't.   See the [Installation](#Installation) section below for more details.
+* Edit the daemon configuration file to indicate where you want to store the backups.   The configuration is stored (on linux) in `/etc/tardis/tardisd.cfg`, the database base directory is specified in the `BaseDir` option.   By default, the location is `/media/Backup/tardis`
+* Start the server:  `tardisd --config /etc/tardis/tardisd.config`
+
+Backing up data
+---------------
+
+* Run the first backup job `tardis --server ServerName --create paths` where ServerName is the name of the server (if backing up to the local machine, this can be localhost, or the --server option can be left of entirely), and paths is a list of directories to backup (including all directories below them).   Depending on the amount of data you wish to backup, this can take a long time.
+  * Adding the --password option will cause your backups to be encrypted.
+   * With no password specified, you will be prompted to enter one.
+   * you can also specify the --password-file and --password-prog to retrieve the password from a file, or from a program.
+   * DO NOT LOSE YOUR PASSWORD.   There is no recovery mechanism.
+  * Adding the --progress option will show progress as your backup runs, but is not recommended for automated backups.
+* When the first job completes correctly, you can run subsequent backups using the same command line, but removing the --create option.  `tardis --server ServerName paths`
+  * If the first run doesn't complete successfully, subsequent runs without --create will simply move to complete the partial backup.
+  * Creating a periodic job (such as daily or hourly) via cron can automate your backups.
+  
+Each time you run the tardis program, you will create a new backup set.  By default backup sets are named Monthly-YYYY-MM for the first backup set stored in any month, Weekly-YYYY-WW for the first backup set any week (if not a monthly set), Daily-YYYY-MM-DD for the first set each day (unless weekly or monthly), and Hourly-YYYY-MM-DD-hh if run hourly.  Additional backup sets (ie, more than hourly), or incomplete backup sets (where the tardis job failed before the backup completed) are named Backup_YYYY-MM-DD-hh:mm:ss. (YYYY = year, MM = month, DD = date, WW = week of year, hh = hour, mm = min, and ss = seconds).
+Normally, hourly backups are pruned out of the database after 24 hours, daily sets after 30 days, weekly after 6 months, and monthly's kept forever.  All these names and pruning parameters can be adjusted.
+
+Recovering data
+---------------
+There are two ways to access backed up data, and it depends how you've done your backup.  If you've backed your data 
+up to the client machine, you can access the backup database directly.  In this case you will point tools directly
+at the database.   This can also be done if the database is accesible via a network file system, such as NFS or Samba/SMB/CIFS.   If the backup drive is not directly accessible, it can be reached via an http exposed filesystem.  Details on setting this up are below.
+
+* Determine which backup sets exist:  `sonic list --database DatabasePath`.
+  * DatabasePath could be a path on yourlocal system, if you're using the system above, usually the same value you entered in     the tardisd config file, so `sonic list --database /media/Backup/tardis`.   If you're using a remote system, it will be an HTTP (or HTTPS) URL, eg `sonic list --database http://serverhost` where serverhost is the name of the machine running the server.
+  * If the backups were made with a password, the password will need to be specified via the --password or related options.  You will be prompted for a password if one isn't specified. 
+* Determine which version of the file are available using the lstardis program: `lstardis --databse DatabasePath /path/to/file`.  This will list all the backup sets which contain changed versions of the file.
+* Recover the file using the regenerate program: `regenerate --database DatabasePath --backup backupset /path/to/file`.  This will recover the versino of the file in backupset.  If the file is a directory, the directory, and all files below it will be recovered.   You can specify the -o option to indicate where the files should be recovered.   You can also replace --backup with --date Date to recover the most recent version backed up before Date.   If you don't specify a backupset or date, the most recent version will be recovered.
+
+Tardis File System
+------------------
+The tardis dataset can also be mounted as a filesystem.   Typically the command: `tardisfs --database DatabasePath /path/to/mountpoint` will mount the filesystem under the directory /path/to/mountpoint (mountpoint should be an empty directory).  In this scenario, you will see files under mountpoint.   At the first level, there will be a directory for each backup set, with the names as above.   Within each directory will be a directory tree, with the data as backed up in that backup set.
+
+Components
+==========
 Tardis consists of several components:
 * tardisd (Daemon.py): The tardis daemon process which maintains the backups
 * tardis  (Client.py): The tardis client process, which creates backup data and pushes it to the server
@@ -19,52 +62,27 @@ Tardis consists of several components:
 * lstardis (List.py): List versions of files and directories in the database.
 * tardiff (Diff.py): Show the differences between versions of backed up files, and the current version.
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
-* tardisremote (HttpInterface): A server, still under development, which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis
+* tardisremote (HttpInterface): An optional http server which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis, etc.
 
-Tardis is currently under development, but is at beta level.
-Tardis relies on the ~~bson~~, msgpack, xattrs, pycryptodome (pycryptodomex), srp, daemonize, parsedatetime, flask, tornado, requests, requests-cache, passwordmeter, python-snappy, 
-and termcolor packages, and their associated libraries.
+Tardis is written in Python 2, and only relies on a few non-pure python packages.
+
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
 
-Important Note -- Version 0.33
-==============================
-New clients must be created with the `tardis --create` or `sonic create` options.
-If a password is required, tardis will prompt for one.
-
-0.33's communications protocol is slightly incompatible with previous versions.   Please upgrade both client and server simultaneously.
-
-Important Note -- Version 0.32
-==============================
-Version 0.32 changes the communications protocol in some minor ways, but is incompatible with previous versions.  The client, server, and all tools must be upgraded
-at the same time.
-
-Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using
-the Secure Remote Password (SRP) protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will
-set the database up for the new password mechanism.  Note that this MUST be run on the server, and requires the users password.  Usage is:
-   * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
-
-Because the database schema updates at the same point, you will also need to upgrade the schema.  The command for this is:
-   * `sonic upgrade -D cache -C client`
-
-Note that no password is needed.
-
-If your backup does not use a password, this step should be skipped.  It only applies to secure backups.
-
-Important Release Notes
-=======================
-0.31.12 or so changed the database journalling scheme to SQLite's "write ahead logging".  This seemed to cause problems.  If you are unable to do much with the database, execute the following command at the command line:
-   * ` % sqlite3 path/to/database/tardis.db`
-   * `sqlite> pragma journal_mode=truncate;`
-
-Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run *MUCH* longer than usual.  It will self correct after the first backup run.
+Tardis also comes with a number of "tools", which are not necessarily fully supported:
+* checkdb.py: Check that the database makes sense, to some degree.
+* encryptDB.py: Encrypt a backup database.
+* decryptName.py: Decrypt (or encrypt) a name as specified in the database.
+* cdfile.py: Give the full path of a file in the backup database.
+* mkKeyBackup.py: Generate a backup copy of your keys, suitable for hardcopy printing and archiving.
+Tools are located in the tools directory, and are not installed.
 
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 1.0.0 Formal release
+  * 1.0.x Tweaks and bug fixes.
   * 1.1.0 Port to Python3
-  * 1.2.0 Asynchronous protocol allowing simultaneous client and server operation
+  * 1.2.0 Asynchronous protocol allowing improved performance.
   
 Support
 =======
@@ -126,6 +144,8 @@ If you wish encrypted backups, add a password (via the --password, --password-fi
 
 On your first backup, add the --create flag to initialize the backup set.
 Your first backup will take quite a while.  Subsequent backups will be significantly faster.
+If the first backup does not complete, it can be continued simply by using the same command line, without the --create option.
+It will backup any data which wasn't backed up the first time, along with any changed data.   This can be repeated any number of times.
 
 Once you have an initial backup in place, put this in your cron job to run daily.
 
@@ -340,7 +360,7 @@ TardisRemote Configuration File
 
 | Name            | Default Value       | Environment Var | Definition |
 | ---             | ------------        | --------------- | ---------- |
-| Port            | 7420                | TARDIS_PORT     | Port to listen on |
+| Port            | 7420                | TARDIS_REMOTE_PORT     | Port to listen on |
 | Database        | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
 | DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
@@ -390,6 +410,37 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
 
+Important Note -- Version 0.33
+==============================
+New clients must be created with the `tardis --create` or `sonic create` options.
+If a password is required, tardis will prompt for one.
+
+0.33's communications protocol is slightly incompatible with previous versions.   Please upgrade both client and server simultaneously.
+
+Important Note -- Version 0.32
+==============================
+Version 0.32 changes the communications protocol in some minor ways, but is incompatible with previous versions.  The client, server, and all tools must be upgraded
+at the same time.
+
+Version 0.32 also changes the login mechanism, from the rather insecure ad-hoc mechanism used previously, to an cryptographically secure version, using
+the Secure Remote Password (SRP) protocol.  As such, the database must be changed to support the new password mechanism.  The script tools/setSRP.py will
+set the database up for the new password mechanism.  Note that this MUST be run on the server, and requires the users password.  Usage is:
+   * `python tools/setSRP.py [-D cache] [-C client] --password [password]|--password-file file|--password-prog program`
+
+Because the database schema updates at the same point, you will also need to upgrade the schema.  The command for this is:
+   * `sonic upgrade -D cache -C client`
+
+Note that no password is needed.
+
+If your backup does not use a password, this step should be skipped.  It only applies to secure backups.
+
+Important Release Notes
+=======================
+0.31.12 or so changed the database journalling scheme to SQLite's "write ahead logging".  This seemed to cause problems.  If you are unable to do much with the database, execute the following command at the command line:
+   * ` % sqlite3 path/to/database/tardis.db`
+   * `sqlite> pragma journal_mode=truncate;`
+
+Post 0.31.11 changes the directory hashing scheme.  It is recommended that you run the `tools/setDirHashes.py` program (or run `encryptDB.py --dirs`, but only if your database is encrypted) to reset the hashes to the new scheme.  This is not necessary, but without it your next backup job will run *MUCH* longer than usual.  It will self correct after the first backup run.
 
 Logwatch Support
 ================
