@@ -712,18 +712,27 @@ def pushFiles():
     logger.debug("Pushing files")
     # If checksum content in NOT specified, send the data for each file
     for i in [tuple(x) for x in allContent]:
-        if args.ckscontent and cksize(i, args.ckscontent):
-            allCkSum.append(i)
-        else:
-            if logger.isEnabledFor(logging.FILES):
-                logFileInfo(i, 'N')
-            sendContent(i, 'New')
-            delInode(i)
+        try:
+            if args.ckscontent and cksize(i, args.ckscontent):
+                allCkSum.append(i)
+            else:
+                if logger.isEnabledFor(logging.FILES):
+                    logFileInfo(i, 'N')
+                sendContent(i, 'New')
+        except Exception as e:
+            logger.error("Unable to backup %s: ", str(i), str(e))
+
+        delInode(i)
+
 
     for i in [tuple(x) for x in allRefresh]:
         if logger.isEnabledFor(logging.FILES):
             logFileInfo(i, 'N')
-        sendContent(i, 'Full')
+        try:
+            sendContent(i, 'Full')
+        except Exception as e:
+            logger.error("Unable to backup %s: ", str(i), str(e))
+
         delInode(i)
 
     # If there are any delta files requested, ask for them
@@ -733,16 +742,19 @@ def pushFiles():
 
     for i in [tuple(x) for x in allDelta]:
         # If doing a full backup, send the full file, else just a delta.
-        if args.full:
-            if logger.isEnabledFor(logging.FILES):
-                logFileInfo(i, 'N')
-            sendContent(i, 'Full')
-        else:
-            if logger.isEnabledFor(logging.FILES):
-                if i in inodeDB:
-                    (x, name) = inodeDB[i]
-                    logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
-            processDelta(i, signatures)
+        try:
+            if args.full:
+                if logger.isEnabledFor(logging.FILES):
+                    logFileInfo(i, 'N')
+                sendContent(i, 'Full')
+            else:
+                if logger.isEnabledFor(logging.FILES):
+                    if i in inodeDB:
+                        (x, name) = inodeDB[i]
+                        logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
+                processDelta(i, signatures)
+        except Exception as e:
+            logger.error("Unable to backup %s: ", str(i), str(e))
         delInode(i)
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
@@ -1301,7 +1313,15 @@ def sendKeys(password, client, includeKeys=True):
     if response['response'] != 'OK':
         logger.error("Could not set keys")
 
-def handleResponse(response, doPush=True):
+def handleResponse(response, doPush=True, pause=0):
+    # TODO: REMOVE THIS DEBUG CODE and the pause parameter
+    if pause:
+        subs = ""
+        if response.get('message') == 'ACKBTCH':
+            subs = "-- " + " ".join(map(lambda x: x.get('message', 'NONE') + " (" + str(x.get('respid', -1)) + ")" , response['responses']))
+        logger.warning("Sleeping for %d seconds.  Do your thing: %d %s %s", pause, response.get('respid', -1), response.get('message', 'NONE'), subs)
+        time.sleep(pause)
+    # END DEBUG
     try:
         msgtype = response['message']
         if msgtype == 'ACKDIR':
@@ -1325,7 +1345,7 @@ def handleResponse(response, doPush=True):
             pass
         elif msgtype == 'ACKBTCH':
             for ack in response['responses']:
-                handleResponse(ack, doPush=False)
+                handleResponse(ack, doPush=False, pause=0)
         else:
             logger.error("Unexpected response: %s", msgtype)
 
@@ -1333,9 +1353,9 @@ def handleResponse(response, doPush=True):
             pushFiles()
     except Exception as e:
         logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e)
+        logger.exception("Exception: ", exc_info=e)
         logger.error(pprint.pformat(response, width=5000, depth=4))
         exceptionLogger.log(e)
-
 
 _nextMsgId = 0
 def setMessageID(message):
