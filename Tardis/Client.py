@@ -56,6 +56,7 @@ import uuid
 import errno
 import unicodedata
 import pprint
+import traceback
 
 from binascii import hexlify
 
@@ -109,7 +110,6 @@ configDefaults = {
     'Local':                str(False),
     'LocalServerCmd':       'tardisd --config ' + local_config,
     'CompressMsgs':         'none',
-    'ChecksumContent':      str(0),
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
     'SkipCaches':           str(False),
@@ -259,11 +259,25 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
+_deletedInodes = {}
+
 def delInode(inode):
     if args.loginodes:
         args.loginodes.write(str(inode) + "\n")
     if inode in inodeDB:
         del inodeDB[inode]
+        _deletedInodes[inode] = (currentResponse, currentBatch)
+
+def msgInfo(resp=None, batch=None):
+    if resp is None: resp = currentResponse
+    if batch is None: batch = currentBatch
+    respId = resp['respid']
+    respType = resp['message']
+    if batch:
+        batchId = batch['respid']
+    else:
+        batchId = None
+    return (respId, respType, batchId)
 
 
 def processChecksums(inodes):
@@ -291,8 +305,16 @@ def processChecksums(inodes):
             checksum = m.hexdigest()
             files.append({ "inode": inode, "checksum": checksum })
         except KeyError as e:
-            logger.error("Unable to process checksum for %s, not found in inodeDB", str(inode))
+            (rId, rType, bId) = msgInfo()
+            logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
             exceptionLogger.log(e)
+            if inode in _deletedInodes:
+                (resp, batch) = _deletedInodes[inode]
+                (rId, rType, bId) = msgInfo(resp, batch)
+
+                logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
+            #traceback.print_stack()
+
     message = {
         "message": "CKS",
         "files": files
@@ -713,14 +735,11 @@ def pushFiles():
     # If checksum content in NOT specified, send the data for each file
     for i in [tuple(x) for x in allContent]:
         try:
-            if args.ckscontent and cksize(i, args.ckscontent):
-                allCkSum.append(i)
-            else:
-                if logger.isEnabledFor(logging.FILES):
-                    logFileInfo(i, 'N')
-                sendContent(i, 'New')
+            if logger.isEnabledFor(logging.FILES):
+                logFileInfo(i, 'N')
+            sendContent(i, 'New')
         except Exception as e:
-            logger.error("Unable to backup %s: ", str(i), str(e))
+            logger.error("Unable to backup %s: %s", str(i), str(e))
 
         delInode(i)
 
@@ -731,7 +750,7 @@ def pushFiles():
         try:
             sendContent(i, 'Full')
         except Exception as e:
-            logger.error("Unable to backup %s: ", str(i), str(e))
+            logger.error("Unable to backup %s: %s", str(i), str(e))
 
         delInode(i)
 
@@ -901,18 +920,6 @@ def handleAckClone(message):
     content = message.setdefault('content', {})
     done    = message.setdefault('done', {})
 
-    # Process the directories that have changed
-    for i in content:
-        finfo = tuple(i)
-        if finfo in cloneContents:
-            (path, files) = cloneContents[finfo]
-            if logdirs:
-                logger.log(logging.DIRS, "[R]: %s", Util.shortPath(path))
-            sendDirChunks(path, finfo, files)
-            del cloneContents[finfo]
-        else:
-            logger.error("Unable to locate info for %s", str(finfo))
-
     # Purge out what hasn't changed
     for i in done:
         inode = tuple(i)
@@ -926,6 +933,19 @@ def handleAckClone(message):
             logger.error("Unable to locate info for %s", inode)
         # And the directory.
         delInode(inode)
+
+    # Process the directories that have changed
+    for i in content:
+        finfo = tuple(i)
+        if finfo in cloneContents:
+            (path, files) = cloneContents[finfo]
+            if logdirs:
+                logger.log(logging.DIRS, "[R]: %s", Util.shortPath(path))
+            sendDirChunks(path, finfo, files)
+            del cloneContents[finfo]
+        else:
+            logger.error("Unable to locate info for %s", str(finfo))
+
 
 def makeCloneMessage():
     global cloneDirs
@@ -1279,12 +1299,18 @@ def loadExcludedDirs(args):
 def sendMessage(message):
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
+    if args.logmessages:
+        args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
+        args.logmessages.write(pprint.pformat(message, width=132) + '\n\n')
     conn.send(message)
 
 def receiveMessage():
     response = conn.receive()
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
+    if args.logmessages:
+        args.logmessages.write("Received message %s %s\n" % (response.get('msgid', 'Unknown'), "-" * 40))
+        args.logmessages.write(pprint.pformat(response, width=132) + '\n\n')
     return response
 
 waittime = 0
@@ -1313,7 +1339,11 @@ def sendKeys(password, client, includeKeys=True):
     if response['response'] != 'OK':
         logger.error("Could not set keys")
 
+currentBatch = None
+currentResponse = None
+
 def handleResponse(response, doPush=True, pause=0):
+    global currentResponse, currentBatch
     # TODO: REMOVE THIS DEBUG CODE and the pause parameter
     if pause:
         subs = ""
@@ -1323,6 +1353,7 @@ def handleResponse(response, doPush=True, pause=0):
         time.sleep(pause)
     # END DEBUG
     try:
+        currentResponse = response
         msgtype = response['message']
         if msgtype == 'ACKDIR':
             handleAckDir(response)
@@ -1344,8 +1375,10 @@ def handleResponse(response, doPush=True, pause=0):
             # Ignore
             pass
         elif msgtype == 'ACKBTCH':
+            currentBatch = response
             for ack in response['responses']:
                 handleResponse(ack, doPush=False, pause=0)
+            currentBatch = None
         else:
             logger.error("Unexpected response: %s", msgtype)
 
@@ -1697,15 +1730,14 @@ def processCommandLine():
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
     comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', nargs='?', const='zlib', choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  Default: %(default)s')
-    comgrp.add_argument('--cks-content',            dest='ckscontent', default=c.getint(t, 'ChecksumContent'), type=int, nargs='?', const=4096,
-                        help='Checksum files before sending.  Is the minimum size to checksum (smaller files automaticaly sent).  Can reduce run time if lots of duplicates are expected.  Default: %(default)s')
 
-    comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=100,               help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
+    comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
     comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: %(default)s'))
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s'))
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  Default: %(default)s'))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  Default: %(default)s'))
-    comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=1000,            help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
+    comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
+    comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
     #comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
     #                    help=_d('Protocol for data transfer.  Default: %(default)s'))
     comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
