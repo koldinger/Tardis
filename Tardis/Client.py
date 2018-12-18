@@ -718,7 +718,10 @@ def handleAckDir(message):
     refresh = message.setdefault("refresh", {})
 
     if verbosity > 2:
-        logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(message['path'], 40))
+        path = message['path']
+        if crypt:
+            path = crypt.decryptPath(path)
+        logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
     # Prune the messages
     for i in [tuple(x) for x in done]:
@@ -1024,9 +1027,11 @@ def sendPurge(relative):
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
+    if crypt:
+        path = crypt.encryptPath(path)
     message = {
         'message': 'DIR',
-        'path'   :  path,
+        'path'   : path,
         'inode'  : list(inode),
     }
 
