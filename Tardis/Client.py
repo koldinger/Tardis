@@ -259,14 +259,14 @@ def filelist(dir, excludes):
     for f in files:
         yield f
 
-_deletedInodes = {}
+#_deletedInodes = {}
 
 def delInode(inode):
     if args.loginodes:
         args.loginodes.write(str(inode) + "\n")
     if inode in inodeDB:
         del inodeDB[inode]
-        _deletedInodes[inode] = (currentResponse, currentBatch)
+        #_deletedInodes[inode] = (currentResponse, currentBatch)
 
 def msgInfo(resp=None, batch=None):
     if resp is None: resp = currentResponse
@@ -308,11 +308,11 @@ def processChecksums(inodes):
             (rId, rType, bId) = msgInfo()
             logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
             exceptionLogger.log(e)
-            if inode in _deletedInodes:
-                (resp, batch) = _deletedInodes[inode]
-                (rId, rType, bId) = msgInfo(resp, batch)
-
-                logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
+            #if inode in _deletedInodes:
+            #   (resp, batch) = _deletedInodes[inode]
+            #   (rId, rType, bId) = msgInfo(resp, batch)
+            #
+            #   logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
             #traceback.print_stack()
 
     message = {
