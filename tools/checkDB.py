@@ -47,19 +47,22 @@ def main():
         # Grab each subdirectory, 
         for j in hexcount(0, 256, 2):
             path = os.path.join(d, i, j)
-            if os.path.isdir(path):
-                contents = os.listdir(path)
-                metafiles = set(filter(hasExt, contents))
-                datafiles = set(filter(lambda x: not hasExt(x), contents))
+            try:
+                if os.path.isdir(path):
+                    contents = os.listdir(path)
+                    metafiles = set(filter(hasExt, contents))
+                    datafiles = set(filter(lambda x: not hasExt(x), contents))
 
-                alldatafiles.update(datafiles)
-                
-                #print path, " :: ", len(contents), len(metafiles), len(datafiles), " :: ", len(dbfiles)
-                # Process the signature files
-                for f in metafiles:
-                    (data, _) = os.path.splitext(f)
-                    if not data in datafiles:
-                        print "{} without matching data file".format(f)
+                    alldatafiles.update(datafiles)
+
+                    #print path, " :: ", len(contents), len(metafiles), len(datafiles), " :: ", len(dbfiles)
+                    # Process the signature files
+                    for f in metafiles:
+                        (data, _) = os.path.splitext(f)
+                        if not data in datafiles:
+                            print "{} without matching data file".format(f)
+            except Exception as e:
+                print "Caught exception proecssing directory {}".format(path)
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)
