@@ -136,7 +136,7 @@ configDefaults = {
     'MaxChangePercent'  : '50',
     'SaveFull'          : str(False),
     'SkipFileName'      : skipFile,
-    'DBBackups'         : '3',
+    'DBBackups'         : '0',
     'AutoPurge'         : str(False),
     'SaveConfig'        : str(True),
     'AllowClientOverrides'  :  str(True),
@@ -227,6 +227,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             self.db.setAcl(inode, device, acl)
 
     def sendMessage(self, message):
+        if not 'message' in message:
+            self.logger.error("No `message` block in message: %s", message)
         if self.printMessages:
             self.logger.log(logging.TRACE, "Sending:\n" + pp.pformat(message))
         self.messenger.sendMessage(message)
@@ -417,7 +419,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             dirhash = self.lastDirHash
         else:
             # Lookup the old directory based on the path
-            if data['path']:
+            if 'path' in data and data['path']:
                 oldDir = self.db.getFileInfoByPath(data['path'], current=False)
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
@@ -1011,7 +1013,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
     def getCacheDir(self, create):
         try:
             self.logger.debug("Using cache dir: %s", self.basedir)
-            return CacheDir.CacheDir(self.basedir, 2, 2,
+            return CacheDir.CacheDir(self.basedir, 1, 2,
                                      create=(self.server.allowNew and create),
                                      user=self.server.user,
                                      group=self.server.group,
@@ -1048,7 +1050,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
         self.db = TardisDB.TardisDB(dbfile,
                                     initialize=script,
-                                    backup=True,
+                                    backup=(self.server.dbbackups > 0),
                                     connid=connid,
                                     user=self.server.user,
                                     group=self.server.group,
@@ -1202,7 +1204,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         """
         self.logger.debug("Beginning Authentication")
         try:
-            message = {"status": "AUTH"}
+            message = {"message": "AUTH", "status": "AUTH"}
             self.sendMessage(message)
             autha = self.recvMessage()
             self.checkMessage(autha, "AUTH1")
@@ -1215,6 +1217,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             self.logger.debug("Sending Challenge values")   
             message = {
+                'message': 'AUTH1',
                 'status': 'OK',
                 'srpValueS': base64.b64encode(srpValueS),
                 'srpValueB': base64.b64encode(srpValueB)
@@ -1227,6 +1230,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             srpValueM = base64.b64decode(resp['srpValueM'])
             srpValueHAMK = self.db.authenticate2(srpValueM)
             message = {
+                'message': 'AUTH2',
                 'status': 'OK',
                 'srpValueHAMK': base64.b64encode(srpValueHAMK)
             }
@@ -1364,6 +1368,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 raise InitFailedException(str(e))
 
             response = {
+                "message": "INIT",
                 "status": "OK",
                 "sessionid": self.sessionid,
                 "prevDate": str(self.db.prevBackupDate),
