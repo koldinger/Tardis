@@ -43,6 +43,10 @@ logger = logging.getLogger("CacheDir")
 class CacheDirDoesNotExist(Exception):
     pass
 
+PARTSIZE    = "partsize"
+PARTS       = "parts"
+CONFIGFILE  = ".cachedir"
+
 class CacheDir(object):
     def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
         self.root = os.path.abspath(root)
@@ -66,21 +70,21 @@ class CacheDir(object):
         defaults = {"parts": str(parts), "partsize": str(partsize) }
         section = "CacheDir"
 
-        configFile = os.path.join(self.root, ".cachedir")
-        config = configparser.ConfigParser()
+        configFile = os.path.join(self.root, CONFIGFILE)
+        config = ConfigParser.ConfigParser(defaults)
         config.add_section(section)
         config.read(configFile)
 
         try:
-            self.parts = int(config.get(section, "parts", vars=defaults))
-            self.partsize = int(config.get(section, "partsize", vars=defaults))
+            self.parts = int(config.get(section, PARTS))
+            self.partsize = int(config.get(section, PARTSIZE))
         except ValueError:
             logger.error("Invalid configuration.  Using defaults")
-            self.parts = 2
-            self.partsize = 2
+            self.parts    = defaults[PARTS]
+            self.partsize = defaults[PARTSIZE]
 
-        config.set(section, "parts", str(self.parts))
-        config.set(section, "partssize", str(self.partsize))
+        config.set(section, PARTS,    str(self.parts))
+        config.set(section, PARTSIZE, str(self.partsize))
         if create:
             try:
                 with open(configFile, "w") as f:
