@@ -198,7 +198,7 @@ def setupLogging(verbosity, levels=None, format=None, stream=sys.stdout):
     colors = colorlog.default_log_colors.copy()
     colors.update({ 'DEBUG': 'green' })
 
-    formatter = colorlog.TTYColoredFormatter(format, log_colors=colors)
+    formatter = colorlog.TTYColoredFormatter(format, log_colors=colors, stream=stream)
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     logging.root.addHandler(handler)

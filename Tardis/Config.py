@@ -40,12 +40,12 @@ configDefaults = {
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
     'DBDir':		        Defaults.getDefault('TARDIS_DBDIR'),
     'DBName':		        Defaults.getDefault('TARDIS_DBNAME'),
-    'Password':             None,
-    'PasswordFile':         None,
-    'PasswordProg':         None,
+    'Password':             '',
+    'PasswordFile':         '',
+    'PasswordProg':         '',
     'Crypt':                str(True),
-    'KeyFile':              None,
-    'LogFiles':             None,
+    'KeyFile':              '',
+    'LogFiles':             '',
     'Verbosity':            str(0),
     'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
 }

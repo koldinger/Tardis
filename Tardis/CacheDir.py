@@ -71,7 +71,7 @@ class CacheDir(object):
         section = "CacheDir"
 
         configFile = os.path.join(self.root, CONFIGFILE)
-        config = ConfigParser.ConfigParser(defaults)
+        config = configparser.ConfigParser(defaults)
         config.add_section(section)
         config.read(configFile)
 
