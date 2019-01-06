@@ -107,25 +107,25 @@ configDefaults = {
     'DBDir'             : dbDir,
     'DBName'            : databaseName,
     'Schema'            : schemaFile,
-    'LogCfg'            : None,
+    'LogCfg'            : '',
     'Profile'           : str(False),
-    'LogFile'           : None,
+    'LogFile'           : '',
     'JournalFile'       : journalName,
     'LinkBasis'         : str(True),
     'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
     'Single'            : str(False),
-    'Local'             : None,
+    'Local'             : '',
     'Verbose'           : '0',
     'Daemon'            : str(False),
     'Umask'             : '027',
-    'User'              : None,
-    'Group'             : None,
+    'User'              : '',
+    'Group'             : '',
     'SSL'               : str(False),
     'Timeout'           : timeout,
-    'CertFile'          : None,
-    'KeyFile'           : None,
+    'CertFile'          : '',
+    'KeyFile'           : '',
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
     'Formats'           : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
@@ -1589,7 +1589,7 @@ def setupLogging():
         if args.logfile or args.daemon:
             logFormat = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
         else:
-            logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s")
+            logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s", stream=sys.stdout)
 
         verbosity = args.verbose
 
