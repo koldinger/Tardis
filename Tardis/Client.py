@@ -1028,7 +1028,7 @@ def sendPurge(relative):
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     if crypt:
-        path = crypt.encryptPath(path)
+        path = crypt.encryptPath(path.decode(systemencoding, 'replace'))
     message = {
         'message': 'DIR',
         'path'   : path,
