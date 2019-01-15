@@ -337,7 +337,7 @@ def logFileInfo(i, c):
         size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
         logger.log(logging.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         if args.crypt and crypt and logger.isEnabledFor(logging.DEBUG):
-            cname = crypt.encryptPath(name.decode(systemencoding, 'replace'))
+            cname = crypt.encryptPath(name)
             logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
@@ -1031,7 +1031,7 @@ def sendPurge(relative):
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     if crypt:
-        path = crypt.encryptPath(path.decode(systemencoding, 'replace'))
+        path = crypt.encryptPath(path)
     message = {
         'message': 'DIR',
         'path'   : path,
