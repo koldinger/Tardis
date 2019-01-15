@@ -44,6 +44,8 @@ import base64
 import time
 import stat    # for file properties
 
+import pprint
+
 #import fuse
 from Tardis.fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -329,8 +331,8 @@ class TardisFS(LoggingMixIn, Operations):
                 else:
                     st['st_size'] = 0
                 return st
+        logger.debug("File not found: %s", path)
         raise FuseOSError(errno.ENOENT)
-
 
     #@tracer
     #def getdir(self, _, fh):
@@ -484,7 +486,7 @@ class TardisFS(LoggingMixIn, Operations):
             logger.debug("Actually read %d bytes of %s", len(data), type(data))
             return data
         else:
-            logger.warning("No file for path %s", path)
+            logger.warn("No file for path %s", path)
             raise FuseOSError(errno.EINVAL)
 
     #@tracer
@@ -599,15 +601,15 @@ class TardisFS(LoggingMixIn, Operations):
                 info = self.tardis.getFileInfoByPath(subpath, b['backupset'])
                 if info:
                     attrs = ['user.tardis_checksum', 'user.tardis_since', 'user.tardis_chain']
-                    self.log.info("xattrs: %s", info['xattrs'])
+                    logger.info("xattrs: %s", info['xattrs'])
                     if info['xattrs']:
                         f = self.regenerator.recoverChecksum(info['xattrs'], authenticate=self.authenticate)
                         xattrs = json.loads(f.read())
-                        self.log.debug("Xattrs: %s", str(xattrs))
+                        logger.debug("Xattrs: %s", str(xattrs))
                         attrs += list(map(str, list(xattrs.keys())))
-                        self.log.debug("Adding xattrs: %s", list(xattrs.keys()))
-                        self.log.info("Xattrs: %s", str(attrs))
-                        self.log.info("Returning: %s", str(attrs))
+                        logger.debug("Adding xattrs: %s", list(xattrs.keys()))
+                        logger.info("Xattrs: %s", str(attrs))
+                        logger.info("Returning: %s", str(attrs))
 
                     return attrs
 
@@ -617,17 +619,19 @@ class TardisFS(LoggingMixIn, Operations):
     #def getxattr (self, path, attr, size, *args):
     def getxattr(self, path, attr, position=0):
         path = self.fsEncodeName(path)
-        self.log.info('CALL getxattr: %s %s', path, attr)
+        #logger.info('CALL getxattr: %s %s', path, attr)
         attr = str(attr)
 
         depth = getDepth(path)
+        #logger.info("Got depth of path %s -> %s", path, depth)
 
         if depth == 1:
+            #logger.debug("-----> Asking for attribute %s %s", attr, pprint.pformat(self.attrMap))
             if attr in self.attrMap:
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
                 if self.attrMap[attr] in list(b.keys()):
-                    return str(b[self.attrMap[attr]])
+                    return bytes(str(b[self.attrMap[attr]]), 'utf-8')
 
         if depth > 1:
             parts = getParts(path)
@@ -636,16 +640,17 @@ class TardisFS(LoggingMixIn, Operations):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
+            #logger.debug("-----> Asking for attribute %s", attr)
             if attr == 'user.tardis_checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                    self.log.debug("Got checksum {}", str(checksum))
+                    #logger.debug("Got checksum {}", str(checksum))
                     if checksum:
                         return bytes(str(checksum), 'utf-8')
             elif attr == 'user.tardis_since':
                 if b:
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
-                    self.log.debug(str(since))
+                    #self.log.debug(str(since))
                     if since:
                         return bytes(str(since), 'utf-8')
             elif attr == 'user.tardis_chain':
@@ -664,8 +669,8 @@ class TardisFS(LoggingMixIn, Operations):
                         value = base64.b64decode(xattrs[attr])
                         return bytes(str(value), 'utf-8')
 
-        self.log.debug("Getxattr -- default return value")
-        return ""
+        #self.log.debug("Getxattr -- default return value")
+        return bytes('', 'utf-8')
 
 def processMountOpts(mountopts):
     kwargs = {}
