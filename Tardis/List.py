@@ -235,7 +235,7 @@ def collectDirContents2(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             logger.debug("Processing %s", y['name'])
-            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'].decode())
+            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'])
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:
