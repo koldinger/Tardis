@@ -38,19 +38,19 @@ import Tardis.Util as Util
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
-    'DBDir':		        Defaults.getDefault('TARDIS_DBDIR'),
-    'DBName':		        Defaults.getDefault('TARDIS_DBNAME'),
-    'Password':             '',
-    'PasswordFile':         '',
-    'PasswordProg':         '',
+    'DBDir':		    Defaults.getDefault('TARDIS_DBDIR'),
+    'DBName':		    Defaults.getDefault('TARDIS_DBNAME'),
+    'Password':             None,
+    'PasswordFile':         None,
+    'PasswordProg':         None,
     'Crypt':                str(True),
-    'KeyFile':              '',
-    'LogFiles':             '',
+    'KeyFile':              None,
+    'LogFiles':             None,
     'Verbosity':            str(0),
     'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
 }
 
-config = configparser.ConfigParser(configDefaults)
+config = configparser.ConfigParser(configDefaults, allow_no_value=True)
 job = None
 
 def parseConfigOptions(parser):
