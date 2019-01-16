@@ -452,6 +452,38 @@ def authenticate(db, client, password):
     if not usr.authenticated():
         raise TardisDB.AuthenticationFailed()
 
+
+def getBackupSet(db, bset):
+    bsetInfo = None
+    # First, try as an integer
+    try:
+        bset = int(bset)
+        bsetInfo = db.getBackupSetInfoById(bset)
+    except ValueError:
+        # Else, let's look it up based on name
+        if bset == Defaults.getDefault('TARDIS_RECENT_SET') or bset == '' or bset == None:
+            bsetInfo = db.lastBackupSet()
+        else:
+            bsetInfo = db.getBackupSetInfo(bset)
+        if not bsetInfo:
+            # still nothing, hm, let's try a date format
+            cal = parsedatetime.Calendar()
+            (then, success) = cal.parse(bset)
+            if success:
+                timestamp = time.mktime(then)
+                logger.debug("Using time: %s", time.asctime(then))
+                bsetInfo = db.getBackupSetInfoForTime(timestamp)
+                if bsetInfo and bsetInfo['backupset'] != 1:
+                    bset = bsetInfo['backupset']
+                    logger.debug("Using backupset: %s %d for %s", bsetInfo['name'], bsetInfo['backupset'], bset)
+                else:
+                    # Weed out the ".Initial" set
+                    logger.critical("No backupset at date: %s (%s)", bset, time.asctime(then))
+                    bsetInfo = None
+            else:
+                logger.critical("Could not parse string: %s", bset)
+    return bsetInfo
+
 # Data manipulation functions
 
 _suffixes = [".basis", ".sig", ".meta", ""]

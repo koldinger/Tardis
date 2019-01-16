@@ -156,37 +156,6 @@ def runDiff(f1, f2, name, then, now):
         line = line.rstrip()
         termcolor.cprint(line, setcolor(line))
 
-def getBackupSet(db, bset):
-    bsetInfo = None
-    # First, try as an integer
-    try:
-        bset = int(bset)
-        bsetInfo = db.getBackupSetInfoById(bset)
-    except:
-        # Else, let's look it up based on name
-        if bset  == current:
-            bsetInfo = db.lastBackupSet()
-        else:
-            bsetInfo = db.getBackupSetInfo(bset)
-        if not bsetInfo:
-            # still nothing, hm, let's try a date format
-            cal = parsedatetime.Calendar()
-            (then, success) = cal.parse(bset)
-            if success:
-                timestamp = time.mktime(then)
-                logger.debug("Using time: %s", time.asctime(then))
-                bsetInfo = db.getBackupSetInfoForTime(timestamp)
-                if bsetInfo and bsetInfo['backupset'] != 1:
-                    bset = bsetInfo['backupset']
-                    logger.debug("Using backupset: %s %d for %s", bsetInfo['name'], bsetInfo['backupset'], bset)
-                else:
-                    # Weed out the ".Initial" set
-                    logger.critical("No backupset at date: %s (%s)", bset, time.asctime(then))
-                    bsetInfo = None
-            else:
-                logger.critical("Could not parse string: %s", bset)
-    return bsetInfo
-
 def getFileInfo(path, bset, tardis, crypt, reducePath):
     p = Util.reducePath(tardis, bset, path, reducePath, crypt)
     e = crypt.encryptPath(p) if crypt else p
@@ -318,7 +287,7 @@ def main():
 
         bsets = []
         for i in args.backup:
-            bset = getBackupSet(tardis, i)
+            bset = Util.getBackupSet(tardis, i)
             if bset:
                 logger.debug("Got backupset %s", str(bset))
                 logger.debug("backupset: %s", bset['backupset'])

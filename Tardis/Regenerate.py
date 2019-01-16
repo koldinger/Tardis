@@ -46,6 +46,7 @@ from Tardis import TardisDB
 from Tardis import Regenerator
 from Tardis import Util
 from Tardis import Config
+from Tardis import Defaults
 
 logger  = None
 crypt = None
@@ -363,7 +364,7 @@ def parseArgs():
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
 
     bsetgroup = parser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
+    bsetgroup.add_argument("--backup", "-b", help="Backup set to use.  Default: %(default)s", dest='backup', default=Defaults.getDefault('TARDIS_RECENT_SET'))
     bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
     bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file")
 
@@ -435,7 +436,8 @@ def main():
                 logger.critical("Could not parse date string: %s", args.date)
                 sys.exit(1)
         elif args.backup:
-            bsetInfo = tardis.getBackupSetInfo(args.backup)
+            #bsetInfo = tardis.getBackupSetInfo(args.backup)
+            bsetInfo = Util.getBackupSet(tardis, args.backup)
             if bsetInfo:
                 bset = bsetInfo['backupset']
             else:
