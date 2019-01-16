@@ -85,6 +85,7 @@ numFiles = 0
 
 def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
     global numFiles
+    newCks = ''
     try:
         conn = db.conn
         c2 = conn.cursor()
@@ -130,7 +131,7 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
         return retFile
     except Exception as e:
         conn.rollback()
-        logger.error("Unable to convert checksum: %s :: %s", checksum, e)
+        logger.error("Unable to convert checksum: %s (%s) :: %s", checksum, newCks, e)
         logger.exception(e)
         return None
 
