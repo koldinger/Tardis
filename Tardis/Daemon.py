@@ -111,7 +111,7 @@ configDefaults = {
     'Profile'           : str(False),
     'LogFile'           : '',
     'JournalFile'       : journalName,
-    'LinkBasis'         : str(True),
+    'LinkBasis'         : str(False),
     'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
     'RequirePassword'   : str(False),
