@@ -244,40 +244,48 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         if authenticate:
                             outname = doAuthenticate(outname, checksum, hasher.hexdigest())
 
-            if outname and args.setperm:
-                try:
-                    logger.debug("Setting permissions on %s to %o", outname, info['mode'])
-                    os.chmod(outname, info['mode'])
-                except Exception as e:
-                    logger.warning("Unable to set permissions for %s", outname)
-                try:
-                    # Change the group, then the owner.
-                    # Change the group first, as only root can change owner, and that might fail.
-                    os.chown(outname, -1, info['gid'])
-                    os.chown(outname, info['uid'], -1)
-                except Exception as e:
-                    logger.warning("Unable to set owner and group of %s", outname)
-            if outname and args.setattrs and 'attr' in info and info['attr']:
-                try:
-                    f = regenerator.recoverChecksum(info['attr'], authenticate)
-                    xattrs = json.loads(f.read())
-                    x = xattr.xattr(outname)
-                    for attr in xattrs.keys():
-                        value = base64.b64decode(xattrs[attr])
-                        try:
-                            x.set(attr, value)
-                        except IOError:
-                            logger.warning("Unable to set extended attribute %s on %s", attr, outname)
-                except Exception as e:
-                    logger.warning("Unable to process extended attributes for %s", outname)
-            if outname and args.setacl and 'acl' in info and info['acl']:
-                try:
-                    f = regenerator.recoverChecksum(info['acl'], authenticate)
-                    acl = json.loads(f.read())
-                    a = posix1e.ACL(text=acl)
-                    a.applyto(outname)
-                except Exception as e:
-                    logger.warning("Unable to process extended attributes for %s", outname)
+            if outname and not skip:
+                if args.setperm:
+                    try:
+                        logger.debug("Setting permissions on %s to %o", outname, info['mode'])
+                        os.chmod(outname, info['mode'])
+                    except Exception as e:
+                        logger.warning("Unable to set permissions for %s", outname)
+                    try:
+                        # Change the group, then the owner.
+                        # Change the group first, as only root can change owner, and that might fail.
+                        os.chown(outname, -1, info['gid'])
+                        os.chown(outname, info['uid'], -1)
+                    except Exception as e:
+                        logger.warning("Unable to set owner and group of %s", outname)
+                if args.settime:
+                    try:
+                        logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
+                        os.utime(outname, (info['atime'], info['mtime']))
+                    except Exception as e:
+                        logger.warning("Unable to set times on %s", outname)
+
+                if args.setattrs and 'attr' in info and info['attr']:
+                    try:
+                        f = regenerator.recoverChecksum(info['attr'], authenticate)
+                        xattrs = json.loads(f.read())
+                        x = xattr.xattr(outname)
+                        for attr in xattrs.keys():
+                            value = base64.b64decode(xattrs[attr])
+                            try:
+                                x.set(attr, value)
+                            except IOError:
+                                logger.warning("Unable to set extended attribute %s on %s", attr, outname)
+                    except Exception as e:
+                        logger.warning("Unable to process extended attributes for %s", outname)
+                if args.setacl and 'acl' in info and info['acl']:
+                    try:
+                        f = regenerator.recoverChecksum(info['acl'], authenticate)
+                        acl = json.loads(f.read())
+                        a = posix1e.ACL(text=acl)
+                        a.applyto(outname)
+                    except Exception as e:
+                        logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
         if args.exceptions:
