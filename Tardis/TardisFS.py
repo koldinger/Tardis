@@ -686,7 +686,7 @@ def processMountOpts(mountopts):
     return kwargs
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
+    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False, fromfile_prefix_chars='@')
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
