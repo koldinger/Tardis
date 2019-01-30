@@ -295,7 +295,6 @@ By default, configurations are read from Tardis section, but can be overridden b
 | Local           | False               |                   | Perform a local backup.  Spawns a server as a child process. |
 | LocalServerCmd  | tardisd --config    |                   | Command for running the local server. |
 | CompressMsgs    | none                |                   | Compress messages to the server.  Choices are none, zlib, zlib-stream, snappy |
-| ChecksumContent | 0                   |                   | Always checksum files greater than this size. |
 | Purge           | False               |                   | Purge old content ||
 | IgnoreCVS       | False               |                   | Ignore source code control files (CVS, SVN, RCS, and git) |
 | SkipCaches      | False               |                   | Skip cachedir directories |
@@ -352,6 +351,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | Priorities      | 40, 20, 10          |                 | Priority value corresponding to the names in the Formats value. |
 | KeepPeriods     | 0, 180, 30          |                 | Number of days to keep for each backup type, corresponding to the names in the Formats value. |
 | DBBackups       | 5                   |                 | Number of backup iterations of the database to keep. |
+| LinkBasis       | False               |                 | Create a ".basis" symbolic link file to the basis file when deltas are created. |
 
 TardisRemote Configuration File
 ===============================
