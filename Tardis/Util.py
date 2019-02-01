@@ -698,7 +698,7 @@ def _updateLen(value, length):
     return res
 
 def loadKeys(name, client):
-    config = configparser.ConfigParser({'ContentKey': None, 'FilenameKey': None})
+    config = configparser.ConfigParser({'ContentKey': None, 'FilenameKey': None}, allow_no_value=True)
     client = str(client)
     config.add_section(client)
     config.read(fullPath(name))
