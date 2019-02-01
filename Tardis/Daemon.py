@@ -128,7 +128,7 @@ configDefaults = {
     'KeyFile'           : '',
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
-    'Formats'           : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
+    'Formats'           : 'Monthly-%%Y-%%m, Weekly-%%Y%-%%U, Daily-%%Y-%%m-%%d',
     'Priorities'        : '40, 30, 20',
     'KeepDays'          : '0, 180, 30',
     'ForceFull'         : '0, 0, 0',
@@ -1281,7 +1281,6 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             try:
                 fields = self.recvMessage()
-                print(fields)
                 messType    = fields['message']
                 if not messType == 'BACKUP':
                     raise InitFailedException("Unknown message type: {}".format(messType))
@@ -1510,7 +1509,7 @@ class TardisServer(object):
 
         self.exceptions     = args.exceptions
 
-        self.umask          = Util.getIntOrNone(config, 'Tardis', 'Umask')
+        self.umask          = config.getint('Tardis', 'Umask')
 
         self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
         self.saveConfig     = config.getboolean('Tardis', 'SaveConfig')
@@ -1664,7 +1663,7 @@ def processArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Tardis'
-    config = configparser.ConfigParser(configDefaults)
+    config = configparser.RawConfigParser(configDefaults)
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 

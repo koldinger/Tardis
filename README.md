@@ -349,7 +349,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | CertFile        | None                |                 | Path to the certificate file for SSL communications.  Must be set if SSL is true. |
 | KeyFile         | None                |                 | Path to the key file for SSL communications.  Must be set if SSL is true. |
 | SkipFileName    | .tardis-skip        | TARDIS_SKIP     | Skip file name to be created in the backup directories. |
-| Formats         | Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function.  Each name will be checked in order. |
+| Formats         | Monthly-%%Y-%%m, Weekly-%%Y-%%U, Daily-%%Y-%%m-%%d | Formats of names to use for the different types of variables.  A common and whitespace separated list of formats.  Format is of the same type as used by pythons time.strptime() function, although percent signs need to be doubled (ie %%Y, not %Y).  Each name will be checked in order. |
 | Priorities      | 40, 20, 10          |                 | Priority value corresponding to the names in the Formats value. |
 | KeepPeriods     | 0, 180, 30          |                 | Number of days to keep for each backup type, corresponding to the names in the Formats value. |
 | DBBackups       | 5                   |                 | Number of backup iterations of the database to keep. |
