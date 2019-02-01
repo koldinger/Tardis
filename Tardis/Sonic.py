@@ -267,7 +267,7 @@ def listBSets(db, crypt, cache):
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 if commandLine:
-                    print("    Command Line: %s" % (commandLine))
+                    print("    Command Line: %s" % (commandLine.decode('utf-8')))
                     print()
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
