@@ -46,7 +46,7 @@ except:
         pass
 
 if __buildversion__:
-    __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
+    __versionstring__ = __version__ + ' (' + str(__buildversion__) + ')'
 
 def check_features():
     xattr_pkg = 'xattr'

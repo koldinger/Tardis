@@ -3,6 +3,9 @@
 from Tardis import CacheDir, Util
 import argparse
 import sys
+import logging
+
+logging.basicConfig()
 
 
 parser = argparse.ArgumentParser(description="Generate file paths in a cache dir directory", add_help=True)
@@ -13,7 +16,7 @@ Util.addGenCompletions(parser)
 
 args = parser.parse_args()
 
-c = CacheDir.CacheDir(args.base)
+c = CacheDir.CacheDir(args.base, create=False)
 
 for i in args.files:
     print c.path(i)
