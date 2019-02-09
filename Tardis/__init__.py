@@ -29,10 +29,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import sys
 
 __version__ = '1.1.0'
+v = sys.version_info
+
 __buildversion__ = ''
-__versionstring__ = __version__
+__pythonversion__ = " Python %d.%d.%d" % (v.major, v.minor, v.micro)
+__versionstring__ = __version__ + '(' + __pythonversion__ + ')'
 
 try:
     parentDir     = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -46,7 +50,7 @@ except:
         pass
 
 if __buildversion__:
-    __versionstring__ = __version__ + ' (' + __buildversion__ + ')'
+    __versionstring__ = __version__ + ' (' + str(__buildversion__) + __pythonversion__ + ')'
 
 def check_features():
     xattr_pkg = 'xattr'
