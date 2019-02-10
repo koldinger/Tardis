@@ -139,6 +139,17 @@ def formatTime(then):
 def stripComments(line):
     return line.partition('#')[0].strip()
 
+# Convert a string to an integer
+def parseInt(x):
+    if x.startswith('0x'):
+        return int(x[2:], 16)
+    elif x.startswith('0o'):
+        return int(x[2:], 8)
+    elif x.startswith('0'):
+        return int(x[1:], 8)
+    else:
+        return int(x)
+
 # Make a path look short.
 def shortPath(path, width=80):
     """

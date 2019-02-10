@@ -98,9 +98,9 @@ configDefaults = {
     'Force':                str(False),
     'Full':                 str(False),
     'Timeout':              str(300.0),
-    'Password':             '',
-    'PasswordFile':         '',
-    'PasswordProg':         '',
+    'Password':             None,
+    'PasswordFile':         None,
+    'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              '',
     'SendClientConfig':     Defaults.getDefault('TARDIS_SEND_CONFIG'),
@@ -1650,7 +1650,7 @@ def processCommandLine():
     (args, remaining) = parser.parse_known_args()
 
     t = args.job
-    c = configparser.ConfigParser(configDefaults)
+    c = configparser.ConfigParser(configDefaults, allow_no_value=True)
     if args.config:
         c.read(args.config)
         if not c.has_section(t):

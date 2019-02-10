@@ -128,7 +128,7 @@ configDefaults = {
     'KeyFile'           : '',
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
-    'Formats'           : 'Monthly-%%Y-%%m, Weekly-%%Y%-%%U, Daily-%%Y-%%m-%%d',
+    'Formats'           : 'Monthly-%Y-%%m, Weekly-%Y%-%U, Daily-%Y-%m-%d',
     'Priorities'        : '40, 30, 20',
     'KeepDays'          : '0, 180, 30',
     'ForceFull'         : '0, 0, 0',
@@ -1509,7 +1509,7 @@ class TardisServer(object):
 
         self.exceptions     = args.exceptions
 
-        self.umask          = config.getint('Tardis', 'Umask')
+        self.umask          = Util.parseInt(config.get('Tardis', 'Umask'))
 
         self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
         self.saveConfig     = config.getboolean('Tardis', 'SaveConfig')
