@@ -1,4 +1,4 @@
-#! env/bin/python3
+#! /usr/bin/env sonic
 # -*- coding: utf-8 -*-
 
 from Tardis import Sonic
