@@ -293,7 +293,7 @@ def processChecksums(inodes):
             s = os.lstat(pathname)
             mode = s.st_mode
             if stat.S_ISLNK(mode):
-                m.update(os.readlink(pathname))
+                m.update(fs_encode(os.readlink(pathname)))
             else:
                 try:
                     with open(pathname, "rb") as f:
@@ -575,7 +575,7 @@ def sendContent(inode, reportType):
             try:
                 if stat.S_ISLNK(mode):
                     # It's a link.  Send the contents of readlink
-                    data = io.BytesIO(bytes(os.readlink(pathname), 'utf8'))
+                    data = io.BytesIO(fs_encode(os.readlink(pathname)))
                 else:
                     data = open(pathname, "rb")
             except IOError as e:
