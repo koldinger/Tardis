@@ -76,6 +76,7 @@ CONTENT = 1
 CKSUM   = 2
 DELTA   = 3
 REFRESH = 4                     # Perform a full content update
+LINKED  = 5                     # Check if it's already linked
 
 config = None
 args   = None
@@ -128,7 +129,7 @@ configDefaults = {
     'KeyFile'           : '',
     'PidFile'           : pidFileName,
     'ReuseAddr'         : str(False),
-    'Formats'           : 'Monthly-%Y-%%m, Weekly-%Y%-%U, Daily-%Y-%m-%d',
+    'Formats'           : 'Monthly-%Y-%m, Weekly-%Y%-%U, Daily-%Y-%m-%d',
     'Priorities'        : '40, 30, 20',
     'KeepDays'          : '0, 180, 30',
     'ForceFull'         : '0, 0, 0',
@@ -354,14 +355,17 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 self.setXattrAcl(inode, device, xattr, acl)
                 if f["nlinks"] > 1:
                     # We're a file, and we have hard links.  Check to see if I've already been handled this inode.
-                    #self.logger.debug('Looking for file with same inode %d in backupset', inode)
+                    # self.logger.debug('Looking for file with same inode %d: %s', inode, f['name'])
                     # TODO: Check that the file hasn't changed since it was last written. If file is in flux,
                     # it's a problem.
                     checksum = self.db.getChecksumByInode(inode, device, True)
+                    #self.logger.debug('Checksum for inode %d: %s -- %s', inode, f['name'], checksum)
                     if checksum:
+                        #self.logger.debug('Setting linked inode %d: %s to checksum %s', inode, f['name'], checksum)
                         self.db.setChecksum(inode, device, checksum)
-                        retVal = DONE
+                        retVal = LINKED             # special value, allowing the caller to determine that this was handled as a link
                     else:
+                        #self.logger.debug('No link data found for inode %d: %s.   Requesting new content', inode, f['name'])
                         retVal = CONTENT
                 else:
                     #Check to see if it's been moved or copied
@@ -446,7 +450,12 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             #elif res == 1: content.append(inode)
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
-            queues[res].add(fileId)
+            if res == LINKED:
+                # Determine if this fileid is already in one of the queues
+                if not filter(lambda x: fileid in x, queues):
+                    queues[DONE].add(fileId)
+            else:
+                queues[res].add(fileId)
             if 'xattr' in f:
                 xattr = f['xattr']
                 # Check to see if we have this checksum
@@ -599,7 +608,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 output = self.cache.open(checksum, "wb")
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
-        self.logger.debug("Data Received: %d %s %d %s %d", bytesReceived, status, deltaSize, deltaChecksum, compressed)
+        self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, deltaSize, deltaChecksum, compressed)
         if status != 'OK':
             self.logger.warning("Received invalid status on data reception")
 
