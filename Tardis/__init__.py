@@ -39,7 +39,7 @@ __pythonversion__ = " Python %d.%d.%d" % (v.major, v.minor, v.micro)
 __versionstring__ = __version__ + '(' + __pythonversion__ + ')'
 
 try:
-    parentDir     = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    parentDir     = os.path.dirname(os.path.realpath(__file__))
     versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
     __buildversion__ = str(file(versionFile, 'r').readline()).strip()
 except:
