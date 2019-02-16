@@ -40,9 +40,9 @@ __versionstring__ = __version__ + '(' + __pythonversion__ + ')'
 
 try:
     parentDir     = os.path.dirname(os.path.realpath(__file__))
-    versionFile   = os.path.join(parentDir, 'info', 'tardisversion')
-    __buildversion__ = str(file(versionFile, 'r').readline()).strip()
-except:
+    versionFile   = os.path.join(parentDir, 'tardisversion')
+    __buildversion__ = str(open(versionFile, 'r').readline()).strip()
+except Exception as e:
     try:
         import subprocess
         __buildversion__ = str(subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip(), 'utf-8')

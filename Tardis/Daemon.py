@@ -954,7 +954,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             f.close()
         else:
             cksid = ckInfo['checksumid']
-        self.logger.info("Command Line stored as checksum: %s => %d", cksum, cksid)
+        self.logger.debug("Command Line stored as checksum: %s => %d", cksum, cksid)
         self.db.setCommandLine(cksid)
 
         response = {
@@ -1420,7 +1420,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             self.db.completeBackup()
 
             if autoname and serverName is not None:
-                self.logger.info("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
+                self.logger.debug("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
 

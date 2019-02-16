@@ -15,7 +15,7 @@ jokes.
 
 buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
 
-print(buildVersion.decode('utf8'), file=open("Tardis/info/tardisversion", "w"))
+print(buildVersion.decode('utf8'), file=open("Tardis/tardisversion", "w"))
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
 
@@ -50,7 +50,7 @@ setup(  name                    = 'Tardis-Backup',
                      ],
 	package_dir = {'': '.'},
 	package_data = {
-                        'Tardis':   [ 'info/tardisversion', 'schema/tardis.sql' ],
+                        'Tardis':   [ 'tardisversion', 'schema/tardis.sql' ],
                        },
         entry_points = {
             'console_scripts' : [
@@ -71,9 +71,11 @@ setup(  name                    = 'Tardis-Backup',
             'Intended Audience :: System Administrators',
             'Topic :: System :: Archiving :: Backup',
             'Programming Language :: Python',
-            'Programming Language :: Python :: 3.5',
+            'Programming Language :: Python :: 3',
             'Operating System :: MacOS :: MacOS X',
             'Operating System :: POSIX',
             'Operating System :: POSIX :: Linux',
         ]
      )
+
+os.remove("Tardis/tardisversion")
