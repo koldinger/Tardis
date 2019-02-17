@@ -932,7 +932,7 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
     m.update(z)
     for f in filenames:
         # For each entry, hash the name, and a null character
-        m.update(bytes(f, 'utf8'))
+        m.update(bytes(f, 'utf8', 'xmlcharrefreplace'))
         m.update(b'\0')
     m.update(z)
     # Again, Insert "magic" number to help prevent collisions
