@@ -1,6 +1,5 @@
 Tardis-Backup
 =============
-
 A Time Machine style backup system.
 
 Tardis is a system for making incremental backups of filesystems, much like Apple's TimeMachine.
@@ -80,10 +79,10 @@ Tools are located in the tools directory, and are not installed.
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 1.0.x Tweaks and bug fixes.
   * 1.1.0 Port to Python3
+  * 1.1.x Bug Fixes
   * 1.2.0 Asynchronous protocol allowing improved performance.
-  
+
 Support
 =======
 Tardis has been done in my spare time, but still represents a significant amount of work.  If it helps you, please donate to support it's continued development.   Thanks...
@@ -101,7 +100,7 @@ Installing  up the server is relatively straightforward.
     * Ubuntu/Debian: `apt-get install librsync1 libacl1-dev libffi-dev python3-dev python3-cffi python3-setuptools libcurl4-openssl-dev python3-setuptools libgmp3-dev libsnappy-dev`
   * Run the python setup:
     * `python3 setup.py install`
-    * Note, on Debian based systems, add the `--install-layout deb` optios
+    * Note, on Debian based systems (Debian, Ubuntu, and Raspbian, for instance), add the `--install-layout deb` optios
       * `python3 setup.py install --install-layout deb`
 
 Server Setup
@@ -409,6 +408,18 @@ The following steps should be performed:
       * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --meta`
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
+  
+Important Note -- Version 1.1.0
+===============================
+The 1.1.x releases for Python3 are mildly incompatible with the 1.0.x releases.   The incompatibility is in the communications protocol between the tardis client, and the tardisd server.
+Both need to be at the same release.  A 1.0.x client can't backup to a 1.1.x server, nor can a 1.1.x client backup to a 1.0.x server.
+
+However, the remainder of the tools are compatible.   lstardis, regenerate, tardisfs, tardiff, sonic, and tardisremote can are all compatible.   You can use either the 1.0.x or 1.1.x tools to
+monitor the same data.
+
+The database schema is also completely compatible.   Data entered into a database under the 1.0.x branches can be continued to be updated by the 1.1.x branches.
+
+As such, it is recommended that you update both clients and servers to the 1.1.x versions at the same time, to allow ongoing backups to continue.
 
 Important Note -- Version 0.33
 ==============================
