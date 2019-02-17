@@ -93,13 +93,14 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
     if tardisdb.needsAuthentication():
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
+            crypt = TardisCrypto.TardisCrypto(password, args.client)
         Util.authenticate(tardisdb, args.client, password)
 
-    return (tardisdb, cache)
+    return (tardisdb, cache, crypt)
 
 def createClient(crypt, password):
     try:
-        (db, _) = getDB(None, None, True, allowRemote=False)
+        (db, _, _) = getDB(None, None, True, allowRemote=False)
         if crypt:
             setPassword(crypt, password)
         return 0
@@ -116,7 +117,7 @@ def createClient(crypt, password):
 
 def setPassword(crypt, password):
     try:
-        (db, _) = getDB(None, None)
+        (db, _, _) = getDB(None, None)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)
@@ -146,7 +147,7 @@ def setPassword(crypt, password):
 
 def changePassword(crypt, oldpw) :
     try:
-        (db, _) = getDB(crypt, oldpw)
+        (db, _, crypt) = getDB(crypt, oldpw)
 
         # Get the new password
         try:
@@ -694,7 +695,7 @@ def main():
         upgrade = (args.command == 'upgrade')
 
         try:
-            (db, cache) = getDB(crypt, password, allowRemote=allowRemote, allowUpgrade=upgrade)
+            (db, cache, crypt) = getDB(crypt, password, allowRemote=allowRemote, allowUpgrade=upgrade)
 
             if crypt and args.command != 'keys':
                 if args.keys:
