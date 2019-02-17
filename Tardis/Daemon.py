@@ -949,7 +949,10 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         if ckInfo is None:
             self.logger.debug("Inserting command line file")
             f = self.cache.open(cksum, 'wb')
-            f.write(message['line'])
+            if type(message['line']) == bytes:
+                f.write(message['line'])
+            else:
+                f.write(bytes(message['line'], 'utf8'))
             cksid = self.db.insertChecksumFile(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
             f.close()
         else:
