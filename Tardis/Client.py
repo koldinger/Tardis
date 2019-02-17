@@ -812,6 +812,10 @@ def addMeta(meta):
 
 def mkFileInfo(dir, name):
     pathname = os.path.join(dir, name)
+
+    # Cleanup any bogus characters
+    name = name.encode('utf8', 'backslashreplace').decode('utf8')
+
     s = os.lstat(pathname)
     mode = s.st_mode
     # If we don't want to even create dir entries for things we can't access, just return None 
@@ -839,23 +843,29 @@ def mkFileInfo(dir, name):
             }
 
         if support_xattr and args.xattr:
-            attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
-            #items = attrs.items()
-            if len(attrs):
-                # Convert to a set of readable string tuples
-                # We base64 encode the data chunk, as it's often binary
-                # Ugly, but unfortunately necessary
-                attr_string = json.dumps(dict([(str(x[0]), str(base64.b64encode(x[1]), 'utf8')) for x in sorted(attrs.items())]))
-                cks = addMeta(attr_string)
-                finfo['xattr'] = cks
+            try:
+                attrs = xattr.xattr(pathname, options=xattr.XATTR_NOFOLLOW)
+                #items = attrs.items()
+                if len(attrs):
+                    # Convert to a set of readable string tuples
+                    # We base64 encode the data chunk, as it's often binary
+                    # Ugly, but unfortunately necessary
+                    attr_string = json.dumps(dict([(str(x[0]), str(base64.b64encode(x[1]), 'utf8')) for x in sorted(attrs.items())]))
+                    cks = addMeta(attr_string)
+                    finfo['xattr'] = cks
+            except:
+                logger.warning("Could not read extended attributes from %s.   Ignoring", pathname)
 
         if support_acl and args.acl and not stat.S_ISLNK(mode):
             # BUG:? FIXME:? ACL section doesn't seem to work on symbolic links.  Instead wants to follow the link.
             # Definitely an issue
-            if posix1e.has_extended(pathname):
-                acl = posix1e.ACL(file=pathname)
-                cks = addMeta(str(acl))
-                finfo['acl'] = cks
+            try:
+                if posix1e.has_extended(pathname):
+                    acl = posix1e.ACL(file=pathname)
+                    cks = addMeta(str(acl))
+                    finfo['acl'] = cks
+            except:
+                logger.warning("Could not read ACL's from %s.   Ignoring", pathname)
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
