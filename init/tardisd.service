@@ -3,7 +3,7 @@ Description=Tardis Backup Server
 After=syslog.target
 
 [Service]
-ExecStart=/usr/bin/tardisd --daemon
+ExecStart=/usr/local/bin/tardisd --daemon
 ExecStop=/usr/bin/killall tardisd
 Type=forking
 PIDFile=/var/run/tardisd.pid
