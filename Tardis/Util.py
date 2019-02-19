@@ -939,6 +939,16 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
     m.update(_hashMagic)
     return (m.hexdigest(), len(filenames))
 
+
+def asString(a, policy='ignore'):
+    if type(a) == str:
+        return a
+    elif type(a) == bytes:
+        return a.decode('utf-8', policy)
+    else:
+        return str(a)
+
+
 # 'Test' code
 
 if __name__ == "__main__":
