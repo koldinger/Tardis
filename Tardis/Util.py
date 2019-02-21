@@ -941,9 +941,9 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
 
 
 def asString(a, policy='ignore'):
-    if type(a) == str:
+    if isinstance(a, str):
         return a
-    elif type(a) == bytes:
+    elif isinstance(a, bytes):
         return a.decode('utf-8', policy)
     else:
         return str(a)
