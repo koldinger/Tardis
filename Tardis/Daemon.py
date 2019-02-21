@@ -1216,7 +1216,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         """
         self.logger.debug("Beginning Authentication")
         try:
-            message = {"message": "AUTH", "status": "AUTH"}
+            message = {"message": "AUTH", "status": "AUTH", "client": self.db.clientId}
             self.sendMessage(message)
             autha = self.recvMessage()
             self.checkMessage(autha, "AUTH1")
@@ -1326,6 +1326,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 (_, dbfile) = self.genPaths()
                 if create and os.path.exists(dbfile):
                     raise InitFailedException("Client %s already exists" % client)
+                elif not create and not os.path.exists(dbfile):
+                    raise InitFailedException("Unknown client: %s" % client)
 
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
