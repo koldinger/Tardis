@@ -452,7 +452,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             #elif res == 3: delta.append(inode)
             if res == LINKED:
                 # Determine if this fileid is already in one of the queues
-                if not filter(lambda x: fileid in x, queues):
+                if not filter(lambda x: fileId in x, queues):
                     queues[DONE].add(fileId)
             else:
                 queues[res].add(fileId)
@@ -1325,9 +1325,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             try:
                 (_, dbfile) = self.genPaths()
                 if create and os.path.exists(dbfile):
-                    raise InitFailedException("Client %s already exists" % client)
+                    raise Exception("Client %s already exists" % client)
                 elif not create and not os.path.exists(dbfile):
-                    raise InitFailedException("Unknown client: %s" % client)
+                    raise Exception("Unknown client: %s" % client)
 
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
