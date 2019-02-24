@@ -149,7 +149,7 @@ class TardisDB(object):
         self.numbackups = numbackups
 
         conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
-        conn.text_factory = str
+        conn.text_factory = lambda x: x.decode('utf-8', 'backslashreplace')
         conn.row_factory= sqlite3.Row
 
         self.conn = conn
