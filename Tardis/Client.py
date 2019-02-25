@@ -865,7 +865,7 @@ def mkFileInfo(dir, name):
                     cks = addMeta(str(acl))
                     finfo['acl'] = cks
             except:
-                logger.warning("Could not read ACL's from %s.   Ignoring", pathname.encode('utf8', 'backslashreplace').decode('utf8')
+                logger.warning("Could not read ACL's from %s.   Ignoring", pathname.encode('utf8', 'backslashreplace').decode('utf8'))
 
         inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
     else:
