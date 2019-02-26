@@ -1928,6 +1928,8 @@ def printReport(repFormat):
     lastDir = None
     length = 0
     numFiles = 0
+    deltas   = 0
+    dataSize = 0
     logger.log(logging.STATS, "")
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
@@ -1936,26 +1938,35 @@ def printReport(repFormat):
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
         fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s   %-6s %-10s'.format(length)
-        fmt4 = '  %5d files'
+        fmt4 = '  %d files (%d full, %d delta, %s)'
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
             r = report[i]
             (d, f) = i
-            numFiles += 1
+
+            
             if d != lastDir:
                 if repFormat == 'dirs' and lastDir:
-                    logger.log(logging.STATS, fmt4, numFiles)
+                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=fmts))
                 numFiles = 0
+                deltas = 0
+                dataSize = 0
                 logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
                 lastDir = d
+
+            numFiles += 1
+            if r['type'] == 'Delta':
+                deltas += 1
+            dataSize += r['size']
+
             if repFormat == 'all':
                 if r['sigsize']:
                     logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
                 else:
                     logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=fmts))
         if repFormat == 'dirs' and lastDir:
-            logger.log(logging.STATS, fmt4, numFiles)
+            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=fmts))
     else:
         logger.log(logging.STATS, "No files backed up")
 
