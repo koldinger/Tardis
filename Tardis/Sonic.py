@@ -412,7 +412,7 @@ def confirm():
     if not args.confirm:
         return True
     else:
-        print("Proceed (y/n): ", end=' ')
+        print("Proceed (y/n): ", end='', flush=True)
         yesno = sys.stdin.readline().strip().upper()
         return yesno == 'YES' or yesno == 'Y'
 
