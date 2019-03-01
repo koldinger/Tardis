@@ -302,21 +302,27 @@ def processChecksums(inodes):
                                 m.update(chunk)
                             else:
                                 break
+                        checksum = m.hexdigest()
+                        files.append({ "inode": inode, "checksum": checksum })
                 except IOError as e:
                     logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
                     exceptionLogger.log(e)
-            checksum = m.hexdigest()
-            files.append({ "inode": inode, "checksum": checksum })
+                    # TODO: Add an error response?
         except KeyError as e:
             (rId, rType, bId) = msgInfo()
             logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
             exceptionLogger.log(e)
+            # TODO: Add an error response?
             #if inode in _deletedInodes:
             #   (resp, batch) = _deletedInodes[inode]
             #   (rId, rType, bId) = msgInfo(resp, batch)
             #
             #   logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
             #traceback.print_stack()
+        except FileNotFoundError as e:
+            logger.error("Unable to stat %s.  File not found", pathname)
+            exceptionLogger.log(e)
+            # TODO: Add an error response?
 
     message = {
         "message": "CKS",
@@ -1126,13 +1132,13 @@ def recurseTree(dir, top, depth=0, excludes=[]):
     if depth > 0:
         newdepth = depth - 1
 
-    s = os.lstat(dir)
-    if not stat.S_ISDIR(s.st_mode):
-        return
-
     if args.progress:
         printProgress("Dir:", dir)
     try:
+        s = os.lstat(dir)
+        if not stat.S_ISDIR(s.st_mode):
+            return
+
         # Mark that we've processed it before attempting to determine if we actually should
         processedDirs.add(dir)
 
@@ -1945,7 +1951,6 @@ def printReport(repFormat):
             r = report[i]
             (d, f) = i
 
-            
             if d != lastDir:
                 if repFormat == 'dirs' and lastDir:
                     logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=fmts))
