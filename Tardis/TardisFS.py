@@ -47,7 +47,7 @@ import stat    # for file properties
 import pprint
 
 #import fuse
-from Tardis.fuse import FUSE, FuseOSError, Operations, LoggingMixIn
+from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
 import Tardis.CacheDir as CacheDir
