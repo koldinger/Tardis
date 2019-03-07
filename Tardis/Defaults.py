@@ -60,7 +60,8 @@ _defaults = {
     'TARDIS_NOCOMPRESS'     : '',
     'TARDIS_RECENT_SET'     : 'Current',
     'TARDIS_PW_STRENGTH'    : '0.75',
-    'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults'
+    'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults',
+    'TARDIS_PWFILE'         : ''
 }
 
 try:

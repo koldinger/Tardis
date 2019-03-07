@@ -194,7 +194,7 @@ def accumulateStat(stats, name, amount=1):
     if stats:
         stats[name] = stats.setdefault(name, 0) + amount
 
-def setupLogging(verbosity, levels=None, format=None, stream=sys.stdout):
+def setupLogging(verbosity=1, levels=None, format=None, stream=sys.stdout):
     if levels is None:
         levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
@@ -396,7 +396,7 @@ def checkPasswordStrength(password):
 
 # Get the database, cachedir, and crypto object.
 
-def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False):
+def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False, retpassword=False):
     logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
 
@@ -442,7 +442,10 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
             (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
 
-    return (tardis, cache, crypt)
+    if retpassword:
+        return (tardis, cache, crypt, password)
+    else:
+        return (tardis, cache, crypt)
 
 # Perform SRP authentication locally against the DB
 def authenticate(db, client, password):

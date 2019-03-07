@@ -41,7 +41,7 @@ configDefaults = {
     'DBDir':		    Defaults.getDefault('TARDIS_DBDIR'),
     'DBName':		    Defaults.getDefault('TARDIS_DBNAME'),
     'Password':             None,
-    'PasswordFile':         None,
+    'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              None,
