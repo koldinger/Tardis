@@ -329,7 +329,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger('')
     args = processArgs()
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=False)
 
     crypto = TardisCrypto.TardisCrypto(password, args.client)
 
