@@ -34,7 +34,7 @@ import os.path
 import os
 import sys
 import pwd
-import pty
+import subprocess
 
 logger = None
 
@@ -93,42 +93,36 @@ def main():
         logger.error("Authentication failed")
         sys.exit(1)
 
-    logger.debug("Setting environment variables")
-    if password:
-        pwFileName = ".tardis-" + str(os.getpid())
-        pwFilePath = os.path.join(os.path.expanduser("~"), pwFileName)
-        logger.debug("Storing password in %s", pwFilePath)
-        with os.fdopen(os.open(pwFilePath, os.O_WRONLY | os.O_CREAT, 0o400), 'w') as handle:
-          handle.write(password)
-        os.environ['TARDIS_PWFILE'] = pwFilePath
-    os.environ['TARDIS_CLIENT'] = args.client
-    os.environ['TARDIS_DB'] = args.database
-
-    logger.warning("Spawning interactive shell with security preauthenticated.")
-
     try:
-        child_pid = os.fork()
-    except OSError as e:
-        logger.error("Fork of child process failed: %s", str(e))
+        logger.debug("Setting environment variables")
+        if password:
+            pwFileName = ".tardis-" + str(os.getpid())
+            pwFilePath = os.path.join(os.path.expanduser("~"), pwFileName)
+            logger.debug("Storing password in %s", pwFilePath)
+            with os.fdopen(os.open(pwFilePath, os.O_WRONLY | os.O_CREAT, 0o400), 'w') as handle:
+              handle.write(password)
+            os.environ['TARDIS_PWFILE'] = pwFilePath
+        os.environ['TARDIS_CLIENT'] = args.client
+        os.environ['TARDIS_DB'] = args.database
 
-    if child_pid == 0:
-        try:
-            logger.debug("Executing %s", args.shell)
-            os.execl(args.shell, args.shell)
-        except Exception as e:
-            logger.critical("Could not execute %s: %s", args.shell, str(e))
-    else:
-        (pid, status) = os.waitpid(child_pid, 0)
-        if status != 0:
-            logger.warning("Child exitted with status %d", status >> 8)
+        logger.warning("Spawning interactive shell with security preauthenticated.")
 
-    logger.warning("Returned to unauthenticated environment")
-    if password:
-        try:
-            os.unlink(pwFilePath)
-        except Exception as e:
-            logger.critical("Unable to delete password file: %s :: %s", pwFilePath, str(e))
-    sys.exit(status)
+        # Run the shell, and wait
+        status = subprocess.run(args.shell)
+
+        # Check the return code.
+        if status.returncode != 0:
+            logger.warning("Child exited with status %d", status.returncode)
+
+        logger.warning("Returned to unauthenticated environment")
+    finally:
+        if password:
+            try:
+                os.unlink(pwFilePath)
+            except Exception as e:
+                logger.critical("Unable to delete password file: %s :: %s", pwFilePath, str(e))
+
+    sys.exit(status.returncode)
 
 if __name__ == "__main__":
     main()
