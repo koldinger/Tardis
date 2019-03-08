@@ -65,6 +65,7 @@ import pid
 import parsedatetime
 import srp
 import colorlog
+import hmac
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -99,7 +100,7 @@ configDefaults = {
     'Full':                 str(False),
     'Timeout':              str(300.0),
     'Password':             None,
-    'PasswordFile':         None,
+    'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              '',
@@ -1255,7 +1256,6 @@ def splitDir(files, when):
 
 def setBackupName(args):
     """ Calculate the name of the backup set """
-    global purgeTime, purgePriority, starttime
     name = args.name
     priority = args.priority
     auto = True
@@ -1266,7 +1266,10 @@ def setBackupName(args):
     else:
         # Else, no name specified, we're auto.  Create a default name.
         name = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
+    return (name, priority, auto)
 
+def setPurgeValues(args):
+    global purgeTime, purgePriority
     if args.purge:
         purgePriority = priority
         if args.purgeprior:
@@ -1284,7 +1287,6 @@ def setBackupName(args):
                 #logger.error("Could not parse --keep-time argument: %s", args.purgetime)
                 raise Exception("Could not parse --keep-time argument: {} ".format(args.purgetime))
 
-    return (name, priority, auto)
 
 def mkExcludePattern(pattern):
     return re.compile(fnmatch.translate(pattern))
@@ -1324,7 +1326,7 @@ def sendMessage(message):
         logger.debug("Send: %s", str(message))
     if args.logmessages:
         args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
-        args.logmessages.write(pprint.pformat(message, width=132) + '\n\n')
+        args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n\n')
     conn.send(message)
 
 def receiveMessage():
@@ -1332,8 +1334,8 @@ def receiveMessage():
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
     if args.logmessages:
-        args.logmessages.write("Received message %s %s\n" % (response.get('msgid', 'Unknown'), "-" * 40))
-        args.logmessages.write(pprint.pformat(response, width=132) + '\n\n')
+        args.logmessages.write("Received message %s %s\n" % (response.get('respid', 'Unknown'), "-" * 40))
+        args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n\n')
     return response
 
 waittime = 0
@@ -2017,6 +2019,9 @@ def main():
 
         # Figure out the name and the priority of this backupset
         (name, priority, auto) = setBackupName(args)
+
+        # setup purge times
+        setPurgeValues(args)
 
         # Load the excludes
         loadExcludes(args)
