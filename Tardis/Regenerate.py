@@ -39,6 +39,7 @@ import base64
 import json
 import parsedatetime
 import xattr
+import hmac
 import posix1e
 
 import Tardis
@@ -87,7 +88,7 @@ def doAuthenticate(outname, checksum, digest):
     """
     logger.debug("File: %s Expected Hash: %s Hash: %s", outname, checksum, digest)
     # should use hmac.compare_digest() here, but it's not working for some reason.  Probably different types
-    if checksum != digest:
+    if not hmac.compare_digest(checksum, digest):
         if outname:
             if args.authfailaction == 'keep':
                 action = ''
