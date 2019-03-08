@@ -609,7 +609,7 @@ def computeColumnWidth(names):
     else:
         if os.isatty(sys.stdout.fileno()):
             (_, width) = Util.getTerminalSize()
-            logger.info("Setting width to %d", width)
+            logger.debug("Setting width to %d", width)
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
             columns = int(width / (longestName + 4))
             if columns == 0:
@@ -618,7 +618,7 @@ def computeColumnWidth(names):
             columns = 1
 
     fmt = "%%-%ds  " % (longestName + 2)
-    logger.info("Setting columns to %d", columns)
+    logger.debug("Setting columns to %d", columns)
 
     return (columns, fmt)
 
