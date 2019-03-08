@@ -63,6 +63,8 @@ def processArgs():
 
     parser.add_argument('--shell',          dest='shell',      default=getShell(),       help='Shell to use.  Default: %(default)s')
 
+    parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose',                  help='Increase the verbosity')
+
     parser.add_argument('--help', '-h',     action='help');
 
     Util.addGenCompletions(parser)
@@ -75,9 +77,10 @@ def main():
     global logger
     crypto = None
 
-    Util.setupLogging(1)
-    logger = logging.getLogger('')
     args = processArgs()
+
+    Util.setupLogging(args.verbose, levels=[logging.WARNING, logging.DEBUG])
+    logger = logging.getLogger('')
 
     if not validateShell(args.shell):
         sys.exit(1)
@@ -102,13 +105,30 @@ def main():
     os.environ['TARDIS_DB'] = args.database
 
     logger.warning("Spawning interactive shell with security preauthenticated.")
-    pty.spawn(args.shell)
-    logger.warning("Returned to unautheticated environment")
+
+    try:
+        child_pid = os.fork()
+    except OSError as e:
+        logger.error("Fork of child process failed: %s", str(e))
+
+    if child_pid == 0:
+        try:
+            logger.debug("Executing %s", args.shell)
+            os.execl(args.shell, args.shell)
+        except Exception as e:
+            logger.critical("Could not execute %s: %s", args.shell, str(e))
+    else:
+        (pid, status) = os.waitpid(child_pid, 0)
+        if status != 0:
+            logger.warning("Child exitted with status %d", status >> 8)
+
+    logger.warning("Returned to unauthenticated environment")
     if password:
         try:
             os.unlink(pwFilePath)
         except Exception as e:
             logger.critical("Unable to delete password file: %s :: %s", pwFilePath, str(e))
+    sys.exit(status)
 
 if __name__ == "__main__":
     main()
