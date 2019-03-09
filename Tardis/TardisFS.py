@@ -43,8 +43,7 @@ import json
 import base64
 import time
 import stat    # for file properties
-
-import pprint
+import functools
 
 #import fuse
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
@@ -57,7 +56,6 @@ import Tardis.Cache as Cache
 import Tardis.Defaults as Defaults
 import Tardis.TardisDB as TardisDB
 import Tardis.Config as Config
-import Tardis.TardisCrypto as TardisCrypto
 
 _BackupSetInfo = 0
 _LastBackupSet = 1
@@ -95,8 +93,8 @@ def getDepth(path):
     logger.debug("getDepth: %s", path)
     if path ==  '/':
         return 0
-    else:
-        return path.count('/')
+
+    return path.count('/')
 
 def getParts(path):
     """
@@ -105,8 +103,7 @@ def getParts(path):
     """
     if path == '/':
         return [['/']]
-    else:
-        return path.strip("/").split('/', 1)
+    return path.strip("/").split('/', 1)
 
 class TardisFS(LoggingMixIn, Operations):
     """
@@ -485,9 +482,8 @@ class TardisFS(LoggingMixIn, Operations):
             data = f.read(length)
             logger.debug("Actually read %d bytes of %s", len(data), type(data))
             return data
-        else:
-            logger.warn("No file for path %s", path)
-            raise FuseOSError(errno.EINVAL)
+        logger.warning("No file for path %s", path)
+        raise FuseOSError(errno.EINVAL)
 
     #@tracer
     def readlink ( self, path ):
@@ -553,8 +549,7 @@ class TardisFS(LoggingMixIn, Operations):
             return dict((key, getattr(fs, key)) for key in (
                 'f_bavail', 'f_bfree', 'f_blocks', 'f_bsize', 'f_favail',
                 'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
-        else:
-            raise FuseOSError(errno.EINVAL)
+        raise FuseOSError(errno.EINVAL)
 
     def symlink ( self, targetPath, linkPath ):
         #self.log.info('CALL symlink {} {}'.format(path, linkPath))
@@ -626,7 +621,6 @@ class TardisFS(LoggingMixIn, Operations):
         #logger.info("Got depth of path %s -> %s", path, depth)
 
         if depth == 1:
-            #logger.debug("-----> Asking for attribute %s %s", attr, pprint.pformat(self.attrMap))
             if attr in self.attrMap:
                 parts = getParts(path)
                 b = self.getBackupSetInfo(parts[0])
@@ -686,7 +680,7 @@ def processMountOpts(mountopts):
     return kwargs
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False, fromfile_prefix_chars='@')
+    parser = argparse.ArgumentParser(description='Mount a FUSE filesystem containing tardis backup data', add_help = False, fromfile_prefix_chars='@')
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
@@ -697,6 +691,7 @@ def processArgs():
     parser.add_argument('-f',               dest='foreground', action='store_true', default=False, help='Remain in foreground')
 
     parser.add_argument('--verbose', '-v',  dest='verbose', action='count', default=0, help="Increase verbosity")
+    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
 
     parser.add_argument('mountpoint',       nargs=1, help="List of directories to sync")
@@ -731,21 +726,19 @@ def main():
         password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt="Password for %s: " % (getarg('client')))
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(getarg('database'), getarg('client'), password, getarg('keys'), getarg('dbname'), getarg('dbdir'))
-
-        r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         #if args.exceptions:
             #logger.exception(e)
         sys.exit(1)
     except Exception as e:
-        logger.error("DB Conneciton failed: %s", e)
+        logger.error("DB Connection failed: %s", e)
         sys.exit(1)
 
     delTardisKeys(kwargs)
 
     fs = TardisFS(tardis, cache, crypt, args)
-    fuse = FUSE(fs, args.mountpoint[0], debug=args.debug, nothreads=True, foreground=args.foreground, **kwargs)
+    FUSE(fs, args.mountpoint[0], debug=args.debug, nothreads=True, foreground=args.foreground, **kwargs)
 
 if __name__ == "__main__":
     main()
