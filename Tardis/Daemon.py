@@ -1251,7 +1251,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         except TardisDB.AuthenticationFailed as e:
             message = {
                 'status': 'AUTHFAIL',
-                'message': e.message
+                'message': str(e)
             }
             self.sendMessage(message)
             raise e
