@@ -1,3 +1,11 @@
-1: Fix bug w/ missing directories if clone is broken
-2: HTTP file access completion
-3: Asynchronous protocol
+1: Improve communications protocol.   Remove name from autoname sockets.   Make early messages compliant
+    with other messages.   Route all traffic after initial config through Messages.
+2: Break server code into two components, communications and sockets, and backend server proper.
+   Drive the server, as much as possible, from the communications side, rather than vice versa.
+3: Directly connect the server to the client via null messages, allowing local integration.
+4: Create SSH/stdin/stdout communications to allow "serverless" remote connections.
+5: Update metadata format to allow better tracking of which files use this data.   Improve handling of ranges.  
+   Write emergency recovery code.
+6: ASYNCIO client
+7: Out-of-band send and receive, to different locations/URL's.
+8: End directory chunking.   Allow NULL for open ended files.
