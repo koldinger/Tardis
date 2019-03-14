@@ -226,6 +226,10 @@ class ProtocolError(Exception):
 class AuthenticationFailed(Exception):
     pass
 
+class ExitRecursionException(Exception):
+    def __init__(self, rootException):
+        self.rootException = rootException
+
 def setEncoder(format):
     global encoder, encoding, decoder
     if format == 'base64':
@@ -1216,19 +1220,21 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             # Process the sub directories
             for subdir in sorted(subdirs):
                 recurseTree(subdir, top, newdepth, subexcludes)
-
-    except (OSError) as e:
+    except ExitRecursionException:
+        raise
+    except OSError as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
-        #raise
+        raise ExitRecursionException(e)
         #traceback.print_exc()
-    except (IOError) as e:
+    except IOError as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
         exceptionLogger.log(e)
-        raise
+        raise ExitRecursionException(e)
     except Exception as e:
         # TODO: Clean this up
         exceptionLogger.log(e)
-        raise
+        raise ExitRecursionException(e)
+
 
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
@@ -1271,7 +1277,7 @@ def setBackupName(args):
 def setPurgeValues(args):
     global purgeTime, purgePriority
     if args.purge:
-        purgePriority = priority
+        purgePriority = args.priority
         if args.purgeprior:
             purgePriority = args.purgeprior
         if args.purgedays:
@@ -1942,7 +1948,8 @@ def printReport(repFormat):
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
-        fmts = ['','KB','MB','GB', 'TB', 'PB']
+        filefmts = ['','KB','MB','GB', 'TB', 'PB']
+        dirfmts  = ['B','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
         fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s   %-6s %-10s'.format(length)
@@ -1955,7 +1962,7 @@ def printReport(repFormat):
 
             if d != lastDir:
                 if repFormat == 'dirs' and lastDir:
-                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=fmts))
+                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=dirfmts))
                 numFiles = 0
                 deltas = 0
                 dataSize = 0
@@ -1969,11 +1976,11 @@ def printReport(repFormat):
 
             if repFormat == 'all':
                 if r['sigsize']:
-                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=fmts), Util.fmtSize(r['sigsize'], formats=fmts))
+                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=filefmts), Util.fmtSize(r['sigsize'], formats=filefmts))
                 else:
-                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=fmts))
+                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=filefmts))
         if repFormat == 'dirs' and lastDir:
-            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=fmts))
+            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=dirfmts))
     else:
         logger.log(logging.STATS, "No files backed up")
 
@@ -2214,7 +2221,11 @@ def main():
         conn.close()
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
-        exceptionLogger.log(e)
+        #exceptionLogger.log(e)
+    except ExitRecursionException as e:
+        root = e.rootException
+        logger.error("Caught exception: %s, %s", root.__class__.__name__, root)
+        #exceptionLogger.log(root)
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         exceptionLogger.log(e)

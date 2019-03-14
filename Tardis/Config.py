@@ -44,7 +44,7 @@ configDefaults = {
     'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
     'Crypt':                str(True),
-    'KeyFile':              None,
+    'KeyFile':              Defaults.getDefault('TARDIS_KEYFILE'),
     'LogFiles':             None,
     'Verbosity':            str(0),
     'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
