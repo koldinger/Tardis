@@ -107,6 +107,7 @@ def generateFullFileInfo(checksum, regenerator, cacheDir, nameMac, signature=Tru
             sig.step(data)
         data = i.read(64 * 1024)
     # Return a handle on the full file object.  Allows it to be reused in the next step
+    i.close()
     return i
 
 suffixes = ['','KB','MB','GB', 'TB', 'PB']
