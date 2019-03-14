@@ -104,6 +104,8 @@ def main():
             os.environ['TARDIS_PWFILE'] = pwFilePath
         os.environ['TARDIS_CLIENT'] = args.client
         os.environ['TARDIS_DB'] = args.database
+        if args.keys:
+            os.environ['TARDIS_KEYFILE'] = args.keys
 
         logger.warning("Spawning interactive shell with security preauthenticated.")
 
