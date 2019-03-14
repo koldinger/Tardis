@@ -34,6 +34,7 @@ import logging
 import tempfile
 import shutil
 import hashlib
+import hmac
 
 import Tardis.CompressedBuffer as CompressedBuffer
 
@@ -58,7 +59,7 @@ class Regenerator(object):
         if self.crypt is None:
             raise Exception("Encrypted file.  No password specified")
         infile = self.cacheDir.open(filename, 'rb')
-        hmac = self.crypt.getHash(func=hashlib.sha512)
+        mac = self.crypt.getHash(func=hashlib.sha512)
 
         # Get the IV, if it's not specified.
         infile.seek(0, os.SEEK_SET)
@@ -67,14 +68,14 @@ class Regenerator(object):
         self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))
 
         if authenticate:
-            hmac.update(iv)
+            mac.update(iv)
 
         # Create the cypher
         cipher = self.crypt.getContentCipher(iv)
 
         outfile = tempfile.TemporaryFile()
 
-        contentSize = size - self.crypt.ivLength - hmac.digest_size
+        contentSize = size - self.crypt.ivLength - mac.digest_size
         #self.logger.info("Computed Size: %d.  Specified size: %d.  Diff: %d", ctSize, size, (ctSize - size))
 
         rem = contentSize
@@ -83,15 +84,15 @@ class Regenerator(object):
             readsize = blocksize if rem > blocksize else rem
             ct = infile.read(readsize)
             if authenticate:
-                hmac.update(ct)
+                mac.update(ct)
             pt = cipher.decrypt(ct)
             if rem <= blocksize:
                 # ie, we're the last block
-                digest = infile.read(hmac.digest_size)
+                digest = infile.read(mac.digest_size)
                 self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
                 readsize += len(digest)
-                if hmac.compare_diges(digest, hmac.digest()):
-                    self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), hmac.hexdigest())
+                if hmac.compare_digest(digest, mac.digest()):
+                    self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), mac.hexdigest())
                     raise RegenerateException("HMAC did not authenticate.")
                 pt = self.crypt.unpad(pt)
             outfile.write(pt)
