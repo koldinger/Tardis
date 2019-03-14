@@ -61,7 +61,8 @@ _defaults = {
     'TARDIS_RECENT_SET'     : 'Current',
     'TARDIS_PW_STRENGTH'    : '0.75',
     'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults',
-    'TARDIS_PWFILE'         : ''
+    'TARDIS_PWFILE'         : '',
+    'TARDIS_KEYFILE'        : '',
 }
 
 try:
@@ -76,11 +77,11 @@ _parser.read(_default_file)
 def getDefault(var):
     if var in os.environ:
         return os.environ[var]
-    else:
-        try:
-            return _parser.get(SECTION, var)
-        except configparser.Error:
-            return None
+
+    try:
+        return _parser.get(SECTION, var)
+    except configparser.Error:
+        return None
 
 if __name__ == "__main__":
     print(_default_file)
