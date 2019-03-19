@@ -35,8 +35,9 @@ import logging
 import shutil
 import configparser
 
-from . import Defaults
 from functools import reduce
+
+from . import Defaults
 
 logger = logging.getLogger("CacheDir")
 
@@ -47,7 +48,7 @@ PARTSIZE    = "partsize"
 PARTS       = "parts"
 CONFIGFILE  = ".cachedir"
 
-class CacheDir(object):
+class CacheDir:
     def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
         self.root = os.path.abspath(root)
         self.user  = user if user else -1
@@ -174,8 +175,8 @@ class CacheDir(object):
 
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
-    path = os.path.join("cache", socket.gethostname())
-    c = CacheDir(path, 4, 2, True)
+    testPath = os.path.join("cache", socket.gethostname())
+    c = CacheDir(testPath, 4, 2, True)
     print(c.comps(test))
     print(c.dirPath(test))
     print(c.path(test))

@@ -32,7 +32,7 @@ import collections
 import time
 import logging
 
-class Cache(object):
+class Cache:
     def __init__(self, size, timeout, name='Cache'):
         self.size = size
         self.timeout = timeout
