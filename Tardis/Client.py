@@ -1695,7 +1695,7 @@ def processCommandLine():
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
-    parser.add_argument('--client',                 dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  Default: %(default)s')
+    parser.add_argument('--client', '-C',           dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  Default: %(default)s')
     parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=c.getboolean(t, 'Force'),
                         help='Force the backup to take place, even if others are currently running.  Default: %(default)s')
     parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=c.getboolean(t, 'Full'),
@@ -1766,7 +1766,8 @@ def processCommandLine():
                         help='Ignore the global exclude file')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
-    comgrp.add_argument('--compress-msgs', '-C',    dest='compressmsgs', nargs='?', const='zlib', choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
+    comgrp.add_argument('--compress-msgs', '-Y',    dest='compressmsgs', nargs='?', const='snappy',
+                        choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  Default: %(default)s')
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
