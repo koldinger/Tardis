@@ -80,6 +80,8 @@ LINKED  = 5                     # Check if it's already linked
 
 config = None
 args   = None
+configSection = 'Daemon'
+
 databaseName    = Defaults.getDefault('TARDIS_DBNAME')
 schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
@@ -1490,45 +1492,45 @@ class TardisServer(object):
             self.dbdir      = args.dbdir
         else:
             self.dbdir      = self.basedir
-        self.savefull       = config.getboolean('Tardis', 'SaveFull')
-        self.maxChain       = config.getint('Tardis', 'MaxDeltaChain')
-        self.deltaPercent   = float(config.getint('Tardis', 'MaxChangePercent')) / 100.0        # Convert to a ratio
+        self.savefull       = config.getboolean(configSection, 'SaveFull')
+        self.maxChain       = config.getint(configSection, 'MaxDeltaChain')
+        self.deltaPercent   = float(config.getint(configSection, 'MaxChangePercent')) / 100.0        # Convert to a ratio
 
         self.dbname         = args.dbname
         self.allowNew       = args.newhosts
         self.schemaFile     = args.schema
         self.journal        = args.journal
 
-        self.linkBasis      = config.getboolean('Tardis', 'LinkBasis')
+        self.linkBasis      = config.getboolean(configSection, 'LinkBasis')
 
         self.timeout        = args.timeout
 
-        self.requirePW      = config.getboolean('Tardis', 'RequirePassword')
+        self.requirePW      = config.getboolean(configSection, 'RequirePassword')
 
-        self.allowOverrides = config.getboolean('Tardis', 'AllowClientOverrides')
+        self.allowOverrides = config.getboolean(configSection, 'AllowClientOverrides')
 
-        self.allowUpgrades  = config.getboolean('Tardis', 'AllowSchemaUpgrades')
+        self.allowUpgrades  = config.getboolean(configSection, 'AllowSchemaUpgrades')
 
-        self.formats        = list(map(str.strip, config.get('Tardis', 'Formats').split(',')))
-        self.priorities     = list(map(int, config.get('Tardis', 'Priorities').split(',')))
-        self.keep           = list(map(int, config.get('Tardis', 'KeepDays').split(',')))
-        self.forceFull      = list(map(int, config.get('Tardis', 'ForceFull').split(',')))
+        self.formats        = list(map(str.strip, config.get(configSection, 'Formats').split(',')))
+        self.priorities     = list(map(int, config.get(configSection, 'Priorities').split(',')))
+        self.keep           = list(map(int, config.get(configSection, 'KeepDays').split(',')))
+        self.forceFull      = list(map(int, config.get(configSection, 'ForceFull').split(',')))
 
         numFormats = len(self.formats)
         if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
             logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
                            len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
-        self.dbbackups      = config.getint('Tardis', 'DBBackups')
+        self.dbbackups      = config.getint(configSection, 'DBBackups')
 
         self.exceptions     = args.exceptions
 
-        self.umask          = Util.parseInt(config.get('Tardis', 'Umask'))
+        self.umask          = Util.parseInt(config.get(configSection, 'Umask'))
 
-        self.autoPurge      = config.getboolean('Tardis', 'AutoPurge')
-        self.saveConfig     = config.getboolean('Tardis', 'SaveConfig')
+        self.autoPurge      = config.getboolean(configSection, 'AutoPurge')
+        self.saveConfig     = config.getboolean(configSection, 'SaveConfig')
 
-        self.skip           = config.get('Tardis', 'SkipFileName')
+        self.skip           = config.get(configSection, 'SkipFileName')
 
         self.user = None
         self.group = None
@@ -1636,10 +1638,10 @@ def run_server():
             logger.info("Starting Server. Socket: %s", args.local)
             server = TardisDomainSocketServer()
         elif args.threaded:
-            logger.info("Starting Server on Port: %d", config.getint('Tardis', 'Port'))
+            logger.info("Starting Server on Port: %d", config.getint(configSection, 'Port'))
             server = TardisSocketServer()
         else:
-            logger.info("Starting Single Threaded Server on Port: %d", config.getint('Tardis', 'Port'))
+            logger.info("Starting Single Threaded Server on Port: %d", config.getint(configSection, 'Port'))
             server = TardisSingleThreadedSocketServer()
 
         logger.info("Server Session: %s", server.serverSessionID)
@@ -1676,17 +1678,18 @@ def processArgs():
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
 
-    t = 'Tardis'
-    config = configparser.RawConfigParser(configDefaults)
+    t = configSection
+    config = configparser.RawConfigParser(configDefaults, default_section='Tardis')
     config.add_section(t)                   # Make it safe for reading other values from.
-    config.read(args.config)
+    if args.config:
+        config.read(args.config)
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
     parser.add_argument('--database',           dest='database',        default=config.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbdir',              dest='dbdir',           default=config.get(t, 'DBDir'),  help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
-    parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file')
+    parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
     parser.add_argument('--exceptions',         dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')

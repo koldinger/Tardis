@@ -154,7 +154,7 @@ def login():
             host    = request.form['host']
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
-            upgrade = config.getboolean('Tardis', 'AllowSchemaUpgrades')
+            upgrade = config.getboolean('Remote', 'AllowSchemaUpgrades')
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 
             #session['tardis']   = tardis
@@ -521,8 +521,8 @@ def processArgs():
     parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
 
-    t = 'Tardis'
-    config = configparser.ConfigParser(configDefaults)
+    t = 'Remote'
+    config = configparser.ConfigParser(configDefaults, default_section='Tardis')
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
