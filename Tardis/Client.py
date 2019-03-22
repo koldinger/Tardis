@@ -57,6 +57,7 @@ import errno
 import unicodedata
 import pprint
 import traceback
+import hmac
 
 from binascii import hexlify
 
@@ -65,7 +66,7 @@ import pid
 import parsedatetime
 import srp
 import colorlog
-import hmac
+from pathmatch import wildmatch
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -257,11 +258,12 @@ def checkMessage(message, expected):
         logger.critical("Expected {} message, received {}".format(expected, message['message']))
         raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
 
-def filelist(dir, excludes):
+def filelist(dirname, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
-    files = os.listdir(dir)
+    files = os.listdir(dirname)
     for p in excludes:
-        files = itertools.filterfalse(p.match, files)
+        # This has to be listifed.  If it doesn't, it seems to not do the filtering.   Not sure why
+        files = list(itertools.filterfalse(lambda x: p.match(os.path.join(dirname, x)), files))
     return files
 
 #_deletedInodes = {}
@@ -1295,14 +1297,18 @@ def setPurgeValues(args):
 
 
 def mkExcludePattern(pattern):
-    return re.compile(fnmatch.translate(pattern))
+    logger.debug("Excluding {}", pattern)
+    if not pattern.startswith('/'):
+        pattern = '/**/' + pattern
+    logger.info("Excluding %s", pattern)
+    return wildmatch.translate(pattern)
 
 def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
     try:
         with open(name) as f:
             excludes = [mkExcludePattern(x.rstrip('\n')) for x in f.readlines()]
-        return excludes
+        return list(excludes)
     except IOError as e:
         #traceback.print_exc()
         return []
