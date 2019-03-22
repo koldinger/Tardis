@@ -3,7 +3,7 @@ Description=Tardis HTTP File Server
 After=syslog.target
 
 [Service]
-ExecStart=/usr/local/bin/tardisremote --daemon
+ExecStart=/usr/local/bin/tardisremote --daemon --config /etc/tardis/tardisremote.cfg
 ExecStop=/usr/bin/killall tardisremote
 Type=forking
 PIDFile=/var/run/tardisremote.pid
