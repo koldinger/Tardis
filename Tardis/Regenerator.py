@@ -44,7 +44,7 @@ import Tardis.librsync as librsync
 class RegenerateException(Exception):
     pass
 
-class Regenerator(object):
+class Regenerator:
     errors = 0
 
     def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
@@ -91,7 +91,7 @@ class Regenerator(object):
                 digest = infile.read(mac.digest_size)
                 self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
                 readsize += len(digest)
-                if hmac.compare_digest(digest, mac.digest()):
+                if not hmac.compare_digest(digest, mac.digest()):
                     self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), mac.hexdigest())
                     raise RegenerateException("HMAC did not authenticate.")
                 pt = self.crypt.unpad(pt)
@@ -122,6 +122,9 @@ class Regenerator(object):
         #self.logger.debug(" %s: %s", cksum, str(cksInfo))
 
         try:
+            if not cksInfo['isfile']:
+                raise RegenerateException("{} is not a file".format(cksum))
+
             if cksInfo['basis']:
                 if basisFile:
                     basis = basisFile
@@ -164,9 +167,11 @@ class Regenerator(object):
 
                 return output
 
+        except RegenerateException:
+            raise
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            self.logger.exception(e)
+            #self.logger.exception(e)
             raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
