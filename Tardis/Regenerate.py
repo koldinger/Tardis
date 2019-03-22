@@ -363,7 +363,7 @@ def mkOutputDir(name):
         return name
 
 def parseArgs():
-    parser = argparse.ArgumentParser(description='List Tardis File Versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description='Recover Backed Up Files', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
