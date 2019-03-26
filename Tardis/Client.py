@@ -58,6 +58,7 @@ import unicodedata
 import pprint
 import traceback
 import hmac
+import cProfile
 
 from binascii import hexlify
 
@@ -1104,22 +1105,29 @@ def _handle_resize(sig, frame):
     global _progressBarFormat, _windowWidth
     (_, width) = Util.getTerminalSize()
     if width < 110:
-        _progressBarFormat = '(%d, %d) :: (%d, %d, %s) :: %s '
+        _progressBarFormat = '%s (%d, %d) :: (%d, %d, %s) :: %s '
     else:
-        _progressBarFormat = 'Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
+        _progressBarFormat = '%s | Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
     _windowWidth = width
 
 
 _lastInfo = (None, None)                # STATIC for printProgress
 _lastProgressTime = 0
+_starttime = time.time()
 
 def printProgress(header=None, name=None):
+    def pTime(seconds):
+        if seconds > 3600:
+            return time.strftime("%H:%M:%S", time.gmtime(seconds))
+        else:
+            return time.strftime("%M:%S", time.gmtime(seconds))
+
     global _lastInfo, _lastProgressTime
     if args.progress:
         now = time.time()
         if ((now - _lastProgressTime) > 0.25):
             _lastProgressTime = now
-            bar = _progressBarFormat % ( stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
+            bar = _progressBarFormat % (pTime(now - _starttime), stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
 
             width = _windowWidth - len(bar) - 4
 
