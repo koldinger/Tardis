@@ -1093,13 +1093,19 @@ _startOfLine = '\r'
 
 def initProgressBar():
     global _progressBarFormat, _windowWidth
-    if args.progress:
-        try:
-            _handle_resize(None, None)
-            signal.signal(signal.SIGWINCH, _handle_resize)
-            signal.siginterrupt(signal.SIGWINCH, False)
-        except Exception as e:
-            pass
+    try:
+        _handle_resize(None, None)
+        signal.signal(signal.SIGWINCH, _handle_resize)
+        signal.signal(signal.SIGALRM,  _printProgress)
+        signal.siginterrupt(signal.SIGWINCH, False)
+        signal.siginterrupt(signal.SIGALRM, False)
+        signal.setitimer(signal.ITIMER_REAL, 5, 5)
+    except Exception as e:
+        logger.warning("signal setters failed: %s", str(e))
+        pass
+
+def cancelProgressBar():
+    signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
 def _handle_resize(sig, frame):
     global _progressBarFormat, _windowWidth
@@ -1110,12 +1116,15 @@ def _handle_resize(sig, frame):
         _progressBarFormat = '%s | Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
     _windowWidth = width
 
+def _printProgress(sig, frame):
+    logger.warning("Woke up progress printer")
+    printProgress(force=True)
 
-_lastInfo = (None, None)                # STATIC for printProgress
+_lastInfo = ('', '')                # STATIC for printProgress
 _lastProgressTime = 0
 _starttime = time.time()
 
-def printProgress(header=None, name=None):
+def printProgress(header=None, name=None, force=False):
     def pTime(seconds):
         if seconds > 3600:
             return time.strftime("%H:%M:%S", time.gmtime(seconds))
@@ -1125,7 +1134,7 @@ def printProgress(header=None, name=None):
     global _lastInfo, _lastProgressTime
     if args.progress:
         now = time.time()
-        if ((now - _lastProgressTime) > 0.25):
+        if (force or (now - _lastProgressTime) > 0.25):
             _lastProgressTime = now
             bar = _progressBarFormat % (pTime(now - _starttime), stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
 
@@ -1344,12 +1353,14 @@ def loadExcludedDirs(args):
 def sendMessage(message):
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
+    printProgress("Communicating", '', force=True)
     if args.logmessages:
         args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n\n')
     conn.send(message)
 
 def receiveMessage():
+    printProgress("Receiving", '', force=True)
     response = conn.receive()
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
@@ -2234,6 +2245,9 @@ def main():
             else:
                 sendPurge(True)
         conn.close()
+        if args.progress:
+            cancelProgressBar()
+
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         #exceptionLogger.log(e)
