@@ -1117,7 +1117,6 @@ def _handle_resize(sig, frame):
     _windowWidth = width
 
 def _printProgress(sig, frame):
-    logger.warning("Woke up progress printer")
     printProgress(force=True)
 
 _lastInfo = ('', '')                # STATIC for printProgress
