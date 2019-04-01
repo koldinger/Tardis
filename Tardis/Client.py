@@ -105,7 +105,7 @@ configDefaults = {
     'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
     'Crypt':                str(True),
-    'KeyFile':              '',
+    'KeyFile':              Defaults.getDefault('TARDIS_KEYFILE'),
     'SendClientConfig':     Defaults.getDefault('TARDIS_SEND_CONFIG'),
     'CompressData':         'none',
     'CompressMin':          str(4096),
@@ -1287,9 +1287,9 @@ def setBackupName(args):
     # If a name has been specified, we're not an automatic set.
     if name:
         auto = False
-    else:
-        # Else, no name specified, we're auto.  Create a default name.
-        name = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
+    #else:
+    #   # Else, no name specified, we're auto.  Create a default name.
+    #   name = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
     return (name, priority, auto)
 
 def setPurgeValues(args):
@@ -1352,14 +1352,12 @@ def loadExcludedDirs(args):
 def sendMessage(message):
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
-    printProgress("Communicating", '', force=True)
     if args.logmessages:
         args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n\n')
     conn.send(message)
 
 def receiveMessage():
-    printProgress("Receiving", '', force=True)
     response = conn.receive()
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
@@ -1621,7 +1619,6 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             'message'   : 'BACKUP',
             'host'      : client,
             'encoding'  : encoding,
-            'name'      : name,
             'priority'  : priority,
             'autoname'  : autoname,
             'force'     : force,
@@ -2110,12 +2107,12 @@ def main():
             names = {}
             errors = False
             for i in directories:
-                name = os.path.split(i)[1]
-                if name in names:
-                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, name, names[name])
+                x = os.path.split(i)[1]
+                if x in names:
+                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, x, names[name])
                     errors = True
                 else:
-                    names[name] = i
+                    names[x] = i
             if errors:
                 raise Exception('All paths must have a unique final directory name if basepath is none')
             rootdir = None
