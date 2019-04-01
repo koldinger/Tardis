@@ -140,6 +140,7 @@ configDefaults = {
     'SaveFull'          : str(False),
     'SkipFileName'      : skipFile,
     'DBBackups'         : '0',
+    'CksContent'        : '65536',
     'AutoPurge'         : str(False),
     'SaveConfig'        : str(True),
     'AllowClientOverrides'  :  str(True),
@@ -241,6 +242,21 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         if self.printMessages:
             self.logger.log(logging.TRACE, "Received:\n" + pp.pformat(message))
         return message
+
+    sizes = set()
+    sizesLoaded = False
+    def checkForSize(self, size):
+        if not self.sizesLoaded:
+            self.logger.debug("Loading sizes")
+            for i in self.db.getFileSizes(self.server.cksContent):
+                self.sizes.add(i[0])
+            self.logger.debug("Size loading complete: %d", len(self.sizes))
+            self.sizesLoaded = True
+
+        if (size > self.server.cksContent) and (size in self.sizes):
+            return CKSUM
+        else:
+            return CONTENT
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -390,7 +406,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     else:
                         # TODO: Lookup based on inode.
                         #self.logger.debug("No old file.")
-                        retVal = CONTENT
+                        retVal = self.checkForSize(f['size'])
 
         return retVal
 
@@ -649,6 +665,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     if self.server.linkBasis:
                         self.cache.link(basis, checksum + ".basis")
                     self.db.insertChecksumFile(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
+
+                # Track that we've added a file of this size.
+                self.sizes.add(size)
 
                 self.statUpdFiles += 1
 
@@ -1300,11 +1319,11 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     raise InitFailedException("Unknown message type: {}".format(messType))
 
                 client      = fields['host']            # TODO: Change at client as well.
-                name        = fields['name']
                 clienttime  = fields['time']
                 version     = fields['version']
 
                 autoname    = fields.get('autoname', True)
+                name        = fields.get('name', None)
                 full        = fields.get('full', False)
                 priority    = fields.get('priority', 0)
                 force       = fields.get('force', False)
@@ -1495,6 +1514,7 @@ class TardisServer(object):
         self.savefull       = config.getboolean(configSection, 'SaveFull')
         self.maxChain       = config.getint(configSection, 'MaxDeltaChain')
         self.deltaPercent   = float(config.getint(configSection, 'MaxChangePercent')) / 100.0        # Convert to a ratio
+        self.cksContent     = config.getint(configSection, 'CksContent')
 
         self.dbname         = args.dbname
         self.allowNew       = args.newhosts

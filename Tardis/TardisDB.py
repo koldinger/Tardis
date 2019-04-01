@@ -332,6 +332,11 @@ class TardisDB(object):
             raise Exception("Backupset {} already exists".format(name))
 
         self.currBackupSet = c.lastrowid
+
+        if name == None:
+            name = "INCOMPLETE-{}".format(self.currBackupSet)
+            self.setBackupSetName(name, priority)
+
         self.currBackupName = name
         self.conn.commit()
         self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
@@ -919,6 +924,11 @@ class TardisDB(object):
         cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin + 
                                "WHERE Files.FirstSet >= :pSet AND Files.LastSet >= :bSet",
                                {'bSet': bSet, 'pSet': pSet})
+        return _fetchEm(cursor)
+
+    @authenticate
+    def getFileSizes(self, minsize):
+        cursor = self._execute("SELECT DISTINCT(Size) FROM Checksums WHERE Size > :minsize", {"minsize": minsize })
         return _fetchEm(cursor)
 
     @authenticate
