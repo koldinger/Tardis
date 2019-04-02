@@ -37,7 +37,7 @@ import base64
 import binascii
 
 from Cryptodome.Cipher import AES
-from Cryptodome.Protocol.KDF import PBKDF2
+from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
 import srp
@@ -290,10 +290,13 @@ class CryptoScheme1(NullCrypto):
 
         self.client = bytes(client, 'utf8')
         self.salt = hashlib.sha256(self.client).digest()
-        keys = PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
+        keys = self.genKeyKey()
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
 
         self._fsEncoding = fsencoding
+
+    def genKeyKey(self):
+        return PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
 
     def getContentCipher(self, iv):
         return AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
@@ -405,6 +408,9 @@ class CryptoScheme2(CryptoScheme1):
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
+
+    def genKeyKey(self):
+        return scrypt('password', 'linux.koldware.com', 32, 65536, 8, 1)
 
     def _encryptSIV(self, key, value, name=None):
         cipher = AES.new(key, AES.MODE_SIV)
