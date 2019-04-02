@@ -940,12 +940,14 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         return (response, True)
 
     def processSetKeys(self, message):
-        filenameKey = message['filenameKey']
-        contentKey  = message['contentKey']
-        srpSalt     = message['srpSalt']
-        srpVkey     = message['srpVkey']
+        filenameKey     = message['filenameKey']
+        contentKey      = message['contentKey']
+        srpSalt         = message['srpSalt']
+        srpVkey         = message['srpVkey']
+        cryptoScheme    = message['cryptoScheme']
 
         ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+        self.db.setConfigValue('CryptoScheme', cryptoScheme)
         response = {
             'message': 'ACKSETKEYS',
             'response': 'OK' if ret else 'FAIL'
@@ -1224,8 +1226,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             contentKey  = resp['contentKey']
             srpSalt     = resp['srpSalt']
             srpVkey     = resp['srpVkey']
+            cryptoScheme = resp['cryptoScheme']
             # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-            return(srpSalt, srpVkey, filenameKey, contentKey)
+            return(srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme)
 
         except KeyError as e:
             raise InitFailedException(e.message)
@@ -1237,7 +1240,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         """
         self.logger.debug("Beginning Authentication")
         try:
-            message = {"message": "AUTH", "status": "AUTH", "client": self.db.clientId}
+            cryptoScheme = self.db.getConfig('CryptoScheme') or '1'
+            message = {"message": "AUTH", "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             autha = self.recvMessage()
             self.checkMessage(autha, "AUTH1")
@@ -1360,8 +1364,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
                 if keys:
                     self.logger.debug("Setting keys into new client DB")
-                    (srpSalt, srpVkey, filenameKey, contentKey) = keys
+                    (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
                     ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+                    self.db.setConfigValue('CryptoScheme', cryptoScheme)
                     keys = None
 
                 self.logger.debug("Ready for authentication")

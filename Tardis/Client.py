@@ -1385,7 +1385,8 @@ def sendKeys(password, client, includeKeys=True):
                 "filenameKey": f,
                 "contentKey": c,
                 "srpSalt": salt,
-                "srpVkey": vkey
+                "srpVkey":  vkey,
+                "cryptoScheme": crypt.getCryptoScheme()
               }
     response = sendAndReceive(message)
     checkMessage(response, 'ACKSETKEYS')
@@ -1539,17 +1540,17 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def setCrypto(confirm, strength=False):
+def setCrypto(confirm, strength=False, version=None):
     global srpUsr, crypt
     password = Util.getPassword(True, None, None, "Password for %s:" % (args.client),
                                 confirm=confirm, strength=strength, allowNone = False)
     srpUsr = srp.User(args.client, password)
-    crypt = TardisCrypto.TardisCrypto(password, args.client)
+    crypt = TardisCrypto.getCrypto(version, password, args.client)
     return password
 
 def doSendKeys(password):
     if srpUsr is None:
-        password = setCrypto(True, True)
+        password = setCrypto(True, True, cryptoVersion)
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1558,15 +1559,16 @@ def doSendKeys(password):
                 "filenameKey": f,
                 "contentKey": c,
                 "srpSalt": salt,
-                "srpVkey": vkey
+                "srpVkey": vkey,
+                "cryptoScheme": crypt.getCryptoScheme()
               }
     resp = sendAndReceive(message)
     return resp
 
-def doSrpAuthentication():
+def doSrpAuthentication(response):
     try:
         if srpUsr is None:
-            setCrypto(False)
+            setCrypto(False, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
@@ -1612,7 +1614,7 @@ def doSrpAuthentication():
     
 
 def startBackup(name, priority, client, autoname, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
-    global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey
+    global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey, crypt
 
     # Create a BACKUP message
     message = {
@@ -1634,7 +1636,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
     if resp['status'] == 'NEEDKEYS':
         resp = doSendKeys(password)
     if resp['status'] == 'AUTH':
-        resp = doSrpAuthentication()
+        resp = doSrpAuthentication(resp)
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
         if 'error' in resp:
@@ -2034,7 +2036,6 @@ def main():
     verbosity=args.verbose if args.verbose else 0
     setupLogging(args.logfiles, verbosity, args.exceptions)
 
-
     try:
         if args.progress:
             initProgressBar()
@@ -2076,7 +2077,9 @@ def main():
 
         if password:
             srpUsr = srp.User(client, password)
-            crypt = TardisCrypto.TardisCrypto(password, client)
+
+            if args.create:
+                crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password, client)
 
         # If no compression types are specified, load the list
         types = []

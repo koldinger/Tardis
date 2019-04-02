@@ -435,7 +435,9 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
             raise TardisDB.AuthenticationFailed()
 
         # Password specified, so create the crypto unit
-        crypt = TardisCrypto.TardisCrypto(password, client)
+        cryptoScheme = tardis.getConfigValue('CryptoScheme') or '1'
+
+        crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
         if keyFile:
             (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
         else:
