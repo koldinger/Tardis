@@ -938,14 +938,14 @@ class TardisDB(object):
                       {"bset": bset, "full": newFiles, "delta": deltaFiles, "bytes": bytesReceived})
 
     @authenticate
-    def getConfigValue(self, key):
-        return self._getConfigValue(key)
+    def getConfigValue(self, key, default=None):
+        return self._getConfigValue(key, default)
 
-    def _getConfigValue(self, key):
+    def _getConfigValue(self, key, default=None):
         self.logger.debug("Getting Config Value %s", key)
         c = self._execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
         row = c.fetchone()
-        return row[0] if row else None
+        return row[0] if row else default
 
     @authenticate
     def setConfigValue(self, key, value):
