@@ -36,6 +36,7 @@ import stat
 import argparse
 import fnmatch
 import parsedatetime
+import time
 
 import termcolor
 
@@ -555,6 +556,7 @@ def pruneBackupSetsByDateRange(tardis):
         (then, success) = cal.parse(daterange[0])
         if success:
             startTime = time.mktime(then)
+            startSet = tardis.getBackupSetInfoForTime(startTime)
 
             if startSet:
                 # Get the backupset, then add 1.  Backupset will be the LAST backupset before
