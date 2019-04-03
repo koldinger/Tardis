@@ -1316,7 +1316,6 @@ def mkExcludePattern(pattern):
     logger.debug("Excluding {}", pattern)
     if not pattern.startswith('/'):
         pattern = '/**/' + pattern
-    logger.info("Excluding %s", pattern)
     return wildmatch.translate(pattern)
 
 def loadExcludeFile(name):
