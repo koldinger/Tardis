@@ -43,7 +43,7 @@ up to the client machine, you can access the backup database directly.  In this 
 at the database.   This can also be done if the database is accesible via a network file system, such as NFS or Samba/SMB/CIFS.   If the backup drive is not directly accessible, it can be reached via an http exposed filesystem.  Details on setting this up are below.
 
 * Determine which backup sets exist:  `sonic list --database DatabasePath`.
-  * DatabasePath could be a path on yourlocal system, if you're using the system above, usually the same value you entered in     the tardisd config file, so `sonic list --database /media/Backup/tardis`.   If you're using a remote system, it will be an HTTP (or HTTPS) URL, eg `sonic list --database http://serverhost` where serverhost is the name of the machine running the server.
+  * DatabasePath could be a path on your local system, if you're using the system above, usually the same value you entered in the tardisd config file, so `sonic list --database /media/Backup/tardis`.   If you're using a remote system, it will be an HTTP (or HTTPS) URL, eg `sonic list --database http://serverhost` where serverhost is the name of the machine running the server.
   * If the backups were made with a password, the password will need to be specified via the --password or related options.  You will be prompted for a password if one isn't specified. 
 * Determine which version of the file are available using the lstardis program: `lstardis --databse DatabasePath /path/to/file`.  This will list all the backup sets which contain changed versions of the file.
 * Recover the file using the regenerate program: `regenerate --database DatabasePath --backup backupset /path/to/file`.  This will recover the versino of the file in backupset.  If the file is a directory, the directory, and all files below it will be recovered.   You can specify the -o option to indicate where the files should be recovered.   You can also replace --backup with --date Date to recover the most recent version backed up before Date.   If you don't specify a backupset or date, the most recent version will be recovered.
@@ -81,7 +81,7 @@ Future Releases
 ===============
 Several releases will be coming soon:
   * 1.1.0 Port to Python3
-  * 1.1.x Bug Fixes
+  * 1.1.x Bug Fixes, and minor features
   * 1.2.0 Asynchronous protocol allowing improved performance.
 
 Support
@@ -410,6 +410,17 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
+Release Notes -- Version 1.1.2
+==============================
+1.1.2 adds a several bug fixes, and a couple minor features.  The most visible feature is the addition of path matching in exclude files.   Patch matching uses the \*\* wildcard, and follows
+the GIT WildMatch syntax.
+
+Changes in behavior include:
+   * tardisd and tardisremote no longer include the configuration files from /etc/tardis/ by default.   These need to be specified on the command line.
+   * tardisd and tardisremote now attempt to read their data from the `Daemon` and `Remote` sections of their config files respectively, allowing a combined config file for both.   Defaults are read
+     from the `Tardis` section, allowing current configuration files to be used unchanged.
+   * tardis now uses the -Y option for message compression.   -C is now a shortcut for --client, to be compatibile with other tools.
+
 Important Note -- Version 1.1.0
 ===============================
 The 1.1.x releases for Python3 are mildly incompatible with the 1.0.x releases.   The incompatibility is in the communications protocol between the tardis client, and the tardisd server.
