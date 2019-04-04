@@ -45,34 +45,73 @@ import srp
 import Tardis.Defaults as Defaults
 from functools import reduce
 
-defaultCryptoScheme = '2'
+defaultCryptoScheme = 2
 
 def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
-    if scheme == '0':
-        return NullCrypto(client, fsencoding)
-    elif scheme == '1':
-        return CryptoScheme1(password, client, fsencoding)
-    elif scheme == '2':
-        return CryptoScheme2(password, client, fsencoding)
-    elif scheme == '3':
-        return CryptoScheme3(password, client, fsencoding)
-    else:
-        raise Exception(f"Unknown Encryption Scheme: {scheme}")
+    scheme = int(scheme)
 
-class BlockDecryptor:
+    if scheme == 0:
+        return NullCrypto(password, client, fsencoding)
+    elif scheme == 1:
+        return CryptoScheme1(password, client, fsencoding)
+    elif scheme == 2:
+        return CryptoScheme2(password, client, fsencoding)
+    elif scheme == 3:
+        return CryptoScheme3(password, client, fsencoding)
+    elif scheme == 4:
+        return CryptoScheme4(password, client, fsencoding)
+    else:
+        raise Exception(f"Unknown Crypto Scheme: {scheme}")
+
+
+class HasherMixin:
+    hasher = None
+
+    def __init__(self, cipher, hasher):
+        self.hasher = hasher
+        super().__init__(cipher)
+
+    def update(self, data):
+        self.hasher.update(data)
+
+    def encrypt(self, data):
+        ct = super().encrypt(data)
+        self.hasher.update(ct)
+        return ct
+
+    def finish(self):
+        ct = super().finish()
+        self.hasher.update(ct)
+        return ct
+
+    def decrypt(self, ct, last=False):
+        self.hasher.update(ct)
+        plain = super().decrypt(ct, last)
+        return plain
+
+    def digest(self):
+        return self.hasher.digest()
+
+    def verify(self, tag):
+        if not hmac.compare_digest(tag, self.hasher.digest()):
+            raise ValueError("MAC did not match")
+
+class BlockEncryptor:
     done = False
     prev = None
     iv = None
 
-    def __init__(self, cipher, hasher):
+    def __init__(self, cipher):
         self.cipher = cipher
-        self.hasher = hasher
         self.iv = cipher.iv
+        self.update(self.iv)
+
+    def update(self, data):
+        self.cipher.update(data)
 
     def encrypt(self, data):
         if self.done:
             raise Exception("Already completed")
-        self.hasher.update(data)
         if self.prev:
             data = self.prev + data
             self.prev = None
@@ -85,34 +124,7 @@ class BlockDecryptor:
         else:
             return None
 
-    def finish(self):
-        if self.done:
-            raise Exception("Already completed")
-        self.done = True
-        if self.prev:
-            padded = pad(self.prev, cipher.block_size)
-
-            return cipher.encrypt(padded)
-        else:
-            return None
-
-    def digest(self):
-        if not self.done and self.prev:
-            raise Exception("Not yet finished encrypting")
-        self.done = True
-        return self.hasher.digest()
-
-class CBCStreamDecryptor:
-    first = True
-    done = False
-    prev = None
-
-    def __init__(self, cipher, hasher):
-        self.cipher = cipher
-        self.hasher = hasher
-        self.hasher.update(cipher.iv)
-
-    def decrypt(data, last=False):
+    def decrypt(self, data, last=False):
         if self.done:
             raise Exception("Already completed")
         if self.prev:
@@ -126,16 +138,34 @@ class CBCStreamDecryptor:
             output = self.cipher.decrypt(data)
             if last:
                 self.done = True
-                output = unpad(output, cipher.blocksize)
-
-            self.hasher.update(output)
+                output = unpad(output, self.cipher.block_size)
             return output
         else:
             return None
 
-    def verify(tag):
-        if not hmac.compare_digest(tag, self.hasher.digest()):
-            raise ValueError("MAC did not match")
+
+    def finish(self):
+        if self.done:
+            raise Exception("Already completed")
+        self.done = True
+        if self.prev:
+            padded = pad(self.prev, self.cipher.block_size)
+        else:
+            padded = pad(b'', self.cipher.block_size)
+        return self.cipher.encrypt(padded)
+
+    def digest(self):
+        if not self.done and self.prev:
+            raise Exception("Not yet finished encrypting")
+        self.done = True
+        return self.cipher.digest()
+
+    def verify(self, tag):
+        self.cipher.verify(tag)
+
+class HashingBlockEncryptor(HasherMixin, BlockEncryptor):
+    def __init__(self, cipher, hasher):
+        HasherMixin.__init__(self, cipher, hasher)
 
 
 class StreamEncryptor:
@@ -145,49 +175,43 @@ class StreamEncryptor:
     def __init__(self, cipher):
         self.cipher = cipher
         self.iv = cipher.nonce
+        self.update(self.iv)
+
+    def update(self, data):
+        self.cipher.update(data)
 
     def encrypt(self, data):
-        return cipher.encrypt(data)
+        return self.cipher.encrypt(data)
 
-    def decrypt(self, data):
-        return cipher.decrypt(data)
+    def decrypt(self, data, last=False):
+        return self.cipher.decrypt(data)
 
     def finish(self):
-        pass
+        return b''
 
     def digest(self):
         return self.cipher.digest()
 
     def verify(self, tag):
-        cipher.verify(tag)
+        self.cipher.verify(tag)
 
-class HashingStreamEncryptor(StreamEncryptor):
-    def __init__(self, cipher, hasher):
-        super().__init__(cipher)
-        self.hasher = hasher
-        self.hasher.update(cipher.nonce)
+def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
+    pass
+
+
+class NullEncryptor:
+    iv = ''
 
     def encrypt(self, data):
-        hasher.update(data)
-        return super().encrypt(data)
-
-    def finish(self):
-        super().finish()
-
-    def digest():
-        self.hasher.digest()
-
-class NullEncryptor():
-    def encrypt(self, data):
         return data
-    def decrypt(self, data):
+    def decrypt(self, data, last=False):
         return data
     def finish(self):
-        pass
+        return b''
     def digest(self):
         return None
     def verify(self, tag):
-        return None
+        pass
 
 class NullCrypto:
     _cryptoScheme = '0'
@@ -205,7 +229,7 @@ class NullCrypto:
         def encrypt(data):
             return data
 
-    def __init__(self, client=None, fsencoding=sys.getfilesystemencoding()):
+    def __init__(self, password=None, client=None, fsencoding=sys.getfilesystemencoding()):
         pass
 
     def getCryptoScheme(self):
@@ -214,7 +238,7 @@ class NullCrypto:
     def getContentCipher(self, iv):
         return NullCipher()
 
-    def getContentEncryptor(self, iv):
+    def getContentEncryptor(self, iv=None):
         return NullEncryptor()
 
     def encryptFilename(self, name):
@@ -290,19 +314,21 @@ class CryptoScheme1(NullCrypto):
 
         self.client = bytes(client, 'utf8')
         self.salt = hashlib.sha256(self.client).digest()
-        keys = self.genKeyKey()
+        keys = self.genKeyKey(password)
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
 
         self._fsEncoding = fsencoding
 
-    def genKeyKey(self):
+    def genKeyKey(self, password):
         return PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
 
     def getContentCipher(self, iv):
+        if iv is None:
+            iv = self.getIV()
         return AES.new(self._contentKey, AES.MODE_CBC, IV=iv)
 
-    def getContentEncryptor(self, iv):
-        return CBCStreamEncryptor(self.getContentCipher(iv), self.getHash(hashlib.sha512))
+    def getContentEncryptor(self, iv=None):
+        return HashingBlockEncryptor(self.getContentCipher(iv), self.getHash(hashlib.sha512))
 
     def getHash(self, func=hashlib.md5):
         return hmac.new(self._contentKey, digestmod=func)
@@ -409,8 +435,8 @@ class CryptoScheme2(CryptoScheme1):
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
 
-    def genKeyKey(self):
-        return scrypt('password', 'linux.koldware.com', 32, 65536, 8, 1)
+    def genKeyKey(self, password):
+        return scrypt(password, self.salt, 32, 65536, 8, 1)
 
     def _encryptSIV(self, key, value, name=None):
         cipher = AES.new(key, AES.MODE_SIV)
@@ -469,9 +495,73 @@ class CryptoScheme3(CryptoScheme2):
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
 
-    def getContentCipher(self, iv):
+    def getContentCipher(self, iv=None):
+        if iv is None:
+            iv = self.getIV()
         return AES.new(self._contentKey, AES.MODE_GCM, nonce=iv)
 
-    def getContentEncryptor(self, iv):
-        return GCMStreamEncryptor(self.getContentCipher(iv))
+    def getContentEncryptor(self, iv=None):
+        return StreamEncryptor(self.getContentCipher(iv))
+
+
+class CryptoScheme4(CryptoScheme2):
+    """
+    Improved crypto scheme.
+    Uses ChaCha20/Poly1305  for encryption and authentication
+    Uses ASE-256 SIV encryption and authentaction for files
+    """
+    _cryptoScheme = '4'
+
+    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
+        super().__init__(password, client, fsencoding)
+
+    def getContentCipher(self, iv):
+        return ChaCha20_Poly1305.new(key=self._contentKey, nonce=iv)
+
+    def getContentEncryptor(self, iv=None):
+        return StreamEncryptor(self.getContentCipher(iv))
+
+
+if __name__ == '__main__':
+    string = b'abcdefghijknlmnopqrstuvwxyz' + \
+             b'ABCDEFGHIJKNLMNOPQRSTUVWXYZ' + \
+             b'1234567890!@#$%&*()[]{}-_,.<>'
+
+    #print(string)
+    path = '/srv/home/kolding/this is a/test.onlyATest'
+    fname ='test.only1234'
+
+    for i in range(0, 4):
+        print(f"Testing {i}")
+        try:
+            c = getCrypto(i, 'PassWordXYZ123')
+            c.genKeys()
+            
+            print("--- Testing Content Encryptor ---")
+            e = c.getContentEncryptor()
+            d = c.getContentEncryptor(e.iv)
+
+            ct = e.encrypt(string) + e.finish()
+            pt = d.decrypt(ct, True)
+
+            assert(pt == string)
+            d.verify(e.digest())
+
+            print("--- Testing Filename Encryptor ---")
+            cf = c.encryptFilename(fname)
+            df = c.decryptFilename(cf)
+
+            assert(fname == df)
+
+            print("--- Testing FilePath Encryptor ---")
+            cp = c.encryptPath(path)
+            dp = c.decryptPath(cp)
+
+            assert(path == dp)
+            
+        except Exception as e:
+            print(f"Caught exception: {e}")
+            print(e)
+
+
 
