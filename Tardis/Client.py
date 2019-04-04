@@ -390,17 +390,15 @@ def handleAckSum(response):
 
 def makeEncryptor():
     if args.crypt and crypt:
-        iv = crypt.getIV()
-        encryptor = crypt.getContentCipher(iv)
-        func = lambda x: encryptor.encrypt(x)
-        pad  = lambda x: crypt.pad(x)
-        hmac = crypt.getHash(func=hashlib.sha512)
+        #iv = crypt.getIV()
+        iv = b'\xde\xad\xbe\xef\xde\xad\xbe\xef' + \
+             b'\xde\xad\xbe\xef\xde\xad\xbe\xef'
+        encryptor = crypt.getContentEncryptor(iv)
     else:
-        iv = None
-        func = lambda x: x
-        pad  = lambda x: x
-        hmac = None
-    return (func, pad, iv, hmac)
+        iv = b''
+        #TODO: Fix this
+        encryptor = TardisCrypto.NullEncryptor()
+    return (encryptor, iv)
 
 def prefetchSigFiles(inodes):
     logger.debug("Requesting signature files: %s", str(inodes))
@@ -510,7 +508,7 @@ def processDelta(inode, signatures):
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-                (encrypt, pad, iv, hmac) = makeEncryptor()
+                encrypt, iv, = makeEncryptor()
                 Util.accumulateStat(stats, 'delta')
                 message = {
                     "message": "DEL",
@@ -526,7 +524,7 @@ def processDelta(inode, signatures):
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 progress = printProgress if args.progress else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats, iv=iv, progress=progress)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -539,7 +537,7 @@ def processDelta(inode, signatures):
                     sendMessage(message)
                     #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -576,7 +574,7 @@ def sendContent(inode, reportType):
 
             if stat.S_ISDIR(mode):
                 return
-            (encrypt, pad, iv, hmac) = makeEncryptor()
+            encrypt, iv, = makeEncryptor()
             message = {
                 "message":      "CON",
                 "inode":        inode,
@@ -621,12 +619,10 @@ def sendContent(inode, reportType):
                 sendMessage(message)
                 #batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
-                                                      encrypt, pad, hasher=Util.getHash(crypt, args.crypt),
+                                                      encrypt, hasher=Util.getHash(crypt, args.crypt),
                                                       chunksize=args.chunksize,
                                                       compress=compress,
                                                       signature=makeSig,
-                                                      hmac=hmac,
-                                                      iv=iv,
                                                       stats=stats,
                                                       progress=progress)
 
@@ -638,7 +634,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -667,7 +663,7 @@ def handleAckMeta(message):
         data = metaCache.inverse[cks][0]
         logger.debug("Sending meta data chunk: %s -- %s", cks, data)
 
-        (encrypt, pad, iv, hmac) = makeEncryptor()
+        encrypt, iv = makeEncryptor()
         message = {
             "message": "METADATA",
             "checksum": cks,
@@ -677,7 +673,7 @@ def handleAckMeta(message):
         sendMessage(message)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
         progress = printProgress if args.progress else None
-        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, progress=progress)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -2181,13 +2177,10 @@ def main():
     clHash = Util.getHash(crypt, args.crypt)
     clHash.update(bytes(commandLine, 'utf8'))
     h = clHash.hexdigest()
-    (encrypt, pad, iv, hmac) = makeEncryptor()
+    encrypt, iv = makeEncryptor()
     if iv is None:
         iv = b''
-    data = iv + encrypt(pad(bytes(commandLine, 'utf8')))
-    if hmac:
-        hmac.update(data)
-        data = data + hmac.digest()
+    data = iv + encrypt.encrypt(bytes(commandLine, 'utf8')) + encrypt.finish() + encrypt.digest()
 
     message = {
         'message': 'COMMANDLINE',

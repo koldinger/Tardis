@@ -49,7 +49,6 @@ import time
 import struct
 import io
 
-import urllib.parse
 import urllib.request, urllib.parse, urllib.error
 
 import zlib
@@ -435,7 +434,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
             raise TardisDB.AuthenticationFailed()
 
         # Password specified, so create the crypto unit
-        cryptoScheme = tardis.getConfigValue('CryptoScheme') or '1'
+        cryptoScheme = tardis.getConfigValue('CryptoScheme', '1')
 
         crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
         if keyFile:
@@ -560,7 +559,7 @@ def _chunks(stream, chunksize):
 
 _transmissionTime = 0
 
-def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, hmac=None, iv=None, progress=None, progressPeriod=8*1024*1024):
+def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, progress=None, progressPeriod=8*1024*1024):
     """
     Send a block of data, optionally encrypt and/or compress it before sending
     Compress should be either None, for no compression, or one of the known compression types (zlib, bzip, lzma)
@@ -585,18 +584,17 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
         stream = CompressedBuffer.BufferedReader(data, hasher=hasher, signature=signature)
 
     try:
-        if iv:
-            sender.sendMessage(iv, raw=True)
-            accumulateStat(stats, 'dataSent', len(iv))
-            if hmac:
-                hmac.update(iv)
+        if encrypt.iv:
+            sender.sendMessage(encrypt.iv, raw=True)
+            accumulateStat(stats, 'dataSent', len(encrypt.iv))
         for chunk, eof in _chunks(stream, chunksize):
-            if eof:
-                chunk = pad(chunk)
             #print len(chunk), eof
-            data = sender.encode(encrypt(chunk))
-            if hmac:
-                hmac.update(data)
+            if chunk:
+                data = encrypt.encrypt(chunk)
+            else:
+                data = b''
+            if eof:
+                data += encrypt.finish()
             #chunkMessage = { "chunk" : num, "data": data }
             if data:
                 sender.sendMessage(data, raw=True)
@@ -607,9 +605,10 @@ def sendData(sender, data, encrypt=lambda x:x, pad=lambda x:x, chunksize=(16 * 1
                         progress()
 
             #num += 1
-        if hmac:
-            sender.sendMessage(hmac.digest(), raw=True)
-            accumulateStat(stats, 'dataSent', hmac.digest_size)
+        digest = encrypt.digest()
+        if digest:
+            sender.sendMessage(digest, raw=True)
+            accumulateStat(stats, 'dataSent', len(digest))
 
     except Exception as e:
         status = "Fail"
