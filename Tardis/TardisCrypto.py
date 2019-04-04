@@ -45,7 +45,7 @@ import srp
 import Tardis.Defaults as Defaults
 from functools import reduce
 
-defaultCryptoScheme = 2
+defaultCryptoScheme = 3
 
 def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
     scheme = int(scheme)
@@ -76,7 +76,8 @@ class HasherMixin:
 
     def encrypt(self, data):
         ct = super().encrypt(data)
-        self.hasher.update(ct)
+        if ct:
+            self.hasher.update(ct)
         return ct
 
     def finish(self):
@@ -95,6 +96,9 @@ class HasherMixin:
     def verify(self, tag):
         if not hmac.compare_digest(tag, self.hasher.digest()):
             raise ValueError("MAC did not match")
+
+    def getDigestSize(self):
+        return self.hasher.digest_size()
 
 class BlockEncryptor:
     done = False
@@ -143,7 +147,6 @@ class BlockEncryptor:
         else:
             return None
 
-
     def finish(self):
         if self.done:
             raise Exception("Already completed")
@@ -163,10 +166,13 @@ class BlockEncryptor:
     def verify(self, tag):
         self.cipher.verify(tag)
 
+    def getDigestSize(self):
+        # these all seem to be 128 hashers
+        return 16
+
 class HashingBlockEncryptor(HasherMixin, BlockEncryptor):
     def __init__(self, cipher, hasher):
         HasherMixin.__init__(self, cipher, hasher)
-
 
 class StreamEncryptor:
     done = False
@@ -195,12 +201,16 @@ class StreamEncryptor:
     def verify(self, tag):
         self.cipher.verify(tag)
 
+    def getDigestSize(self):
+        # these all seem to be 128 hashers
+        return 16
+
 def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
     pass
 
 
 class NullEncryptor:
-    iv = ''
+    iv = b''
 
     def encrypt(self, data):
         return data
@@ -209,7 +219,7 @@ class NullEncryptor:
     def finish(self):
         return b''
     def digest(self):
-        return None
+        return b''
     def verify(self, tag):
         pass
 
