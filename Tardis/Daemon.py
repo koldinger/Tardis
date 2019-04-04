@@ -1240,7 +1240,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         """
         self.logger.debug("Beginning Authentication")
         try:
-            cryptoScheme = self.db.getConfigValue('CryptoScheme') or '1'
+            cryptoScheme = self.db._getConfigValue('CryptoScheme', '1')
             message = {"message": "AUTH", "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             autha = self.recvMessage()
