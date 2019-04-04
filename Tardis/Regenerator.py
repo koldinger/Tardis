@@ -67,34 +67,34 @@ class Regenerator:
 
         self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))
 
-        if authenticate:
-            mac.update(iv)
-
-        # Create the cypher
-        cipher = self.crypt.getContentCipher(iv)
+        # Create the cipher
+        encryptor = self.crypt.getContentEncryptor(iv)
 
         outfile = tempfile.TemporaryFile()
 
-        contentSize = size - self.crypt.ivLength - mac.digest_size
+        contentSize = size - self.crypt.ivLength - encryptor.getDigestSize()
         #self.logger.info("Computed Size: %d.  Specified size: %d.  Diff: %d", ctSize, size, (ctSize - size))
 
         rem = contentSize
         blocksize = 64 * 1024
+        last = False
         while rem > 0:
             readsize = blocksize if rem > blocksize else rem
-            ct = infile.read(readsize)
-            if authenticate:
-                mac.update(ct)
-            pt = cipher.decrypt(ct)
             if rem <= blocksize:
+                last = True
+            ct = infile.read(readsize)
+            pt = encryptor.decrypt(ct, last)
+            if last:
                 # ie, we're the last block
-                digest = infile.read(mac.digest_size)
+                digest = infile.read(encryptor.getDigestSize())
                 self.logger.debug("Got HMAC Digest: %d %s", len(digest), binascii.hexlify(digest))
                 readsize += len(digest)
-                if not hmac.compare_digest(digest, mac.digest()):
-                    self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), mac.hexdigest())
-                    raise RegenerateException("HMAC did not authenticate.")
-                pt = self.crypt.unpad(pt)
+                if authenticate:
+                    try:
+                        encryptor.verify(digest)
+                    except:
+                        self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), binascii.hexlify(encryptor.digest()))
+                        raise RegenerateException("HMAC did not authenticate.")
             outfile.write(pt)
             rem -= readsize
 
