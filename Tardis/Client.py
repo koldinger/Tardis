@@ -1096,16 +1096,10 @@ def initProgressBar():
     try:
         _handle_resize(None, None)
         signal.signal(signal.SIGWINCH, _handle_resize)
-        signal.signal(signal.SIGALRM,  _printProgress)
         signal.siginterrupt(signal.SIGWINCH, False)
-        signal.siginterrupt(signal.SIGALRM, False)
-        signal.setitimer(signal.ITIMER_REAL, 5, 5)
     except Exception as e:
         logger.warning("signal setters failed: %s", str(e))
         pass
-
-def cancelProgressBar():
-    signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
 def _handle_resize(sig, frame):
     global _progressBarFormat, _windowWidth
@@ -2240,9 +2234,6 @@ def main():
             else:
                 sendPurge(True)
         conn.close()
-        if args.progress:
-            cancelProgressBar()
-
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         #exceptionLogger.log(e)
