@@ -59,7 +59,12 @@ OW_OLDER  = 3
 OW_PROMPT = 4
 
 overwriteNames = { 'never': OW_NEVER, 'always': OW_ALWAYS, 'newer': OW_NEWER, 'older': OW_OLDER, 'ask': OW_PROMPT }
-owMode = OW_NEVER
+if sys.stdout.isatty():
+    owMode = OW_PROMPT
+    owModeDefault = 'ask'
+else:
+    owMode = OW_NEVER
+    owModeDefault = 'never'
 
 errors = 0
 
@@ -400,7 +405,7 @@ def parseArgs():
     parser.add_argument('--set-perms', dest='setperm', default=True, action=Util.StoreBoolean,      help='Set file owner and permisions to match original file. Default: %(default)s')
     parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
     parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file. Default: %(default)s')
-    parser.add_argument('--overwrite', '-O', dest='overwrite', default='never', const='always', nargs='?',
+    parser.add_argument('--overwrite', '-O', dest='overwrite', default=owModeDefault, const='always', nargs='?',
                         choices=['always', 'newer', 'older', 'never', 'ask'],
                         help='Mode for handling existing files. Default: %(default)s')
 
