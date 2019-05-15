@@ -1385,6 +1385,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     else:
                         self.serverKeepTime = None
                         self.serverPriority = None
+                else:
+                    self.serverKeepTime = None
+                    self.serverPriority = None
 
                 # Either the server or the client can specify a full backup.
                 self.full = full or serverForceFull
