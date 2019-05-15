@@ -1195,8 +1195,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             if self.db.checkBackupSetName(name):
                 return (name, prio, keep, full)
 
-        # Oops, nothing worked.  Didn't change the name.
-        return (None, None, None, False)
+        # Oops, nothing worked.  Create a temporary name
+        name = starttime.strftime("Backup_%Y-%m-%d_%H:%M:%S")
+        return (name, 0, 0, False)
 
     def mkMessenger(self, sock, encoding, compress):
         """
