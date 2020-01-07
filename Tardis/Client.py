@@ -998,7 +998,7 @@ def flushClones():
             sendClones()
 
 def sendBatchMsgs():
-    global batchMsgs
+    global batchMsgs, _batchStartTime
     batchSize = len(batchMsgs)
     if batchSize == 1:
         # If there's only one, don't batch it up, just send it.
@@ -1012,7 +1012,6 @@ def sendBatchMsgs():
         }
         msgId = setMessageID(message)
         logger.debug("BATCH Starting. %s commands", len(batchMsgs))
-
 
         response = sendAndReceive(message)
         checkMessage(response, 'ACKBTCH')
@@ -1028,6 +1027,7 @@ def sendBatchMsgs():
         logger.debug("BATCH Ending.")
 
     batchMsgs = []
+    _batchStartTime = None
     # Process the response messages
     handleResponse(response)
 
@@ -1092,16 +1092,10 @@ def initProgressBar():
     try:
         _handle_resize(None, None)
         signal.signal(signal.SIGWINCH, _handle_resize)
-        signal.signal(signal.SIGALRM,  _printProgress)
         signal.siginterrupt(signal.SIGWINCH, False)
-        signal.siginterrupt(signal.SIGALRM, False)
-        signal.setitimer(signal.ITIMER_REAL, 5, 5)
     except Exception as e:
         logger.warning("signal setters failed: %s", str(e))
         pass
-
-def cancelProgressBar():
-    signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
 def _handle_resize(sig, frame):
     global _progressBarFormat, _windowWidth
@@ -1447,14 +1441,21 @@ def setMessageID(message):
     _nextMsgId += 1
     return message['msgid']
 
+_batchStartTime = None
+
 def batchMessage(message, batch=True, flush=False, response=True):
+    global _batchStartTime
     setMessageID(message)
 
     batch = batch and (args.batchsize > 0)
 
     if batch:
         batchMsgs.append(message)
-    if flush or not batch or len(batchMsgs) >= args.batchsize:
+    now = time.time()
+    if _batchStartTime is None:
+        _batchStartTime = now
+
+    if flush or not batch or len(batchMsgs) >= args.batchsize or (now - _batchStartTime) > args.batchduration:
         flushClones()
         flushBatchMsgs()
     if not batch:
@@ -1786,6 +1787,7 @@ def processCommandLine():
     comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: %(default)s'))
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s'))
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  Default: %(default)s'))
+    comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  Default: $(default)s'))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  Default: %(default)s'))
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
     comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
@@ -2236,9 +2238,6 @@ def main():
             else:
                 sendPurge(True)
         conn.close()
-        if args.progress:
-            cancelProgressBar()
-
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         #exceptionLogger.log(e)

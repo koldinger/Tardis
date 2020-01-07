@@ -253,7 +253,13 @@ def listBSets(db, crypt, cache):
 
         last = db.lastBackupSet()
         print("%-30s %-4s %-6s %3s  %-5s  %-24s  %-7s %6s %5s %8s  %s" % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
-        for bset in db.listBackupSets():
+        sets = list(db.listBackupSets())
+
+        if args.minpriority:
+            sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
+        sets = sets[-(args.number):]
+
+        for bset in sets:
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
             if bset['endtime'] is not None:
                 duration = str(datetime.timedelta(seconds = (int(float(bset['endtime']) - float(bset['starttime'])))))
@@ -583,6 +589,8 @@ def parseArgs():
 
     listParser = argparse.ArgumentParser(add_help=False)
     listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=Util.StoreBoolean,   help='Print long info')
+    listParser.add_argument('--minpriority',    dest='minpriority', default=0, type=int,            help='Minimum priority to list')
+    listParser.add_argument('--number', '-n',   dest='number', default=sys.maxsize, type=int,       help='Maximum number to show')
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
