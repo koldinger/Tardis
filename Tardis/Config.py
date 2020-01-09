@@ -33,6 +33,7 @@ import configparser
 
 import Tardis.Defaults as Defaults
 import Tardis.Util as Util
+import Tardis.TardisCrypto as TardisCrypto
 
 
 configDefaults = {
@@ -79,7 +80,7 @@ def addCommonOptions(parser):
     dbGroup.add_argument('--dbname', '-N',   dest='dbname',      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
     dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  If no value, uses the value of --database.  Default: %(default)s")
 
-def addPasswordOptions(parser, addcrypt=True):
+def addPasswordOptions(parser, addcrypt=True, addscheme=False):
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
     pwgroup.add_argument('--password', '-P',dest='password', default=config.get(job, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
@@ -87,6 +88,9 @@ def addPasswordOptions(parser, addcrypt=True):
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
     if addcrypt:
-        passgroup.add_argument('--crypt',       dest='crypt',action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
+        passgroup.add_argument('--crypt',       dest='crypt', action=Util.StoreBoolean, default=config.getboolean(job, 'Crypt'),
                                help='Encrypt data.  Only valid if password is set')
+    if addscheme:
+        passgroup.add_argument('--scheme',      dest='scheme', type=int, choices=range(TardisCrypto.maxCryptoScheme+1), default=TardisCrypto.defaultCryptoScheme,
+                               help='Use cryptography scheme\n' + TardisCrypto.getCryptoNames())
     passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')

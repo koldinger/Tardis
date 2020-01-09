@@ -835,13 +835,13 @@ def addGenCompletions(parser):
 # Help formatter to handle the StoreBoolean options.
 # Only handles overriding the basic HelpFormatter class.
 
-class HelpFormatter(argparse.HelpFormatter):
+class HelpFormatter(argparse.RawTextHelpFormatter):
     def _format_action_invocation(self, action):
         #print "_format_action_invocation", str(action)
         if hasattr(action, 'help_option'):
             ret = action.help_option
         else:
-            ret = super(HelpFormatter, self)._format_action_invocation(action)
+            ret = super(argparse.RawTextHelpFormatter, self)._format_action_invocation(action)
         #print "Got ", ret
         return ret
 

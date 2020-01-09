@@ -57,12 +57,12 @@ current      = Defaults.getDefault('TARDIS_RECENT_SET')
 # Config keys which can be gotten or set.
 configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled', 'SaveConfig']
 # Extra keys that we print when everything is requested
-sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey']
+sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoScheme']
 
 logger = None
 args = None
 
-def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
+def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
     loc = urllib.parse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if (loc.scheme == 'http') or (loc.scheme == 'https'):
@@ -91,18 +91,22 @@ def getDB(crypt, password, new=False, allowRemote=True, allowUpgrade=False):
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
     if tardisdb.needsAuthentication():
+        scheme = tardisdb._getConfigValue('CryptoScheme', '1')
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
+        logger.info("Using crypto scheme %d", scheme)
+        crypt = TardisCrypto.getCrypto(scheme, password, args.client)
         Util.authenticate(tardisdb, args.client, password)
+    else:
+        crypt = TardisCrypto.getCrypto(0, None, None)
 
     return (tardisdb, cache, crypt)
 
-def createClient(crypt, password):
+def createClient(password):
     try:
-        (db, _, _) = getDB(None, None, True, allowRemote=False)
-        if crypt:
-            setPassword(crypt, password)
+        (db, _, crypt) = getDB(None, True, allowRemote=False)
+        if password:
+            setPassword(password)
         return 0
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
@@ -115,19 +119,21 @@ def createClient(crypt, password):
             logger.exception(e)
         return 1
 
-def setPassword(crypt, password):
+def setPassword(password):
     try:
-        (db, _, _) = getDB(None, None)
+        (db, _, _) = getDB(None)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)
         if args.keys:
             db.beginTransaction()
             db.setSrpValues(salt, vkey)
+            db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
-            db.commit()
         else:
             db.setKeys(salt, vkey, f, c)
+            db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
         return 0
     except TardisDB.NotAuthenticated:
         logger.error('Client %s already has a password', args.client)
@@ -147,7 +153,7 @@ def setPassword(crypt, password):
 
 def changePassword(crypt, oldpw) :
     try:
-        (db, _, crypt) = getDB(crypt, oldpw)
+        (db, _, crypt) = getDB(oldpw)
 
         # Get the new password
         try:
@@ -159,7 +165,8 @@ def changePassword(crypt, oldpw) :
                 logger.exception(e)
             return -1
 
-        crypt2 = TardisCrypto.TardisCrypto(newpw, args.client)
+        scheme = db.getConfigValue('CryptoScheme', 1)
+        crypt2 = TardisCrypto.getCrypto(scheme, newpw, args.client)
 
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
@@ -560,7 +567,7 @@ def parseArgs():
     filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=Util.StoreBoolean,          help='Print inodes')
 
     common = argparse.ArgumentParser(add_help=False)
-    Config.addPasswordOptions(common)
+    Config.addPasswordOptions(common, addscheme=True)
     Config.addCommonOptions(common)
 
     create = argparse.ArgumentParser(add_help=False)
@@ -681,21 +688,16 @@ def main():
                 logger.exception(e)
             return -1
             
-        if password:
-            crypt = TardisCrypto.TardisCrypto(password, args.client)
-            args.password = None
-
         if args.command == 'create':
-            return createClient(crypt, password)
+            if password and not Util.checkPasswordStrength(password):
+                return -1
+            return createClient(password)
 
         if args.command == 'setpass':
             if not Util.checkPasswordStrength(password):
                 return -1
 
-            if not crypt:
-                logger.error("No password specified")
-                return -1
-            return setPassword(crypt, password)
+            return setPassword(password)
 
         if args.command == 'chpass':
             return changePassword(crypt, password)
@@ -703,7 +705,7 @@ def main():
         upgrade = (args.command == 'upgrade')
 
         try:
-            (db, cache, crypt) = getDB(crypt, password, allowRemote=allowRemote, allowUpgrade=upgrade)
+            (db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
 
             if crypt and args.command != 'keys':
                 if args.keys:

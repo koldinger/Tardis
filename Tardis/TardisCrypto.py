@@ -36,7 +36,7 @@ import sys
 import base64
 import binascii
 
-from Cryptodome.Cipher import AES
+from Cryptodome.Cipher import AES, ChaCha20_Poly1305
 from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
@@ -45,23 +45,37 @@ import srp
 import Tardis.Defaults as Defaults
 from functools import reduce
 
-defaultCryptoScheme = 3
+defaultCryptoScheme = 4
+maxCryptoScheme = 4
 
 def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
     scheme = int(scheme)
 
     if scheme == 0:
-        return NullCrypto(password, client, fsencoding)
+        return Crypto_Null(password, client, fsencoding)
     elif scheme == 1:
-        return CryptoScheme1(password, client, fsencoding)
+        return Crypto_AES_CBC_HMAC__AES_ECB(password, client, fsencoding)
     elif scheme == 2:
-        return CryptoScheme2(password, client, fsencoding)
+        return Crypto_AES_CBC_HMAC__AES_SIV(password, client, fsencoding)
     elif scheme == 3:
-        return CryptoScheme3(password, client, fsencoding)
+        return Crypto_AES_GCM__AES_SIV(password, client, fsencoding)
     elif scheme == 4:
-        return CryptoScheme4(password, client, fsencoding)
+        return Crypto_ChaCha20_Poly1305__AES_SIV(password, client, fsencoding)
     else:
         raise Exception(f"Unknown Crypto Scheme: {scheme}")
+
+
+def getCryptoNames(scheme=None):
+    if scheme is None:
+        x = range(0, 5)
+    else:
+        x = range(scheme, scheme + 1)
+
+    names = []
+    for i in x:
+        crypto = getCrypto(i, 'password')
+        names.append(f"{i}: {crypto._cryptoName}")
+    return '\n'.join(names)
 
 
 class HasherMixin:
@@ -223,8 +237,9 @@ class NullEncryptor:
     def verify(self, tag):
         pass
 
-class NullCrypto:
+class Crypto_Null:
     _cryptoScheme = '0'
+    _cryptoName   = 'None'
     _contentKey  = None
     _filenameKey = None
     _keyKey      = None
@@ -297,7 +312,7 @@ class NullCrypto:
         return (None, None)
 
 
-class CryptoScheme1(NullCrypto):
+class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     """ Original Crypto Scheme.
     AES-256 CBC encyrption for files, with HMAC/SHA-512 for authentication.
     AES-256 ECB for filenames with no authentictaion.
@@ -305,6 +320,7 @@ class CryptoScheme1(NullCrypto):
     For backwards compatibility only.
     """
     _cryptoScheme = '1'
+    _cryptoName   = 'AES-CBC-HMAC/AES-ECB'
     _contentKey  = None
     _filenameKey = None
     _keyKey      = None
@@ -432,15 +448,16 @@ class CryptoScheme1(NullCrypto):
             return (None, None)
 
 
-class CryptoScheme2(CryptoScheme1):
+class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     """
     Improved crypto scheme.
     Still uses AES-256 CBC with HMAC/SHA-512 Authentication.
     Changes Filename encryption to using AES-256 SIV encryption and authentication.  On upgraded systems (ie,
-    those formerly using CryptoScheme1), AES-128 SIV encryption and authentication is used.
+    those formerly using Crypto_AES_CBC_HMAC__AES_ECB), AES-128 SIV encryption and authentication is used.
     Uses AES-128 SIV encryption and validation on the keys.
     """
     _cryptoScheme = '2'
+    _cryptoName   = 'AES-CBC-HMAC/AES-SIV'
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
@@ -494,13 +511,14 @@ class CryptoScheme2(CryptoScheme1):
             return (None, None)
 
 
-class CryptoScheme3(CryptoScheme2):
+class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     """
     Improved crypto scheme.
     Still uses AES-256 GCM for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
     _cryptoScheme = '3'
+    _cryptoName   = 'AES-GCM/AES-SIV'
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
@@ -514,13 +532,16 @@ class CryptoScheme3(CryptoScheme2):
         return StreamEncryptor(self.getContentCipher(iv))
 
 
-class CryptoScheme4(CryptoScheme2):
+class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     """
     Improved crypto scheme.
     Uses ChaCha20/Poly1305  for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
     _cryptoScheme = '4'
+    _cryptoName   = 'ChaCha20-Poly1305/AES-SIV'
+
+    ivLength    = 12
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
@@ -538,13 +559,17 @@ if __name__ == '__main__':
              b'1234567890!@#$%&*()[]{}-_,.<>'
 
     #print(string)
-    path = '/srv/home/kolding/this is a/test.onlyATest'
+    path = '/srv/home/kolding/this is a/test.onlyATest/X'
     fname ='test.only1234'
 
-    for i in range(0, 4):
-        print(f"Testing {i}")
+    print(getCryptoNames())
+    print(getCryptoNames(3))
+
+    for i in range(0, 5):
+        print(f"\nTesting {i}")
         try:
             c = getCrypto(i, 'PassWordXYZ123')
+            print(f"Type: {c._cryptoName}")
             c.genKeys()
             
             print("--- Testing Content Encryptor ---")
@@ -559,12 +584,14 @@ if __name__ == '__main__':
 
             print("--- Testing Filename Encryptor ---")
             cf = c.encryptFilename(fname)
+            #print(cf)
             df = c.decryptFilename(cf)
 
             assert(fname == df)
 
             print("--- Testing FilePath Encryptor ---")
             cp = c.encryptPath(path)
+            #print(cp)
             dp = c.decryptPath(cp)
 
             assert(path == dp)

@@ -360,10 +360,13 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
-    def getConfigValue(self, name):
+    def getConfigValue(self, name, default=None):
         r = self.session.get(self.baseURL + "getConfigValue/" + name, headers=self.headers)
         r.raise_for_status()
-        return r.json()
+        if r.json() == None:
+            return default
+        else:
+            return r.json()
 
     @reconnect
     def setConfigValue(self, name, value):

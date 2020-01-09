@@ -332,16 +332,20 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=False)
 
-    crypto = TardisCrypto.TardisCrypto(password, args.client)
+    #crypto = TardisCrypto.TardisCrypto(password, args.client)
 
-    path = os.path.join(args.database, args.client, args.dbname)
-    db = TardisDB.TardisDB(path, backup=False)
+    #path = os.path.join(args.database, args.client, args.dbname)
+    #db = TardisDB.TardisDB(path, backup=False)
 
-    Util.authenticate(db, args.client, password)
-    (f, c) = db.getKeys()
-    crypto.setKeys(f, c)
+    #Util.authenticate(db, args.client, password)
 
-    cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+
+
+    #(f, c) = db.getKeys()
+    #crypto.setKeys(f, c)
+
+    #cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
 
     if args.names or args.all:
         encryptFilenames(db, crypto)

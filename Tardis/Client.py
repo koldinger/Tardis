@@ -390,9 +390,7 @@ def handleAckSum(response):
 
 def makeEncryptor():
     if args.crypt and crypt:
-        #iv = crypt.getIV()
-        iv = b'\xde\xad\xbe\xef\xde\xad\xbe\xef' + \
-             b'\xde\xad\xbe\xef\xde\xad\xbe\xef'
+        iv = crypt.getIV()
         encryptor = crypt.getContentEncryptor(iv)
     else:
         iv = b''
@@ -1727,6 +1725,10 @@ def processCommandLine():
 
     passgroup.add_argument('--crypt',               dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
                            help='Encrypt data.  Only valid if password is set.  Default: %(default)s')
+    passgroup.add_argument('--scheme',              dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
+                           default=TardisCrypto.defaultCryptoScheme,
+                           help=_d("Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames()))
+
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
