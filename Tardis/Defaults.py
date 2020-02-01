@@ -49,6 +49,7 @@ _defaults = {
     'TARDIS_TIMEOUT'        : '300',
     'TARDIS_DAEMON_CONFIG'  : '',
     'TARDIS_LOCAL_CONFIG'   : '',
+    'TARDIS_PWTIMEOUT'      : '120',
     'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
     'TARDIS_JOURNAL'        : 'tardis.journal',
     'TARDIS_SCHEMA'         : os.path.join(os.path.dirname(__file__), 'schema', 'tardis.sql'),
