@@ -32,6 +32,7 @@ import sys
 import zlib
 import bz2
 import lzma
+import zstandard as zstd
 
 import Tardis.librsync as librsync
 
@@ -49,7 +50,14 @@ class _NullCompressor(object):
     def flush(self):
         return None
 
-_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj), 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor), 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor), 'none': (_NullCompressor, _NullCompressor) }
+_zstdCtxC = zstd.ZstdCompressor()
+_zstdCtxD = zstd.ZstdDecompressor()
+
+_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj),
+                 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor),
+                 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor),
+                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj),
+                 'none': (_NullCompressor, _NullCompressor) }
 
 # Pick a selected compressor or decompressor
 def _updateAlg(alg):

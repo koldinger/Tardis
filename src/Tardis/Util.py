@@ -48,6 +48,7 @@ import grp
 import time
 import struct
 import io
+import signal
 
 import urllib.parse
 import urllib.request, urllib.parse, urllib.error
@@ -341,7 +342,22 @@ If a string is passed in, returns it.
 If the string is True or empty (''), it will use the getpass function to prompt on the
 terminal.
 """
-def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, strength=False):
+def _readWithTimeout(prompt, timeout):
+    def _interuptPassword(signum, frame):
+        print("\nTimeout")
+        raise Exception("Password read timedout")
+
+    previous = signal.signal(signal.SIGALRM, _interuptPassword)
+    try:
+        if timeout:
+            signal.alarm(timeout)
+        password = getpass.getpass(prompt=prompt)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+    return password.rstrip()
+
+def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, strength=False, timeout=Defaults.getDefault('TARDIS_PWTIMEOUT')):
     methods = 0
     if password: methods += 1
     if pwurl:    methods += 1
@@ -355,10 +371,10 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         password = True
 
     if password == True or password == '':
-        password = getpass.getpass(prompt=prompt)
-        password.rstrip()       # Delete trailing characters
+        password = _readWithTimeout(prompt, int(timeout))
+        password = password.rstrip()       # Delete trailing characters
         if confirm:
-            pw2 = getpass.getpass(prompt="Confirm password:")
+            pw2 = _readWithTimout("Confirm password:", int(timeout))
             if password != pw2:
                 raise Exception("Passwords don't match")
 
