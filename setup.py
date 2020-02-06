@@ -29,10 +29,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
+import os, sys
 import subprocess
 
 from setuptools import setup, find_packages
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src'))
 
 import Tardis
 
@@ -44,7 +46,8 @@ jokes.
 
 buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
 
-print(buildVersion.decode('utf8'), file=open("Tardis/tardisversion", "w"))
+versionfile = "src/Tardis/tardisversion"
+print(buildVersion.decode('utf8'), file=open(versionfile, "w"))
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
 
@@ -55,7 +58,7 @@ setup(  name                    = 'Tardis-Backup',
         version                 = version,
         description             = "Tardis Backup System",
         long_description        = longdesc,
-        packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
+        packages                = find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
         author                  = "Eric Koldinger",
         author_email            = "kolding@washington.edu",
         url                     = "https://github.com/koldinger/Tardis",
@@ -78,7 +81,7 @@ setup(  name                    = 'Tardis-Backup',
                       ( root + '/etc/logwatch/conf/logfiles',     [ 'logwatch/conf/logfiles/tardisd.conf' ]),
                       ( root + '/etc/logwatch/scripts/services',  [ 'logwatch/scripts/services/tardisd' ]),
                      ],
-        package_dir = {'': '.'},
+        package_dir = {'': 'src'},
         package_data = {
                         'Tardis':   [ 'tardisversion', 'schema/tardis.sql' ],
                        },
@@ -108,4 +111,4 @@ setup(  name                    = 'Tardis-Backup',
         ]
      )
 
-os.remove("Tardis/tardisversion")
+os.remove(versionfile)
