@@ -64,7 +64,7 @@ Tardis consists of several components:
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
 * tardisremote (HttpInterface): An optional http server which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis, etc.
 
-Tardis is written in Python 2, and only relies on a few non-pure python packages.
+Tardis is written in Python 3, and only relies on a few non-pure python packages.
 
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
@@ -475,7 +475,25 @@ I'm in the early stages of testing Tardis on MacOS X, but it appears that, for t
 
 Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Python, and librsync.
 
-Tested only on Yosemite.
+Preliminary experiments indicate that it works on Yosemite, and Mojave, and should work on most versions of MacOS X.
+
+`tardisfs` does not currently work on MacOS, as FUSE isn't natively supported.   In theory it should work with MacFUSE, but I haven't tried.
+
+Installation on Mac OS X
+------------------------
+In most case, MacOS is case insensitive.   Getting Tardis from git can be problematic, as there is a directory Tardis
+and a file tardis.   The latter is not necessary, so the best approach is to download the zip file from github,
+unzip it manually, and when it asks what to do, replace the file.
+  * Install Homebrew
+     * `/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`
+  * Install librsync, python3
+    * `brew install librsync python3 snappy`
+  * Install snappy
+     * `CPPFLAGS="-I/usr/local/include -L/usr/local/lib" pip install python-snappy`
+  * Install tardis
+     * `python3 setup.py install`
+
+I recommend doing all the above in a virtualenv environment until you're certain of the results.
 
 Notes on Data Storage
 =====================
