@@ -1279,10 +1279,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             raise e
 
     def handle(self):
-        started   = False
+        started = False
         completed = False
         starttime = datetime.now()
-        client = ""
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -1313,37 +1312,75 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             # go through messenger, not director to the socket
             self.mkMessenger(sock, fields['encoding'], fields['compress'])
 
-            try:
-                fields = self.recvMessage()
-                messType    = fields['message']
-                if not messType == 'BACKUP':
-                    raise InitFailedException("Unknown message type: {}".format(messType))
+            (started, completed, endtime, orphansRemoved, orphanSize) = self.runBackup()
 
-                client      = fields['host']            # TODO: Change at client as well.
-                clienttime  = fields['time']
-                version     = fields['version']
+            if self.server.profiler:
+                self.logger.info("Stopping Profiler")
+                self.server.profiler.disable()
+                s = io.StringIO()
+                sortby = 'cumulative'
+                ps = pstats.Stats(self.server.profiler, stream=s).sort_stats(sortby)
+                ps.print_stats()
+                print(s.getvalue())
 
-                autoname    = fields.get('autoname', True)
-                name        = fields.get('name', None)
-                full        = fields.get('full', False)
-                priority    = fields.get('priority', 0)
-                force       = fields.get('force', False)
-                create      = fields.get('create', False)
 
-                self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
-            except ValueError as e:
-                raise InitFailedException("Cannot parse JSON field: {}".format(message))
-            except KeyError as e:
-                raise InitFailedException(str(e))
+        except InitFailedException as e:
+            self.logger.error("Connection initialization failed: %s", e)
+            if self.server.exceptions:
+                self.logger.exception(e)
+        except Exception as e:
+            self.logger.error("Caught exception %s: %s", type(e), e)
+            if self.server.exceptions:
+                self.logger.exception(e)
+        finally:
+            if started:
+                self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
+                self.logger.info("New or replaced files:    %d", self.statNewFiles)
+                self.logger.info("Updated files:            %d", self.statUpdFiles)
+                self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
+                self.logger.info("Command breakdown:        %s", self.statCommands)
+                self.logger.info("Purged Sets and File:     %d %d", self.statPurgedSets, self.statPurgedFiles)
+                self.logger.info("Removed Orphans           %d (%s)", orphansRemoved, Util.fmtSize(orphanSize))
 
-            self.client = client
-            self.server.addSession(self.sessionid, client)
+            self.logger.info("Session from %s {%s} Ending: %s: %s", self.client, self.sessionid, str(completed), str(datetime.now() - starttime))
 
-            serverName = None
-            serverForceFull = False
-            authResp = {}
-            keys = None
 
+    def runBackup(self):
+        started   = False
+        completed = False
+        client = ""
+        try:
+            fields = self.recvMessage()
+            messType    = fields['message']
+            if not messType == 'BACKUP':
+                raise InitFailedException("Unknown message type: {}".format(messType))
+
+            client      = fields['host']            # TODO: Change at client as well.
+            clienttime  = fields['time']
+            version     = fields['version']
+
+            autoname    = fields.get('autoname', True)
+            name        = fields.get('name', None)
+            full        = fields.get('full', False)
+            priority    = fields.get('priority', 0)
+            force       = fields.get('force', False)
+            create      = fields.get('create', False)
+
+            self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
+        except ValueError as e:
+            raise InitFailedException("Cannot parse JSON field: {}".format(message))
+        except KeyError as e:
+            raise InitFailedException(str(e))
+
+        self.client = client
+        self.server.addSession(self.sessionid, client)
+
+        serverName = None
+        serverForceFull = False
+        authResp = {}
+        keys = None
+
+        try:
             try:
                 (_, dbfile) = self.genPaths()
                 if create and os.path.exists(dbfile):
@@ -1454,18 +1491,14 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 self.db.setBackupSetName(serverName, serverPriority)
                 #self.db.renameBackupSet(newName, newPriority)
 
-
             completed = True
-        except InitFailedException as e:
-            self.logger.error("Connection initialization failed: %s", e)
-            if self.server.exceptions:
-                self.logger.exception(e)
-        except Exception as e:
-            self.logger.error("Caught exception %s: %s", type(e), e)
-            if self.server.exceptions:
-                self.logger.exception(e)
         finally:
-            sock.close()
+            endtime = datetime.now()
+            count = 0
+            size = 0
+            #sock.close()
+            self.messenger.closeSocket()
+
             if started:
                 self.db.setClientEndTime()
                 # Autopurge if it's set.
@@ -1473,38 +1506,15 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     self.processPurge()
                 self.endSession()
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
-
-
-            if self.server.profiler:
-                self.logger.info("Stopping Profiler")
-                self.server.profiler.disable()
-                s = io.StringIO()
-                sortby = 'cumulative'
-                ps = pstats.Stats(self.server.profiler, stream=s).sort_stats(sortby)
-                ps.print_stats()
-                print(s.getvalue())
-
-            if started:
-                (count, size, _) = Util.removeOrphans(self.db, self.cache)
-                endtime = datetime.now()
-
-                self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
-                self.logger.info("New or replaced files:    %d", self.statNewFiles)
-                self.logger.info("Updated files:            %d", self.statUpdFiles)
-                self.logger.info("Total file data received: %s (%d)", Util.fmtSize(self.statBytesReceived), self.statBytesReceived)
-                self.logger.info("Command breakdown:        %s", self.statCommands)
-                self.logger.info("Purged Sets and File:     %d %d", self.statPurgedSets, self.statPurgedFiles)
-                self.logger.info("Removed Orphans           %d (%s)", count, Util.fmtSize(size))
-
                 self.logger.debug("Removing orphans")
-
-                self.db.commit()
-                self.db.compact()
+                (count, size, _) = Util.removeOrphans(self.db, self.cache)
 
             if self.db:
+                self.db.commit()
+                self.db.compact()
                 self.db.close(started)
-
-        self.logger.info("Session from %s {%s} Ending: %s: %s", client, self.sessionid, str(completed), str(datetime.now() - starttime))
+        
+            return (started, completed, endtime, count, size)
 
 class TardisServer(object):
     # HACK.  Operate on an object, but not in the class.
@@ -1650,7 +1660,7 @@ def setupLogging():
 
     return logger
 
-def run_server():
+def runServer():
     global server
 
     try:
@@ -1683,18 +1693,18 @@ def run_server():
         if args.exceptions:
             logger.exception(e)
 
-def stop_server():
+def stopServer():
     logger.info("Stopping server")
     server.shutdown()
 
-def signal_term_handler(signal, frame):
+def signalTermHandler(signal, frame):
     logger.info("Caught term signal.  Stopping")
     t = threading.Thread(target = shutdownHandler)
     t.start()
     logger.info("Server stopped")
 
 def shutdownHandler():
-    stop_server()
+    stopServer()
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Tardis Backup Server', formatter_class=Util.HelpFormatter, add_help=False)
@@ -1756,7 +1766,7 @@ def main():
     (args, config) = processArgs()
 
     # Set up a handler
-    signal.signal(signal.SIGTERM, signal_term_handler)
+    signal.signal(signal.SIGTERM, signalTermHandler)
     try:
         logger = setupLogging()
     except Exception as e:
@@ -1773,7 +1783,7 @@ def main():
         logger.info("About to daemonize")
 
         try:
-            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
+            daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=runServer, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
             logger.critical("Caught Exception on Daemonize call: {}".format(e))
@@ -1781,7 +1791,7 @@ def main():
                 logger.exception(e)
     else:
         try:
-            run_server()
+            runServer()
         except KeyboardInterrupt:
             logger.warning("Killed by Keyboard")
             pass
