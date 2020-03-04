@@ -545,7 +545,7 @@ def processDelta(inode, signatures):
                     sendMessage(message)
                     #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -642,7 +642,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats, progress=progress)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn, sig, chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -2005,6 +2005,7 @@ def main():
     try:
         if args.progress:
             statusBar = initProgressBar()
+
         starttime = datetime.datetime.now()
         subserver = None
         # Get the actual names we're going to use
