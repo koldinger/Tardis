@@ -2003,11 +2003,9 @@ def main():
 
 
     try:
-        if args.progress:
-            statusBar = initProgressBar()
-
         starttime = datetime.datetime.now()
         subserver = None
+
         # Get the actual names we're going to use
         (server, port, client) = parseServerInfo(args)
 
@@ -2142,6 +2140,10 @@ def main():
                 logger.critical("Unable to load keyfile: %s", args.keys)
                 sys.exit(1)
             crypt.setKeys(f, c)
+
+    # Initialize the progress bar, if requested
+    if args.progress:
+        statusBar = initProgressBar()
 
     # Send a command line
     clHash = Util.getHash(crypt, args.crypt)
