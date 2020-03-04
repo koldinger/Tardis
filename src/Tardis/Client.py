@@ -68,6 +68,7 @@ import parsedatetime
 import srp
 import colorlog
 from pathmatch import wildmatch
+from functools import reduce
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -77,7 +78,8 @@ import Tardis.Util as Util
 import Tardis.Defaults as Defaults
 import Tardis.librsync as librsync
 import Tardis.MultiFormatter as MultiFormatter
-from functools import reduce
+import Tardis.StatusBar as StatusBar
+
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -222,6 +224,11 @@ class CustomArgumentParser(argparse.ArgumentParser):
                 break
             yield arg
 
+class ShortPathStatusBar(StatusBar.StatusBar):
+    def processTrailer(self, width, name):
+        return Util.shortPath(name, width)
+
+
 class ProtocolError(Exception):
     pass
 
@@ -295,7 +302,7 @@ def processChecksums(inodes):
         try:
             (_, pathname) = inodeDB[inode]
 
-            printProgress("File [C]:", pathname)
+            setProgress("File [C]:", pathname)
 
             m = Util.getHash(crypt, args.crypt)
             s = os.lstat(pathname)
@@ -467,7 +474,7 @@ def processDelta(inode, signatures):
 
     try:
         (_, pathname) = inodeDB[inode]
-        printProgress("File [D]:", pathname)
+        setProgress("File [D]:", pathname)
         logger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
         if signatures and inode in signatures:
@@ -525,8 +532,7 @@ def processDelta(inode, signatures):
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
-                progress = printProgress if args.progress else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -572,7 +578,7 @@ def sendContent(inode, reportType):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Sending content for %s (%s) -- %s", inode, Util.fmtSize(filesize), Util.shortPath(pathname, 60))
 
-            printProgress("File [N]:", pathname)
+            setProgress("File [N]:", pathname)
 
             if stat.S_ISDIR(mode):
                 return
@@ -609,7 +615,6 @@ def sendContent(inode, reportType):
             sigsize = 0
             try:
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
-                progress = printProgress if args.progress else None
                 # Check if it's a file type we don't want to compress
                 if compress and noCompTypes:
                     mimeType = magic.from_buffer(data.read(128), mime=True)
@@ -627,8 +632,7 @@ def sendContent(inode, reportType):
                                                       signature=makeSig,
                                                       hmac=hmac,
                                                       iv=iv,
-                                                      stats=stats,
-                                                      progress=progress)
+                                                      stats=stats)
 
                 if sig:
                     sig.seek(0)
@@ -676,8 +680,7 @@ def handleAckMeta(message):
 
         sendMessage(message)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
-        progress = printProgress if args.progress else None
-        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv, progress=progress)
+        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, hmac=hmac, iv=iv)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -1086,58 +1089,19 @@ def makeMetaMessage():
     newmeta = []
     return message
 
-_progressBarFormat = None
-_windowWidth = 80
-_ansiClearEol = '\x1b[K'
-_startOfLine = '\r'
+statusBar = None
 
 def initProgressBar():
-    global _progressBarFormat, _windowWidth
-    try:
-        _handle_resize(None, None)
-        signal.signal(signal.SIGWINCH, _handle_resize)
-        signal.siginterrupt(signal.SIGWINCH, False)
-    except Exception as e:
-        logger.warning("signal setters failed: %s", str(e))
-        pass
+    statusBar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats)
+    statusBar.setValue('mode', '')
+    statusBar.setTrailer('')
+    statusBar.start()
+    return statusBar
 
-def _handle_resize(sig, frame):
-    global _progressBarFormat, _windowWidth
-    (_, width) = Util.getTerminalSize()
-    if width < 110:
-        _progressBarFormat = '%s (%d, %d) :: (%d, %d, %s) :: %s '
-    else:
-        _progressBarFormat = '%s | Dirs: %d | Files: %d | Full: %d | Delta: %d | Data: %s | %s '
-    _windowWidth = width
-
-def _printProgress(sig, frame):
-    printProgress(force=True)
-
-_lastInfo = ('', '')                # STATIC for printProgress
-_lastProgressTime = 0
-_starttime = time.time()
-
-def printProgress(header=None, name=None, force=False):
-    def pTime(seconds):
-        if seconds > 3600:
-            return time.strftime("%H:%M:%S", time.gmtime(seconds))
-        else:
-            return time.strftime("%M:%S", time.gmtime(seconds))
-
-    global _lastInfo, _lastProgressTime
-    if args.progress:
-        now = time.time()
-        if (force or (now - _lastProgressTime) > 0.25):
-            _lastProgressTime = now
-            bar = _progressBarFormat % (pTime(now - _starttime), stats['dirs'], stats['files'], stats['new'], stats['delta'], Util.fmtSize(stats['dataSent']), header or _lastInfo[0])
-
-            width = _windowWidth - len(bar) - 4
-
-            print(bar + Util.shortPath(name or _lastInfo[1], width) + _ansiClearEol + _startOfLine, end='', flush=True)
-
-    if header or name:
-        #update the last info
-        _lastInfo = (header or _lastInfo[0], name or _lastInfo[1])
+def setProgress(mode, name):
+    if statusBar:
+        statusBar.setValue('mode', mode)
+        statusBar.setTrailer(name)
 
 processedDirs = set()
 
@@ -1149,8 +1113,8 @@ def recurseTree(dir, top, depth=0, excludes=[]):
     if depth > 0:
         newdepth = depth - 1
 
-    if args.progress:
-        printProgress("Dir:", dir)
+    setProgress("Dir:", dir)
+
     try:
         s = os.lstat(dir)
         if not stat.S_ISDIR(s.st_mode):
@@ -1348,9 +1312,11 @@ def sendMessage(message):
     if args.logmessages:
         args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n\n')
+    #setProgress("Sending...", "")
     conn.send(message)
 
 def receiveMessage():
+    setProgress("Receiving...", "")
     response = conn.receive()
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
@@ -2021,7 +1987,7 @@ def lockRun(server, port, client):
     return pidfile
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr
+    global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
     # Read the command line arguments.
     commandLine = ' '.join(sys.argv) + '\n'
     (args, config) = processCommandLine()
@@ -2038,7 +2004,7 @@ def main():
 
     try:
         if args.progress:
-            initProgressBar()
+            statusBar = initProgressBar()
         starttime = datetime.datetime.now()
         subserver = None
         # Get the actual names we're going to use
@@ -2254,7 +2220,7 @@ def main():
         exceptionLogger.log(e)
 
     if args.progress:
-        print(' ' +  _startOfLine + _ansiClearEol + _startOfLine, end=' ')
+        statusBar.shutdown()
 
     if args.local:
         logger.info("Waiting for server to complete")
