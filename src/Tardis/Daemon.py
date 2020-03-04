@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2019, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -637,6 +637,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         self.statBytesReceived += bytesReceived
 
         Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
+        # update the database stats
+        self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
         if output:
             try:
@@ -914,6 +916,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             # Record the metadata.  Do it here after we've inserted the file because on a full backup we could overwrite
             # a version which had a basis without updating the base file.
             Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
+            # Update the database stats
+            self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         except Exception as e:
             self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
             if self.server.exceptions:
@@ -1478,7 +1482,6 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     self.processPurge()
                 self.endSession()
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
-
 
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")
