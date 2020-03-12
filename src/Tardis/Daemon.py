@@ -69,6 +69,7 @@ import Tardis.Util as Util
 import Tardis.Defaults as Defaults
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
+import Tardis.TardisCrypto as TardisCrypto
 import Tardis.librsync as librsync
 
 DONE    = 0
@@ -1359,6 +1360,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 elif not create and not os.path.exists(dbfile):
                     raise Exception("Unknown client: %s" % client)
 
+                # If we're creating, and we need keys, do the thing.
                 if self.server.requirePW and create and self.server.allowNew:
                     keys = self.doGetKeys()
 
@@ -1367,12 +1369,17 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 if self.server.requirePW and not self.db.needsAuthentication():
                     raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
 
-                if keys:
-                    self.logger.debug("Setting keys into new client DB")
-                    (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
-                    ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-                    self.db.setConfigValue('CryptoScheme', cryptoScheme)
-                    keys = None
+                # Store the Cryptography Info
+                if create:
+                    if keys:
+                        self.logger.debug("Setting keys into new client DB")
+                        (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
+                        ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+                        self.db.setConfigValue('CryptoScheme', cryptoScheme)
+                        keys = None
+                    else:
+                        self.db.setConfigValue('CryptoScheme', TardisCrypto.noCryptoScheme)
+                
 
                 self.logger.debug("Ready for authentication")
                 if self.db.needsAuthentication():

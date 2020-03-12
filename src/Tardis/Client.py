@@ -304,7 +304,7 @@ def processChecksums(inodes):
 
             setProgress("File [C]:", pathname)
 
-            m = Util.getHash(crypt, args.crypt)
+            m = crypt.getHash()
             s = os.lstat(pathname)
             mode = s.st_mode
             if stat.S_ISLNK(mode):
@@ -357,9 +357,8 @@ def logFileInfo(i, c):
             size = 0
         size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
         logger.log(logging.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
-        if args.crypt and crypt and logger.isEnabledFor(logging.DEBUG):
-            cname = crypt.encryptPath(name)
-            logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
+        cname = crypt.encryptPath(name)
+        logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
@@ -396,13 +395,8 @@ def handleAckSum(response):
         delInode(i)
 
 def makeEncryptor():
-    if args.crypt and crypt:
-        iv = crypt.getIV()
-        encryptor = crypt.getContentEncryptor(iv)
-    else:
-        iv = b''
-        #TODO: Fix this
-        encryptor = TardisCrypto.NullEncryptor()
+    iv = crypt.getIV()
+    encryptor = crypt.getContentEncryptor(iv)
     return (encryptor, iv)
 
 def prefetchSigFiles(inodes):
@@ -482,13 +476,13 @@ def processDelta(inode, signatures):
             try:
                 newsig = None
                 # If we're encrypted, we need to generate a new signature, and send it along
-                makeSig = (args.crypt and crypt) or args.signature
+                makeSig = crypt.encrypting() or args.signature
 
                 logger.debug("Generating delta for %s", pathname)
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
-                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=Util.getHash(crypt, args.crypt), signature=makeSig)
+                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=crypt.getHash(), signature=makeSig)
                 # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
                 reader.seek = lambda x, y: 0
 
@@ -522,7 +516,7 @@ def processDelta(inode, signatures):
                     "checksum": checksum,
                     "basis": oldchksum,
                     "encoding": encoding,
-                    "encrypted": (iv is not None)
+                    "encrypted": True if iv else False
                 }
 
                 sendMessage(message)
@@ -583,7 +577,7 @@ def sendContent(inode, reportType):
                 "message":      "CON",
                 "inode":        inode,
                 "encoding":     encoding,
-                "encrypted":    (iv is not None)
+                "encrypted":    True if iv else False
             }
 
             # Attempt to open the data source
@@ -618,16 +612,14 @@ def sendContent(inode, reportType):
                     if mimeType in noCompTypes:
                         logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
                         compress = False
-                makeSig = (args.crypt and crypt) or args.signature
+                makeSig = crypt.encrypting() or args.signature
                 sendMessage(message)
                 #batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
-                                                      encrypt, hasher=Util.getHash(crypt, args.crypt),
+                                                      encrypt, hasher=crypt.getHash(),
                                                       chunksize=args.chunksize,
                                                       compress=compress,
                                                       signature=makeSig,
-                                                      stats=stats,
-                                                      iv=iv,
                                                       stats=stats)
 
                 if sig:
@@ -671,7 +663,7 @@ def handleAckMeta(message):
         message = {
             "message": "METADATA",
             "checksum": cks,
-            "encrypted": (iv is not None)
+            "encrypted": True if iv else False
         }
 
         sendMessage(message)
@@ -682,8 +674,7 @@ _defaultHash = None
 def sendDirHash(inode):
     global _defaultHash
     if _defaultHash == None:
-        h = Util.getHash(crypt, args.crypt)
-        _defaultHash = '00' * h.digest_size
+        _defaultHash = crypt.getHash().hexdigest()
 
     i = tuple(inode)
     #try:
@@ -816,7 +807,7 @@ def addMeta(meta):
     if meta in metaCache:
         return metaCache[meta]
     else:
-        m = Util.getHash(crypt, args.crypt)
+        m = crypt.getHash()
         m.update(bytes(meta, 'utf8'))
         digest = m.hexdigest()
         metaCache[meta] = digest
@@ -837,8 +828,7 @@ def mkFileInfo(dir, name):
         return None
 
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
-        if args.crypt and crypt:
-            name = crypt.encryptFilename(name)
+        name = crypt.encryptFilename(name)
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
@@ -1140,7 +1130,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
-        h = Util.hashDir(crypt, files, args.crypt)
+        h = Util.hashDir(crypt, files)
         #logger.debug("Dir: %s (%d, %d): Hash: %s Size: %d.", Util.shortPath(dir), s.st_ino, s.st_dev, h[0], h[1])
         dirHashes[(s.st_ino, s.st_dev)] = h
 
@@ -1213,7 +1203,7 @@ def cloneDir(inode, device, files, path, info=None):
     if info:
         (h, s) = info
     else:
-        (h, s) = Util.hashDir(crypt, files, args.crypt)
+        (h, s) = Util.hashDir(crypt, files)
 
     message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
@@ -1502,12 +1492,13 @@ def runServer(cmd, tempfile):
     subp.terminate()
     return None
 
-def setCrypto(confirm, strength=False, version=None):
+def setCrypto(confirm, chkStrength=False, version=None):
     global srpUsr, crypt
     password = Util.getPassword(True, None, None, "Password for %s:" % (args.client),
-                                confirm=confirm, strength=strength, allowNone = False)
+                                confirm=confirm, strength=chkStrength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.getCrypto(version, password, args.client)
+    logger.info("Using %s Crypto scheme", crypt.getCryptoScheme())
     return password
 
 def doSendKeys(password):
@@ -1530,7 +1521,7 @@ def doSendKeys(password):
 def doSrpAuthentication(response):
     try:
         if srpUsr is None:
-            setCrypto(False, response['cryptoScheme'])
+            setCrypto(False, True, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
@@ -1691,11 +1682,9 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),              help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',               dest='crypt',action=Util.StoreBoolean, default=c.getboolean(t, 'Crypt'),
-                           help='Encrypt data.  Only valid if password is set.  Default: %(default)s')
-    passgroup.add_argument('--scheme',              dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
-                           default=TardisCrypto.defaultCryptoScheme,
-                           help=_d("Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames()))
+    passgroup.add_argument('--crypt',              dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
+                           default=None,
+                           help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
 
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
@@ -1746,7 +1735,7 @@ def processCommandLine():
     excgrp.add_argument('--exclude-no-access',          dest='skipNoAccess', default=c.get(t, 'ExcludeNoAccess'), action=Util.StoreBoolean,
                         help="Exclude files to which the runner has no permission- won't generate directory entry. Default: %(default)s")
     excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action=Util.StoreBoolean, default=False,
-                        help='Ignore the global exclude file')
+                        help='Ignore the global exclude file.  Default: $(default)s')
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
     comgrp.add_argument('--compress-msgs', '-Y',    dest='compressmsgs', nargs='?', const='snappy',
@@ -1801,7 +1790,9 @@ def processCommandLine():
 
     parser.add_argument('directories',          nargs='*', default=splitList(c.get(t, 'Directories')), help="List of directories to sync")
 
-    return (parser.parse_args(remaining), c)
+    args = parser.parse_args(remaining)
+
+    return (args, c)
 
 def parseServerInfo(args):
     """ Break up the server info passed in into useable chunks """
@@ -2037,6 +2028,7 @@ def main():
         except Exception as e:
             logger.critical("Could not retrieve password.")
             sys.exit(1)
+
         # Purge out the original password.  Maybe it might go away.
         if args.password:
             args.password = '-- removed --'
@@ -2045,7 +2037,10 @@ def main():
             srpUsr = srp.User(client, password)
 
             if args.create:
-                crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password, client)
+                scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.defaultCryptoScheme
+                crypt = TardisCrypto.getCrypto(scheme, password, client)
+        elif args.create:
+            crypt = TardisCrypto.getCrypto(TardisCrypto.noCryptoScheme, None, client)
 
         # If no compression types are specified, load the list
         types = []
@@ -2115,41 +2110,41 @@ def main():
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
     # Set up the encryption, if needed.
-    if args.crypt and crypt:
-        (f, c) = (None, None)
+    ### TODO
+    (f, c) = (None, None)
 
-        if newBackup == 'NEW':
-            # if new DB, generate new keys, and save them appropriately.
-            if password:
-                logger.debug("Generating new keys")
-                crypt.genKeys()
-                if args.keys:
-                    (f, c) = crypt.getKeys()
-                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-                else:
-                    sendKeys(password, client)
-            else:
-                if args.keys:
-                    (f, c) = crypt.getKeys()
-                    Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-        else:
-            # Otherwise, load the keys from the appropriate place
+    if newBackup == 'NEW':
+        # if new DB, generate new keys, and save them appropriately.
+        if password:
+            logger.debug("Generating new keys")
+            crypt.genKeys()
             if args.keys:
-                (f, c) = Util.loadKeys(args.keys, clientId)
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
             else:
-                f = filenameKey
-                c = contentKey
-            if not (f and c):
-                logger.critical("Unable to load keyfile: %s", args.keys)
-                sys.exit(1)
-            crypt.setKeys(f, c)
+                sendKeys(password, client)
+        else:
+            if args.keys:
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+    elif crypt.encrypting():
+        # Otherwise, load the keys from the appropriate place
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys, clientId)
+        else:
+            f = filenameKey
+            c = contentKey
+        if not (f and c):
+            logger.critical("Unable to load keyfile: %s", args.keys)
+            sys.exit(1)
+        crypt.setKeys(f, c)
 
     # Initialize the progress bar, if requested
     if args.progress:
         statusBar = initProgressBar()
 
     # Send a command line
-    clHash = Util.getHash(crypt, args.crypt)
+    clHash = crypt.getHash()
     clHash.update(bytes(commandLine, 'utf8'))
     h = clHash.hexdigest()
     encrypt, iv = makeEncryptor()

@@ -69,22 +69,21 @@ def encryptFilenames(db, crypto):
             conn.rollback()
     logger.info("Encrypted %d names", names)
 
-def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac, output = None):
+def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     f = cacheDir.open(checksum, 'rb')
     if output == None:
         output = checksum + '.enc'
     o = cacheDir.open(output, 'wb')
     o.write(iv)
     nb = len(iv)
-    hmac.update(iv)
+    cipher.update(iv)
     for chunk, eof in Util._chunks(f, 64 * 1024):
         if eof:
             chunk = pad(chunk)
         ochunk = cipher.encrypt(chunk)
         o.write(ochunk)
         nb = nb + len(ochunk)
-        hmac.update(ochunk)
-    ochunk = hmac.digest()
+    ochunk = cipher.digest()
     o.write(ochunk)
     nb = nb + len(ochunk)
     o.close()
@@ -141,7 +140,7 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
         hmac = crypto.getHash(func=hashlib.sha512)
-        fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac, output=newCks)
+        fSize = encryptFile(checksum, cacheDir, cipher, iv, output=newCks)
         #logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
 
         #cacheDir.link(checksum + '.enc', newCks, soft=False)

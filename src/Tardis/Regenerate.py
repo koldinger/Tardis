@@ -224,7 +224,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
                 if i:
                     if authenticate:
-                        hasher = Util.getHash(crypt)
+                        hasher = crypt.getHash()
 
                     if info['link']:
                         # read and make a link
@@ -432,6 +432,7 @@ def main():
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
+        print(crypt)
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
@@ -440,6 +441,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
+        if args.exceptions:
+            logger.exception(e)
         sys.exit(1)
 
     try:

@@ -34,7 +34,6 @@ import logging
 import tempfile
 import shutil
 import hashlib
-import hmac
 
 import Tardis.CompressedBuffer as CompressedBuffer
 
@@ -56,10 +55,7 @@ class Regenerator:
 
     def decryptFile(self, filename, size, authenticate=True):
         self.logger.debug("Decrypting %s", filename)
-        if self.crypt is None:
-            raise Exception("Encrypted file.  No password specified")
         infile = self.cacheDir.open(filename, 'rb')
-        mac = self.crypt.getHash(func=hashlib.sha512)
 
         # Get the IV, if it's not specified.
         infile.seek(0, os.SEEK_SET)

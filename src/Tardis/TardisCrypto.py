@@ -47,6 +47,7 @@ from functools import reduce
 
 defaultCryptoScheme = 4
 maxCryptoScheme = 4
+noCryptoScheme = 0
 
 def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
     scheme = int(scheme)
@@ -112,7 +113,7 @@ class HasherMixin:
             raise ValueError("MAC did not match")
 
     def getDigestSize(self):
-        return self.hasher.digest_size()
+        return self.hasher.digest_size
 
 class BlockEncryptor:
     done = False
@@ -260,6 +261,9 @@ class Crypto_Null:
     def getCryptoScheme(self):
         return self._cryptoScheme
 
+    def encrypting(self):
+        return False
+
     def getContentCipher(self, iv):
         return NullCipher()
 
@@ -311,6 +315,13 @@ class Crypto_Null:
     def getKeys(self):
         return (None, None)
 
+    def createSRPValues(self, password, client=None):
+        if client is None:
+            client = self.client
+        salt, vkey = srp.create_salted_verification_key(client, password)
+        return salt, vkey
+
+
 
 class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     """ Original Crypto Scheme.
@@ -344,6 +355,9 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
 
         self._fsEncoding = fsencoding
+
+    def encrypting(self):
+        return True
 
     def genKeyKey(self, password):
         return PBKDF2(password, self.salt, count=20000, dkLen=self._keysize * 2)      # 2x256 bit keys
@@ -420,12 +434,6 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
 
     def decryptFilename(self, name):
         return str(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)), 'utf8').rstrip('\0')
-
-    def createSRPValues(self, password, client=None):
-        if client is None:
-            client = self.client
-        salt, vkey = srp.create_salted_verification_key(client, password)
-        return salt, vkey
 
     def genKeys(self):
         self._contentKey  = self._random.read(self._keysize)
@@ -571,7 +579,9 @@ if __name__ == '__main__':
             c = getCrypto(i, 'PassWordXYZ123')
             print(f"Type: {c._cryptoName}")
             c.genKeys()
-            
+
+            print(f"DigestSize: {c.getDigestSize()}")
+
             print("--- Testing Content Encryptor ---")
             e = c.getContentEncryptor()
             d = c.getContentEncryptor(e.iv)

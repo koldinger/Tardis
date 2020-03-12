@@ -443,21 +443,20 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
     if needsAuth and password is None:
         password = getPassword(True, None, None, "Password for %s: " % client, allowNone=False)
 
-    if password:
-        if needsAuth:
-            authenticate(tardis, client, password)
-        else:
-            raise TardisDB.AuthenticationFailed()
+    if needsAuth:
+        authenticate(tardis, client, password)
+    elif password:
+        raise TardisDB.AuthenticationFailed()
 
-        # Password specified, so create the crypto unit
-        cryptoScheme = tardis.getConfigValue('CryptoScheme', '1')
+    # Password specified, so create the crypto unit
+    cryptoScheme = tardis.getConfigValue('CryptoScheme', '1')
 
-        crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
-        if keyFile:
-            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
-        else:
-            (f, c) = tardis.getKeys()
-        crypt.setKeys(f, c)
+    crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
+    if keyFile:
+        (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
+    else:
+        (f, c) = tardis.getKeys()
+    crypt.setKeys(f, c)
 
     if retpassword:
         return (tardis, cache, crypt, password)
@@ -925,15 +924,9 @@ class bidict(dict):
 
 # Get a hash function.  Configurable.
 
-def getHash(crypt=None, doCrypt=True, func=hashlib.md5):
-    if crypt and doCrypt:
-        return crypt.getHash(func)
-    else:
-        return func()
-
 _hashMagic = struct.pack("!I", 0xffeeddcc)
 
-def hashDir(crypt, files, cryptActive, decrypt=False):
+def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
         f = list(files)
@@ -942,7 +935,7 @@ def hashDir(crypt, files, cryptActive, decrypt=False):
     else:
         filenames = sorted([x["name"] for x in files])
 
-    m = getHash(crypt, cryptActive)
+    m = crypt.getHash()
     # Insert "magic" number to help prevent collisions
     m.update(_hashMagic)
     # Insert a magic number
