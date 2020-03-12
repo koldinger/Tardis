@@ -33,9 +33,12 @@ import time
 import signal
 import shutil
 import string
+import atexit
 
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
+_hideCursor = '\x1b[?25l'
+_showCursor = '\x1b[?25h'
 _statusBars = []
 
 def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
@@ -78,6 +81,8 @@ class StatusBarFormatter(string.Formatter):
         else:
             return super().convert_field(value, conversion)
 
+def resetCursor():
+    print(_showCursor, end='')
 
 class StatusBar():
     def __init__(self, base, live={}, formatter=None):
@@ -100,11 +105,14 @@ class StatusBar():
         signal.siginterrupt(signal.SIGWINCH, False)
 
     def run(self, delay=0.25):
+        atexit.register(resetCursor)
         starttime = time.time()
         self.halt = False
         while not self.halt:
             time.sleep(delay)
             self.printStatus()
+        atexit.unregister(resetCursor)
+        self.clearStatus()
 
     def start(self, delay=0.25, name="StatusBar"):
         thread = threading.Thread(name=name, target=self.run, args=(delay,))
@@ -150,10 +158,10 @@ class StatusBar():
         except Exception as e:
             output = "Error generating status message: " + str(e)
 
-        print(output + _ansiClearEol + _startOfLine, end='', flush=True)
+        print(output + _ansiClearEol + _startOfLine + _hideCursor, end='', flush=True)
 
     def clearStatus(self):
-        print(' ' +  _startOfLine + _ansiClearEol + _startOfLine, end=' ')
+        print(_showCursor + _startOfLine + _ansiClearEol, end='')
 
 
 
@@ -172,5 +180,6 @@ if __name__ == "__main__":
         sb.setValue("mode", "Running" if i % 2 == 0 else "Walking")
         sb.setValue("amount", i * 1000000)
     sb.shutdown()
+    print("All done")
 
 
