@@ -373,7 +373,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         password = _readWithTimeout(prompt, int(timeout))
         password = password.rstrip()       # Delete trailing characters
         if confirm:
-            pw2 = _readWithTimout("Confirm password:", int(timeout))
+            pw2 = _readWithTimeout("Confirm password:", int(timeout))
             if password != pw2:
                 raise Exception("Passwords don't match")
 

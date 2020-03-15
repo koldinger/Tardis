@@ -88,7 +88,7 @@ def processArgs():
     (_, remaining) = Config.parseConfigOptions(parser)
 
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--output', '-o',   default=None, dest='output', required=True,           help='Output file')
 

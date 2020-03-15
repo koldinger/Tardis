@@ -1520,8 +1520,7 @@ def doSendKeys(password):
 
 def doSrpAuthentication(response):
     try:
-        if srpUsr is None:
-            setCrypto(False, True, response['cryptoScheme'])
+        setCrypto(False, True, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
@@ -1590,6 +1589,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
         resp = doSendKeys(password)
     if resp['status'] == 'AUTH':
         resp = doSrpAuthentication(resp)
+
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
         if 'error' in resp:
@@ -1605,6 +1605,38 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
         filenameKey = resp['filenameKey']
     if 'contentKey' in resp:
         contentKey = resp['contentKey']
+    if crypt is None:
+        crypt = TardisCrypto.getCrypto(TardisCrypto.noCryptoScheme, None, client)
+
+    # Set up the encryption, if needed.
+    ### TODO
+    (f, c) = (None, None)
+
+    if newBackup == 'NEW':
+        # if new DB, generate new keys, and save them appropriately.
+        if password:
+            logger.debug("Generating new keys")
+            crypt.genKeys()
+            if args.keys:
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+            else:
+                sendKeys(password, client)
+        else:
+            if args.keys:
+                (f, c) = crypt.getKeys()
+                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
+    elif crypt.encrypting():
+        # Otherwise, load the keys from the appropriate place
+        if args.keys:
+            (f, c) = Util.loadKeys(args.keys, clientId)
+        else:
+            f = filenameKey
+            c = contentKey
+        if not (f and c):
+            logger.critical("Unable to load keyfile: %s", args.keys)
+            sys.exit(1)
+        crypt.setKeys(f, c)
 
 def getConnection(server, port):
     #if args.protocol == 'json':
@@ -2026,14 +2058,16 @@ def main():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
                                         confirm=args.create, strength=args.create)
         except Exception as e:
-            logger.critical("Could not retrieve password.")
+            logger.critical("Could not retrieve password.: %s", str(e))
+            if args.exceptions:
+                logger.exception(e)
             sys.exit(1)
 
         # Purge out the original password.  Maybe it might go away.
         if args.password:
             args.password = '-- removed --'
 
-        if password:
+        if password or (args.create and args.cryptoScheme):
             srpUsr = srp.User(client, password)
 
             if args.create:
@@ -2109,35 +2143,6 @@ def main():
     if verbosity or args.stats or args.report:
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
-    # Set up the encryption, if needed.
-    ### TODO
-    (f, c) = (None, None)
-
-    if newBackup == 'NEW':
-        # if new DB, generate new keys, and save them appropriately.
-        if password:
-            logger.debug("Generating new keys")
-            crypt.genKeys()
-            if args.keys:
-                (f, c) = crypt.getKeys()
-                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-            else:
-                sendKeys(password, client)
-        else:
-            if args.keys:
-                (f, c) = crypt.getKeys()
-                Util.saveKeys(Util.fullPath(args.keys), clientId, f, c)
-    elif crypt.encrypting():
-        # Otherwise, load the keys from the appropriate place
-        if args.keys:
-            (f, c) = Util.loadKeys(args.keys, clientId)
-        else:
-            f = filenameKey
-            c = contentKey
-        if not (f and c):
-            logger.critical("Unable to load keyfile: %s", args.keys)
-            sys.exit(1)
-        crypt.setKeys(f, c)
 
     # Initialize the progress bar, if requested
     if args.progress:

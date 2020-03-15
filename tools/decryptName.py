@@ -56,7 +56,7 @@ def processArgs():
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--encrypt', '-e', dest='encrypt', default=False, action='store_true', help='Encrypt names instead of decrypting')
     parser.add_argument('--quiet', '-q', dest='quiet', default=False, action='store_true', help="Only print the translation, not the input strings")

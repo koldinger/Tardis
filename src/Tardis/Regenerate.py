@@ -147,9 +147,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     hasher = None
     try:
         if info:
-            realname = info['name']
-            if args.crypt and crypt:
-                realname = crypt.decryptFilename(realname)
+            realname = crypt.decryptFilename(info['name'])
 
             if name:
                 # This should only happen only one file specified.
@@ -194,15 +192,9 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 dirInode = (info['inode'], info['device'])
                 # For each file in the directory, regenerate it.
                 for i in contents:
-                    name = i['name']
+                    name = crypt.decryptFilename(i['name'])
                     # Get the Info
                     childInfo = tardis.getFileInfoByName(name, dirInode, bset)
-
-                    # Decrypt filename, and make it UTF-8.
-                    if args.crypt and crypt:
-                        name = crypt.decryptFilename(name)
-                    else:
-                        name = name
 
                     # Recurse into the child, if it exists.
                     if childInfo:
@@ -346,9 +338,7 @@ def findLastPath(path, reduce):
     for bset in reversed(bsets):
         logger.debug("Checking for path %s in %s (%d)", path, bset['name'], bset['backupset'])
         tmp = Util.reducePath(tardis, bset['backupset'], os.path.abspath(path), reduce, crypt)
-        tmp2 = tmp
-        if args.crypt and crypt:
-            tmp2 = crypt.encryptPath(tmp)
+        tmp2 = crypt.encryptPath(tmp)
         info = tardis.getFileInfoByPath(tmp2, bset['backupset'])
         if info:
             logger.debug("Found %s in backupset %s: %s", path, bset['name'], tmp)
@@ -359,8 +349,7 @@ def recoverName(cksum):
     names = tardis.getNamesForChecksum(cksum)
     #print names
     if names:
-        if args.crypt and crypt:
-            names = map(crypt.decryptFilename, names)
+        names = map(crypt.decryptFilename, names)
         name = names[0]
         if len(names) > 1:
             logger.warning("Multiple (%d) names for checksum %s %s.  Choosing '%s'.", len(names), cksum, map(str, list(names)), name)
@@ -580,10 +569,8 @@ def main():
                     else:
                         path = i
 
-                    if args.crypt and crypt:
-                        actualPath = crypt.encryptPath(path)
-                    else:
-                        actualPath = path
+                    actualPath = crypt.encryptPath(path)
+
                     logger.debug("Actual path is %s -- %s", actualPath, bset)
                     info = tardis.getFileInfoByPath(actualPath, bset)
                     if info:

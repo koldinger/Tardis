@@ -684,7 +684,7 @@ def processArgs():
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('-o',               dest='mountopts', action='append',help='Standard mount -o options')
     parser.add_argument('-d',               dest='debug', action='store_true', default=False, help='Run in FUSE debug mode')

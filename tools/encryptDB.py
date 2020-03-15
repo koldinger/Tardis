@@ -77,15 +77,17 @@ def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     o.write(iv)
     nb = len(iv)
     cipher.update(iv)
+    # Encrypt the chunks
     for chunk, eof in Util._chunks(f, 64 * 1024):
-        if eof:
-            chunk = pad(chunk)
         ochunk = cipher.encrypt(chunk)
         o.write(ochunk)
         nb = nb + len(ochunk)
+
+    # add the digest chunk
     ochunk = cipher.digest()
     o.write(ochunk)
     nb = nb + len(ochunk)
+
     o.close()
     f.close()
 
@@ -304,7 +306,7 @@ def processArgs():
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')

@@ -59,7 +59,7 @@ def processArgs():
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--shell',          dest='shell',      default=getShell(),       help='Shell to use.  Default: %(default)s')
 
