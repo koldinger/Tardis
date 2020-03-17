@@ -574,6 +574,13 @@ def _chunks(stream, chunksize):
 
 _transmissionTime = 0
 
+def sendDataPlain(sender, data, chunksize=(16 * 1024), compress=None, stats=None):
+    """
+    Send data, with no encryption, or calculation
+    """
+    encrypt = TardisCrypto.NullEncryptor()
+    sendData(sender, data, encrypt, chunksize=chunksize, compress=compress, stats=stats)
+
 def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, progress=None, progressPeriod=8*1024*1024):
     """
     Send a block of data, optionally encrypt and/or compress it before sending

@@ -578,7 +578,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                     "size": len(sig) }
                 self.sendMessage(response)
                 sigio = io.BytesIO(sig)
-                Util.sendData(self.messenger, sigio, compress=None)
+                Util.sendDataPlain(self.messenger, sigio, compress=None)
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))

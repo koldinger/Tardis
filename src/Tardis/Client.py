@@ -522,7 +522,7 @@ def processDelta(inode, signatures):
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, pad, chunksize=args.chunksize, compress=compress, stats=stats, iv=iv)
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -535,7 +535,7 @@ def processDelta(inode, signatures):
                     sendMessage(message)
                     #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats) # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report:
@@ -1494,7 +1494,7 @@ def runServer(cmd, tempfile):
 
 def setCrypto(confirm, chkStrength=False, version=None):
     global srpUsr, crypt
-    password = Util.getPassword(True, None, None, "Password for %s:" % (args.client),
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, "Password for %s:" % (args.client),
                                 confirm=confirm, strength=chkStrength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.getCrypto(version, password, args.client)
@@ -2066,8 +2066,8 @@ def main():
             sys.exit(1)
 
         # Purge out the original password.  Maybe it might go away.
-        if args.password:
-            args.password = '-- removed --'
+        #if args.password:
+            #args.password = '-- removed --'
 
         if password or (args.create and args.cryptoScheme):
             srpUsr = srp.User(client, password)
