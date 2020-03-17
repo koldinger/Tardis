@@ -115,13 +115,14 @@ class StatusBar():
         self.clearStatus()
 
     def start(self, delay=0.25, name="StatusBar"):
-        thread = threading.Thread(name=name, target=self.run, args=(delay,))
-        thread.setDaemon(True)
-        thread.start()
+        self.thread = threading.Thread(name=name, target=self.run, args=(delay,))
+        self.thread.setDaemon(True)
+        self.thread.start()
 
     def shutdown(self):
         self.halt = True
         self.clearStatus()
+        self.thread.join()
         pass
 
     def pTime(self, seconds):
