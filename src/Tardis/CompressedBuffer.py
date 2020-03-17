@@ -50,14 +50,15 @@ class _NullCompressor(object):
     def flush(self):
         return None
 
-_zstdCtxC = zstd.ZstdCompressor()
+_zstdCtxC = zstd.ZstdCompressor(level=5)
 _zstdCtxD = zstd.ZstdDecompressor()
 
-_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj),
-                 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor),
-                 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor),
-                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj),
-                 'none': (_NullCompressor, _NullCompressor) }
+_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj, {}),
+                 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
+                 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor, {}),
+                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
+                 'none': (_NullCompressor, _NullCompressor, {})
+               }
 
 # Pick a selected compressor or decompressor
 def _updateAlg(alg):
@@ -69,7 +70,7 @@ def _updateAlg(alg):
 
 def getCompressor(alg='zlib'):
     alg = _updateAlg(alg)
-    return _compressors[alg][0]()
+    return _compressors[alg][0](**(_compressors[alg][2]))
 
 def getDecompressor(alg='zlib'):
     alg = _updateAlg(alg)
@@ -145,7 +146,6 @@ class BufferedReader(object):
 class CompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor='zlib'):
         super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
-        self.compressor = None
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
@@ -243,15 +243,26 @@ class UncompressedBufferedReader(BufferedReader):
         return None
 
 if __name__ == "__main__":
+    import time, hashlib
+    import Util
     print("Opening {}".format(sys.argv[1]))
-    x = CompressedBufferedReader(file(sys.argv[1], "rb"))
     #line = x.get()
-    with file(sys.argv[2], "wb") as f:
-        line = x.read(16384)
-        while line:
-            f.write(line)
-            #print "==== ",  len(line), " :: ", base64.b64encode(line)
-            #line = x.get()
-            line = x.read(16384)
+    readsize = 4 * 1024 * 1024
+    for c in getCompressors():
+        print(f"{c} => ", end='', flush=True)
+        start = time.time()
+        x = CompressedBufferedReader(open(sys.argv[1], "rb"), compressor=c) #, hasher=hashlib.sha256())
+        try:
+            line = x.read(readsize)
+            while line:
+                #f.write(line)
+                #print "==== ",  len(line), " :: ", base64.b64encode(line)
+                #line = x.get()
+                line = x.read(readsize)
+            end = time.time()
+            duration = end - start
+            #print(x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " ", duration," :: ", x.checksum())
+            print(f"{x.origsize()} ({Util.fmtSize(x.origsize())})  -- {x.compsize()} ({Util.fmtSize(x.compsize())})  -- {x.ratio():.2%} {duration:3.3f}  {(x.origsize() / (1024 * 1024) / duration):2.2f} MB/s :: {x.checksum()}")
+        except Exception as e:
+            print(f"Caught exception: {str(e)}")
 
-    print(x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " :: ", x.checksum())
