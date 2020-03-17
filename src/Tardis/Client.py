@@ -1672,12 +1672,14 @@ def processCommandLine():
         """ Only print the help message if --debug is specified """
         return help if args.debug else argparse.SUPPRESS
 
+    _def = 'Default: %(default)s'
+
     # Use the custom arg parser, which handles argument files more cleanly
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False,
                                   epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
-    parser.add_argument('--config',                 dest='config', default=None,                                        help='Location of the configuration file.   Default: %(default)s')
-    parser.add_argument('--job',                    dest='job', default='Tardis',                                       help='Job Name within the configuration file.  Default: %(default)s')
+    parser.add_argument('--config',                 dest='config', default=None,                                        help='Location of the configuration file. ' + _def)
+    parser.add_argument('--job',                    dest='job', default='Tardis',                                       help='Job Name within the configuration file. ' + _def)
     parser.add_argument('--debug',                  dest='debug', default=False, action='store_true',                   help=argparse.SUPPRESS)
     (args, remaining) = parser.parse_known_args()
 
@@ -1692,20 +1694,20 @@ def processCommandLine():
     else:
         c.add_section(t)                        # Make it safe for reading other values from.
 
-    parser.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. Default: %(default)s')
-    parser.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. Default: %(default)s')
+    parser.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
+    parser.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. ' + _def)
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
-    parser.add_argument('--client', '-C',           dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  Default: %(default)s')
+    parser.add_argument('--client', '-C',           dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  ' + _def)
     parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=c.getboolean(t, 'Force'),
-                        help='Force the backup to take place, even if others are currently running.  Default: %(default)s')
+                        help='Force the backup to take place, even if others are currently running.  ' + _def)
     parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=c.getboolean(t, 'Full'),
-                        help='Perform a full backup, with no delta information. Default: %(default)s')
+                        help='Perform a full backup, with no delta information. ' + _def)
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
     parser.add_argument('--create',                 dest='create', default=False, action=Util.StoreBoolean,             help='Create a new client.')
 
-    parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  Default: %(default)s')
+    parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  ' + _def)
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
@@ -1725,10 +1727,10 @@ def processCommandLine():
                         help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s');
 
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
-                        help='Compress files.  Default: %(default)s')
-    parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  Default: %(default)d')
+                        help='Compress files.  ' + _def)
+    parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  ' + _def)
     parser.add_argument('--nocompress-types',       dest='nocompressfile', default=splitList(c.get(t, 'NoCompressFile')), action='append',
-                        help='File containing a list of MIME types to not compress.  Default: %(default)s')
+                        help='File containing a list of MIME types to not compress.  ' + _def)
     parser.add_argument('--nocompress', '-z',       dest='nocompress', default=splitList(c.get(t, 'NoCompress')), action='append',
                         help='MIME type to not compress. Can be repeated')
     if support_xattr:
@@ -1739,19 +1741,19 @@ def processCommandLine():
     locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
     locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=c.getboolean(t, 'Local'),
                         help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default=c.get(t, 'LocalServerCmd'),                  help='Local server program to run.  Default: %(default)s')
+    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default=c.get(t, 'LocalServerCmd'),                  help='Local server program to run.  ' + _def)
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
-    parser.add_argument('--crossdevice',        dest='crossdev', action=Util.StoreBoolean,                              help='Cross devices')
+    parser.add_argument('--crossdevice',        dest='crossdev', action=Util.StoreBoolean, default=False,               help='Cross devices. ' + _def)
 
-    parser.add_argument('--basepath',           dest='basepath', default='full', choices=['none', 'common', 'full'],    help="Select style of root path handling Default: %(default)s")
+    parser.add_argument('--basepath',           dest='basepath', default='full', choices=['none', 'common', 'full'],    help='Select style of root path handling ' + _def)
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
     excgrp.add_argument('--cvs-ignore',                 dest='cvs', default=c.getboolean(t, 'IgnoreCVS'), action=Util.StoreBoolean,
-                        help='Ignore files like CVS.  Default: %(default)s')
+                        help='Ignore files like CVS.  ' + _def)
     excgrp.add_argument('--skip-caches',                dest='skipcaches', default=c.getboolean(t, 'SkipCaches'),action=Util.StoreBoolean,
-                        help='Skip directories with valid CACHEDIR.TAG files.  Default: %(default)s')
+                        help='Skip directories with valid CACHEDIR.TAG files.  ' + _def)
     excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append', default=splitList(c.get(t, 'ExcludePatterns')),
                         help='Patterns to exclude globally (may be repeated)')
     excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',                           help='Load patterns from exclude file (may be repeated)')
@@ -1759,42 +1761,42 @@ def processCommandLine():
                         help='Exclude certain directories by path')
 
     excgrp.add_argument('--exclude-file-name',          dest='excludefilename', default=c.get(t, 'ExcludeFileName'),
-                        help='Load recursive exclude files from this.  Default: %(default)s')
+                        help='Load recursive exclude files from this.  ' + _def)
     excgrp.add_argument('--local-exclude-file-name',    dest='localexcludefile', default=c.get(t, 'LocalExcludeFileName'),
-                        help='Load local exclude files from this.  Default: %(default)s')
+                        help='Load local exclude files from this.  ' + _def)
     excgrp.add_argument('--skip-file-name',             dest='skipfile', default=c.get(t, 'SkipFileName'),
-                        help='File to indicate to skip a directory.  Default: %(default)s')
+                        help='File to indicate to skip a directory.  ' + _def)
     excgrp.add_argument('--exclude-no-access',          dest='skipNoAccess', default=c.get(t, 'ExcludeNoAccess'), action=Util.StoreBoolean,
-                        help="Exclude files to which the runner has no permission- won't generate directory entry. Default: %(default)s")
+                        help="Exclude files to which the runner has no permission- won't generate directory entry. " + _def)
     excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action=Util.StoreBoolean, default=False,
-                        help='Ignore the global exclude file.  Default: $(default)s')
+                        help='Ignore the global exclude file.  ' + _def)
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
     comgrp.add_argument('--compress-msgs', '-Y',    dest='compressmsgs', nargs='?', const='snappy',
                         choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
-                        help='Compress messages.  Default: %(default)s')
+                        help='Compress messages.  ' + _def)
 
-    comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  Default: %(default)s'))
-    comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: %(default)s'))
-    comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  Default: %(default)s'))
-    comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  Default: %(default)s'))
-    comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  Default: $(default)s'))
-    comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  Default: %(default)s'))
-    comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  Default: %(default)s'))
+    comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  ' + _def))
+    comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: ' + _def))
+    comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  ' + _def))
+    comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  ' + _def))
+    comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  ' + _def))
+    comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  ' + _def))
+    comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  ' + _def))
     comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
     #comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
-    #                    help=_d('Protocol for data transfer.  Default: %(default)s'))
+    #                    help=_d('Protocol for data transfer.  ' + _def))
     comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
-                        help=_d('Always send a signature.  Default: %(default)s'))
+                        help=_d('Always send a signature.  ' + _def))
 
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,
-                        help=_d('If delta file is greater than this percentage of the original, a full version is sent.  Default: %(default)s'))
+                        help=_d('If delta file is greater than this percentage of the original, a full version is sent.  ' + _def))
 
     parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
     parser.add_argument('--loginodes',              dest='loginodes', default=None, type=argparse.FileType('w'), help=_d('Log inode actions, and messages'))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
-    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  Default: %(default)s')
+    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  ' + _def)
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
 
     prggroup = purgegroup.add_mutually_exclusive_group()
@@ -1810,7 +1812,7 @@ def processCommandLine():
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
-    parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. Default: %(default)s')
+    parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. ' + _def)
     parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
     parser.add_argument('--logtime',            dest='logtime', default=False, action=Util.StoreBoolean, help='Log time')
     parser.add_argument('--logcolor',           dest='logcolor', default=True, action=Util.StoreBoolean, help='Generate colored logs')
