@@ -80,9 +80,8 @@ Tools are located in the tools directory, and are not installed.
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 1.1.0 Port to Python3
-  * 1.1.x Bug Fixes, and minor features
-  * 1.2.0 Asynchronous protocol allowing improved performance.
+  * 1.1.4 Support for multiple encryption schemes, and improved encryption, support for Zstd compression
+  * 1.2.0 Asynchronous protocol allowing improved performance, and improved integration between client and server for local cases.
 
 Support
 =======
@@ -115,8 +114,11 @@ Server Setup
   * Add a tardis user (adduser tardis)
   * Create a log directory (mkdir */var/log/tardisd*)
   * Copy the appropriate startup script as desired
-      * Systemd/systemctl based systems (such as Fedora 20)
-         * `cp init/tardisd.service /usr/lib/systemd/system`
+      * Systemd/systemctl based systems
+         * Debian based systems:
+             * `cp init/debian/tardisd.service /usr/lib/systemd/system`
+         * Other systems (such as Fedora):
+             * `cp init/other/tardisd.service /usr/lib/systemd/system`
          * `systemctl enable tardisd.service`
          * start the service
            * `systemctl start tardisd.service`
@@ -126,7 +128,7 @@ Server Setup
          * `chkconfig tardisd on`
          * start the service
            * `service tardisd start`
-     * Repeat the process with the tardisremote scripts, if you wish to support accessing the database via the remote protocol.
+     * Repeat the process with the tardisremote scripts, if you wish to support accessing the database via the remote (http) protocol.
 
 Server Requirements
 -------------------
