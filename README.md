@@ -64,7 +64,7 @@ Tardis consists of several components:
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
 * tardisremote (HttpInterface): An optional http server which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis, etc.
 
-Tardis is written in Python 2, and only relies on a few non-pure python packages.
+Tardis is written in Python 3, and only relies on a few non-pure python packages.
 
 Tardis uses a modified version of the librsync library, which adapts it to support he most recent versions of librsync.
 When/if a correct functional version appears on Pypi, we'll use it instead.  See https://github.com/smartfile/python-librsync
@@ -115,8 +115,11 @@ Server Setup
   * Add a tardis user (adduser tardis)
   * Create a log directory (mkdir */var/log/tardisd*)
   * Copy the appropriate startup script as desired
-      * Systemd/systemctl based systems (such as Fedora 20)
-         * `cp init/tardisd.service /usr/lib/systemd/system`
+      * Systemd/systemctl based systems
+         * Debian based systems:
+             * `cp init/debian/tardisd.service /usr/lib/systemd/system`
+         * Other systems (such as Fedora):
+             * `cp init/other/tardisd.service /usr/lib/systemd/system`
          * `systemctl enable tardisd.service`
          * start the service
            * `systemctl start tardisd.service`
@@ -126,7 +129,7 @@ Server Setup
          * `chkconfig tardisd on`
          * start the service
            * `service tardisd start`
-     * Repeat the process with the tardisremote scripts, if you wish to support accessing the database via the remote protocol.
+     * Repeat the process with the tardisremote scripts, if you wish to support accessing the database via the remote (http) protocol.
 
 Server Requirements
 -------------------
@@ -289,7 +292,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | PassswordProg   |                     |                   | Program to prompt for a password. |
 | Crypt           | True                |                   | Encrypt data in the backup.  A Password must be set to enable tihs. |
 | KeyFile         |                     |                   | File containing the keys. |
-| CompressData    | none                |                   | Compress data using this algorithm.  Choices are none, zlib, bzip, lzma |
+| CompressData    | none                |                   | Compress data using this algorithm.  Choices are none, zlib, bzip, lzma, zstd |
 | CompressMin     | 4096                |                   | Minimum size file to compress. |
 | NoCompressFile  |                     | TARDIS_NOCOMPRESS | File containing a list of mime type files to not attempt to compress
 | NoCompress      |                     |                   | Mime types to not compress |
@@ -475,7 +478,66 @@ I'm in the early stages of testing Tardis on MacOS X, but it appears that, for t
 
 Note, you need to use the [homebrew](http://brew.sh "Homebrew") to install Python, and librsync.
 
-Tested only on Yosemite.
+Preliminary experiments indicate that it works on Yosemite, and Mojave, and should work on most versions of MacOS X.
+
+`tardisfs` does not currently work on MacOS, as FUSE isn't natively supported.   In theory it should work with MacFUSE, but I haven't tried.
+
+Installation on Mac OS X
+------------------------
+In most case, MacOS is case insensitive.   Getting Tardis from git can be problematic, as there is a directory Tardis
+and a file tardis.   The latter is not necessary, so the best approach is to download the zip file from github,
+unzip it manually, and when it asks what to do, replace the file.
+  * Install Homebrew
+     * `/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`
+  * Install librsync, python3
+    * `brew install librsync python3 snappy`
+  * Install snappy
+     * `CPPFLAGS="-I/usr/local/include -L/usr/local/lib" pip install python-snappy`
+  * Install tardis
+     * `python3 setup.py install`
+
+I recommend doing all the above in a virtualenv environment until you're certain of the results.
+
+Compression
+===========
+Current versions of tardis support the following compression algorithms: zlib (gzip) deflate, lzma (xz), bzip2, and zstandard (zstd).   The choice of compression algorithm is up to the user.
+The compression algorithm can be specified as an argument to the --compress-data (-Z) argument.  If no compression is specified, zlib is chosen.   The compression algorithm can differ between
+backup runs, and is handled transparently.
+
+In general, zlib is the fastest scheme, but offers the least compression.   Zstandard offers slightly better compression, at a slightly slower speed.   bzip2 offers even better compression,
+and lzma is the has the best, with lzma showing a significant increase in computation time.
+
+In general, zstandard and bzip2 probably give the best tradeoffs between compression, and performance, with zstandard being faster, and bzip2 giving better compression.   lzma is probably too slow for general use.
+
+Note that performance of any compression algorithm will be heavily influenced by the data being compressed.
+
+Tardis will not attempt to compress certain types of files, which it views as already compressed.  Compressed file types include standard compressed files (zip, gzip, xz, lzma, bzip2, etc) and 
+some compressed data types (jpeg, mpeg, mp3, mp4, flac, etc).    Additional types can be expressed via their mime type iin the `types.ignore` file.
+
+Encryption
+==========
+Older versions of Tardis supported a single compression scheme.  File data was compressed with AES-256 in CBC (Cypher Block Chaining) mode, with a HMAC-SHA512 authentication code.   Filenames were
+encrypted using AES-256 in ECB (Electronic Code Book) mode.   Separate keys were used for filename and data encryption.
+
+Newer versions of Tardis support multiple encryption schemes.
+    * AES-256-CBC/HMAC-SHA512 for file data, AES-256-ECB for filenames (the original scheme), PBKDF2 for key protection
+    * AES-256-CBC/HMAC-SHA512 for file data, AES-SIV (Synthetic Initilazition Vector) for filenames, scrypt for key protection
+    * AES-256-GCM (Galois Counter Mode) for file data, AES-SIV for filenames, scrypt for key protection
+    * ChaCha20/Poly1305 for file data, AES-SIV for filenames, scrypt for key protection
+    * No encryption
+
+The original filename scheme was weak because ECB mode allows common sections of data to appear as the same value.   Thus, if two file names started with the same block of characters,
+it was possible that both file names would be similar when encrypted.
+
+Newer versions will use ChaCha20/Poly1305 as the default encryption.   On modern Intel x86-64 processors, AES-256-GCM may give better performance, due to the availability of specialized AES instructions (AES-NI).   On lower powered processors, ChaCha23/Poly1305 will generally give better performance.   Both schemes are believed to be cryptographically secure.
+
+Protection Model
+----------------
+The Tardis encryption scheme is designed to protect against unauthorized viewing of data, but are not designed to protect you against an attack.
+Simple checks on file data are made (via the HMAC, GCM, or Poly1305 authentication codes), but damage can easily be done by attacking the database.
+In addition, some data of minor value (such as inode numbers) are stored in plaintext in the database, allowing possible reconstruction of the shape of a directory tree.
+If the general structure of your data is known, Tardis may leak some information.
+
 
 Notes on Data Storage
 =====================

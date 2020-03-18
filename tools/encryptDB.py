@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2019, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -69,24 +69,25 @@ def encryptFilenames(db, crypto):
             conn.rollback()
     logger.info("Encrypted %d names", names)
 
-def encryptFile(checksum, cacheDir, cipher, iv, pad, hmac, nameHmac, output = None):
+def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     f = cacheDir.open(checksum, 'rb')
     if output == None:
         output = checksum + '.enc'
     o = cacheDir.open(output, 'wb')
     o.write(iv)
     nb = len(iv)
-    hmac.update(iv)
+    cipher.update(iv)
+    # Encrypt the chunks
     for chunk, eof in Util._chunks(f, 64 * 1024):
-        if eof:
-            chunk = pad(chunk)
         ochunk = cipher.encrypt(chunk)
         o.write(ochunk)
         nb = nb + len(ochunk)
-        hmac.update(ochunk)
-    ochunk = hmac.digest()
+
+    # add the digest chunk
+    ochunk = cipher.digest()
     o.write(ochunk)
     nb = nb + len(ochunk)
+
     o.close()
     f.close()
 
@@ -141,7 +142,7 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
         hmac = crypto.getHash(func=hashlib.sha512)
-        fSize = encryptFile(checksum, cacheDir, cipher, iv, crypto.pad, hmac, nameHmac, output=newCks)
+        fSize = encryptFile(checksum, cacheDir, cipher, iv, output=newCks)
         #logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
 
         #cacheDir.link(checksum + '.enc', newCks, soft=False)
@@ -305,7 +306,7 @@ def processArgs():
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
-    Config.addPasswordOptions(parser, addcrypt=False)
+    Config.addPasswordOptions(parser)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
@@ -332,16 +333,20 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=False)
 
-    crypto = TardisCrypto.TardisCrypto(password, args.client)
+    #crypto = TardisCrypto.TardisCrypto(password, args.client)
 
-    path = os.path.join(args.database, args.client, args.dbname)
-    db = TardisDB.TardisDB(path, backup=False)
+    #path = os.path.join(args.database, args.client, args.dbname)
+    #db = TardisDB.TardisDB(path, backup=False)
 
-    Util.authenticate(db, args.client, password)
-    (f, c) = db.getKeys()
-    crypto.setKeys(f, c)
+    #Util.authenticate(db, args.client, password)
 
-    cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+
+
+    #(f, c) = db.getKeys()
+    #crypto.setKeys(f, c)
+
+    #cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
 
     if args.names or args.all:
         encryptFilenames(db, crypto)

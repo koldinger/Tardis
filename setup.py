@@ -29,10 +29,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
+import os, sys
 import subprocess
 
 from setuptools import setup, find_packages
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src'))
 
 import Tardis
 
@@ -44,7 +46,8 @@ jokes.
 
 buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always']).strip()
 
-print(buildVersion.decode('utf8'), file=open("Tardis/tardisversion", "w"))
+versionfile = "src/Tardis/tardisversion"
+print(buildVersion.decode('utf8'), file=open(versionfile, "w"))
 
 root = os.environ.setdefault('VIRTUAL_ENV', '')
 
@@ -55,7 +58,7 @@ setup(  name                    = 'Tardis-Backup',
         version                 = version,
         description             = "Tardis Backup System",
         long_description        = longdesc,
-        packages                = find_packages(exclude=['ez_setup', 'examples', 'tests']),
+        packages                = find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
         author                  = "Eric Koldinger",
         author_email            = "kolding@washington.edu",
         url                     = "https://github.com/koldinger/Tardis",
@@ -63,10 +66,10 @@ setup(  name                    = 'Tardis-Backup',
         platforms               = "Posix; MacOS X",
         include_package_data    = True,
         zip_safe                = False,
-        install_requires = ['msgpack-python', 'daemonize',      'parsedatetime', 'pycryptodomex',
-                            'termcolor',      'passwordmeter',  'pathmatch',     'python-snappy',   'srp',
-			    'pid', 	      'python-magic',   'urllib3',       'binaryornot',  
-                            'colorlog',       'progressbar2',   'reportlab',     'qrcode',       'fusepy',
+        install_requires = ['msgpack-python', 'daemonize',      'parsedatetime', 'pycryptodomex>=3.8.0',
+                            'termcolor',      'passwordmeter',  'pathmatch',     'python-snappy',   'zstandard',
+                            'srp',            'pid',            'python-magic',  'urllib3',         'binaryornot',     
+                            'colorlog',       'progressbar2',   'reportlab',     'qrcode',          'fusepy',
                             'requests_cache', 'requests',       'flask',         'tornado',      
                             'Tardis_Backup'] + add_pkgs,
         data_files = [( root + '/etc/tardis',                     [ 'tardisd.cfg-template', 'types.ignore', 'tardisremote.cfg-template' ]),
@@ -78,8 +81,8 @@ setup(  name                    = 'Tardis-Backup',
                       ( root + '/etc/logwatch/conf/logfiles',     [ 'logwatch/conf/logfiles/tardisd.conf' ]),
                       ( root + '/etc/logwatch/scripts/services',  [ 'logwatch/scripts/services/tardisd' ]),
                      ],
-	package_dir = {'': '.'},
-	package_data = {
+        package_dir = {'': 'src'},
+        package_data = {
                         'Tardis':   [ 'tardisversion', 'schema/tardis.sql' ],
                        },
         entry_points = {
@@ -108,4 +111,4 @@ setup(  name                    = 'Tardis-Backup',
         ]
      )
 
-os.remove("Tardis/tardisversion")
+os.remove(versionfile)
