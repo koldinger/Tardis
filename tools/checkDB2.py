@@ -1,4 +1,3 @@
-
 #! /usr/bin/env python3
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
@@ -65,11 +64,11 @@ def processArgs():
     return parser.parse_args(remaining)
 
 def listChecksums(tardis, chunksize=10000):
-    rs = tardis.conn.execute("SELECT Checksum, DiskSize, Basis, Compressed, Encrypted FROM Checksums WHERE isFile = 1 ORDER BY Checksum")
+    rs = tardis.conn.execute("SELECT Checksum, DiskSize, Basis, Compressed, Encrypted, Added FROM Checksums WHERE isFile = 1 ORDER BY Checksum")
     data = rs.fetchmany(chunksize)
     while data:
         for row in data:
-            yield(row[0], row[1], row[2], row[3], row[4])
+            yield(row[0], row[1], row[2], row[3], row[4], row[5])
         data = rs.fetchmany(chunksize)
 
 def decryptHeader(crypt, infile):
@@ -89,13 +88,13 @@ missing = []
 mismatch = []
 notdelta = []
 
-def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted):
+def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added):
     fsize = cache.size(checksum)
     if not cache.exists(checksum):
         #print(f"{checksum}: does not exist")
         missing.append(checksum)
     elif fsize != size:
-        print(f"{checksum}: size mismatch Expected: {size}, found {fsize} -- {basis is not None}")
+        print(f"{checksum}: size mismatch Expected: {size}, found {fsize} ({fsize - size})-- {added} -- {basis is not None} ")
         mismatch.append((checksum, size, fsize))
     elif basis:
         #print(f"{checksum} -- {compressed} {encrypted}", flush=True)
@@ -114,10 +113,12 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
     (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
-    for (checksum, size, basis, compressed, encrypted) in listChecksums(tardis):
-        checkFile(cache, crypt, checksum, size, basis, compressed, encrypted)
+    count = 0
+    for (checksum, size, basis, compressed, encrypted, added) in listChecksums(tardis):
+        count += 1
+        checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added)
 
-    print(f"Missing Files: {len(missing)} Size mismatch: {len(mismatch)} Not Delta: {len(notdelta)}")
+    print(f"Files: {count} Missing Files: {len(missing)} Size mismatch: {len(mismatch)} Not Delta: {len(notdelta)}")
 
     return 0
 

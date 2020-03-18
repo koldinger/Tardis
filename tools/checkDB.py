@@ -80,7 +80,7 @@ def main():
                 if os.path.isdir(path):
                     contents = os.listdir(path)
                     metafiles = set(filter(hasExt, contents))
-                    datafiles = set(filter(lambda x: not hasExt(x), contents))
+                    datafiles = set([x for x in contents if not hasExt(x)])
 
                     alldatafiles.update(datafiles)
 
@@ -89,9 +89,9 @@ def main():
                     for f in metafiles:
                         (data, _) = os.path.splitext(f)
                         if not data in datafiles:
-                            print "{} without matching data file".format(f)
+                            print("{} without matching data file".format(f))
             except Exception as e:
-                print "Caught exception proecssing directory {}".format(path)
+                print("Caught exception proecssing directory {}".format(path))
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)

@@ -494,7 +494,7 @@ def main():
             for i in args.files:
                 try:
                     if args.auth:
-                        hasher = Util.getHash(crypt)
+                        hasher = crypt.getHash()
                     ckname = i
                     if args.recovername:
                         ckname = recoverName(i)
