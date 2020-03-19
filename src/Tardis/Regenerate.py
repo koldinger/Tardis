@@ -421,7 +421,6 @@ def main():
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
-        print(crypt)
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
