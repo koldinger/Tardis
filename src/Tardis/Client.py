@@ -1520,7 +1520,7 @@ def doSendKeys(password):
 
 def doSrpAuthentication(response):
     try:
-        setCrypto(False, True, response['cryptoScheme'])
+        setCrypto(False, args.create, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))

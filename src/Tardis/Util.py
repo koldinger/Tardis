@@ -412,6 +412,10 @@ def checkPasswordStrength(password):
 # Get the database, cachedir, and crypto object.
 
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False, retpassword=False):
+    """ Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem, 
+    or via TardisRemote (http).
+    Returns a 3-tuple, the TardisDB object, the CacheDir object, and the appropriate crypto object
+    """
     logger.debug("Connection requested for %s under %s", client, dataLoc)
     crypt = None
 
