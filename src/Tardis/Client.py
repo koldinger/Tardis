@@ -1386,7 +1386,7 @@ def handleResponse(response, doPush=True, pause=0):
     except Exception as e:
         logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e)
         logger.exception("Exception: ", exc_info=e)
-        logger.error(pprint.pformat(response, width=5000, depth=4))
+        logger.error(pprint.pformat(response, width=150, depth=5, compact=True))
         exceptionLogger.log(e)
 
 _nextMsgId = 0
