@@ -1398,7 +1398,7 @@ class Backend:
             #sock.close()
             self.messenger.closeSocket()
 
-            rmSession(self.sessionId)
+            rmSession(self.sessionid)
 
             if started:
                 self.db.setClientEndTime()
