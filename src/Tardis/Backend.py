@@ -107,7 +107,7 @@ else:
 server = None
 logger = None
 
-pp = pprint.PrettyPrinter(indent=2, width=1000, compact=True)
+pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2
@@ -118,7 +118,10 @@ def addSession(sessionId, client):
     _sessions[sessionId] = client
 
 def rmSession(sessionId):
-    _sessions[sessionId]
+    try:
+        del _sessions[sessionId]
+    except KeyError:
+        pass
 
 def checkSession(sessionId):
     return (sessionId in _sessions)
@@ -1048,7 +1051,6 @@ class Backend:
         return ret
 
     def setConfig(self, config):
-        self.logger.info("In setConfig")
         self.formats        = self.config.formats
         self.priorities     = self.config.priorities
         self.keep           = self.config.keep
@@ -1194,7 +1196,8 @@ class Backend:
         """
         self.logger.debug("Beginning Authentication")
         try:
-            message = {"message": "AUTH", "status": "AUTH", "client": self.db.clientId}
+            cryptoScheme = self.db._getConfigValue('CryptoScheme', '1')
+            message = {"message": "AUTH", "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             autha = self.recvMessage()
             self.checkMessage(autha, "AUTH1")
@@ -1394,6 +1397,8 @@ class Backend:
             size = 0
             #sock.close()
             self.messenger.closeSocket()
+
+            rmSession(self.sessionId)
 
             if started:
                 self.db.setClientEndTime()
