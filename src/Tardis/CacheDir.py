@@ -132,10 +132,13 @@ class CacheDir:
             os.fchown(f.fileno(), self.user, self.group)
         return f
 
-    def insert(self, name, source):
+    def insert(self, name, source, link=False):
         self.mkdir(name)
         path = self.path(name)
-        shutil.move(source, path)
+        if link:
+            os.link(source, path)
+        else:
+            shutil.move(source, path)
         if self.chown:
             os.chown(path, self.user, self.group)
 
