@@ -39,9 +39,10 @@ import os.path
 logging.basicConfig()
 
 
-parser = argparse.ArgumentParser(description="Generate file paths in a cache dir directory", add_help=True)
+parser = argparse.ArgumentParser(description="Insert files into a cache dir", add_help=True)
 parser.add_argument('--base', '-b', dest='base', default='.', help='Base CacheDir directory')
 parser.add_argument('--link', '-l', dest='link', default=False, action='store_true', help='link instead of move')
+parser.add_argument('--delete', '-d', dest='delete', default=False, action='store_true', help='Delete files instead of adding')
 parser.add_argument('files', nargs='*', help='List of files to print')
 
 Util.addGenCompletions(parser)
@@ -52,8 +53,12 @@ c = CacheDir.CacheDir(args.base, create=False)
 
 for i in args.files:
     name = os.path.basename(i)
-    print(f"{i} => {c.path(name)}")
     try:
-        c.insert(i, name, link=args.link)
+        if args.delete:
+            print(f"Removing {name}")
+            c.remove(name)
+        else:
+            print(f"{i} => {c.path(name)}")
+            c.insert(i, name, link=args.link)
     except Exception as e:
         print(e)
