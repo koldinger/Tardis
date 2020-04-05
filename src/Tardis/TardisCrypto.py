@@ -139,9 +139,13 @@ class BlockEncryptor:
             self.prev = data[-remainder:]
             data = data[0:-remainder]
         if data:
-            return self.cipher.encrypt(data)
+            ret = self.cipher.encrypt(data)
+            if ret:
+                return ret
+            else:
+                return b''
         else:
-            return None
+            return b''
 
     def decrypt(self, data, last=False):
         if self.done:
@@ -160,7 +164,7 @@ class BlockEncryptor:
                 output = unpad(output, self.cipher.block_size)
             return output
         else:
-            return None
+            return b''
 
     def finish(self):
         if self.done:

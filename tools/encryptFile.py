@@ -29,7 +29,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
+from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, CompressedBuffer
 import sqlite3
 import argparse, logging
 import os.path
@@ -42,6 +42,7 @@ import progressbar
 import uuid
 import json
 import shutil
+import traceback
 
 logger = None
 
@@ -66,6 +67,8 @@ def processArgs():
     parser.add_argument('--output', '-o', dest='output', required=True, help="Output directory")
     parser.add_argument('--json', '-j', default=None, dest='input', help='JSON input file')
     parser.add_argument('--signature', '-s', default=False, action='store_true', dest='signature', help='Generate signature file')
+    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=None, nargs='?', choices=CompressedBuffer.getCompressors(),
+                        help='Compress files')
     parser.add_argument('names',          nargs='*', help="List of pathnames to decrypt")
     parser.add_argument('--help', '-h',   action='help');
 
@@ -75,13 +78,13 @@ def processArgs():
 
     return args
 
-def processFile(outdir, crypto, name, signature=False):
+def processFile(outdir, crypto, name, compress='none', signature=False):
     outname = str(uuid.uuid1())
     outpath = os.path.join(outdir, outname)
     outfile = open(outpath, "wb")
     s = FileSender(outfile)
     infile = open(name, "rb")
-    size, ck, sig = Util.sendData(s, infile, crypto.getContentEncryptor(), hasher=crypto.getHash(), signature=True)
+    size, ck, sig = Util.sendData(s, infile, crypto.getContentEncryptor(), hasher=crypto.getHash(), signature=True, compress=compress)
     infile.close()
     outfile.close()
     newpath = os.path.join(outdir, ck)
@@ -107,15 +110,17 @@ def main():
         files = json.load(open(args.input, "r"))
         for x in files:
             try:
-                processFile(args.output, crypto, files[x], args.signature)
+                processFile(args.output, crypto, files[x], args.compress, args.signature)
             except Exception as e:
                 print(f"----> {str(e)} Processing {files[x]}")
+                traceback.print_exc()
 
     for name in args.names:
         try:
             processFile(args.output, crypto, name, args.signature)
         except Exception as e:
             print(f"----> {str(e)} Processing {name}")
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
