@@ -475,6 +475,22 @@ class TardisDB(object):
         return c.fetchone()
 
     @authenticate
+    def getFileInfoByChecksum(self, checksum, current=False):
+        """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
+        backupset = self._bset(current)
+        self.logger.debug("Looking up file for similar info: %s", checksum)
+        c = self.cursor.execute("SELECT " + 
+                                 _fileInfoFields + _fileInfoJoin +
+                                 "WHERE C1.Checksum = :cksum AND :backup BETWEEN Files.FirstSet AND Files.LastSet",
+                                 {'cksum': checksum, 'backup': backupset})
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row
+
+    @authenticate
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         #self.logger.debug("Looking up file for similar info: %s", fileInfo)
@@ -983,6 +999,10 @@ class TardisDB(object):
         if vkey:
             vkey = unhexlify(vkey)
         return salt, vkey
+
+    def getCryptoScheme(self):
+        self.logger.debug("Getting CryptoScheme")
+        return self._getConfigValue('CryptoScheme')
 
     @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey, backup=True):

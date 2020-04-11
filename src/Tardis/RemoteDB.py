@@ -413,6 +413,10 @@ class RemoteDB(object):
         return (salt, vKey)
 
     @reconnect
+    def getCryptoScheme(self):
+        return self.getConfigValue('CryptoScheme')
+
+    @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
         r = self.session.get(self.baseURL + "listPurgeSets/" + bset + '/' + str(priority) + '/' + str(timestamp), headers=self.headers)
