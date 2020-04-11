@@ -319,11 +319,6 @@ class Crypto_Null:
     def getKeys(self):
         return (None, None)
 
-    def createSRPValues(self, password, client=None):
-        if client is None:
-            client = self.client
-        salt, vkey = srp.create_salted_verification_key(client, password)
-        return salt, vkey
 
 
 

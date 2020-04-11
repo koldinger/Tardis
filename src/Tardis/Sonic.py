@@ -91,12 +91,13 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
 
     if tardisdb.needsAuthentication():
-        scheme = tardisdb._getConfigValue('CryptoScheme', '1')
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
+        Util.authenticate(tardisdb, args.client, password)
+
+        scheme = tardisdb.getCryptoScheme()
         logger.info("Using crypto scheme %d", scheme)
         crypt = TardisCrypto.getCrypto(scheme, password, args.client)
-        Util.authenticate(tardisdb, args.client, password)
     else:
         crypt = TardisCrypto.getCrypto(0, None, None)
 

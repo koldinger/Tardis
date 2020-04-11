@@ -1325,7 +1325,10 @@ def sendAndReceive(message):
 def sendKeys(password, client, includeKeys=True):
     logger.debug("Sending keys")
     (f, c) = crypt.getKeys()
-    salt, vkey = crypt.createSRPValues(password, client)
+
+    #salt, vkey = TardisCrypto.createSRPValues(password, client)
+
+    (salt, vkey) = srp.create_salted_verification_key(client, password)
     message = { "message": "SETKEYS",
                 "filenameKey": f,
                 "contentKey": c,
@@ -1507,7 +1510,8 @@ def doSendKeys(password):
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
-    salt, vkey = crypt.createSRPValues(password, args.client)
+    #salt, vkey = crypt.createSRPValues(password, args.client)
+    (salt, vkey) = srp.create_salted_verification_key(args.client, password)
     message = { "message": "SETKEYS",
                 "filenameKey": f,
                 "contentKey": c,

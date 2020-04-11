@@ -1000,6 +1000,10 @@ class TardisDB(object):
             vkey = unhexlify(vkey)
         return salt, vkey
 
+    def getCryptoScheme(self):
+        self.logger.debug("Getting CryptoScheme")
+        return self._getConfigValue('CryptoScheme')
+
     @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey, backup=True):
         import Tardis.Util as Util      # Import it here, as Util imports TardisDB
