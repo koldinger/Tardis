@@ -222,15 +222,19 @@ class BsonMessages(BinMessages):
         return "bin"
 
 class ObjectMessages():
-    def __init__(self, inQueue, outQueue, stats=None, compress=True):
+    def __init__(self, inQueue, outQueue, stats=None, compress=True, timeout=None):
         self.inQueue = inQueue
         self.outQueue= outQueue
+        self.timeout = timeout
 
     def sendMessage(self, message, compress=False, raw=False):
         self.outQueue.put(message)
 
     def recvMessage(self, raw=False):
-        return self.inQueue.get(message)
+        ret =  self.inQueue.get(timeout=self.timeout)
+        if isinstance(ret, BaseException):
+            raise ret
+        return ret
 
     def encode(self, data):
         return data

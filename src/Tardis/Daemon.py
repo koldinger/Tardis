@@ -29,9 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import types
 import sys
-import string
 import pwd
 import grp
 import argparse
@@ -41,9 +39,6 @@ import logging.config
 import configparser
 import socketserver
 import ssl
-import pprint
-import tempfile
-import shutil
 import traceback
 import signal
 import threading
@@ -63,15 +58,9 @@ import Tardis
 import Tardis.Backend as Backend
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
 import Tardis.Messages as Messages
-import Tardis.CacheDir as CacheDir
-import Tardis.TardisDB as TardisDB
-import Tardis.Regenerator as Regenerator
 import Tardis.Util as Util
 import Tardis.Defaults as Defaults
 import Tardis.Connection as Connection
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.librsync as librsync
 
 DONE    = 0
 CONTENT = 1
@@ -151,8 +140,6 @@ configDefaults = {
 
 server = None
 logger = None
-
-pp = pprint.PrettyPrinter(indent=2, width=1000)
 
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2

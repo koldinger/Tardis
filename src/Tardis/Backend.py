@@ -32,31 +32,22 @@ import os
 import types
 import sys
 import string
-import pwd
-import grp
 import argparse
 import uuid
 import logging
 import logging.config
 import configparser
-import socketserver
-import ssl
 import pprint
 import tempfile
 import shutil
-import traceback
 import signal
-import threading
 import json
 import base64
 from datetime import datetime
 
 # For profiling
 import io
-import pstats
 
-import daemonize
-import colorlog
 
 import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
@@ -80,19 +71,8 @@ LINKED  = 5                     # Check if it's already linked
 
 config = None
 args   = None
-configSection = 'Daemon'
 
-databaseName    = Defaults.getDefault('TARDIS_DBNAME')
 schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
-configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
-baseDir         = Defaults.getDefault('TARDIS_DB')
-dbDir           = Defaults.getDefault('TARDIS_DBDIR')
-portNumber      = Defaults.getDefault('TARDIS_PORT')
-pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
-journalName     = Defaults.getDefault('TARDIS_JOURNAL')
-timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
-logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
-skipFile        = Defaults.getDefault('TARDIS_SKIP')
 
 if  os.path.isabs(schemaName):
     schemaFile = schemaName
@@ -104,14 +84,10 @@ else:
     #if len(schemaFile) > len(os.path.relpath(schemaFile)):
         #schemaFile = os.path.relpath(schemaFile)
 
-server = None
-logger = None
-
 pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2
-
 
 _sessions = {}
 def addSession(sessionId, client):
@@ -131,6 +107,43 @@ class InitFailedException(Exception):
 
 class ProtocolError(Exception):
     pass
+
+class BackendConfig:
+    umask           = 0
+    cksContent      = False
+    serverSessionID = None
+    formats         = []
+    priorities      = []
+    keep            = []
+    forceFull       = False
+    journal         = None
+
+    savefull        = False
+    maxChain        = 0
+    deltaPercent    = 0
+    autoPurge       = False
+    saveConfig      = False
+    dbbackups       = 0
+
+    user            = None
+    group           = None
+
+    dbname          = ""
+    dbdir           = ""
+    basedir         = ""
+    allowNew        = True
+    allowUpgrades   = True
+
+    allowOverrides  = True
+
+    requirePW       = False
+
+    exceptions      = False
+
+    linkBasis       = False
+
+    skip            = 'tardis.skip'
+
 
 class Backend:
     numfiles = 0
@@ -159,10 +172,14 @@ class Backend:
     lastCompleted = None
     maxChain = 0
 
-    def __init__(self, messenger, config):
+    def __init__(self, messenger, config, logSession=True):
         self.sessionid = str(uuid.uuid1())
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
-        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr })
+        if logSession:
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr })
+        else:
+            self.logger = logging.getLogger('Backend')
+
         self.logger.info("Created backend")
         self.messenger = messenger
         self.config = config
@@ -174,7 +191,7 @@ class Backend:
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
         if not message['message'] == expected:
-            logger.critical("Expected {} message, received {}".format(expected, message['message']))
+            self.logger.critical("Expected {} message, received {}".format(expected, message['message']))
             raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
 
     def setXattrAcl(self, inode, device, xattr, acl):
@@ -535,8 +552,8 @@ class Backend:
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
-                if args.exceptions:
-                    logger.exception(e)
+                if self.config.exceptions:
+                    self.logger.exception(e)
                 errmsg = str(e)
 
         if response is None:
@@ -993,6 +1010,7 @@ class Backend:
         return (response, flush)
 
     def genPaths(self):
+        self.logger.debug("Generating paths: %s", self.config.basedir)
         self.basedir    = os.path.join(self.config.basedir, self.client)
         dbdir           = os.path.join(self.config.dbdir, self.client)
         dbname          = self.config.dbname.format({'client': self.client})
@@ -1208,7 +1226,7 @@ class Backend:
             if srpValueS is None or srpValueB is None:
                 raise TardisDB.AuthenticationFailed
 
-            self.logger.debug("Sending Challenge values")   
+            self.logger.debug("Sending Challenge values")
             message = {
                 'message': 'AUTH1',
                 'status': 'OK',
@@ -1274,6 +1292,8 @@ class Backend:
         try:
             try:
                 (_, dbfile) = self.genPaths()
+                self.logger.debug("Database File: %s", dbfile)
+
                 if create and os.path.exists(dbfile):
                     raise Exception("Client %s already exists" % client)
                 elif not create and not os.path.exists(dbfile):
@@ -1288,7 +1308,6 @@ class Backend:
                     raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
 
                 if create:
-                    print(keys)
                     if keys:
                         self.logger.debug("Setting keys into new client DB")
                         (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
@@ -1334,7 +1353,7 @@ class Backend:
                 # Create the actual backup set
                 self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.config.serverSessionID)
             except Exception as e:
-                self.logger.error("Caught exception : {}", str(e))
+                self.logger.error("Caught exception : %s", str(e))
                 message = {"status": "FAIL", "error": str(e)}
                 if self.config.exceptions:
                     self.logger.exception(e)
@@ -1383,6 +1402,7 @@ class Backend:
                 if flush:
                     self.db.commit()
 
+            self.logger.debug("Completing Backup %s", self.idstr)
             self.db.completeBackup()
 
             if autoname and serverName is not None:
@@ -1391,6 +1411,11 @@ class Backend:
                 #self.db.renameBackupSet(newName, newPriority)
 
             completed = True
+        except Exception as e:
+            self.logger.warning("Caught Exception during run: %s", str(e))
+            if self.config.exceptions:
+                self.logger.exception(e)
+
         finally:
             endtime = datetime.now()
             count = 0
@@ -1414,7 +1439,7 @@ class Backend:
                 self.db.commit()
                 self.db.compact()
                 self.db.close(started)
-        
+
             return (started, completed, endtime, count, size)
 
 
