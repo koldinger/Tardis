@@ -125,7 +125,7 @@ def doAuthenticate(outname, checksum, digest):
             action = ''
         if outname is None:
             outname = ''
-        logger.critical("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
+        logger.error("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
                         outname, checksum, digest, action)
         return target
     else:
@@ -193,8 +193,10 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 # For each file in the directory, regenerate it.
                 for i in contents:
                     name = crypt.decryptFilename(i['name'])
+                    logger.debug("Processing file %s", name)
                     # Get the Info
-                    childInfo = tardis.getFileInfoByName(name, dirInode, bset)
+                    childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
+                    logger.debug("Info on %s: %s", name, childInfo)
 
                     # Recurse into the child, if it exists.
                     if childInfo:
@@ -206,6 +208,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                             if args.exceptions:
                                 logger.exception(e)
                     else:
+                        logger.warning("No info on %s", name)
                         retCode += 1
             elif not skip:
                 myname = outname if outname else "stdout"
