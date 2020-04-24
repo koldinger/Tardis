@@ -214,6 +214,8 @@ def setupLogging(verbosity=1, levels=None, format=None, stream=sys.stdout):
     handler.setFormatter(formatter)
     logging.root.addHandler(handler)
 
+    logging.raiseExceptions = False
+
     logger = logging.getLogger("")
     logger.setLevel(loglevel)
     return logger

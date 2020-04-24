@@ -309,7 +309,7 @@ def filelist(dirname, excludes):
 
 def delInode(inode):
     if args.loginodes:
-        args.loginodes.write(str(inode) + "\n")
+        args.loginodes.write(f"Del {str(inode)}\n".encode('utf8'))
     if inode in inodeDB:
         del inodeDB[inode]
         #_deletedInodes[inode] = (currentResponse, currentBatch)
@@ -364,7 +364,7 @@ def processChecksums(inodes):
             #   (rId, rType, bId) = msgInfo(resp, batch)
             #
             #   logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
-            #traceback.print_stack()
+            logger.debug(repr(traceback.format_stack()))
         except FileNotFoundError as e:
             logger.error("Unable to stat %s.  File not found", pathname)
             exceptionLogger.log(e)
@@ -454,7 +454,6 @@ def prefetchSigFiles(inodes):
         sigfile.seek(0)
         signatures[inode] = (sigfile, sigmessage['checksum'])
 
-
         # Get the next file in the stream
         sigmessage = receiveMessage()
         checkMessage(sigmessage, "SIG")
@@ -490,8 +489,18 @@ def fetchSignature(inode):
     return (sigfile, None)
 
 
+def getInodeDBName(inode):
+    if inode in inodeDB:
+        return inodeDB[inode][1]
+    else:
+        return "Unknown"
+
 def processDelta(inode, signatures):
     """ Generate a delta and send it """
+    if verbosity > 3:
+        logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
+    if args.loginodes:
+        args.loginodes.write(f"ProcessDelta {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
 
     try:
         (_, pathname) = inodeDB[inode]
@@ -583,11 +592,18 @@ def processDelta(inode, signatures):
             sendContent(inode, 'Full')
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", inode)
+        logger.debug(repr(traceback.format_stack()))
+        if args.loginodes:
+            args.loginodes.write(f"ProcessDelta No inode entry for {str(inode)}\n".encode('utf8'))
         exceptionLogger.log(e)
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
 
+    if verbosity > 3:
+        logger.debug("SendContent: %s %s %s", inode, reportType, getInodeDBName(inode))
+    if args.loginodes:
+        args.loginodes.write(f"SendContent: {inode} {reportType} {getInodeDBName(inode)}\n".encode('utf8'))
     #if inode in inodeDB:
     try:
         checksum = None
@@ -679,6 +695,9 @@ def sendContent(inode, reportType):
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
     except KeyError as e:
         logger.error("SendContent: No inode entry for %s", inode)
+        logger.debug(repr(traceback.format_stack()))
+        if args.loginodes:
+            args.loginodes.write(f"SendContent: No inode entry for {inode}\n".encode('utf8'))
         exceptionLogger.log(e)
 
 def handleAckMeta(message):
@@ -765,6 +784,13 @@ def handleAckDir(message):
     for i in [tuple(x) for x in done]:
         delInode(i)
 
+    
+    if args.loginodes:
+        args.loginodes.write(f"Adding to AllContent: ({len(allContent)}):: {len(content)}: {str(content)}\n".encode('utf8'))
+        args.loginodes.write(f"Adding to AllRefresh: ({len(allRefresh)}):: {len(refresh)}: {str(refresh)}\n".encode('utf8'))
+        args.loginodes.write(f"Adding to AllDelta:   ({len(allDelta)}):: {len(delta)}: {str(delta)}\n".encode('utf8'))
+        args.loginodes.write(f"Adding to AllCkSum:   ({len(allCkSum)}):: {len(cksum)}: {str(cksum)}\n".encode('utf8'))
+
     allContent += content
     allDelta   += delta
     allCkSum   += cksum
@@ -774,6 +800,13 @@ def pushFiles():
     global allContent, allDelta, allCkSum, allRefresh
     logger.debug("Pushing files")
     # If checksum content in NOT specified, send the data for each file
+    if args.loginodes:
+        args.loginodes.write(f"Pushing Files\n".encode('utf8'))
+        args.loginodes.write(f"AllContent: {len(allContent)}: {str(allContent)}\n".encode('utf8'))
+        args.loginodes.write(f"AllRefresh: {len(allRefresh)}: {str(allRefresh)}\n".encode('utf8'))
+        args.loginodes.write(f"AllDelta:   {len(allDelta)}: {str(allDelta)}\n".encode('utf8'))
+        args.loginodes.write(f"AllCkSum:   {len(allCkSum)}: {str(allCkSum)}\n".encode('utf8'))
+
     for i in [tuple(x) for x in allContent]:
         try:
             if logger.isEnabledFor(logging.FILES):
@@ -783,6 +816,8 @@ def pushFiles():
             logger.error("Unable to backup %s: %s", str(i), str(e))
 
         delInode(i)
+    # clear it out
+    allContent = []
 
 
     for i in [tuple(x) for x in allRefresh]:
@@ -794,6 +829,8 @@ def pushFiles():
             logger.error("Unable to backup %s: %s", str(i), str(e))
 
         delInode(i)
+    # clear it out
+    allRefresh = []
 
     # If there are any delta files requested, ask for them
     signatures = None
@@ -817,16 +854,17 @@ def pushFiles():
             logger.error("Unable to backup %s: ", str(i), str(e))
         delInode(i)
 
+    allDelta   = []
+
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
     if len(allCkSum) > 0:
-        processChecksums([tuple(x) for x in allCkSum])
+        cksums = [tuple(x) for x in allCkSum]
+        allCkSum   = []             # Clear it out to avoid processing loop
+        processChecksums(cksums)
 
-    # Clear out the files
-    allContent = []
-    allDelta   = []
-    allCkSum   = []
-    allRefresh = []
+
+    logger.debug("Done pushing")
 
     #if message['last']:
     #    sendDirHash(message['inode'])
@@ -901,7 +939,12 @@ def mkFileInfo(dir, name):
             except:
                 logger.warning("Could not read ACL's from %s.   Ignoring", pathname.encode('utf8', 'backslashreplace').decode('utf8'))
 
-        inodeDB[(s.st_ino, s.st_dev)] = (finfo, pathname)
+        # Insert into the inode DB
+        inode = (s.st_ino, s.st_dev)
+        if args.loginodes:
+            args.loginodes.write(f"Add {str(inode)} {pathname}\n".encode('utf8'))
+
+        inodeDB[inode] = (finfo, pathname)
     else:
         if verbosity:
             logger.info("Skipping special file: %s", pathname)
@@ -1027,6 +1070,7 @@ def sendBatchMsgs():
     if batchSize == 1:
         # If there's only one, don't batch it up, just send it.
         response = sendAndReceive(batchMsgs[0])
+        batchMsgs = []
     else:
         logger.debug("Sending %d batch messages", len(batchMsgs))
         message = {
@@ -1036,6 +1080,12 @@ def sendBatchMsgs():
         }
         msgId = setMessageID(message)
         logger.debug("BATCH Starting. %s commands", len(batchMsgs))
+
+        # Clear out the batch messages before sending, or you can get into an awkward loop.
+        # if it's not cleared out, the sendAndReceive can make a set of calls that will
+        # cause another message to be added to the batch (in pushFiles) which will cause the batch to
+        # be reprocessed.
+        batchMsgs = []
 
         response = sendAndReceive(message)
         checkMessage(response, 'ACKBTCH')
@@ -1050,7 +1100,6 @@ def sendBatchMsgs():
                 logger.debug("Missing Messages: %s", str(list(diffs1)))
         logger.debug("BATCH Ending.")
 
-    batchMsgs = []
     _batchStartTime = None
     # Process the response messages
     handleResponse(response)
@@ -1532,7 +1581,7 @@ def setCrypto(confirm, chkStrength=False, version=None):
                                 confirm=confirm, strength=chkStrength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.getCrypto(version, password, args.client)
-    logger.info("Using %s Crypto scheme", crypt.getCryptoScheme())
+    logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
     return password
 
 def doSendKeys(password):
@@ -1837,7 +1886,7 @@ def processCommandLine():
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  ' + _def))
 
     parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
-    parser.add_argument('--loginodes',              dest='loginodes', default=None, type=argparse.FileType('w'), help=_d('Log inode actions, and messages'))
+    parser.add_argument('--loginodes',              dest='loginodes', default=None, type=argparse.FileType('wb'), help=_d('Log inode actions, and messages'))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  ' + _def)
@@ -1909,7 +1958,10 @@ def setupLogging(logfiles, verbosity, logExceptions):
     logging.addLevelName(logging.DIRS,  "DIR")
     logging.addLevelName(logging.MSGS,  "MSG")
 
-    levels = [logging.STATS, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.STATS, logging.INFO, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
+
+    # Don't want logging complaining within it's own runs.
+    logging.raiseExceptions = False
 
     # Create some default colors
     colors = colorlog.default_log_colors.copy()
