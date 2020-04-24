@@ -572,6 +572,8 @@ def setupLogging():
     else:
         handler = logging.StreamHandler()
 
+    logiging.raiseExceptions = False
+
     handler.setFormatter(format)
     log.addHandler(handler)
     return log

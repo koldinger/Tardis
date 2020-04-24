@@ -1635,6 +1635,8 @@ def setupLogging():
     logging.addLevelName(logging.TRACE, 'Message')
     logging.addLevelName(logging.MSGS,  'MSG')
 
+    logging.raiseExceptions = False
+
     if args.logcfg:
         logging.config.fileConfig(args.logcfg)
         logger = logging.getLogger('')
