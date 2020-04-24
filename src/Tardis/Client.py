@@ -333,7 +333,7 @@ def processChecksums(inodes):
             #   (rId, rType, bId) = msgInfo(resp, batch)
             #
             #   logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
-            logger.error(repr(traceback.format_stack()))
+            logger.debug(repr(traceback.format_stack()))
         except FileNotFoundError as e:
             logger.error("Unable to stat %s.  File not found", pathname)
             exceptionLogger.log(e)
@@ -561,7 +561,7 @@ def processDelta(inode, signatures):
             sendContent(inode, 'Full')
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", inode)
-        logger.error(repr(traceback.format_stack()))
+        logger.debug(repr(traceback.format_stack()))
         if args.loginodes:
             args.loginodes.write(f"ProcessDelta No inode entry for {str(inode)}\n".encode('utf8'))
         exceptionLogger.log(e)
@@ -664,7 +664,7 @@ def sendContent(inode, reportType):
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
     except KeyError as e:
         logger.error("SendContent: No inode entry for %s", inode)
-        logger.error(repr(traceback.format_stack()))
+        logger.debug(repr(traceback.format_stack()))
         if args.loginodes:
             args.loginodes.write(f"SendContent: No inode entry for {inode}\n".encode('utf8'))
         exceptionLogger.log(e)
