@@ -255,6 +255,8 @@ class Crypto_Null:
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
     _altchars    = b'#@'
 
+    ivLength    = 0
+
     class NullCipher():
         def encrypt(data):
             return data
