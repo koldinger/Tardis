@@ -1769,7 +1769,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),              help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',              dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
+    passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
                            default=None,
                            help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
 
