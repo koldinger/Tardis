@@ -6,7 +6,7 @@ Tardis is a system for making incremental backups of filesystems, much like Appl
 
 Like TimeMachine, Tardis is aimed primarily at "live backups", namely a backup taken periodically, and available for quick recovery, typically stored on attached or online disks, or rather than being stored on archival backup media, such as tapes.
 
-Tardis runs in a client/server mode, normally using a remote backup server (client and server can be the same machine).   The server is relatively lightweight, and runs fine on a Raspberry Pi 2 or better machine.
+Tardis runs in a client/server mode, or in a fully local mode.   
 
 Quick Start
 ===========
@@ -22,7 +22,6 @@ Installation
 
 Backing up data
 ---------------
-
 * Run the first backup job `tardis --server ServerName --create paths` where ServerName is the name of the server (if backing up to the local machine, this can be localhost, or the --server option can be left of entirely), and paths is a list of directories to backup (including all directories below them).   Depending on the amount of data you wish to backup, this can take a long time.
   * Adding the --password option will cause your backups to be encrypted.
    * With no password specified, you will be prompted to enter one.
@@ -51,6 +50,18 @@ at the database.   This can also be done if the database is accesible via a netw
 Tardis File System
 ------------------
 The tardis dataset can also be mounted as a filesystem.   Typically the command: `tardisfs --database DatabasePath /path/to/mountpoint` will mount the filesystem under the directory /path/to/mountpoint (mountpoint should be an empty directory).  In this scenario, you will see files under mountpoint.   At the first level, there will be a directory for each backup set, with the names as above.   Within each directory will be a directory tree, with the data as backed up in that backup set.
+
+
+Local and Remote Backups
+------------------------
+The Tardis client (tardis) can be run in either a client/server (remote) or directly against a backup database (local) mode.
+
+In the remote mode, there must be a backup server running, typically on a remote machine.   In the local mode, no server is used, and data is backed up to a drive connected to the
+machine being backed up, either physically or via a network share.
+
+Normally, the mode will be selected by the switches, and various config options.  If a server is specified (via --server, the TARDIS_SERVER environment variable, or a configuration file), remote mode will
+be picked.   If a database is specified (via the --database/-D option, the TARDIS_DATABASE environment variable, or a configuration file), local mode will be selected.    In some circumstances, you can create a confusing situation, such as having
+both the TARDIS_SERVER and TARDIS_DATABASE environment variables set.  In this case, use either the --local or --remote options to select local or remote mode, respectively.
 
 Components
 ==========
@@ -161,17 +172,6 @@ All client tools take a couple of password options.  `--password` or `-P` will a
 
 Tardisfs supports all the same options, with slightly different syntax.  All are specified via the -o syntax to fuse mount.  `-o password=*password*` will use *password* as the password, `-o password=` will prompt for a password, `-o pwfile=*path*` will read the password from *path* (which accepts the same options as `--password-file` above), and `-o pwprog=*program*` will run *program*, same as `--password-prog` above.
 
-Running the Client without a Server locally
-===========================================
-It is possible to run the tardis client without connecting to a remote server.  When doing this, the server is run as a subprocess under the client.
-Simply add the --local option to your tardis client, and it will invoke a server for duration of that run.
-Ex:
-    tardis --local ~
-Will backup your home directory.
-
-When running locally, Tardis will start a local server running for the duration of the backup job.  The server can be configured via a configuration file specified in the TARDIS_LOCAL_CONFIG
-variable/configuration argument.  See below for details.
-
 Listing Versions of Files Available
 ===================================
 Files can be listed in the `tardisfs`, or via the `lstardis` application.
@@ -233,7 +233,6 @@ Environment Variables
 | TARDIS_SERVER         | Name (or IP address) of the tardis server| localhost | Client |
 | TARDIS_CLIENT         | Name of the backup client. |Current hostname | Client, User Tools |
 | TARDIS_DAEMON_CONFIG  | Name of the file containing the daemon configuration| /etc/tardis/tardisd.cfg| Daemon |
-| TARDIS_LOCAL_CONFIG   | Name of the file containing the configuration when running the daemon in local mode|  /etc/tardis/tardisd.local.cfg| Daemon |
 | TARDIS_EXCLUDES       | Name of the file containing patterns to exclude below the current directory.| .tardis-excludes | Client |
 | TARDIS_LOCAL_EXCLUDES | Name of the file containing patterns to exclude *only* in the local directory.| .tardis-local-excludes| Client |
 | TARDIS_GLOBAL_EXCLUDES| Name of the file containing patterns to exclude globally| /etc/tardis/excludes| Client |
@@ -283,6 +282,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | Server          | localhost           | TARDIS_SERVER     | Server to use for backups |
 | Port            | 7420                | TARDIS_PORT       | Port to listen on |
 | Client          | hostname            | TARDIS_CLIENT     | Name of the system to backup |
+| Database        |                     | TARDIS_DB         | Directory for  local backups |
 | Force           | False               |                   | Force the backup, even if another one might still be running. |
 | Full            | False               |                   | Perform a full backup (no delta's, full files for previous deltas. |
 | Timeout         | 300                 |                   | Time out (in seconds) for connections. |
@@ -400,7 +400,7 @@ If you've built an unencrypted backup, and wish to add encryption, this can be a
 
 The following steps should be performed:
    * Add a password to the database:
-      * `sonic setpass [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program]`
+      * `sonic setpass [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] [--crypt scheme]`
    * Encrypt the filenames.  **This step must be performed only once, unless it fails.  It should either encrypt all the filenames, or none.  If executed more than once, it will gladly doubly encrypt the passwords.  This can be a mess.**
       * `python tools/encryptDB.py [-D /path/to/database] [-C client] [--password [password]| --password-file path | --password-prog program] --names`
    * Generate new directory hashes.  This step is optional, but will improve performance (and database size) on the next backup.  If interrupted, this step can be restarted.  It will regenerate any information already calculated, but this is fine, just slow.
@@ -529,6 +529,8 @@ The original filename scheme was weak because ECB mode allows common sections of
 it was possible that both file names would be similar when encrypted.
 
 Newer versions will use ChaCha20/Poly1305 as the default encryption.   On modern Intel x86-64 processors, AES-256-GCM may give better performance, due to the availability of specialized AES instructions (AES-NI).   On lower powered processors, ChaCha23/Poly1305 will generally give better performance.   Both schemes are believed to be cryptographically secure.
+
+The encryption scheme can be specified when the backup is created at first, or when the password is set via sonic.  The scheme is specified via the --crypt option.  Specifying scheme 0 will create an unecrypted backup, with password authentication.
 
 Protection Model
 ----------------

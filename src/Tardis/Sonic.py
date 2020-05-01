@@ -96,8 +96,8 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
         Util.authenticate(tardisdb, args.client, password)
 
         scheme = tardisdb.getCryptoScheme()
-        logger.info("Using crypto scheme %d", scheme)
         crypt = TardisCrypto.getCrypto(scheme, password, args.client)
+        logger.info("Using crypto scheme %s", TardisCrypto.getCryptoNames(int(scheme)))
     else:
         crypt = TardisCrypto.getCrypto(0, None, None)
 
