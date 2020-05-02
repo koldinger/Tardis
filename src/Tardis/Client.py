@@ -677,7 +677,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
