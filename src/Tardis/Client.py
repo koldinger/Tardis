@@ -864,7 +864,7 @@ def mkFileInfo(dir, name):
         return None
 
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
-        name = crypt.encryptFilename(name)
+        #name = crypt.encryptFilename(name)
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
@@ -1091,7 +1091,7 @@ def sendPurge(relative):
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
-    if crypt:
+    if crypt.encrypting():
         path = crypt.encryptPath(path)
     message = {
         'message': 'DIR',
@@ -1105,10 +1105,16 @@ def sendDirChunks(path, inode, files):
             logger.debug("---- Generating chunk %d ----", chunkNum)
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
+
+        # Encrypt the names before sending them out
+        if crypt.encrypting():
+            for i in chunk:
+                i['name'] = crypt.encryptFilename(i['name'])
+
         message["files"] = chunk
         message["last"]  = (x + args.dirslice > len(files))
         if verbosity > 3:
-            logger.debug("---- Sending chunk ----")
+            logger.debug("---- Sending chunk at %d ----", x)
         batch = (len(chunk) < args.dirslice)
         batchMessage(message, batch=batch)
 
@@ -1518,6 +1524,8 @@ def createPrefixPath(root, path):
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(current, d)
+        if crypt.encrypting():
+            f['name'] = crypt.encryptFilename(f['name'])
         if dirPath not in processedDirs:
             logger.debug("Sending dir entry for: %s", dirPath)
             sendDirEntry(parent, parentDev, [f])
