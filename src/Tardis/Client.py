@@ -194,9 +194,7 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 report = {}
 
 inodeDB             = {}
-dirHashes           = {
-    (0, 0): ('00000000000000000000000000000000', 0)
-    }
+dirHashes           = {}
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
 # will only have a message
@@ -1036,10 +1034,11 @@ def flushClones():
 def sendBatchMsgs():
     global batchMsgs, _batchStartTime
     batchSize = len(batchMsgs)
-    if batchSize == 1:
+    if batchSize <= 1:
         # If there's only one, don't batch it up, just send it.
-        response = sendAndReceive(batchMsgs[0])
+        msg = batchMsgs[0]
         batchMsgs = []
+        response = sendAndReceive(msg)
     else:
         logger.debug("Sending %d batch messages", len(batchMsgs))
         message = {
@@ -1169,7 +1168,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         if args.skipcaches and os.path.lexists(os.path.join(dir, 'CACHEDIR.TAG')):
             logger.debug("CACHEDIR.TAG file found.  Analyzing")
             try:
-                with file(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
+                with open(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
                     line = f.readline()
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
