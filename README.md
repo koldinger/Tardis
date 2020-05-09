@@ -412,7 +412,7 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
-Release Notes -- Version 1.1.15
+Release Notes -- Version 1.1.5
 ==============================
 1.1.15 changes the way directory hashes are generated.   Prior to this, hashes were based on the encrypted file names.   This caused a significant performance hit, as the filenames all had to be encrytped,
 taking up most of the runtime of an incremental backup.   1.1.15 changes this so that the hashes are generated based on the original filenames.
