@@ -107,6 +107,10 @@ def main():
         if args.keys:
             os.environ['TARDIS_KEYFILE'] = os.path.abspath(args.keys)
 
+        prompt = os.environ.get('PS1')
+        if prompt:
+            os.environ['PS1'] = f'TARDIS: {args.client}: {PS1}'
+
         logger.warning("Spawning interactive shell with security preauthenticated.")
 
         # Run the shell, and wait

@@ -225,9 +225,7 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 report = {}
 
 inodeDB             = {}
-dirHashes           = {
-    (0, 0): ('00000000000000000000000000000000', 0)
-    }
+dirHashes           = {}
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
 # will only have a message
@@ -897,7 +895,7 @@ def mkFileInfo(dir, name):
         return None
 
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
-        name = crypt.encryptFilename(name)
+        #name = crypt.encryptFilename(name)
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
@@ -1067,10 +1065,11 @@ def flushClones():
 def sendBatchMsgs():
     global batchMsgs, _batchStartTime
     batchSize = len(batchMsgs)
-    if batchSize == 1:
+    if batchSize <= 1:
         # If there's only one, don't batch it up, just send it.
-        response = sendAndReceive(batchMsgs[0])
+        msg = batchMsgs[0]
         batchMsgs = []
+        response = sendAndReceive(msg)
     else:
         logger.debug("Sending %d batch messages", len(batchMsgs))
         message = {
@@ -1123,7 +1122,7 @@ def sendPurge(relative):
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
-    if crypt:
+    if crypt.encrypting():
         path = crypt.encryptPath(path)
     message = {
         'message': 'DIR',
@@ -1137,10 +1136,16 @@ def sendDirChunks(path, inode, files):
             logger.debug("---- Generating chunk %d ----", chunkNum)
         chunkNum += 1
         chunk = files[x : x + args.dirslice]
+
+        # Encrypt the names before sending them out
+        if crypt.encrypting():
+            for i in chunk:
+                i['name'] = crypt.encryptFilename(i['name'])
+
         message["files"] = chunk
         message["last"]  = (x + args.dirslice > len(files))
         if verbosity > 3:
-            logger.debug("---- Sending chunk ----")
+            logger.debug("---- Sending chunk at %d ----", x)
         batch = (len(chunk) < args.dirslice)
         batchMessage(message, batch=batch)
 
@@ -1200,7 +1205,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         if args.skipcaches and os.path.lexists(os.path.join(dir, 'CACHEDIR.TAG')):
             logger.debug("CACHEDIR.TAG file found.  Analyzing")
             try:
-                with file(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
+                with open(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
                     line = f.readline()
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
@@ -1550,6 +1555,8 @@ def createPrefixPath(root, path):
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(current, d)
+        if crypt.encrypting():
+            f['name'] = crypt.encryptFilename(f['name'])
         if dirPath not in processedDirs:
             logger.debug("Sending dir entry for: %s", dirPath)
             sendDirEntry(parent, parentDev, [f])

@@ -1,11 +1,15 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-from Tardis import Client
-import sys
-
+import sys, os.path
 import cProfile
 import time
+
+src = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src')
+sys.path.insert(0, src)
+
+from Tardis import Client
+
 name = 'tardis.profile.' + str(int(time.time()))
 
 #sys.exit(Client.main())
