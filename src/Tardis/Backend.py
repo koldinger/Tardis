@@ -180,7 +180,7 @@ class Backend:
         else:
             self.logger = logging.getLogger('Backend')
 
-        self.logger.info("Created backend")
+        self.logger.debug("Created backend: %s", self.sessionid)
         self.messenger = messenger
         self.config = config
         self.printMessages = True if self.logger.isEnabledFor(logging.TRACE) else False
