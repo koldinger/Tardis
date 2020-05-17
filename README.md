@@ -91,8 +91,8 @@ Tools are located in the tools directory, and are not installed.
 Future Releases
 ===============
 Several releases will be coming soon:
-  * 1.1.4 Support for multiple encryption schemes, and improved encryption, support for Zstd compression
-  * 1.2.0 Asynchronous protocol allowing improved performance, and improved integration between client and server for local cases.
+  * 1.2.0 Integrated backend with frontend for local backups.
+  * 1.3.0 Asynchronous protocol allowing improved performance, and improved integration between client and server for local cases.
 
 Support
 =======
@@ -314,7 +314,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | LogFiles        |                     |                   | List of files to log to. |
 | Verbosity       | 0                   |                   | Verbosity level. |
 | Stats           | False               |                   | Print some stats on the backup when complete. |
-| Report          | False               |                   | Print a list of all files backed up when complete. |
+| Report          | none                |                   | Print a list of all files backed up when complete. Valid values are none, all, and dirs |
 | Directories     | .                   |                   | List of directories to backup. |
 
 
@@ -412,6 +412,15 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
+Release Notes -- Version 1.1.5
+==============================
+1.1.5 changes the way directory hashes are generated.   Prior to this, hashes were based on the encrypted file names.   This caused a significant performance hit, as the filenames all had to be encrytped,
+taking up most of the runtime of an incremental backup.   1.1.15 changes this so that the hashes are generated based on the original filenames.
+This will cause a significant performance increase, but on the first backup after the upgrade, it will cause all directory hashes to be incorrect.
+New hashes will be generated automatically, but if you wish, you can generate new hashes using the `tools/setDirHashes.py` script, or with `encryptDB.py --dirs`).
+This only impacts encrypted backups.   Unencrypted backups will see no difference.
+
+
 Release Notes -- Version 1.1.2
 ==============================
 1.1.2 adds a several bug fixes, and a couple minor features.  The most visible feature is the addition of path matching in exclude files.   Patch matching uses the \*\* wildcard, and follows
