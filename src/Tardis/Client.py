@@ -109,6 +109,8 @@ configDefaults = {
     'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
     'Schema':               Defaults.getDefault('TARDIS_SCHEMA'),
 
+    'Local':                '',
+
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
     'Force':                str(False),
     'Full':                 str(False),
@@ -123,8 +125,6 @@ configDefaults = {
     'CompressMin':          str(4096),
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
     'NoCompress':           '',
-    'Local':                str(False),
-    'LocalServerCmd':       'tardisd --config ' + local_config,
     'CompressMsgs':         'none',
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
@@ -1210,8 +1210,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
                         return
-            except:
+            except Exception as e:
                 logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, 'CACHEDIR.TAG'), dir)
+                exceptionLogger.log(e)
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
@@ -1565,23 +1566,6 @@ def createPrefixPath(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
-def runServer(cmd, tempfile):
-    server_cmd = shlex.split(cmd) + ['--single', '--local', tempfile]
-    logger.debug("Invoking server: " + str(server_cmd))
-    subp = subprocess.Popen(server_cmd)
-    # Wait until the subprocess has created the domain socket.
-    # There's got to be a better way to do this. Oy.
-    for _ in range(0, 20):
-        if os.path.exists(tempfile):
-            return subp
-        if subp.poll():
-            raise Exception("Subprocess died: %d" % (subp.returncode))
-        time.sleep(0.5)
-
-    logger.error("Unable to locate socket %s from process %d.  Killing subprocess", tempfile, subp.pid)
-    subp.terminate()
-    return None
-
 def setCrypto(confirm, chkStrength=False, version=None):
     global srpUsr, crypt
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, "Password for %s:" % (args.client),
@@ -1785,20 +1769,19 @@ def processCommandLine():
     else:
         c.add_section(t)                        # Make it safe for reading other values from.
 
-
     locgroup = parser.add_argument_group("Local Backup options")
     locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
-    locgroup.add_argument('--dbdir',              dest='dbdir',           default=c.get(t, 'DBDir'),  help='Dabatase directory (Default: %(default)s)')
-    locgroup.add_argument('--dbname', '-N',       dest='dbname',          default=c.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    locgroup.add_argument('--schema',             dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
+    locgroup.add_argument('--dbdir',              dest='dbdir',           default=c.get(t, 'DBDir'),   help='Location of database files (if different from database directory above) (Default: %(default)s)')
+    locgroup.add_argument('--dbname', '-N',       dest='dbname',          default=c.get(t, 'DBName'),  help='Use the database name (Default: %(default)s)')
+    locgroup.add_argument('--schema',             dest='schema',          default=c.get(t, 'Schema'),  help='Path to the schema to use (Default: %(default)s)')
 
     remotegroup = parser.add_argument_group("Remote Server options")
     remotegroup.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
     remotegroup.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. ' + _def)
 
     modegroup = parser.add_mutually_exclusive_group()
-    modegroup.add_argument('--local',               dest='local', action='store_true',  default=None, help='Run as a local job')
-    modegroup.add_argument('--remote',              dest='local', action='store_false', default=None, help='Run against a remote server')
+    modegroup.add_argument('--local',               dest='local', action='store_true',  default=c.get(t, 'Local'), help='Run as a local job')
+    modegroup.add_argument('--remote',              dest='local', action='store_false', default=c.get(t, 'Local'), help='Run against a remote server')
 
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
@@ -1906,8 +1889,8 @@ def processCommandLine():
 
     parser.add_argument('--stats',              action=Util.StoreBoolean, dest='stats', default=c.getboolean(t, 'Stats'),
                         help='Print stats about the transfer.  Default=%(default)s')
-    parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default='none', nargs='?',
-                        help='Print a report on all files or directories transferred.  Default=%(default)s')
+    parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
+                        help='Print a report on all files or directories transferred.  ' + _def)
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
@@ -1926,7 +1909,7 @@ def processCommandLine():
 
     args = parser.parse_args(remaining)
 
-    return (args, c)
+    return (args, c, t)
 
 def parseServerInfo(args):
     """ Break up the server info passed in into useable chunks """
@@ -2052,12 +2035,12 @@ def printStats(starttime, endtime):
     logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
 
 def pickMode():
-    if args.local is not None:
-        if args.local is True:
+    if args.local != '' and args.local is not None:
+        if args.local is True or args.local == 'True':
             if args.server is None:
                 raise Exception("Remote mode specied without a server")
             return True
-        elif args.local is False:
+        elif args.local is False or args.local == 'False':
             if args.database is None:
                 raise Exception("Local mode specied without a database")
             return False
@@ -2082,12 +2065,14 @@ def printReport(repFormat):
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
+
         filefmts = ['','KB','MB','GB', 'TB', 'PB']
         dirfmts  = ['B','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
         fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s   %-6s %-10s'.format(length)
         fmt4 = '  %d files (%d full, %d delta, %s)'
+
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
@@ -2108,7 +2093,7 @@ def printReport(repFormat):
                 deltas += 1
             dataSize += r['size']
 
-            if repFormat == 'all':
+            if repFormat == 'all' or repFormat is True:
                 if r['sigsize']:
                     logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=filefmts), Util.fmtSize(r['sigsize'], formats=filefmts))
                 else:
@@ -2131,9 +2116,9 @@ def lockRun(server, port, client):
         raise Exception("Tardis already running: %s" % e)
     return pidfile
 
-def mkBackendConfig():
+def mkBackendConfig(jobname):
     bc = Backend.BackendConfig()
-    j = args.job
+    j = jobname
     bc.umask           = Util.parseInt(config.get(j, 'Umask'))
     bc.cksContent      = config.getint(j, 'CksContent')
     bc.serverSessionID = socket.gethostname() + time.strftime("-%Y-%m-%d::%H:%M:%S%Z", time.gmtime())
@@ -2175,9 +2160,9 @@ def mkBackendConfig():
 
     return bc
 
-def runBackend():
+def runBackend(jobname):
     conn = Connection.DirectConnection(args.timeout)
-    beConfig = mkBackendConfig()
+    beConfig = mkBackendConfig(jobname)
 
     backend = Backend.Backend(conn.serverMessages, beConfig, logSession=False)
     backendThread = threading.Thread(target=backend.runBackup, name="Backend")
@@ -2188,7 +2173,7 @@ def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
     # Read the command line arguments.
     commandLine = ' '.join(sys.argv) + '\n'
-    (args, config) = processCommandLine()
+    (args, config, jobname) = processCommandLine()
 
     # Memory debugging.
     # Enable only if you really need it.
@@ -2305,7 +2290,7 @@ def main():
     # Get the connection object
     try:
         if localmode:
-            (conn, backend, backendThread) = runBackend()
+            (conn, backend, backendThread) = runBackend(jobname)
         else:
             conn = getConnection(server, port)
 
