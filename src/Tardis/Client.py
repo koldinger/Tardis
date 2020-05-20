@@ -121,7 +121,6 @@ configDefaults = {
     'SkipCaches':           str(False),
     'SendSig':              str(False),
     'ExcludePatterns':      '',
-    'ExcludeFiles':         '',
     'ExcludeDirs':          '',
     'GlobalExcludeFileName':Defaults.getDefault('TARDIS_GLOBAL_EXCLUDES'),
     'ExcludeFileName':      Defaults.getDefault('TARDIS_EXCLUDES'),
