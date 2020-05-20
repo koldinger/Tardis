@@ -39,16 +39,17 @@ import Tardis.TardisCrypto as TardisCrypto
 configDefaults = {
     'Database':             Defaults.getDefault('TARDIS_DB'),
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
-    'DBDir':		    Defaults.getDefault('TARDIS_DBDIR'),
-    'DBName':		    Defaults.getDefault('TARDIS_DBNAME'),
+    'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
+    'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
     'Password':             None,
     'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
+    'PasswordTimeout':      Defaults.getDefault('TARDIS_PWTIMEOUT'),
     'Crypt':                str(True),
     'KeyFile':              Defaults.getDefault('TARDIS_KEYFILE'),
     'LogFiles':             None,
     'Verbosity':            str(0),
-    'Schema':				Defaults.getDefault('TARDIS_SCHEMA')
+    'Schema':               Defaults.getDefault('TARDIS_SCHEMA')
 }
 
 config = configparser.ConfigParser(configDefaults, allow_no_value=True)

@@ -153,7 +153,7 @@ class StatusBar():
         try:
             output = self.formatter.format(self.base, **{**self.live, **self.values})
             if self.trailer:
-                output += self.processTrailer(self.width - len(output), self.trailer)
+                output += self.processTrailer(self.width - 2 - len(output), self.trailer)
         except KeyError as k:
             output = "Error generating status message: Missing value for " + str(k)
         except Exception as e:

@@ -32,6 +32,7 @@ import socket
 import json
 import time
 import ssl
+import queue
 
 import Tardis
 import Tardis.Messages as Messages
@@ -154,10 +155,43 @@ class MsgPackConnection(ProtocolConnection):
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
+class DirectConnection:
+    stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
+    serverStats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.toClientQueue = queue.SimpleQueue()
+        self.toServerQueue = queue.Queue(1024)
+        self.clientMessages = Messages.ObjectMessages(self.toClientQueue, self.toServerQueue, self.stats, timeout)
+        self.serverMessages = Messages.ObjectMessages(self.toServerQueue, self.toClientQueue)
+        self.sender = self.clientMessages
+
+    def send(self, message, compress=True):
+        self.sender.sendMessage(message, compress)
+        self.stats['messagesSent'] += 1
+
+    def receive(self):
+        message = self.sender.recvMessage()
+        self.stats['messagesRecvd'] += 1
+        return message
+
+    def close(self):
+        self.send({"message" : "BYE" })
+
+    def encode(self, string):
+        return self.sender.encode(string)
+
+    def decode(self, string):
+        return self.sender.decode(string)
+
+    def getStats(self):
+        return self.stats
+
+
 if __name__ == "__main__":
     """
     Test Code
-    """
     conn = JsonConnection("localhost", 9999, "HiMom")
     print(conn.getSessionId())
     conn.send({ 'x' : 1 })
@@ -165,3 +199,14 @@ if __name__ == "__main__":
     conn.send({ 'y' : 2 })
     print(conn.receive())
     conn.close()
+    """
+
+    conn = DirectConnection(None)
+    server = conn.serverMessages
+
+    conn.send({"a" : 1})
+    print(server.recvMessage())
+    server.sendMessage({"b": 2, "c": ['a', 'b', 'c']})
+    print(conn.receive())
+
+

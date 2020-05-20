@@ -40,7 +40,7 @@ _defaults = {
     'TARDIS_DBDIR'          : '',
     'TARDIS_DBNAME'         : 'tardis.db',
     'TARDIS_CLIENT'         : socket.gethostname(),
-    'TARDIS_SERVER'         : 'localhost',
+    'TARDIS_SERVER'         : '',
     'TARDIS_EXCLUDES'       : '.tardis-excludes',
     'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
     'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',

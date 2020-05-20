@@ -69,6 +69,11 @@ class Messages(object):
             self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 
+    def closeSocket(self):
+        if self.__socket:
+            self.__socket.close()
+            self.__socket = None
+
 class zlibCompressor:
     def __init__(self):
         self.compressor = zlib.compressobj()
@@ -215,3 +220,30 @@ class BsonMessages(BinMessages):
 
     def getEncoding(self):
         return "bin"
+
+class ObjectMessages():
+    def __init__(self, inQueue, outQueue, stats=None, compress=True, timeout=None):
+        self.inQueue = inQueue
+        self.outQueue= outQueue
+        self.timeout = timeout
+
+    def sendMessage(self, message, compress=False, raw=False):
+        self.outQueue.put(message)
+
+    def recvMessage(self, raw=False):
+        ret =  self.inQueue.get(timeout=self.timeout)
+        if isinstance(ret, BaseException):
+            raise ret
+        return ret
+
+    def encode(self, data):
+        return data
+
+    def decode(self, data):
+        return data
+
+    def getEncoding(self):
+        return "bin"
+
+    def closeSocket(self):
+        pass

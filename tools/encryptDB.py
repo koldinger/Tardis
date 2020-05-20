@@ -236,7 +236,7 @@ def generateDirHashes(db, crypto, cacheDir):
 
                 #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
                 #logger.debug("    Directory contents: %s", str(files))
-                (newHash, newSize) = Util.hashDir(crypto, files, True, decrypt=True)
+                (newHash, newSize) = Util.hashDir(crypto, files, True)
                 #logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
                 bar.update(hashes)
                 try:

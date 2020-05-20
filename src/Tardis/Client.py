@@ -57,8 +57,9 @@ import errno
 import unicodedata
 import pprint
 import traceback
-import hmac
+import threading
 import cProfile
+import socket
 
 from binascii import hexlify
 
@@ -79,6 +80,7 @@ import Tardis.Defaults as Defaults
 import Tardis.librsync as librsync
 import Tardis.MultiFormatter as MultiFormatter
 import Tardis.StatusBar as StatusBar
+import Tardis.Backend as Backend
 
 
 features = Tardis.check_features()
@@ -97,8 +99,18 @@ if not os.path.exists(local_config):
     local_config = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 
 configDefaults = {
+    # Remote Socket connectionk params
     'Server':               Defaults.getDefault('TARDIS_SERVER'),
     'Port':                 Defaults.getDefault('TARDIS_PORT'),
+
+    # Local Direct connect params
+    'BaseDir':              Defaults.getDefault('TARDIS_DB'),
+    'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
+    'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
+    'Schema':               Defaults.getDefault('TARDIS_SCHEMA'),
+
+    'Local':                '',
+
     'Client':               Defaults.getDefault('TARDIS_CLIENT'),
     'Force':                str(False),
     'Full':                 str(False),
@@ -113,8 +125,6 @@ configDefaults = {
     'CompressMin':          str(4096),
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
     'NoCompress':           '',
-    'Local':                str(False),
-    'LocalServerCmd':       'tardisd --config ' + local_config,
     'CompressMsgs':         'none',
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
@@ -132,6 +142,27 @@ configDefaults = {
     'Stats':                str(False),
     'Report':               str(False),
     'Directories':          '.',
+    
+    # Backend parameters
+    'Formats'               : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
+    'Priorities'            : '40, 30, 20',
+    'KeepDays'              : '0, 180, 30',
+    'ForceFull'             : '0, 0, 0',
+    'Umask'                 : '027',
+    'User'                  : '',
+    'Group'                 : '',
+    'CksContent'            : '65536',
+    'AutoPurge'             : str(False),
+    'SaveConfig'            : str(True),
+    'AllowClientOverrides'  : str(True),
+    'AllowSchemaUpgrades'   : str(False),
+    'JournalFile'           : Defaults.getDefault('TARDIS_JOURNAL'),
+    'SaveFull'              : str(False),
+    'MaxDeltaChain'         : '5',
+    'MaxChangePercent'      : '50',
+    'DBBackups'             : '0',
+    'LinkBasis'             : str(False),
+    'RequirePassword'       : str(False),
 }
 
 excludeDirs         = []
@@ -643,7 +674,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -1178,8 +1209,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
                         return
-            except:
+            except Exception as e:
                 logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, 'CACHEDIR.TAG'), dir)
+                exceptionLogger.log(e)
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
 
@@ -1442,7 +1474,7 @@ def handleResponse(response, doPush=True, pause=0):
     except Exception as e:
         logger.error("Error handling response %s %s: %s", response.get('msgid'), response.get('message'), e)
         logger.exception("Exception: ", exc_info=e)
-        logger.error(pprint.pformat(response, width=5000, depth=4))
+        logger.error(pprint.pformat(response, width=150, depth=5, compact=True))
         exceptionLogger.log(e)
 
 _nextMsgId = 0
@@ -1532,23 +1564,6 @@ def createPrefixPath(root, path):
         parent    = st.st_ino
         parentDev = st.st_dev
         current   = dirPath
-
-def runServer(cmd, tempfile):
-    server_cmd = shlex.split(cmd) + ['--single', '--local', tempfile]
-    logger.debug("Invoking server: " + str(server_cmd))
-    subp = subprocess.Popen(server_cmd)
-    # Wait until the subprocess has created the domain socket.
-    # There's got to be a better way to do this. Oy.
-    for _ in range(0, 20):
-        if os.path.exists(tempfile):
-            return subp
-        if subp.poll():
-            raise Exception("Subprocess died: %d" % (subp.returncode))
-        time.sleep(0.5)
-
-    logger.error("Unable to locate socket %s from process %d.  Killing subprocess", tempfile, subp.pid)
-    subp.terminate()
-    return None
 
 def setCrypto(confirm, chkStrength=False, version=None):
     global srpUsr, crypt
@@ -1743,7 +1758,7 @@ def processCommandLine():
     (args, remaining) = parser.parse_known_args()
 
     t = args.job
-    c = configparser.ConfigParser(configDefaults, allow_no_value=True)
+    c = configparser.RawConfigParser(configDefaults, allow_no_value=True)
     if args.config:
         c.read(args.config)
         if not c.has_section(t):
@@ -1753,8 +1768,20 @@ def processCommandLine():
     else:
         c.add_section(t)                        # Make it safe for reading other values from.
 
-    parser.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
-    parser.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. ' + _def)
+    locgroup = parser.add_argument_group("Local Backup options")
+    locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    locgroup.add_argument('--dbdir',              dest='dbdir',           default=c.get(t, 'DBDir'),   help='Location of database files (if different from database directory above) (Default: %(default)s)')
+    locgroup.add_argument('--dbname', '-N',       dest='dbname',          default=c.get(t, 'DBName'),  help='Use the database name (Default: %(default)s)')
+    locgroup.add_argument('--schema',             dest='schema',          default=c.get(t, 'Schema'),  help='Path to the schema to use (Default: %(default)s)')
+
+    remotegroup = parser.add_argument_group("Remote Server options")
+    remotegroup.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
+    remotegroup.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. ' + _def)
+
+    modegroup = parser.add_mutually_exclusive_group()
+    modegroup.add_argument('--local',               dest='local', action='store_true',  default=c.get(t, 'Local'), help='Run as a local job')
+    modegroup.add_argument('--remote',              dest='local', action='store_false', default=c.get(t, 'Local'), help='Run against a remote server')
+
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
@@ -1797,10 +1824,6 @@ def processCommandLine():
     if support_acl:
         parser.add_argument('--acl',                dest='acl', default=True, action=Util.StoreBoolean,                 help='Backup file access control lists')
 
-    locgrp = parser.add_argument_group("Arguments for running server locally under tardis")
-    locgrp.add_argument('--local',              dest='local', action=Util.StoreBoolean, default=c.getboolean(t, 'Local'),
-                        help='Run server as a local client')
-    locgrp.add_argument('--local-server-cmd',   dest='serverprog', default=c.get(t, 'LocalServerCmd'),                  help='Local server program to run.  ' + _def)
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
@@ -1865,8 +1888,8 @@ def processCommandLine():
 
     parser.add_argument('--stats',              action=Util.StoreBoolean, dest='stats', default=c.getboolean(t, 'Stats'),
                         help='Print stats about the transfer.  Default=%(default)s')
-    parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default='none', nargs='?',
-                        help='Print a report on all files or directories transferred.  Default=%(default)s')
+    parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
+                        help='Print a report on all files or directories transferred.  ' + _def)
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
@@ -1885,30 +1908,25 @@ def processCommandLine():
 
     args = parser.parse_args(remaining)
 
-    return (args, c)
+    return (args, c, t)
 
 def parseServerInfo(args):
     """ Break up the server info passed in into useable chunks """
-    if args.local:
-        sServer = 'localhost'
-        sPort   = 'local'
-        sClient = args.client
-    else:
-        serverStr = args.server
-        #logger.debug("Got server string: %s", serverStr)
-        if not serverStr.startswith('tardis://'):
-            serverStr = 'tardis://' + serverStr
-        try:
-            info = urllib.parse.urlparse(serverStr)
-            if info.scheme != 'tardis':
-                raise Exception("Invalid URL scheme: {}".format(info.scheme))
+    serverStr = args.server
+    #logger.debug("Got server string: %s", serverStr)
+    if not serverStr.startswith('tardis://'):
+        serverStr = 'tardis://' + serverStr
+    try:
+        info = urllib.parse.urlparse(serverStr)
+        if info.scheme != 'tardis':
+            raise Exception("Invalid URL scheme: {}".format(info.scheme))
 
-            sServer = info.hostname
-            sPort   = info.port
-            sClient = info.path.lstrip('/')
+        sServer = info.hostname
+        sPort   = info.port
+        sClient = info.path.lstrip('/')
 
-        except Exception as e:
-            raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
+    except Exception as e:
+        raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
 
     server = sServer or args.server
     port = sPort or args.port
@@ -2015,6 +2033,26 @@ def printStats(starttime, endtime):
     logger.log(logging.STATS, "Wait Times:   {:}".format(str(datetime.timedelta(0, waittime))))
     logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
 
+def pickMode():
+    if args.local != '' and args.local is not None:
+        if args.local is True or args.local == 'True':
+            if args.server is None:
+                raise Exception("Remote mode specied without a server")
+            return True
+        elif args.local is False or args.local == 'False':
+            if args.database is None:
+                raise Exception("Local mode specied without a database")
+            return False
+    else:
+        if args.server is not None and args.database is not None:
+            raise Exception("Both database and server specified.  Unable to determine mode.   Use --local/--remote switches")
+        if args.server is not None:
+            return False
+        elif args.database is not None:
+            return True
+        else:
+            raise Exception("Neither database nor remote server is set.   Unable to backup")
+
 
 def printReport(repFormat):
     lastDir = None
@@ -2026,12 +2064,14 @@ def printReport(repFormat):
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
+
         filefmts = ['','KB','MB','GB', 'TB', 'PB']
         dirfmts  = ['B','KB','MB','GB', 'TB', 'PB']
         fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
         fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
         fmt3 = '  %-{}s   %-6s %-10s'.format(length)
         fmt4 = '  %d files (%d full, %d delta, %s)'
+
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
         logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
@@ -2052,7 +2092,7 @@ def printReport(repFormat):
                 deltas += 1
             dataSize += r['size']
 
-            if repFormat == 'all':
+            if repFormat == 'all' or repFormat is True:
                 if r['sigsize']:
                     logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=filefmts), Util.fmtSize(r['sigsize'], formats=filefmts))
                 else:
@@ -2075,11 +2115,64 @@ def lockRun(server, port, client):
         raise Exception("Tardis already running: %s" % e)
     return pidfile
 
+def mkBackendConfig(jobname):
+    bc = Backend.BackendConfig()
+    j = jobname
+    bc.umask           = Util.parseInt(config.get(j, 'Umask'))
+    bc.cksContent      = config.getint(j, 'CksContent')
+    bc.serverSessionID = socket.gethostname() + time.strftime("-%Y-%m-%d::%H:%M:%S%Z", time.gmtime())
+    bc.formats         = list(map(str.strip, config.get(j, 'Formats').split(',')))
+    bc.priorities      = list(map(int, config.get(j, 'Priorities').split(',')))
+    bc.keep            = list(map(int, config.get(j, 'KeepDays').split(',')))
+    bc.forceFull       = list(map(int, config.get(j, 'ForceFull').split(',')))
+
+    bc.journal         = config.get(j, 'JournalFile')
+
+    bc.savefull        = config.getboolean(j, 'SaveFull')
+    bc.maxChain        = config.getint(j, 'MaxDeltaChain')
+    bc.deltaPercent    = float(config.getint(j, 'MaxChangePercent')) / 100.0        # Convert to a ratio
+    bc.autoPurge       = config.getboolean(j, 'AutoPurge')
+    bc.saveConfig      = config.getboolean(j, 'SaveConfig')
+    bc.dbbackups       = config.getint(j, 'DBBackups')
+
+    bc.user            = None
+    bc.group           = None
+
+    bc.dbname          = args.dbname
+    bc.basedir         = args.database
+    bc.allowNew        = True
+    bc.allowUpgrades   = True
+
+    if args.dbdir:
+        bc.dbdir       = args.dbdir
+    else:
+        bc.dbdir       = bc.basedir
+
+    bc.allowOverrides  = True
+    bc.linkBasis       = config.getboolean(j, 'LinkBasis')
+
+    bc.requirePW       = config.getboolean(j, 'RequirePassword')
+
+    bc.sxip            = args.skipfile
+
+    bc.exceptions      = args.exceptions
+
+    return bc
+
+def runBackend(jobname):
+    conn = Connection.DirectConnection(args.timeout)
+    beConfig = mkBackendConfig(jobname)
+
+    backend = Backend.Backend(conn.serverMessages, beConfig, logSession=False)
+    backendThread = threading.Thread(target=backend.runBackup, name="Backend")
+    backendThread.start()
+    return conn, backend, backendThread
+
 def main():
     global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
     # Read the command line arguments.
     commandLine = ' '.join(sys.argv) + '\n'
-    (args, config) = processCommandLine()
+    (args, config, jobname) = processCommandLine()
 
     # Memory debugging.
     # Enable only if you really need it.
@@ -2184,21 +2277,22 @@ def main():
         exceptionLogger.log(e)
         sys.exit(1)
 
+    # determine mode:
+    localmode = pickMode()
+
     # Open the connection
 
-    # If we're using a local connection, create the domain socket, and start the server running.
-    if args.local:
-        tempsocket = os.path.join(tempfile.gettempdir(), "tardis_local_" + str(os.getpid()))
-        port = tempsocket
-        server = None
-        subserver = runServer(args.serverprog, tempsocket)
-        if subserver is None:
-            logger.critical("Unable to create server")
-            sys.exit(1)
+    backend = None
+    backendThread = None
+    
 
     # Get the connection object
     try:
-        conn = getConnection(server, port)
+        if localmode:
+            (conn, backend, backendThread) = runBackend(jobname)
+        else:
+            conn = getConnection(server, port)
+
         startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
@@ -2274,7 +2368,6 @@ def main():
                 sendPurge(False)
             else:
                 sendPurge(True)
-        conn.close()
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         #exceptionLogger.log(e)
@@ -2285,13 +2378,17 @@ def main():
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         exceptionLogger.log(e)
+    finally:
+        conn.close()
+        if localmode:
+            conn.send(Exception("Terminate connection"))
 
     if args.progress:
         statusBar.shutdown()
 
-    if args.local:
+    if localmode:
         logger.info("Waiting for server to complete")
-        subserver.wait()        # Should I do communicate?
+        backendThread.join()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
 
@@ -2316,8 +2413,6 @@ def main():
     if args.report != 'none':
         printReport(args.report)
 
-    if args.local:
-        os.unlink(tempsocket)
     print('')
 
 if __name__ == '__main__':
