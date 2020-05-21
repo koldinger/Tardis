@@ -177,7 +177,7 @@ decoder             = None
 purgePriority       = None
 purgeTime           = None
 
-globalExcludes      = []
+globalExcludes      = set()
 cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".*.swp", ".*.swo",
@@ -268,6 +268,17 @@ class ExitRecursionException(Exception):
     def __init__(self, rootException):
         self.rootException = rootException
 
+class FakeDirEntry:
+    def __init__(self, dirname, filename):
+        self.name = filename
+        self.path = os.path.join(dirname, filename)
+
+    def stat(self, follow_symlinks=True):
+        if follow_symlinks:
+            return os.stat(self.path)
+        else:
+            return os.lstat(self.path)
+
 def setEncoder(format):
     global encoder, encoding, decoder
     if format == 'base64':
@@ -297,11 +308,10 @@ def checkMessage(message, expected):
 
 def filelist(dirname, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
-    files = os.listdir(dirname)
-    for p in excludes:
-        # This has to be listifed.  If it doesn't, it seems to not do the filtering.   Not sure why
-        files = list(itertools.filterfalse(lambda x: p.match(os.path.join(dirname, x)), files))
-    return files
+    files = os.scandir(dirname)
+    for f in files:
+        if all(not p.match(f.path) for p in excludes):
+            yield f
 
 #_deletedInodes = {}
 
@@ -881,14 +891,15 @@ def addMeta(meta):
         newmeta.append(digest)
         return digest
 
-def mkFileInfo(dir, name):
-    pathname = os.path.join(dir, name)
+def mkFileInfo(f):
+    pathname = f.path
+    s = f.stat(follow_symlinks=False)
 
     # Cleanup any bogus characters
-    name = name.encode('utf8', 'backslashreplace').decode('utf8')
+    name = f.name.encode('utf8', 'backslashreplace').decode('utf8')
 
-    s = os.lstat(pathname)
     mode = s.st_mode
+
     # If we don't want to even create dir entries for things we can't access, just return None 
     # if we can't access the file itself
     if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
@@ -949,7 +960,7 @@ def mkFileInfo(dir, name):
         finfo = None
     return finfo
 
-def getDirContents(dir, dirstat, excludes=[]):
+def getDirContents(dirname, dirstat, excludes=set()):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
 
@@ -958,21 +969,20 @@ def getDirContents(dir, dirstat, excludes=[]):
     device = dirstat.st_dev
 
     # Process an exclude file which will be passed on down to the receivers
-    newExcludes = loadExcludeFile(os.path.join(dir, excludeFile))
-    newExcludes.extend(excludes)
+    newExcludes = loadExcludeFile(os.path.join(dirname, excludeFile))
+    newExcludes = newExcludes.union(excludes)
     excludes = newExcludes
 
     # Add a list of local files to exclude.  These won't get passed to lower directories
-    localExcludes = list(excludes)
-    localExcludes.extend(loadExcludeFile(os.path.join(dir, args.localexcludefile)))
+    localExcludes = excludes.union(loadExcludeFile(os.path.join(dirname, args.localexcludefile)))
 
     files = []
     subdirs = []
 
     try:
-        for f in filelist(dir, localExcludes):
+        for f in filelist(dirname, localExcludes):
             try:
-                fInfo = mkFileInfo(dir, f)
+                fInfo = mkFileInfo(f)
                 if fInfo and (args.crossdev or device == fInfo['dev']):
                     mode = fInfo["mode"]
                     if stat.S_ISLNK(mode):
@@ -982,7 +992,7 @@ def getDirContents(dir, dirstat, excludes=[]):
                         Util.accumulateStat(stats, 'backed', fInfo['size'])
 
                     if stat.S_ISDIR(mode):
-                        sub = os.path.join(dir, f)
+                        sub = os.path.join(dirname, f)
                         if sub in excludeDirs:
                             logger.debug("%s excluded.  Skipping", sub)
                             continue
@@ -991,10 +1001,10 @@ def getDirContents(dir, dirstat, excludes=[]):
 
                     files.append(fInfo)
             except (IOError, OSError) as e:
-                logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
+                logger.error("Error processing %s: %s", os.path.join(dirname, f), str(e))
             except Exception as e:
                 ## Is this necessary?  Fold into above?
-                logger.error("Error processing %s: %s", os.path.join(dir, f), str(e))
+                logger.error("Error processing %s: %s", os.path.join(dirname, f), str(e))
                 exceptionLogger.log(e)
     except (IOError, OSError) as e:
         logger.error("Error reading directory %s: %s" ,dir, str(e))
@@ -1342,6 +1352,7 @@ def setPurgeValues(args):
                 raise Exception("Could not parse --keep-time argument: {} ".format(args.purgetime))
 
 
+@functools.lru_cache(maxsize=128)
 def mkExcludePattern(pattern):
     logger.debug("Excluding {}", pattern)
     if not pattern.startswith('/'):
@@ -1353,24 +1364,24 @@ def loadExcludeFile(name):
     try:
         with open(name) as f:
             excludes = [mkExcludePattern(x.rstrip('\n')) for x in f.readlines()]
-        return list(excludes)
+        return set(excludes)
     except IOError as e:
         #traceback.print_exc()
-        return []
+        return set()
 
 
 # Load all the excludes we might want
 def loadExcludes(args):
-    global excludeFile
+    global excludeFile, globalExcludes
     if not args.ignoreglobalexcludes:
-        globalExcludes.extend(loadExcludeFile(globalExcludeFile))
+        globalExcludes = globalExcludes.union(loadExcludeFile(globalExcludeFile))
     if args.cvs:
-        globalExcludes.extend(map(mkExcludePattern, cvsExcludes))
+        globalExcludes = globalExcludes.union(map(mkExcludePattern, cvsExcludes))
     if args.excludes:
-        globalExcludes.extend(map(mkExcludePattern, args.excludes))
+        globalExcludes = globalExcludes.union(map(mkExcludePattern, args.excludes))
     if args.excludefiles:
         for f in args.excludefiles:
-            globalExcludes.extend(loadExcludeFile(f))
+            globalExcludes = globalExcludes.union(loadExcludeFile(f))
     excludeFile         = args.excludefilename
 
 def loadExcludedDirs(args):
@@ -1555,7 +1566,7 @@ def createPrefixPath(root, path):
     for d in pathDirs:
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
-        f = mkFileInfo(current, d)
+        f = mkFileInfo(FakeDirEntry(current, d))
         if crypt.encrypting():
             f['name'] = crypt.encryptFilename(f['name'])
         if dirPath not in processedDirs:
@@ -2351,7 +2362,7 @@ def main():
                 root = rootdir
             else:
                 (root, name) = os.path.split(directory)
-                f = mkFileInfo(root, name)
+                f = mkFileInfo(FakeDirEntry(root, name))
                 sendDirEntry(0, 0, [f])
             # And run the directory
             recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
