@@ -87,7 +87,7 @@ def decryptHeader(crypt, infile):
     # Create the cipher
     encryptor = crypt.getContentEncryptor(iv)
 
-    ct = infile.read(1024)
+    ct = infile.read(64 * 1024)
     pt = encryptor.decrypt(ct, False)
     outstream = io.BytesIO(pt)
     return outstream
