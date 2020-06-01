@@ -141,7 +141,7 @@ configDefaults = {
     'LogFiles':             '',
     'Verbosity':            str(0),
     'Stats':                str(False),
-    'Report':               str(False),
+    'Report':               'none',
     'Directories':          '.',
     
     # Backend parameters
@@ -586,7 +586,7 @@ def processDelta(inode, signatures):
                     (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats) # Don't bother to encrypt the signature
                     newsig.close()
 
-                if args.report:
+                if args.report != 'none':
                     x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
                     # Convert to Unicode, and normalize any characters, so lengths become reasonable
                     name = unicodedata.normalize('NFD', pathname)
@@ -697,7 +697,7 @@ def sendContent(inode, reportType):
                     sig.close()
 
             Util.accumulateStat(stats, 'new')
-            if args.report:
+            if args.report != 'none':
                 repInfo = { 'type': reportType, 'size': size, 'sigsize': sigsize }
                 report[os.path.split(pathname)] = repInfo
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
@@ -2310,7 +2310,7 @@ def main():
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         exceptionLogger.log(e)
         sys.exit(1)
-    if verbosity or args.stats or args.report:
+    if verbosity or args.stats or args.report != 'none':
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
 
