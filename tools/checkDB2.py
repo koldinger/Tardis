@@ -46,7 +46,13 @@ from Tardis import CompressedBuffer
 
 args = None
 
-
+#tardis.log:      text/plain
+#tardis.log.br:   application/octet-stream
+#tardis.log.bz2:  application/x-bzip2
+#tardis.log.gz:   application/gzip
+#tardis.log.lzma: application/x-lzma
+#tardis.log.xz:   application/x-xz
+#tardis.log.zst:  application/x-zstd
  
 def processArgs():
     parser = argparse.ArgumentParser(description='Check contents of the DB against the file system', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
@@ -65,7 +71,6 @@ def processArgs():
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose',                  help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
-
 
     Util.addGenCompletions(parser)
 
@@ -131,11 +136,37 @@ def authenticateFile(infile, size, crypt):
     except:
         return False
 
+#tardis.log:      text/plain
+#tardis.log.br:   application/octet-stream
+#tardis.log.bz2:  application/x-bzip2
+#tardis.log.gz:   application/gzip
+#tardis.log.lzma: application/x-lzma
+#tardis.log.xz:   application/x-xz
+#tardis.log.zst:  application/x-zstd
+
+def checkCompression(mimetype, compresstype):
+    if (compresstype == 'zlib' or compresstype == True or compresstype == 1):
+        if mimetype != 'application/zlib':
+            return False
+    elif compresstype == 'zstd':
+        if mimetype != 'application/x-std':
+            return False
+    elif compresstype == 'bzip':
+        if mimetype != 'application/x-bzip2':
+            return False
+    elif compresstype == 'lzma': 
+        if mimetype != 'application/x-lzma' and mimetype != 'application/x-xz':
+            return False
+    elif not (compresstype == 'none' or compresstype == False):
+        print(f"Unknown compression type: {compresstype}")
+    return True
+
 missing = []
 zero = []
 mismatch = []
 notdelta = []
 notauth = []
+badcomp = []
 sizes = {}
 
 def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, authCond):
@@ -154,6 +185,19 @@ def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added,
             sizes.setdefault((fsize - size), []).append(checksum)
             if authCond != 'none':
                 authenticate = True
+
+            try:
+                instream = decryptHeader(crypt, cache.open(checksum, "rb"))
+                uc = CompressedBuffer.UncompressedBufferedReader(instream, compressor="none")
+                data = uc.read(256)
+                mimetype = magic.from_buffer(data, mime=True)
+                if not checkCompression(mimetype, compressed):
+                    print(f"{checksum} has wrong compression type.   Expected {compressed}.  Found {mimetype}")
+                    badcomp.append((checksum, compressed, mimetype))
+            except Exception as e:
+                print(f"Caught exception: {compressed} {e}")
+                badcomp.append((checksum, compressed, "error"))
+
         elif basis:
             #print(f"{checksum} -- {compressed} {encrypted}", flush=True)
             instream = decryptHeader(crypt, cache.open(checksum, "rb"))
@@ -182,7 +226,7 @@ def main():
         count += 1
         checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, args.authenticate)
 
-    print(f"Files: {count} Missing Files: {len(missing)} Empty: {len(zero)} Size mismatch: {len(mismatch)} Not Delta: {len(notdelta)}")
+    print(f"Files: {count} Missing Files: {len(missing)} Empty: {len(zero)} Size mismatch: {len(mismatch)} Not Delta: {len(notdelta)} Wrong Comp: {len(badcomp)}")
     #for i in sizes:
     #    print(f"   Size: {i}: Count {len(sizes[i])}")
 
@@ -192,7 +236,8 @@ def main():
             "empty": zero,
             "size": mismatch,
             "notauth": notauth,
-            "notdelta": notdelta
+            "notdelta": notdelta,
+            "badcomp":  badcomp
             }
         json.dump(out, args.output, indent=2)
 
