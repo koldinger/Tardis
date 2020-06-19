@@ -51,7 +51,7 @@ _defaults = {
     'TARDIS_LOCAL_CONFIG'   : '',
     'TARDIS_PWTIMEOUT'      : '120',
     'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
-    'TARDIS_JOURNAL'        : 'tardis.journal',
+    'TARDIS_JOURNAL'        : 'tardis.journal.gz',
     'TARDIS_SCHEMA'         : os.path.join(os.path.dirname(__file__), 'schema', 'tardis.sql'),
     'TARDIS_SEND_CONFIG'    : 'true',
     'TARDIS_REMOTE_PORT'    : '7430',
