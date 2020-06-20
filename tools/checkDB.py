@@ -33,7 +33,9 @@ import os, os.path
 import sys
 import sqlite3
 import gettext
+import glob
 
+from Tardis import CacheDir
 from Tardis import Util
 
 def hexcount(lower, upper, digits):
@@ -59,6 +61,8 @@ def hasExt(x):
 
 def main():
     d = sys.argv[1]
+    cd = CacheDir.CacheDir(d, create=False)
+
 
     db = os.path.join(d, "tardis.db")
     print("Opening DB: " + db)
@@ -68,36 +72,45 @@ def main():
     missingData = set()
     unreferenced = set()
 
-    for i in hexcount(0, 256, 2):
-        print("Starting: ", i)
+    for i in hexcount(0, 16 ** int(cd.partsize), int(cd.partsize)):
+        print(f"Starting: {i}  ", end='')
         # Get all the files which start with i
         dbfiles = getdbfiles(conn, i)
         alldatafiles = set()
         # Grab each subdirectory, 
-        for j in hexcount(0, 256, 2):
-            path = os.path.join(d, i, j)
-            try:
-                if os.path.isdir(path):
-                    contents = os.listdir(path)
-                    metafiles = set(filter(hasExt, contents))
-                    datafiles = set([x for x in contents if not hasExt(x)])
 
-                    alldatafiles.update(datafiles)
+        path = os.path.join(d, i)
+        try:
+            if os.path.isdir(path):
+                pattern = ('?' * int(cd.partsize) + os.sep) * (int(cd.parts)-1) + "*"
+                pattern = os.path.join(d, i, pattern)
+                #print(pattern)
 
-                    #print path, " :: ", len(contents), len(metafiles), len(datafiles), " :: ", len(dbfiles)
-                    # Process the signature files
-                    for f in metafiles:
-                        (data, _) = os.path.splitext(f)
-                        if not data in datafiles:
-                            print("{} without matching data file".format(f))
-            except Exception as e:
-                print("Caught exception proecssing directory {}".format(path))
+                # contents = os.listdir(path)
+                contents = list(map(lambda x: os.path.basename(x), glob.glob(pattern, recursive=True)))
+                # print(contents)
+                print(f"{len(contents)} files")
+                metafiles = set(filter(hasExt, contents))
+                datafiles = set([x for x in contents if not hasExt(x)])
+
+                alldatafiles.update(datafiles)
+
+                #print path, " :: ", len(contents), len(metafiles), len(datafiles), " :: ", len(dbfiles)
+                # Process the signature files
+                for f in metafiles:
+                    (data, _) = os.path.splitext(f)
+                    if not data in datafiles:
+                        print("{} without matching data file".format(f))
+            else:
+                print()
+        except Exception as e:
+            print("Caught exception proecssing directory {}: {}".format(path), e)
 
         # Find missing data files
         missing = dbfiles.difference(alldatafiles)
         missingData.update(missing)
         for i in missing:
-            print("Missing data files {}".format(i))
+            print("Missing data file {}".format(i))
 
         # Find files which aren't in the DB
         unref = alldatafiles.difference(dbfiles)

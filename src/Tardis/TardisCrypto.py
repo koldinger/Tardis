@@ -332,7 +332,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     For backwards compatibility only.
     """
     _cryptoScheme = '1'
-    _cryptoName   = 'AES-CBC-HMAC/AES-ECB'
+    _cryptoName   = 'AES-CBC-HMAC/AES-ECB/PBKDF2'
     _contentKey  = None
     _filenameKey = None
     _keyKey      = None
@@ -466,7 +466,7 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     Uses AES-128 SIV encryption and validation on the keys.
     """
     _cryptoScheme = '2'
-    _cryptoName   = 'AES-CBC-HMAC/AES-SIV'
+    _cryptoName   = 'AES-CBC-HMAC/AES-SIV/scrypt'
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
@@ -527,7 +527,7 @@ class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Uses ASE-256 SIV encryption and authentaction for files
     """
     _cryptoScheme = '3'
-    _cryptoName   = 'AES-GCM/AES-SIV'
+    _cryptoName   = 'AES-GCM/AES-SIV/scrypt'
 
     def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
         super().__init__(password, client, fsencoding)
@@ -548,7 +548,7 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Uses ASE-256 SIV encryption and authentaction for files
     """
     _cryptoScheme = '4'
-    _cryptoName   = 'ChaCha20-Poly1305/AES-SIV'
+    _cryptoName   = 'ChaCha20-Poly1305/AES-SIV/scrypt'
 
     ivLength    = 12
 

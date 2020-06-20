@@ -180,7 +180,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         else:
             self.address = 'localhost'
         log            = logging.getLogger('Tardis')
-        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {'connid': str(self.address) })
+        self.sessionid = str(uuid.uuid1())
+        self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {'connid': self.sessionid[0:13]})
         self.logger.info("Session created from: %s", self.address)
 
     def finish(self):
@@ -238,7 +239,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             messenger = self.mkMessenger(sock, fields['encoding'], fields['compress'])
 
             # Create a backend, and run it.
-            backend = Backend.Backend(messenger, self.server)
+            backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid)
 
             (started, completed, endtime, orphansRemoved, orphanSize) = backend.runBackup()
 

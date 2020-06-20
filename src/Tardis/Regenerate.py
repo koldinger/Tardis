@@ -42,6 +42,9 @@ import xattr
 import hmac
 import posix1e
 
+import queue
+import threading
+
 import Tardis
 from Tardis import TardisDB
 from Tardis import Regenerator
@@ -137,6 +140,98 @@ def notSame(a, b, string):
     else:
         return string
 
+def setAttributes(regenerator, info, outname):
+    if outname:
+        if args.setperm:
+            try:
+                logger.debug("Setting permissions on %s to %o", outname, info['mode'])
+                os.chmod(outname, info['mode'])
+            except Exception as e:
+                logger.warning("Unable to set permissions for %s", outname)
+            try:
+                # Change the group, then the owner.
+                # Change the group first, as only root can change owner, and that might fail.
+                os.chown(outname, -1, info['gid'])
+                os.chown(outname, info['uid'], -1)
+            except Exception as e:
+                logger.warning("Unable to set owner and group of %s", outname)
+        if args.settime:
+            try:
+                logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
+                os.utime(outname, (info['atime'], info['mtime']))
+            except Exception as e:
+                logger.warning("Unable to set times on %s", outname)
+
+        if args.setattrs and 'attr' in info and info['attr']:
+            try:
+                f = regenerator.recoverChecksum(info['attr'], authenticate)
+                xattrs = json.loads(f.read())
+                x = xattr.xattr(outname)
+                for attr in xattrs.keys():
+                    value = base64.b64decode(xattrs[attr])
+                    try:
+                        x.set(attr, value)
+                    except IOError:
+                        logger.warning("Unable to set extended attribute %s on %s", attr, outname)
+            except Exception as e:
+                logger.warning("Unable to process extended attributes for %s", outname)
+        if args.setacl and 'acl' in info and info['acl']:
+            try:
+                f = regenerator.recoverChecksum(info['acl'], authenticate)
+                acl = json.loads(f.read())
+                a = posix1e.ACL(text=acl)
+                a.applyto(outname)
+            except Exception as e:
+                logger.warning("Unable to process extended attributes for %s", outname)
+
+def doRecovery(regenerator, info, authenticate, path, outname):
+    myname = outname if outname else "stdout"
+    logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
+
+    checksum = info['checksum']
+    i = regenerator.recoverChecksum(checksum, authenticate)
+
+    if i:
+        if authenticate:
+            hasher = crypt.getHash()
+
+        if info['link']:
+            # read and make a link
+            i.seek(0)
+            x = i.read(16 * 1024)
+            if outname:
+                os.symlink(x, outname)
+            else:
+                logger.warning("No name specified for link: %s", x)
+            if hasher:
+                hasher.update(x)
+        else:
+            if outname:
+                # Generate an output name
+                logger.debug("Writing output to %s", outname)
+                output = open(outname,  "wb")
+            else:
+                output = sys.stdout.buffer
+            try:
+                x = i.read(16 * 1024)
+                while x:
+                    output.write(x)
+                    if hasher:
+                        hasher.update(x)
+                    x = i.read(16 * 1024)
+            except Exception as e:
+                logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                raise
+            finally:
+                i.close()
+                if output is not sys.stdout.buffer:
+                    output.close()
+
+            if authenticate:
+                outname = doAuthenticate(outname, checksum, hasher.hexdigest())
+
+            setAttributes(regenerator, info, outname)
+
 def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, authenticate=True):
     """
     Main recovery routine.  Recover an object, based on the info object, and put it in outputdir.
@@ -189,6 +284,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 if not os.path.exists(outname):
                     os.mkdir(outname)
 
+                setAttributes(regenerator, info, outname)
+
                 dirInode = (info['inode'], info['device'])
                 # For each file in the directory, regenerate it.
                 for i in contents:
@@ -211,93 +308,8 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         logger.warning("No info on %s", name)
                         retCode += 1
             elif not skip:
-                myname = outname if outname else "stdout"
-                logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
+                doRecovery(regenerator, info, authenticate, path, outname)
 
-                checksum = info['checksum']
-                i = regenerator.recoverChecksum(checksum, authenticate)
-
-                if i:
-                    if authenticate:
-                        hasher = crypt.getHash()
-
-                    if info['link']:
-                        # read and make a link
-                        i.seek(0)
-                        x = i.read(16 * 1024)
-                        if outname:
-                            os.symlink(x, outname)
-                        else:
-                            logger.warning("No name specified for link: %s", x)
-                        if hasher:
-                            hasher.update(x)
-                    else:
-                        if outname:
-                            # Generate an output name
-                            logger.debug("Writing output to %s", outname)
-                            output = open(outname,  "wb")
-                        else:
-                            output = sys.stdout.buffer
-                        try:
-                            x = i.read(16 * 1024)
-                            while x:
-                                output.write(x)
-                                if hasher:
-                                    hasher.update(x)
-                                x = i.read(16 * 1024)
-                        except Exception as e:
-                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
-                            raise
-                        finally:
-                            i.close()
-                            if output is not sys.stdout.buffer:
-                                output.close()
-
-                        if authenticate:
-                            outname = doAuthenticate(outname, checksum, hasher.hexdigest())
-
-            if outname and not skip:
-                if args.setperm:
-                    try:
-                        logger.debug("Setting permissions on %s to %o", outname, info['mode'])
-                        os.chmod(outname, info['mode'])
-                    except Exception as e:
-                        logger.warning("Unable to set permissions for %s", outname)
-                    try:
-                        # Change the group, then the owner.
-                        # Change the group first, as only root can change owner, and that might fail.
-                        os.chown(outname, -1, info['gid'])
-                        os.chown(outname, info['uid'], -1)
-                    except Exception as e:
-                        logger.warning("Unable to set owner and group of %s", outname)
-                if args.settime:
-                    try:
-                        logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
-                        os.utime(outname, (info['atime'], info['mtime']))
-                    except Exception as e:
-                        logger.warning("Unable to set times on %s", outname)
-
-                if args.setattrs and 'attr' in info and info['attr']:
-                    try:
-                        f = regenerator.recoverChecksum(info['attr'], authenticate)
-                        xattrs = json.loads(f.read())
-                        x = xattr.xattr(outname)
-                        for attr in xattrs.keys():
-                            value = base64.b64decode(xattrs[attr])
-                            try:
-                                x.set(attr, value)
-                            except IOError:
-                                logger.warning("Unable to set extended attribute %s on %s", attr, outname)
-                    except Exception as e:
-                        logger.warning("Unable to process extended attributes for %s", outname)
-                if args.setacl and 'acl' in info and info['acl']:
-                    try:
-                        f = regenerator.recoverChecksum(info['acl'], authenticate)
-                        acl = json.loads(f.read())
-                        a = posix1e.ACL(text=acl)
-                        a.applyto(outname)
-                    except Exception as e:
-                        logger.warning("Unable to process extended attributes for %s", outname)
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
         if args.exceptions:

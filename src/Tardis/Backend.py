@@ -172,8 +172,8 @@ class Backend:
     lastCompleted = None
     maxChain = 0
 
-    def __init__(self, messenger, config, logSession=True):
-        self.sessionid = str(uuid.uuid1())
+    def __init__(self, messenger, config, logSession=True, sessionid=None):
+        self.sessionid = sessionid if sessionid else str(uuid.uuid1())
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         if logSession:
             self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr })

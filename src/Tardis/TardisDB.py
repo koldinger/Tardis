@@ -38,6 +38,7 @@ import uuid
 import srp
 import functools
 import importlib
+import gzip
 
 from binascii import hexlify, unhexlify
 
@@ -255,7 +256,10 @@ class TardisDB(object):
         self.conn.execute("PRAGMA foreignkeys=true")
 
         if self.journalName:
-            self.journal = open(self.journalName, 'a')
+            if self.journalName.endswith('.gz'):
+                self.journal = gzip.open(self.journalName, 'at')
+            else:
+                self.journal = open(self.journalName, 'a')
 
         # Make sure the permissions are set the way we want, if that's specified.
         if self.user != -1 or self.group != -1:
