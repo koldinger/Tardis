@@ -122,7 +122,7 @@ class CacheDir:
                     path = os.path.join(path, i)
                     os.chown(path, self.user, self.group)
 
-    def open(self, name, mode):
+    def open(self, name, mode, streaming=False):
         iswrite = mode.startswith('w') or mode.startswith('a')
         if iswrite:
             self.mkdir(name)
