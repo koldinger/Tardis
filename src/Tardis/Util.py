@@ -807,7 +807,7 @@ class StoreBoolean(argparse.Action):
     or --argument to store a true.
     """
     def __init__(self, option_strings, dest, negate="no", nargs=0, **kwargs):
-        if nargs is not 0:
+        if nargs != 0:
             raise ValueError("nargs not allowed")
         #if len(option_strings) > 1:
         #    raise ValueError("Multiple option strings not allowed")
