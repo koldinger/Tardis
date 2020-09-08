@@ -280,7 +280,11 @@ class Crypto_Null:
         return name
 
     def decryptFilename(self, name):
-        return name
+        if isinstance(name, bytes):
+            return name.decode('utf8')
+        else:
+            return name
+
 
     def getHash(self, func=hashlib.md5):
         return func()
@@ -307,9 +311,6 @@ class Crypto_Null:
         return path
 
     def encryptFilename(self, name):
-        return name
-
-    def decryptFilename(self, name):
         return name
 
     def genKeys(self):

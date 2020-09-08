@@ -58,7 +58,7 @@ class Regenerator:
         infile = self.cacheDir.open(filename, 'rb')
 
         # Get the IV, if it's not specified.
-        infile.seek(0, os.SEEK_SET)
+        #infile.seek(0, os.SEEK_SET)
         iv = infile.read(self.crypt.ivLength)
 
         self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))

@@ -77,7 +77,6 @@ def fs_encode(val):
     else:
         return val
 
-
 class RemoteDB(object):
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
@@ -457,17 +456,24 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
-    def open(self, checksum, mode):
-        temp = tempfile.SpooledTemporaryFile(max_size=64 * 1024)
+    def open(self, checksum, mode, streaming=True):
+        if mode[0] != 'r':
+            raise PermissionError("Read only file system")
+
         r = self.session.get(self.baseURL + "getFileData/" + checksum, stream=True)
         r.raise_for_status()
         #self.logger.debug("%s", str(r.headers))
 
-        for chunk in r.iter_content(chunk_size=64 * 1024):
-            temp.write(chunk)
+        if streaming:
+            return r.raw
+        else:
+            temp = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
 
-        temp.seek(0)
-        return temp
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                temp.write(chunk)
+
+            temp.seek(0)
+            return temp
 
     @reconnect
     def removeOrphans(self):

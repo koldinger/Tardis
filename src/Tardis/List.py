@@ -433,6 +433,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     Collect information about a file, across all the backup sets
     Print a header for the file.
     """
+    logger.debug("Processing file %s", filename)
 
     # Count the number of non-null entries
     numFound = len([i for i in fInfos if fInfos[i] is not None])
@@ -452,6 +453,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     # Figure out which versions of the file are directories
 
     if printContents:
+        # Create the list of directories
         dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
         if len(dirs):
             (contents, names) = collectDirContents2(tardis, dirs, crypt)
@@ -709,7 +711,8 @@ def processArgs():
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
-    parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,               help='Maximum depth to recurse directories')
+    parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
+    parser.add_argument('--path'            dest='path',        default=False, action='store_true',         help='Print the full path of files')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 

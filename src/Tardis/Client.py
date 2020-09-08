@@ -60,6 +60,7 @@ import traceback
 import threading
 import cProfile
 import socket
+import concurrent.futures
 
 from binascii import hexlify
 
@@ -81,7 +82,6 @@ import Tardis.librsync as librsync
 import Tardis.MultiFormatter as MultiFormatter
 import Tardis.StatusBar as StatusBar
 import Tardis.Backend as Backend
-
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -333,50 +333,51 @@ def msgInfo(resp=None, batch=None):
     return (respId, respType, batchId)
 
 
+pool = concurrent.futures.ThreadPoolExecutor()
+
+def genChecksum(inode):
+    checksum = None
+    try:
+        (_, pathname) = inodeDB[inode]
+        setProgress("File [C]:", pathname)
+
+        m = crypt.getHash()
+        s = os.lstat(pathname)
+        mode = s.st_mode
+        if stat.S_ISLNK(mode):
+            m.update(fs_encode(os.readlink(pathname)))
+        else:
+            try:
+                with open(pathname, "rb") as f:
+                    for chunk in iter(functools.partial(f.read, args.chunksize), b''):
+                        if chunk:
+                            m.update(chunk)
+                        else:
+                            break
+                    checksum = m.hexdigest()
+                    # files.append({ "inode": inode, "checksum": checksum })
+            except IOError as e:
+                logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
+                exceptionLogger.log(e)
+                # TODO: Add an error response?
+    except KeyError as e:
+        (rId, rType, bId) = msgInfo()
+        logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
+        exceptionLogger.log(e)
+    except FileNotFoundError as e:
+        logger.error("Unable to stat %s.  File not found", pathname)
+        exceptionLogger.log(e)
+        # TODO: Add an error response?
+
+    return inode, checksum
+
 def processChecksums(inodes):
     """ Generate checksums for requested checksum files """
     files = []
-    for inode in inodes:
-        try:
-            (_, pathname) = inodeDB[inode]
-
-            setProgress("File [C]:", pathname)
-
-            m = crypt.getHash()
-            s = os.lstat(pathname)
-            mode = s.st_mode
-            if stat.S_ISLNK(mode):
-                m.update(fs_encode(os.readlink(pathname)))
-            else:
-                try:
-                    with open(pathname, "rb") as f:
-                        for chunk in iter(functools.partial(f.read, args.chunksize), b''):
-                            if chunk:
-                                m.update(chunk)
-                            else:
-                                break
-                        checksum = m.hexdigest()
-                        files.append({ "inode": inode, "checksum": checksum })
-                except IOError as e:
-                    logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
-                    exceptionLogger.log(e)
-                    # TODO: Add an error response?
-        except KeyError as e:
-            (rId, rType, bId) = msgInfo()
-            logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
-            exceptionLogger.log(e)
-            # TODO: Add an error response?
-            #if inode in _deletedInodes:
-            #   (resp, batch) = _deletedInodes[inode]
-            #   (rId, rType, bId) = msgInfo(resp, batch)
-            #
-            #   logger.error("Already deleted inode %s in message: %s %s -- %s", str(inode), rId, rType, bId)
-            logger.debug(repr(traceback.format_stack()))
-        except FileNotFoundError as e:
-            logger.error("Unable to stat %s.  File not found", pathname)
-            exceptionLogger.log(e)
-            # TODO: Add an error response?
-
+    jobs = pool.map(genChecksum, inodes)
+    for job in jobs:
+        inode, checksum = job
+        files.append({ "inode": inode, "checksum": checksum })
     message = {
         "message": "CKS",
         "files": files
@@ -1546,7 +1547,7 @@ def splitDirs(x):
         ret = splitDirs(root)
         ret.append(rest)
     elif root:
-        if root is '/':
+        if root == '/':
             ret = [root]
         else:
             ret = splitDirs(root)
