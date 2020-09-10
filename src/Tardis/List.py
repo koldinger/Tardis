@@ -712,7 +712,7 @@ def processArgs():
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
-    parser.add_argument('--path'            dest='path',        default=False, action='store_true',         help='Print the full path of files')
+    #parser.add_argument('--path',           dest='path',        default=False, action='store_true',         help='Print the full path of files')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
 
