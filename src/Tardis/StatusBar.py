@@ -151,7 +151,7 @@ class StatusBar():
 
     def printStatus(self):
         try:
-            output = self.formatter.format(self.base, **{**self.live, **self.values})
+            output = self.formatter.format(self.base, **{**self.live, **self.values}).encode('utf8', 'backslashreplace').decode('utf8')
             if self.trailer:
                 output += self.processTrailer(self.width - 2 - len(output), self.trailer)
         except KeyError as k:
@@ -159,7 +159,10 @@ class StatusBar():
         except Exception as e:
             output = "Error generating status message: " + str(e)
 
-        print(output + _ansiClearEol + _startOfLine + _hideCursor, end='', flush=True)
+        try:
+            print(output + _ansiClearEol + _startOfLine + _hideCursor, end='', flush=True)
+        except:
+            print(_ansiClearEol + _startOfLine, end='', flush=True)
 
     def clearStatus(self):
         print(_showCursor + _startOfLine + _ansiClearEol, end='')
