@@ -58,6 +58,7 @@ import lzma
 import srp
 import passwordmeter
 import colorlog
+import parsedatetime
 
 import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
