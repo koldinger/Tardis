@@ -692,11 +692,11 @@ class Backend:
                 done.append(f['inode'])
             else:
                 # FIXME: TODO: If no checksum, should we request a delta???
-                #old = self.db.getFileInfoByInode((inode, dev))
-                #if old and old['chainlength'] < self.maxChain:
-                    #delta.append(f['inode'])
-                #else:
-                content.append(f['inode'])
+                old = self.db.getFileInfoByInode((inode, dev))
+                if old and old['chainlength'] < self.maxChain:
+                    delta.append(f['inode'])
+                else:
+                    content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",
