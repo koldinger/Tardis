@@ -110,14 +110,14 @@ def main():
         files = json.load(open(args.input, "r"))
         for x in files:
             try:
-                processFile(args.output, crypto, files[x], args.compress, args.signature)
+                processFile(args.output, crypto, x, args.compress, args.signature)
             except Exception as e:
                 print(f"----> {str(e)} Processing {files[x]}")
                 traceback.print_exc()
 
     for name in args.names:
         try:
-            processFile(args.output, crypto, name, args.signature)
+            processFile(args.output, crypto, name, args.compress, args.signature)
         except Exception as e:
             print(f"----> {str(e)} Processing {name}")
             traceback.print_exc()
