@@ -181,7 +181,7 @@ def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added,
         authenticate = (authCond == 'all')
         if fsize != size:
             print(f"{checksum}: size mismatch Expected: {size}, found {fsize} ({fsize - size})-- {added} -- {basis is not None} ")
-            mismatch.append((checksum, size, fsize))
+            mismatch.append((checksum, size, fsize, compressed))
             sizes.setdefault((fsize - size), []).append(checksum)
             if authCond != 'none':
                 authenticate = True
