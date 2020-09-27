@@ -815,17 +815,16 @@ def pushFiles():
         args.loginodes.write(f"AllDelta:   {len(allDelta)}: {str(allDelta)}\n".encode('utf8'))
         args.loginodes.write(f"AllCkSum:   {len(allCkSum)}: {str(allCkSum)}\n".encode('utf8'))
 
+    processed = []
+
     for i in [tuple(x) for x in allContent]:
         try:
             if logger.isEnabledFor(logging.FILES):
                 logFileInfo(i, 'N')
             sendContent(i, 'New')
+            processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
-
-        delInode(i)
-    # clear it out
-    allContent = []
 
 
     for i in [tuple(x) for x in allRefresh]:
@@ -833,12 +832,9 @@ def pushFiles():
             logFileInfo(i, 'N')
         try:
             sendContent(i, 'Full')
+            processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
-
-        delInode(i)
-    # clear it out
-    allRefresh = []
 
     # If there are any delta files requested, ask for them
     signatures = None
@@ -858,10 +854,15 @@ def pushFiles():
                         (x, name) = inodeDB[i]
                         logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
                 processDelta(i, signatures)
+            processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: ", str(i), str(e))
-        delInode(i)
 
+    # clear it out
+    for i in processed:
+        delInode(i)
+    allRefresh = []
+    allContent = []
     allDelta   = []
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
