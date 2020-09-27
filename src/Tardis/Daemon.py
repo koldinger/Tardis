@@ -386,7 +386,15 @@ def setupLogging():
         if args.logfile or args.daemon:
             logFormat = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
         else:
-            logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s", stream=sys.stdout)
+            # Create some default colors
+            colors = {
+                'DEBUG':    'cyan',
+		'INFO':     'green',
+		'WARNING':  'yellow',
+		'ERROR':    'red',
+		'CRITICAL': 'red,bg_white',
+                  }
+            logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s", log_colors=colors, stream=sys.stdout)
 
         verbosity = args.verbose
 
