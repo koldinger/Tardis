@@ -770,9 +770,10 @@ allContent = []
 allDelta   = []
 allCkSum   = []
 allRefresh = []
+allDone    = []
 
 def handleAckDir(message):
-    global allContent, allDelta, allCkSum, allRefresh
+    global allContent, allDelta, allCkSum, allRefresh, allDone
 
     checkMessage(message, 'ACKDIR')
 
@@ -788,11 +789,6 @@ def handleAckDir(message):
             path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
-    # Prune the messages
-    for i in [tuple(x) for x in done]:
-        delInode(i)
-
-    
     if args.loginodes:
         args.loginodes.write(f"Adding to AllContent: ({len(allContent)}):: {len(content)}: {str(content)}\n".encode('utf8'))
         args.loginodes.write(f"Adding to AllRefresh: ({len(allRefresh)}):: {len(refresh)}: {str(refresh)}\n".encode('utf8'))
@@ -803,9 +799,10 @@ def handleAckDir(message):
     allDelta   += delta
     allCkSum   += cksum
     allRefresh += refresh
+    allDone    += done
 
 def pushFiles():
-    global allContent, allDelta, allCkSum, allRefresh
+    global allContent, allDelta, allCkSum, allRefresh, allDone
     logger.debug("Pushing files")
     # If checksum content in NOT specified, send the data for each file
     if args.loginodes:
@@ -829,7 +826,7 @@ def pushFiles():
 
     for i in [tuple(x) for x in allRefresh]:
         if logger.isEnabledFor(logging.FILES):
-            logFileInfo(i, 'N')
+            logFileInfo(i, 'R')
         try:
             sendContent(i, 'Full')
             processed.append(i)
@@ -861,9 +858,12 @@ def pushFiles():
     # clear it out
     for i in processed:
         delInode(i)
+    for i in [tuple(x) for x in allDone]:
+        delInode(i)
     allRefresh = []
     allContent = []
     allDelta   = []
+    allDone    = []
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
