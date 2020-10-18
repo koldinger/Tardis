@@ -528,11 +528,11 @@ Older versions of Tardis supported a single compression scheme.  File data was c
 encrypted using AES-256 in ECB (Electronic Code Book) mode.   Separate keys were used for filename and data encryption.
 
 Newer versions of Tardis support multiple encryption schemes.
-    * AES-256-CBC/HMAC-SHA512 for file data, AES-256-ECB for filenames (the original scheme), PBKDF2 for key protection
-    * AES-256-CBC/HMAC-SHA512 for file data, AES-SIV (Synthetic Initilazition Vector) for filenames, scrypt for key protection
-    * AES-256-GCM (Galois Counter Mode) for file data, AES-SIV for filenames, scrypt for key protection
-    * ChaCha20/Poly1305 for file data, AES-SIV for filenames, scrypt for key protection
-    * No encryption
+   * AES-256-CBC/HMAC-SHA512 for file data, AES-256-ECB for filenames (the original scheme), PBKDF2 for key protection
+   * AES-256-CBC/HMAC-SHA512 for file data, AES-SIV (Synthetic Initilazition Vector) for filenames, scrypt for key protection
+   * AES-256-GCM (Galois Counter Mode) for file data, AES-SIV for filenames, scrypt for key protection
+   * ChaCha20/Poly1305 for file data, AES-SIV for filenames, scrypt for key protection
+   * No encryption
 
 The original filename scheme was weak because ECB mode allows common sections of data to appear as the same value.   Thus, if two file names started with the same block of characters,
 it was possible that both file names would be similar when encrypted.
@@ -548,6 +548,8 @@ Simple checks on file data are made (via the HMAC, GCM, or Poly1305 authenticati
 In addition, some data of minor value (such as inode numbers) are stored in plaintext in the database, allowing possible reconstruction of the shape of a directory tree.
 If the general structure of your data is known, Tardis may leak some information.
 
+The system is designed so that the server never works with unencrypted data.   All encryption and decryption are handled by the client being backed up, or being restored.
+
 
 Notes on Data Storage
 =====================
@@ -562,6 +564,6 @@ There are also up to 256 subdirectories, number in hex from 00-ff, containing th
 
 If the data is unencrypted, it is stored directly in the file, as either the raw data of the file (possibly compressed, if the client so specified) or as an rdiff delta.
 
-If the data is encrypted, the above data is encapsulated in the following format: the first 16 bytes (128 bits) are the initilization vector for the encryption, currently AES-256-CBC.  After this comes the data, as above, encrypted.  This data is padded ala PKCS#7, in binary.  The last 64 bytes (512 bits) of the file contain an HMAC of the data (including the PAD) using HMAC-SHA512.
+If the data is encrypted, the above data is encapsulated in the following format: the first 16 bytes (128 bits) are the initilization vector for the encryption, currently AES-256-CBC.  After this comes the data, as above, encrypted.  In schemes one and two, which use an explicit HMAC, this data is padded ala PKCS#7, in binary.  The last 64 bytes (512 bits) of the file contain an HMAC of the data (including the PAD) using HMAC-SHA512.
 
 Along with each file xxx, there is a corresponding file xxx.sig, containing the rdiff signature of the file, and a file xxx.meta, which contains information allowing reconstruction of the file (if not it's filename) should the database be corrupted.
