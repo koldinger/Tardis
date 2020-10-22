@@ -497,7 +497,7 @@ class Backend:
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
-        #self.logger.debug("Processing signature request message: %s"format(str(message)))
+        #self.logger.debug("Processing signature request message: %s", str(message))
         (inode, dev) = message["inode"]
         return self.sendSignature(inode, dev)
 
@@ -507,11 +507,13 @@ class Backend:
         errmsg = None
 
         ### TODO: Remove this function.  Clean up.
-        info = self.db.getFileInfoByInode((inode, dev), current=True)
+        info = self.db.getFileInfoByInode((inode, dev), current=False)
         if info:
-            chksum = self.db.getChecksumByName(info["name"], (info["parent"], info["parentdev"]))      ### Assumption: Current parent is same as old
+            chksum = info['checksum']
         else:
-            self.logger.error("No Checksum Info available for %s in (%d, %d)", info['name'], info['parent'], info['parentdev'])
+            self.logger.error("No Checksum Info available for(%d, %d)", inode, dev)
+
+        self.logger.debug("Sending signature for (%d, %d): %s", inode, dev, str(chksum))
 
         if chksum:
             try:
