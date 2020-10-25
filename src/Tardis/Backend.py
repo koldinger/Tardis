@@ -110,7 +110,7 @@ class ProtocolError(Exception):
 
 class BackendConfig:
     umask           = 0
-    cksContent      = False
+    cksContent      = 0
     serverSessionID = None
     formats         = []
     priorities      = []
@@ -275,6 +275,7 @@ class Backend:
                     old = tmp
                     fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
+
             if old:
                 #self.logger.debug("Comparing version:  New: %s", str(f))
                 #self.logger.debug("Comparing version:  Old: %s", str(makeDict(old)))
@@ -337,7 +338,7 @@ class Backend:
                         retVal = CONTENT
                     else:
                         retVal = DELTA
-            else:
+            else:           # if old (i.e., if not old)
                 # Create a new record for this file
                 #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
@@ -355,7 +356,7 @@ class Backend:
                         retVal = LINKED             # special value, allowing the caller to determine that this was handled as a link
                     else:
                         #self.logger.debug('No link data found for inode %d: %s.   Requesting new content', inode, f['name'])
-                        retVal = CONTENT
+                        retVal = self.checkForSize(f['size'])
                 else:
                     #Check to see if it's been moved or copied
                     #self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
@@ -370,7 +371,7 @@ class Backend:
                                 self.db.setChecksum(inode, device, old['checksum'])
                                 retVal = DONE
                             else:
-                                retVal = CONTENT
+                                retVal = self.checkForSize(f['size'])
                         else:
                             # otherwise
                             retVal = CKSUM
