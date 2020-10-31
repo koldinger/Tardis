@@ -477,7 +477,8 @@ def deleteBsets(db, cache):
         for bset in bsets:
             filesDeleted = filesDeleted + db.deleteBackupSet(bset['backupset'])
         print("Deleted %d files" % (filesDeleted))
-        removeOrphans(db, cache)
+        if args.purge:
+            removeOrphans(db, cache)
 
 def removeOrphans(db, cache):
     if hasattr(cache, 'removeOrphans'):
@@ -545,6 +546,7 @@ def parseArgs():
 
     deleteParser = argparse.ArgumentParser(add_help=False)
     #deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
+    deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=Util.StoreBoolean,        help="Delete files in the backupset")
     deleteParser.add_argument("backups", nargs="*", default=None, help="Backup sets to delete")
 
     cnfParser = argparse.ArgumentParser(add_help=False)
