@@ -689,17 +689,23 @@ class Backend:
             cksum = f["checksum"]
             # Check to see if the checksum exists
             # TODO: Is this faster than checking if the file exists?  Probably, but should test.
-            info = self.db.getChecksumInfo(cksum)
-            if info and info['isfile'] and info['size'] >= 0:
-                self.db.setChecksum(inode, dev, cksum)
-                done.append(f['inode'])
-            else:
-                # FIXME: TODO: If no checksum, should we request a delta???
-                old = self.db.getFileInfoByInode((inode, dev))
-                if old and old['chainlength'] < self.maxChain:
-                    delta.append(f['inode'])
+            try:
+                info = self.db.getChecksumInfo(cksum)
+                if info and info['isfile'] and info['size'] >= 0:
+                    self.db.setChecksum(inode, dev, cksum)
+                    done.append(f['inode'])
                 else:
-                    content.append(f['inode'])
+                    # FIXME: TODO: If no checksum, should we request a delta???
+                    old = self.db.getFileInfoByInode((inode, dev))
+                    if old and old['chainlength'] < self.maxChain:
+                        delta.append(f['inode'])
+                    else:
+                        content.append(f['inode'])
+            except Exception as e:
+                self.logger.error("Could check checksum for %s: %s", cksum, str(e))
+                if self.config.exceptions:
+                    self.logger.exception(e)
+                content.append(f['inode'])
         message = {
             "message": "ACKSUM",
             "status" : "OK",
@@ -717,15 +723,21 @@ class Backend:
         done = []
         content = []
         for cksum in metadata:
-            info = self.db.getChecksumInfo(cksum)
-            if info and info['size'] != -1:
-                done.append(cksum)
-            else:
-                # Insert a placeholder with a negative size
-                # But only if we don't already have one, left over from a previous failing build.
-                if not info:
-                    self.db.insertChecksumFile(cksum, encrypted, -1)
-                content.append(cksum)
+            try:
+                info = self.db.getChecksumInfo(cksum)
+                if info and info['size'] != -1:
+                    done.append(cksum)
+                else:
+                    # Insert a placeholder with a negative size
+                    # But only if we don't already have one, left over from a previous failing build.
+                    if not info:
+                        self.db.insertChecksumFile(cksum, encrypted, -1)
+                    content.append(cksum)
+            except Exception as e:
+                self.logger.error("Could process metadata for %s: %s", cksum, str(e))
+                if self.config.exceptions:
+                    self.logger.exception(e)
+                content.append(f['inode'])
         message = {
             'message': 'ACKMETA',
             'content': content,
