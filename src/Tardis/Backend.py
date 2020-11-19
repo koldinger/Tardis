@@ -28,39 +28,36 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import types
-import sys
-import string
 import argparse
-import uuid
+import base64
+import configparser
+import io
+import json
 import logging
 import logging.config
-import configparser
+import os
 import pprint
-import tempfile
 import shutil
 import signal
-import json
-import base64
+import string
+import sys
+import tempfile
+import types
+import uuid
 from datetime import datetime
 
-# For profiling
-import io
-
-
 import Tardis
-import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
-import Tardis.Messages as Messages
 import Tardis.CacheDir as CacheDir
-import Tardis.TardisDB as TardisDB
-import Tardis.Regenerator as Regenerator
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.Connection as Connection
 import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.TardisCrypto as TardisCrypto
+import Tardis.Connection as Connection
+import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
+import Tardis.Defaults as Defaults
 import Tardis.librsync as librsync
+import Tardis.Messages as Messages
+import Tardis.Regenerator as Regenerator
+import Tardis.TardisCrypto as TardisCrypto
+import Tardis.TardisDB as TardisDB
+import Tardis.Util as Util
 
 DONE    = 0
 CONTENT = 1
@@ -146,33 +143,34 @@ class BackendConfig:
 
 
 class Backend:
-    numfiles = 0
-    logger   = None
-    sessionid = None
-    tempdir = None
-    cache   = None
-    db      = None
-    purged  = False
-    full    = False
-    statNewFiles = 0
-    statUpdFiles = 0
-    statDirs     = 0
-    statBytesReceived = 0
-    statPurgedFiles = 0
-    statPurgedSets = 0
-    statCommands = {}
-    address = ''
-    regenerator = None
-    basedir = None
-    autoPurge = False
-    saveConfig = False
-    deltaPercent = 80
-    forceFull = False
-    saveFull = False
-    lastCompleted = None
-    maxChain = 0
 
     def __init__(self, messenger, config, logSession=True, sessionid=None):
+        self.numfiles       = 0
+        self.logger         = None
+        self.sessionid      = None
+        self.tempdir        = None
+        self.cache          = None
+        self.db             = None
+        self.purged         = False
+        self.full           = False
+        self.statNewFiles   = 0
+        self.statUpdFiles   = 0
+        self.statDirs       = 0
+        self.statBytesReceived  = 0
+        self.statPurgedFiles    = 0
+        self.statPurgedSets = 0
+        self.statCommands   = {}
+        self.address        = ''
+        self.regenerator    = None
+        self.basedir        = None
+        self.autoPurge      = False
+        self.saveConfig     = False
+        self.deltaPercent   = 80
+        self.forceFull      = False
+        self.saveFull       = False
+        self.lastCompleted  = None
+        self.maxChain       = 0
+
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         if logSession:
@@ -478,6 +476,7 @@ class Backend:
             cksid = ckinfo['checksumid']
         else:
             cksid = self.db.insertChecksumFile(checksum, encrypted=False, size=message['size'], isFile=False)
+            self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         self.db.updateDirChecksum(inode, cksid)
         response = {
             "message" : "ACKDHSH",
@@ -635,10 +634,12 @@ class Backend:
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                     self.db.insertChecksumFile(checksum, encrypted, size=size, disksize=bytesReceived)
+                    self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                 else:
                     if self.config.linkBasis:
                         self.cache.link(basis, checksum + ".basis")
                     self.db.insertChecksumFile(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
+                    self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
                 # Track that we've added a file of this size.
                 self.sizes.add(size)
@@ -877,6 +878,7 @@ class Backend:
                         self.logger.warning("Checksum file %s exists, but no DB entry.  Reinserting", checksum)
                         self.cache.insert(checksum, tempName)
                         self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                        self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                     else:
                         if self.full:
                             self.logger.debug("Replacing existing checksum file for %s", checksum)
@@ -889,8 +891,10 @@ class Backend:
                 else:
                     self.cache.insert(checksum, tempName)
                     self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                    self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
             else:
                 self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
             (inode, dev) = message['inode']
 
@@ -923,6 +927,8 @@ class Backend:
             'message': 'ACKBTCH',
             'responses': responses
         }
+        self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
+        self.db.commit()
         return (response, True)
 
     def processSetKeys(self, message):
@@ -963,6 +969,7 @@ class Backend:
             else:
                 f.write(bytes(message['line'], 'utf8'))
             cksid = self.db.insertChecksumFile(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
+            self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
             f.close()
         else:
             cksid = ckInfo['checksumid']
@@ -1020,7 +1027,9 @@ class Backend:
 
         if response and 'msgid' in message:
             response['respid'] = message['msgid']
-        self.db.commit()
+        if transaction:
+            self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
+            self.db.commit()
 
         return (response, flush)
 
