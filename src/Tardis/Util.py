@@ -754,20 +754,21 @@ def loadKeys(name, client):
     except configparser.NoOptionError as e:
         raise Exception("No keys available for client " + client)
 
-def saveKeys(name, client, nameKey, contentKey):
+def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
+    def _addOrDelete(config, client, key, value):
+        if value:
+            config.set(client, key, value)
+        else:
+            config.remove_option(client, key)
+
     config = configparser.ConfigParser()
     config.add_section(client)
     config.read(name)
 
-    if contentKey:
-        config.set(client, 'ContentKey', contentKey)
-    else:
-        config.remove_option(client, 'ContentKey')
-
-    if nameKey:
-        config.set(client, 'FilenameKey', nameKey)
-    else:
-        config.remove_option(client, 'FilenameKey')
+    _addOrDelete(config, client, 'ContentKey', contentKey)
+    _addOrDelete(config, client, 'FilenameKey', nameKey)
+    _addOrDelete(config, client, 'SRPSalt', srpSalt)
+    _addOrDelete(config, client, 'SRPVkey', srpVkey)
 
     with open(name, 'w') as configfile:
         config.write(configfile)

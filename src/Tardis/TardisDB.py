@@ -1028,7 +1028,7 @@ class TardisDB(object):
                 backupName = self.dbName + ".keys"
                 r = Rotator.Rotator(rotations=0)
                 r.backup(backupName)
-                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey)
+                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, salt, vkey)
             self.commit()
             if backup:
                 r.rotate(backupName)
