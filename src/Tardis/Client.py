@@ -1765,8 +1765,8 @@ def processCommandLine():
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False,
                                   epilog='Options can be specified in files, with the filename specified by an @sign: e.g. "%(prog)s @args.txt" will read arguments from args.txt')
 
-    parser.add_argument('--config',                 dest='config', default=None,                                        help='Location of the configuration file. ' + _def)
-    parser.add_argument('--job',                    dest='job', default='Tardis',                                       help='Job Name within the configuration file. ' + _def)
+    parser.add_argument('--config',                 dest='config', default=Defaults.getDefault('TARDIS_CONFIG'),        help='Location of the configuration file. ' + _def)
+    parser.add_argument('--job',                    dest='job', default=Defaults.getDefault('TARDIS_JOB'),              help='Job Name within the configuration file. ' + _def)
     parser.add_argument('--debug',                  dest='debug', default=False, action='store_true',                   help=argparse.SUPPRESS)
     (args, remaining) = parser.parse_known_args()
 

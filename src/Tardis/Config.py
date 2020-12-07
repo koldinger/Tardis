@@ -58,8 +58,8 @@ job = None
 def parseConfigOptions(parser):
     global job
     configGroup = parser.add_argument_group("Configuration File Options")
-    configGroup.add_argument('--config',         dest='config', default=None,                                    help='Location of the configuration file.   Default: %(default)s')
-    configGroup.add_argument('--job',            dest='job', default='Tardis',                                   help='Job Name within the configuration file.  Default: %(default)s')
+    configGroup.add_argument('--config',         dest='config', default=Defaults.getDefault('TARDIS_CONFIG'),    help='Location of the configuration file.   Default: %(default)s')
+    configGroup.add_argument('--job',            dest='job', default=Defaults.getDefault('TARDIS_JOB'),          help='Job Name within the configuration file.  Default: %(default)s')
 
     (args, remaining) = parser.parse_known_args()
 

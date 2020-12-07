@@ -246,9 +246,11 @@ Environment Variables
 | TARDIS_DEFAULTS       | Location of a defaults file.| /etc/tardis/system.defaults | All |
 | TARDIS_RECENT_SET     | Name to use for most recent, complete backup | Current | User tools |
 | TARDIS_SEND_CONFIG    | Send the running configuration to the server, mainly for debug. | True | Client
+| TARDIS_CONFIG         | Configuration file to use | None | Client, User Tools |
+| TARDIS_JOB            | Job to run, from a configuration file | Tardis | Client, User Tools |
 
 Notes:
-    * User tools are lstardis, regenerate, tardiff, and sonic.
+    * User tools are lstardis, regenerate, tardiff, tardisfs, and sonic.
     * Client is the tardis app.
     * Daemon is the tardisd app.
 
@@ -297,7 +299,6 @@ By default, configurations are read from Tardis section, but can be overridden b
 | NoCompress      |                     |                   | Mime types to not compress |
 | SendClientConfig| True                | TARDIS_SEND_CONFIG| Send the client configuration (arguments) to the server. |
 | Local           | False               |                   | Perform a local backup.  Spawns a server as a child process. |
-| LocalServerCmd  | tardisd --config    |                   | Command for running the local server. |
 | CompressMsgs    | none                |                   | Compress messages to the server.  Choices are none, zlib, zlib-stream, snappy |
 | Purge           | False               |                   | Purge old content ||
 | IgnoreCVS       | False               |                   | Ignore source code control files (CVS, SVN, RCS, and git) |
