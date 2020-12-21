@@ -82,7 +82,7 @@ import Tardis.librsync as librsync
 import Tardis.MultiFormatter as MultiFormatter
 import Tardis.StatusBar as StatusBar
 import Tardis.Backend as Backend
-import Tardis.Throttler as Throttler
+#import Tardis.Throttler as Throttler
 import Tardis.ThreadedScheduler as ThreadedScheduler
 
 features = Tardis.check_features()
@@ -1736,10 +1736,10 @@ def getConnection(server, port, maxBandwidth=None):
     #    setEncoder("bin")
     #elif args.protocol == 'msgp':
     throttler = None
-    if maxBandwidth:
-        throttler = Throttler(maxBandwidth, blocking=True)
+    #if maxBandwidth:
+    #    throttler = Throttler(maxBandwidth, blocking=True)
 
-    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, throttler=throttler)
+    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout)
     setEncoder("bin")
     return conn
 
