@@ -34,6 +34,7 @@ import signal
 import shutil
 import string
 import atexit
+import sched
 
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
@@ -85,45 +86,39 @@ def resetCursor():
     print(_showCursor, end='')
 
 class StatusBar():
-    def __init__(self, base, live={}, formatter=None):
+    def __init__(self, base, live={}, formatter=None, delay=0.25, scheduler=None, priority=10):
         self.base = base
         self.live = live
         self.trailer = None
         self.halt = False
         self.values = {}
-        if formatter:
-            self.formatter = formatter
-        else:
-            self.formatter = StatusBarFormatter()
+        self.delay = delay
+        self.formatter = formatter if formatter else StatusBarFormatter()
+        self.scheduler = scheduler if scheduler else sched.scheduler()
+        self.priority = priority
 
         (width, _) = shutil.get_terminal_size((80, 32))
-
         _statusBars.append(self)
 
         _handle_resize(None, None)
         signal.signal(signal.SIGWINCH, _handle_resize)
         signal.siginterrupt(signal.SIGWINCH, False)
 
-    def run(self, delay=0.25):
+        self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
         atexit.register(resetCursor)
-        starttime = time.time()
-        self.halt = False
-        while not self.halt:
-            time.sleep(delay)
-            self.printStatus()
-        atexit.unregister(resetCursor)
-        self.clearStatus()
 
     def start(self, delay=0.25, name="StatusBar"):
-        self.thread = threading.Thread(name=name, target=self.run, args=(delay,))
+        self.thread = threading.Thread(name=name, target=self.scheduler.run)
         self.thread.setDaemon(True)
         self.thread.start()
 
     def shutdown(self):
+        self.scheduler.cancel(self.event)
         self.halt = True
         self.clearStatus()
-        self.thread.join()
-        pass
+        atexit.unregister(resetCursor)
+        if self.thread:
+            self.thread.join()
 
     def pTime(self, seconds):
         if seconds > 3600:
@@ -164,9 +159,10 @@ class StatusBar():
         except:
             print(_ansiClearEol + _startOfLine, end='', flush=True)
 
+        self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
+
     def clearStatus(self):
         print(_showCursor + _startOfLine + _ansiClearEol, end='')
-
 
 
 if __name__ == "__main__":
@@ -185,5 +181,3 @@ if __name__ == "__main__":
         sb.setValue("amount", i * 1000000)
     sb.shutdown()
     print("All done")
-
-

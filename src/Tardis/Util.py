@@ -157,34 +157,43 @@ def shortPath(path, width=80):
     Compress a path to only show the last elements if it's wider than specified.
     Replaces early elements with ".../"
     """
+
+    # If we're already short enough, just return what we have
     if not path or len(path) < width:
         return path
 
+    # Compensate for a coming .../ plus slosh
     width -= 5
+
+    # split into path prefix, + the current file
     path, retPath = os.path.split(path)
 
     # Check to see if we're already wider than width.....
     # If so, put a "..." in the middle of the filename
+    # retPath is the current file at this point
     if len(retPath) > width:
         namecomps = retPath.rsplit('.', 1)
+        #print("Name Comps:: ",  namecomps)
         if len(namecomps) == 2:
             main, suffix = namecomps
         else:
             main = namecomps[0]
             suffix = ''
-        length = len(main) - len(suffix) - 5
-        length = min(length, width - 4)
-        retPath   = main[0:length // 2] + "..." + main[-(length // 2):]
+        #print("Split:: ", main, suffix)
+        length = min(len(retPath), width) - 5
+        retPath   = main[0:(length // 2) - 1] + "..." + main[-(length // 2) + 1:]
         if suffix:
             retPath = '.'.join([retPath, suffix])
 
+    #print("First chunk:: ", len(retPath), retPath)
+
     # Build it up backwards from the end
     while len(retPath) < width:
-        #print retPath, len(retPath), width
         path, tail = os.path.split(path)
+        #print(retPath, len(retPath), path, tail)
         if not path or not tail:
             break
-        elif len(tail) + len(retPath) > width:
+        elif len(tail) + len(os.sep) + len(retPath) > width:
             break
         else:
             retPath = os.path.join(tail, retPath)

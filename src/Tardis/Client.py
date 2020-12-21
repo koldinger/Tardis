@@ -82,6 +82,8 @@ import Tardis.librsync as librsync
 import Tardis.MultiFormatter as MultiFormatter
 import Tardis.StatusBar as StatusBar
 import Tardis.Backend as Backend
+import Tardis.Throttler as Throttler
+import Tardis.ThreadedScheduler as ThreadedScheduler
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -1173,8 +1175,8 @@ def makeMetaMessage():
 
 statusBar = None
 
-def initProgressBar():
-    statusBar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats)
+def initProgressBar(scheduler):
+    statusBar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats, scheduler=scheduler)
     statusBar.setValue('mode', '')
     statusBar.setTrailer('')
     statusBar.start()
@@ -1725,7 +1727,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             sys.exit(1)
         crypt.setKeys(f, c)
 
-def getConnection(server, port):
+def getConnection(server, port, maxBandwidth=None):
     #if args.protocol == 'json':
     #    conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout, full=args.full)
     #    setEncoder("base64")
@@ -1733,8 +1735,11 @@ def getConnection(server, port):
     #    conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
     #    setEncoder("bin")
     #elif args.protocol == 'msgp':
+    throttler = None
+    if maxBandwidth:
+        throttler = Throttler(maxBandwidth, blocking=True)
 
-    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout)
+    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, throttler=throttler)
     setEncoder("bin")
     return conn
 
@@ -2298,6 +2303,8 @@ def main():
     backend = None
     backendThread = None
     
+    # Create a scheduler thread, if need be
+    scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
 
     # Get the connection object
     try:
@@ -2315,9 +2322,12 @@ def main():
         logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
 
 
+
     # Initialize the progress bar, if requested
     if args.progress:
-        statusBar = initProgressBar()
+        statusBar = initProgressBar(scheduler)
+
+    scheduler.start()
 
     # Send a command line
     clHash = crypt.getHash()
