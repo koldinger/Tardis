@@ -2327,7 +2327,8 @@ def main():
     if args.progress:
         statusBar = initProgressBar(scheduler)
 
-    scheduler.start()
+    if scheduler:
+        scheduler.start()
 
     # Send a command line
     clHash = crypt.getHash()
