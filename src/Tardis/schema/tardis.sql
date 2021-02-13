@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS Backups (
     ClientConfigId  INTEGER,
     CmdLineId       INTEGER,
     ServerSession   TEXT,
+    Exception       TEXT,
+    ErrorMsg        TEXT,
     FOREIGN KEY(ClientConfigId) REFERENCES ClientConfig(ClientConfigId),
     FOREIGN KEY(CmdLineId) REFERENCES Checksums(ChecksumId)
 );
@@ -107,5 +109,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "17");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "18");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

@@ -389,11 +389,11 @@ def setupLogging():
             # Create some default colors
             colors = {
                 'DEBUG':    'cyan',
-		'INFO':     'green',
-		'WARNING':  'yellow',
-		'ERROR':    'red',
-		'CRITICAL': 'red,bg_white',
-                  }
+                'INFO':     'green',
+                'WARNING':  'yellow',
+                'ERROR':    'red',
+                'CRITICAL': 'red,bg_white',
+            }
             logFormat = colorlog.TTYColoredFormatter("%(asctime)s %(log_color)s%(levelname)s%(reset)s : %(message)s", log_colors=colors, stream=sys.stdout)
 
         verbosity = args.verbose

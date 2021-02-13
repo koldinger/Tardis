@@ -1435,8 +1435,10 @@ class Backend:
                 #self.db.renameBackupSet(newName, newPriority)
 
             completed = True
+            failure = None
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
+            self.db.setFailure(e)
             if self.config.exceptions:
                 self.logger.exception(e)
 
@@ -1451,6 +1453,7 @@ class Backend:
 
             if started:
                 self.db.setClientEndTime()
+
                 # Autopurge if it's set.
                 if self.autoPurge and not self.purged and completed:
                     self.processPurge()
@@ -1465,5 +1468,3 @@ class Backend:
                 self.db.close(started)
 
             return (started, completed, endtime, count, size)
-
-

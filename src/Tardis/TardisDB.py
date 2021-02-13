@@ -88,7 +88,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 17
+_schemaVersion = 18
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -1184,6 +1184,13 @@ class TardisDB(object):
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET ClientEndTime = :now WHERE BackupSet = :backup",
                               { "now": time.time(), "backup": self.currBackupSet })
+
+    @authenticate
+    def setFailure(self, ex):
+        if self.currBackupSet:
+            self.conn.execute("UPDATE Backups SET Exception = :ex, ErrorMsg = :msg WHERE BackupSet = :backup",
+                              { "ex": type(ex).__name__, "msg": str(ex), "backup": self.currBackupSet})
+
 
     def close(self, completeBackup=False):
         #self.logger.debug("Closing DB: %s", self.dbName)
