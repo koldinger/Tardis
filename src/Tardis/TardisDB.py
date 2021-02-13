@@ -66,6 +66,8 @@ def authenticate(func):
             raise NotAuthenticated("Not authenticated to database.")
     return doit
 
+# Be sure to end all these lists with a space.
+
 _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                    "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
                    "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
@@ -81,7 +83,8 @@ _fileInfoJoin =    "FROM Files " \
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
-                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline "
+                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline, "\
+                       "Exception AS exception, ErrorMsg AS errormsg "
 
 _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.ChecksumID = Backups.CmdLineId "
 

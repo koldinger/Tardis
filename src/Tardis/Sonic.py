@@ -275,10 +275,16 @@ def listBSets(db, crypt, cache):
                 duration = ''
             completed = 'Comp' if bset['completed'] else 'Incomp'
             full      = 'Full' if bset['full'] else 'Delta'
-            isCurrent = current if bset['backupset'] == last['backupset'] else ''
+            if bset['backupset'] == last['backupset']:
+                status = current
+            elif bset['errormsg']:
+                status = bset['errormsg']
+            else:
+                status = ''
+            #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print("%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, isCurrent))
+            print("%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 if commandLine:
