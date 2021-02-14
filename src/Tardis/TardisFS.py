@@ -509,11 +509,11 @@ class TardisFS(LoggingMixIn, Operations):
                     subpath = self.crypt.encryptPath(subpath)
                 f = self.regenerator.recoverFile(subpath, b['backupset'], nameEncrypted=True, authenticate=self.authenticate)
                 f.flush()
-                link = f.readline()
+                link = f.readline().decode(self.fsencoding, errors='backslashreplace')
                 f.close()
-                if self.repoint:
-                    if os.path.isabs(link):
-                        link = os.path.join(self.mountpoint, parts[0], os.path.relpath(link, "/"))
+                #if self.repoint:
+                #    if os.path.isabs(link):
+                #        link = os.path.join(self.mountpoint, parts[0], os.path.relpath(link, "/"))
                 self.cache.insert(key, link)
                 return link
         raise FuseOSError(errno.ENOENT)
