@@ -71,6 +71,7 @@ import srp
 import colorlog
 from pathmatch import wildmatch
 from functools import reduce
+from collections import defaultdict
 
 import Tardis
 import Tardis.TardisCrypto as TardisCrypto
@@ -225,7 +226,44 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 
 report = {}
 
-inodeDB             = {}
+
+
+class InodeEntry:
+    def __init__(self):
+        self.paths = []
+        self.numEntries = 0
+        self.finfo = None
+
+class InodeDB:
+    def __init__(self):
+        self.db = defaultdict(InodeEntry)
+
+    def insert(self, inode, finfo, path):
+        entry = self.db[inode]
+        entry.numEntries += 1
+        entry.paths.append(path)
+        entry.finfo = finfo
+
+    def get(self, inode, num=0):
+        if not inode in self.db:
+            return (None, None)
+        entry = self.db[inode]
+        if num >= len(entry.paths):
+            return (entry.finfo, None)
+        return (entry.finfo, entry.paths[num])
+
+    def delete(self, inode, path=None):
+        if inode in self.db:
+            entry = self.db[inode]
+            entry.numEntries -= 1
+            if entry.numEntries == 0:
+                self.db.pop(inode)
+            if path:
+                entry.paths.remove(path)
+            else:
+                entry.paths.pop(0)
+
+inodeDB             = InodeDB()
 dirHashes           = {}
 
 # Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
@@ -316,13 +354,6 @@ def filelist(dirname, excludes):
 
 #_deletedInodes = {}
 
-def delInode(inode):
-    if args.loginodes:
-        args.loginodes.write(f"Del {str(inode)}\n".encode('utf8'))
-    if inode in inodeDB:
-        del inodeDB[inode]
-        #_deletedInodes[inode] = (currentResponse, currentBatch)
-
 def msgInfo(resp=None, batch=None):
     if resp is None: resp = currentResponse
     if batch is None: batch = currentBatch
@@ -340,7 +371,7 @@ pool = concurrent.futures.ThreadPoolExecutor()
 def genChecksum(inode):
     checksum = None
     try:
-        (_, pathname) = inodeDB[inode]
+        (_, pathname) = inodeDB.get(inode)
         setProgress("File [C]:", pathname)
 
         m = crypt.getHash()
@@ -391,7 +422,7 @@ def processChecksums(inodes):
 
 def logFileInfo(i, c):
     if i in inodeDB:
-        (x, name) = inodeDB[i]
+        (x, name) = inodeDB.get(i)
         if "size" in x:
             size = x["size"]
         else:
@@ -412,10 +443,10 @@ def handleAckSum(response):
     # First, delete all the files which are "done", ie, matched
     for i in [tuple(x) for x in done]:
         if logfiles:
-            if i in inodeDB:
-                (x, name) = inodeDB[i]
+            (x, name) = inodeDB.get(i)
+            if name:
                 logger.log(logging.FILES, "[C]: %s", Util.shortPath(name))
-        delInode(i)
+        inodeDB.delete(i)
 
     # First, then send content for any files which don't
     # FIXME: TODO: There should be a test in here for Delta's
@@ -423,7 +454,7 @@ def handleAckSum(response):
         if logfiles:
             logFileInfo(i, 'n')
         sendContent(i, 'Full')
-        delInode(i)
+        inodeDB.delete(i)
 
     signatures = None
     if not args.full and len(delta) != 0:
@@ -433,7 +464,7 @@ def handleAckSum(response):
         if logfiles:
             logFileInfo(i, 'd')
         processDelta(i, signatures)
-        delInode(i)
+        inodeDB.delete(i)
 
 def makeEncryptor():
     iv = crypt.getIV()
@@ -500,8 +531,9 @@ def fetchSignature(inode):
 
 
 def getInodeDBName(inode):
-    if inode in inodeDB:
-        return inodeDB[inode][1]
+    (_, name) = inodeDB.get(inode)
+    if name:
+        return name
     else:
         return "Unknown"
 
@@ -513,7 +545,7 @@ def processDelta(inode, signatures):
         args.loginodes.write(f"ProcessDelta {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
 
     try:
-        (_, pathname) = inodeDB[inode]
+        (_, pathname) = inodeDB.get(inode)
         setProgress("File [D]:", pathname)
         logger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
@@ -617,7 +649,7 @@ def sendContent(inode, reportType):
     #if inode in inodeDB:
     try:
         checksum = None
-        (fileInfo, pathname) = inodeDB[inode]
+        (fileInfo, pathname) = inodeDB.get(inode)
         if pathname:
             mode = fileInfo["mode"]
             filesize = fileInfo["size"]
@@ -762,10 +794,9 @@ def sendDirHash(inode):
         #    logger.exception("No directory hash entry for %s", i)
 
 def cksize(i, threshhold):
-    if i in inodeDB:
-        (f, _) = inodeDB[i]
-        if f['size'] > threshhold:
-            return True
+    (f, _) = inodeDB.get(i)
+    if f and f['size'] > threshhold:
+        return True
     return False
 
 allContent = []
@@ -849,8 +880,8 @@ def pushFiles():
                 sendContent(i, 'Full')
             else:
                 if logger.isEnabledFor(logging.FILES):
-                    if i in inodeDB:
-                        (x, name) = inodeDB[i]
+                    (x, name) = inodeDB.get(i)
+                    if name:
                         logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
                 processDelta(i, signatures)
             processed.append(i)
@@ -859,9 +890,9 @@ def pushFiles():
 
     # clear it out
     for i in processed:
-        delInode(i)
+        inodeDB.delete(i)
     for i in [tuple(x) for x in allDone]:
-        delInode(i)
+        inodeDB.delete(i)
     allRefresh = []
     allContent = []
     allDelta   = []
@@ -956,7 +987,7 @@ def mkFileInfo(f):
         if args.loginodes:
             args.loginodes.write(f"Add {str(inode)} {pathname}\n".encode('utf8'))
 
-        inodeDB[inode] = (finfo, pathname)
+        inodeDB.insert(inode, finfo, pathname)
     else:
         if verbosity:
             logger.info("Skipping special file: %s", pathname)
@@ -1031,12 +1062,12 @@ def handleAckClone(message):
             (path, files) = cloneContents[inode]
             for f in files:
                 key = (f['inode'], f['dev'])
-                delInode(key)
+                inodeDB.delete(key)
             del cloneContents[inode]
         else:
             logger.error("Unable to locate info for %s", inode)
         # And the directory.
-        delInode(inode)
+        inodeDB.delete(inode)
 
     # Process the directories that have changed
     for i in content:
@@ -2425,11 +2456,11 @@ def main():
                 print("{}:: {}".format(path, len(files)))
 
         # This next one is usually non-zero, for some reason.  Enable to debug.
-        if len(inodeDB) != 0:
-            logger.warning("%d InodeDB entries not processed", len(inodeDB))
-            for key in list(inodeDB.keys()):
-                (_, path) = inodeDB[key]
-                print("{}:: {}".format(key, path))
+        #if len(inodeDB) != 0:
+            #logger.warning("%d InodeDB entries not processed", len(inodeDB))
+            #for key in list(inodeDB.keys()):
+                #(_, path) = inodeDB[key]
+                #print("{}:: {}".format(key, path))
 
     # Print stats and files report
     if args.stats:
