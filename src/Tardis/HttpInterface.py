@@ -263,7 +263,7 @@ def getFileInfoByPathRoot(backupset):
 # getFileInfoByPath
 @app.route('/getFileInfoByPath/<int:backupset>/<path:pathname>')
 def getFileInfoByPath(backupset, pathname):
-    #app.logger.info("getFiloInfoByPath Invoked: %d %s", backupset, pathname)
+    #app.logger.info("getFileInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
@@ -288,7 +288,7 @@ def getFileInfoByPathForRange(first, last, pathname):
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
-    #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
+    #app.logger.info("getFileInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
@@ -296,9 +296,15 @@ def getFileInfoByName(backupset, device, inode, name):
 # getFileInfoByInode
 @app.route('/getFileInfoByInode/<int:backupset>/<int:device>/<int:inode>')
 def getFileInfoByInode(backupset, device, inode):
-    #app.logger.info("getFiloInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
+    #app.logger.info("getFileInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByInode((inode, device), backupset)))
+
+@app.route('/getFileInfoByChecksum/<int:backupset>/<checksum>')
+def getFileInfoByChecksum(backupset, checksum):
+    #app.logger.info("getFileInfoByChceksum Invoked: %d %s", backupset, checksum)
+    db = getDB()
+    return createResponse([makeDict(x) for x in db.getFileInfoByChecksum(checksum, backupset)])
 
 # getNewFiles
 @app.route('/getNewFiles/<int:backupset>/<other>')

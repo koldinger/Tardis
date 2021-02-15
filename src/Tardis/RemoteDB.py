@@ -257,6 +257,13 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def getFileInfoByChecksum(self, checksum, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + "getFileInfoByChecksum/" + bset + "/" + str(checksum), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def getFileInfoByPath(self, path, current=False):
         bset = self._bset(current)
         if not path.startswith('/'):
@@ -275,6 +282,7 @@ class RemoteDB(object):
         r.raise_for_status()
         for i in r.json():
             yield i
+
 
     @reconnect
     def readDirectory(self, dirNode, current=False):
