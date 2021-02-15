@@ -58,9 +58,9 @@ def processArgs():
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
-    parser.add_argument('--encrypt', '-e', dest='encrypt', default=False, action='store_true', help='Encrypt names instead of decrypting')
     parser.add_argument('--quiet', '-q', dest='quiet', default=False, action='store_true', help="Only print the translation, not the input strings")
     parser.add_argument('--backup', '-b', dest='backup', default=None, help='Look in specific backupset')
+    parser.add_argument('--chain', '-c', dest='chain', default=False, action='store_true', help="Print file info on all stages in the chain")
 
     parser.add_argument('--help', '-h',     action='help');
     parser.add_argument('checksums',          nargs='*', help="List of checksums to extract")
@@ -131,7 +131,14 @@ def main():
                 if args.quiet:
                     print(_path(tardis, crypto, bset, inode))
                 else:
-                    print(f"{i} => {_path(tardis, crypto, bset, inode)}")
+                    print(f"{i} => [{finfo['firstset']}, {finfo['lastset']}] ({finfo['inode']}, {finfo['device']})\t{_path(tardis, crypto, bset, inode)}")
+            if args.chain:
+                info = tardis.getChecksumInfoChain(i)
+                x = 0
+                for j in info:
+                    print(f"  {x:2}: {j['checksum']} Size: {j['size']:8} File: {bool(j['isfile'])} Compressed: {j['compressed']} Encrypted: {bool(j['encrypted'])} DiskSize: {j['disksize']}")
+                    x += 1
+                print("")
 
         except Exception as e:
             print("Caught exception: " + str(e))
