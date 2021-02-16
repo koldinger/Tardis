@@ -511,7 +511,7 @@ class Backend:
         if info:
             chksum = info['checksum']
         else:
-            self.logger.error("No Checksum Info available for(%d, %d)", inode, dev)
+            self.logger.warning("No Checksum Info available for (%d, %d)", inode, dev)
 
         self.logger.debug("Sending signature for (%d, %d): %s", inode, dev, str(chksum))
 
