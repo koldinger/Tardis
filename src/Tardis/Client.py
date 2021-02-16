@@ -2434,12 +2434,11 @@ def main():
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         exceptionLogger.log(e)
     finally:
+        setProgress("Finishing backup", "")
         conn.close()
         if localmode:
             conn.send(Exception("Terminate connection"))
 
-    if args.progress:
-        statusBar.shutdown()
 
     if localmode:
         logger.info("Waiting for server to complete")
@@ -2461,6 +2460,9 @@ def main():
             #for key in list(inodeDB.keys()):
                 #(_, path) = inodeDB[key]
                 #print("{}:: {}".format(key, path))
+
+    if args.progress:
+        statusBar.shutdown()
 
     # Print stats and files report
     if args.stats:
