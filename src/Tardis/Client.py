@@ -421,8 +421,8 @@ def processChecksums(inodes):
     batchMessage(message)
 
 def logFileInfo(i, c):
-    if i in inodeDB:
-        (x, name) = inodeDB.get(i)
+    (x, name) = inodeDB.get(i)
+    if name:
         if "size" in x:
             size = x["size"]
         else:
