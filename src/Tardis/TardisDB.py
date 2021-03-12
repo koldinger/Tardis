@@ -697,7 +697,7 @@ class TardisDB(object):
                 f["nameid"] = self.cursor.lastrowid
 
     @authenticate
-    def insertChecksumFile(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
+    def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
         def _xstr(x):

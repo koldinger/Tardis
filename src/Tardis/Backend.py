@@ -475,7 +475,7 @@ class Backend:
         if ckinfo:
             cksid = ckinfo['checksumid']
         else:
-            cksid = self.db.insertChecksumFile(checksum, encrypted=False, size=message['size'], isFile=False)
+            cksid = self.db.insertChecksum(checksum, encrypted=False, size=message['size'], isFile=False)
             self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         self.db.updateDirChecksum(inode, cksid)
         response = {
@@ -633,12 +633,12 @@ class Backend:
                         shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
-                    self.db.insertChecksumFile(checksum, encrypted, size=size, disksize=bytesReceived)
+                    self.db.insertChecksum(checksum, encrypted, size=size, disksize=bytesReceived)
                     self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                 else:
                     if self.config.linkBasis:
                         self.cache.link(basis, checksum + ".basis")
-                    self.db.insertChecksumFile(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
+                    self.db.insertChecksum(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
                     self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
                 # Track that we've added a file of this size.
@@ -732,7 +732,7 @@ class Backend:
                     # Insert a placeholder with a negative size
                     # But only if we don't already have one, left over from a previous failing build.
                     if not info:
-                        self.db.insertChecksumFile(cksum, encrypted, -1)
+                        self.db.insertChecksum(cksum, encrypted, -1)
                     content.append(cksum)
             except Exception as e:
                 self.logger.error("Could process metadata for %s: %s", cksum, str(e))
@@ -877,7 +877,7 @@ class Backend:
                     if ckInfo is None:
                         self.logger.warning("Checksum file %s exists, but no DB entry.  Reinserting", checksum)
                         self.cache.insert(checksum, tempName)
-                        self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                        self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                         self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                     else:
                         if self.full:
@@ -890,10 +890,10 @@ class Backend:
                             os.remove(tempName)
                 else:
                     self.cache.insert(checksum, tempName)
-                    self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                    self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                     self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
             else:
-                self.db.insertChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
+                self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
             (inode, dev) = message['inode']
@@ -968,7 +968,7 @@ class Backend:
                 f.write(message['line'])
             else:
                 f.write(bytes(message['line'], 'utf8'))
-            cksid = self.db.insertChecksumFile(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
+            cksid = self.db.insertChecksum(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
             self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
             f.close()
         else:
