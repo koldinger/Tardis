@@ -1419,6 +1419,8 @@ class Backend:
                 message = self.recvMessage()
                 if message["message"] == "BYE":
                     done = True
+                    if 'error' in message:
+                        raise Exception("Client Error: " + message['error'])
                 else:
                     (response, flush) = self.processMessage(message)
                     if response:

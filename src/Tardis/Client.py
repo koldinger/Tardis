@@ -2393,6 +2393,7 @@ def main():
         batchMessage(message)
 
     # Now, do the actual work here.
+    exc = None
     try:
         # Now, process all the actual directories
         for directory in directories:
@@ -2425,17 +2426,22 @@ def main():
                 sendPurge(True)
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
+        exc = "Backup Interrupted"
+        logger.warning(exc)
         #exceptionLogger.log(e)
     except ExitRecursionException as e:
         root = e.rootException
         logger.error("Caught exception: %s, %s", root.__class__.__name__, root)
+        exc = str(e)
         #exceptionLogger.log(root)
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
+        exc = str(e)
         exceptionLogger.log(e)
     finally:
         setProgress("Finishing backup", "")
-        conn.close()
+        logger.error(exc)
+        conn.close(exc)
         if localmode:
             conn.send(Exception("Terminate connection"))
 

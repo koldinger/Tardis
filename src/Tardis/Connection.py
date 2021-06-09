@@ -124,8 +124,12 @@ class ProtocolConnection(Connection):
         self.stats['messagesRecvd'] += 1
         return message
 
-    def close(self):
-        self.send({"message" : "BYE" })
+    def close(self, error=None):
+        message = {"message": "BYE" }
+        if error:
+            print("I've got your error here: " + error)
+            message["error"] = error
+        self.send(message)
         super(ProtocolConnection, self).close()
 
     def encode(self, string):
