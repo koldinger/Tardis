@@ -2427,7 +2427,6 @@ def main():
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         exc = "Backup Interrupted"
-        logger.warning(exc)
         #exceptionLogger.log(e)
     except ExitRecursionException as e:
         root = e.rootException
@@ -2440,7 +2439,6 @@ def main():
         exceptionLogger.log(e)
     finally:
         setProgress("Finishing backup", "")
-        logger.error(exc)
         conn.close(exc)
         if localmode:
             conn.send(Exception("Terminate connection"))
