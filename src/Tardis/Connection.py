@@ -179,8 +179,11 @@ class DirectConnection:
         self.stats['messagesRecvd'] += 1
         return message
 
-    def close(self):
-        self.send({"message" : "BYE" })
+    def close(self, error=None):
+        message = {"message": "BYE" }
+        if error:
+            message["error"] = error
+        self.send(message)
 
     def encode(self, string):
         return self.sender.encode(string)
