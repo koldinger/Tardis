@@ -153,6 +153,7 @@ class Backend:
         self.db             = None
         self.purged         = False
         self.full           = False
+        self.done           = False
         self.statNewFiles   = 0
         self.statUpdFiles   = 0
         self.statDirs       = 0
@@ -957,6 +958,13 @@ class Backend:
         }
         return (response, False)
 
+    def processDone(self, message):
+        self.done = True
+        response = {
+            'message': 'ACKDONE'
+        }
+        return (response, True)
+
     def processCommandLine(self, message):
         cksum = message['hash']
         self.logger.debug("Received command line")
@@ -1022,6 +1030,8 @@ class Backend:
             (response, flush) = self.processMetaData(message)
         elif messageType == "SETKEYS":
             (response, flush) = self.processSetKeys(message)
+        elif messageType == "DONE":
+            (response, flush) = self.processDone(message)
         else:
             raise Exception("Unknown message type", messageType)
 
@@ -1412,15 +1422,16 @@ class Backend:
             started = True
 
             #sock.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
-            done = False
 
-            while not done:
+            while True:
                 flush = False
                 message = self.recvMessage()
+                if message is None:
+                    raise Exception("No message received")
                 if message["message"] == "BYE":
-                    done = True
                     if 'error' in message:
                         raise Exception("Client Error: " + message['error'])
+                    break
                 else:
                     (response, flush) = self.processMessage(message)
                     if response:
@@ -1429,15 +1440,14 @@ class Backend:
                     self.db.commit()
 
             self.logger.debug("Completing Backup %s", self.idstr)
-            self.db.completeBackup()
+            if self.done:
+                self.db.completeBackup()
 
-            if autoname and serverName is not None:
-                self.logger.debug("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
-                self.db.setBackupSetName(serverName, serverPriority)
-                #self.db.renameBackupSet(newName, newPriority)
+                if autoname and serverName is not None:
+                    self.logger.debug("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
+                    self.db.setBackupSetName(serverName, serverPriority)
 
             completed = True
-            failure = None
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
             self.db.setFailure(e)
