@@ -903,8 +903,9 @@ def pushFiles():
     if len(allCkSum) > 0:
         cksums = [tuple(x) for x in allCkSum]
         allCkSum   = []             # Clear it out to avoid processing loop
-        processChecksums(cksums)
-
+        while cksums:
+            processChecksums(cksums[0:args.cksumbatch])
+            cksums = cksums[args.cksumbatch:]
 
     logger.debug("Done pushing")
 
@@ -1507,6 +1508,9 @@ def handleResponse(response, doPush=True, pause=0):
         elif msgtype == 'ACKCMDLN':
             # Ignore
             pass
+        elif msgtype == 'ACKDONE':
+            # Ignore
+            pass
         elif msgtype == 'ACKBTCH':
             currentBatch = response
             for ack in response['responses']:
@@ -1912,6 +1916,7 @@ def processCommandLine():
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  ' + _def))
     comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  ' + _def))
     comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  ' + _def))
+    comgrp.add_argument('--ckbatchsize',            dest='cksumbatch', type=int, default=100,           help=_d('Maximum number of checksums to handle in a single message.  ' + _def))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  ' + _def))
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  ' + _def))
     comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
@@ -2424,6 +2429,11 @@ def main():
                 sendPurge(False)
             else:
                 sendPurge(True)
+        message = {
+            "message": "DONE"
+        }
+        batchMessage(message, batch=False, flush=True)
+
     except KeyboardInterrupt as e:
         logger.warning("Backup Interupted")
         exc = "Backup Interrupted"
