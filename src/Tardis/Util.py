@@ -777,7 +777,7 @@ def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
     _addOrDelete(config, client, 'ContentKey', contentKey)
     _addOrDelete(config, client, 'FilenameKey', nameKey)
     _addOrDelete(config, client, 'SRPSalt', srpSalt)
-    _addOrDelete(config, client, 'SRPVkey', srpVkey)
+    _addOrDelete(config, client, 'SRPVkey', srpVKey)
 
     with open(name, 'w') as configfile:
         config.write(configfile)
