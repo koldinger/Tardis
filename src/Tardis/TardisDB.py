@@ -41,6 +41,7 @@ import importlib
 import gzip
 
 from binascii import hexlify, unhexlify
+import base64
 
 import Tardis
 import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
@@ -1031,7 +1032,7 @@ class TardisDB(object):
                 backupName = self.dbName + ".keys"
                 r = Rotator.Rotator(rotations=0)
                 r.backup(backupName)
-                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, salt, vkey)
+                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode('utf8'), base64.b64encode(vkey).decode('utf8'))
             self.commit()
             if backup:
                 r.rotate(backupName)
