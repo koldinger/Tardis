@@ -384,7 +384,7 @@ def getChainLength(checksum):
     db = getDB()
     return createResponse(db.getChainLength(checksum))
 
-_blocksize = (64 * 1024)
+_blocksize = (1024 * 1024)
 def _stream(f):
     try:
         f.seek(0)
