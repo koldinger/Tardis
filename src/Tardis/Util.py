@@ -392,7 +392,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
     if pwurl:
         loc = urllib.parse.urlunparse(urllib.parse.urlparse(pwurl, scheme='file'))
         pwf = urllib.request.urlopen(loc)
-        password = pwf.readline().rstrip()
+        password = pwf.readline().rstrip().decode('utf8')
         pwf.close()
 
     if pwprog:
