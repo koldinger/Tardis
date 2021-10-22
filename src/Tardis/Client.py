@@ -484,16 +484,20 @@ def prefetchSigFiles(inodes):
     sigmessage = sendAndReceive(message)
     checkMessage(sigmessage, "SIG")
 
-    while sigmessage['status'] == 'OK':
+    while sigmessage['status'] != 'DONE':
         inode = tuple(sigmessage['inode'])
-        logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
+        if sigmessage['status'] == 'OK':
+            logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
 
-        sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
-        #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-        Util.receiveData(conn.sender, sigfile)
-        logger.debug("Received sig file: %d", sigfile.tell())
-        sigfile.seek(0)
-        signatures[inode] = (sigfile, sigmessage['checksum'])
+            sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
+            #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
+            Util.receiveData(conn.sender, sigfile)
+            logger.debug("Received sig file: %d", sigfile.tell())
+            sigfile.seek(0)
+            signatures[inode] = (sigfile, sigmessage['checksum'])
+        else:
+            logger.warning("No signature file received for %s: %s", inode, pathname)
+            signatures[inode] = (None, sigmessage['checksum'])
 
         # Get the next file in the stream
         sigmessage = receiveMessage()
