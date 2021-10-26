@@ -509,14 +509,17 @@ def deleteOrphanChecksums(isfile):
     return createResponse(db.deleteOrphanChecksums(isfile))
 
 @app.route('/setTag/<int:backupset>/<tag>')
+def setTags(bset, tag):
     db = getDB()
     return createResponse(db.setTag(tag, backupset))
 
 @app.route('/removeTag/<tag>')
+def removeTag(tag):
     db = getDB()
     return createResponse(db.setTag(tag, backupset))
 
 @app.route('/getTags/<int:backupset>')
+def getTags(tag):
     db = getDB()
     return createResponse(db.getTags(backupset))
 
