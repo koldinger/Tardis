@@ -464,6 +464,26 @@ class RemoteDB(object):
         return r.json()
 
     @reconnect
+    def setTag(self, tag, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + 'setTag/' + bset + '/' + str(tag), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def removeTag(self, tag):
+        r = self.session.get(self.baseURL + 'removeTag/' + str(tag), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
+    def getTags(self, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + 'getTags/' + bset, headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def open(self, checksum, mode, streaming=True):
         if mode[0] != 'r':
             raise PermissionError("Read only file system")

@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2021, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,19 @@ class AuthenticationFailed(AuthenticationException):
 class NotAuthenticated(AuthenticationException):
     pass
 
+# Subclass the Row object to add a "get" operation.
+# Allows it t
+
+class TardisRow(sqlite3.Row):
+    def get(self, value, default=None):
+        try:
+            if self[value] is not None:
+                return self[value]
+            else:
+                return default
+        except IndexError:
+            return default
+
 # Utility functions
 def authenticate(func):
     @functools.wraps(func)
@@ -92,7 +105,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 18
+_schemaVersion = 19
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -155,7 +168,7 @@ class TardisDB(object):
 
         conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
         conn.text_factory = lambda x: x.decode('utf-8', 'backslashreplace')
-        conn.row_factory= sqlite3.Row
+        conn.row_factory = TardisRow
 
         self.conn = conn
         self.cursor = self.conn.cursor()
@@ -188,7 +201,6 @@ class TardisDB(object):
         else:
             self.logger.debug("Setting authenticated false")
             self.authenticated = False
-            
     
     def needsAuthentication(self):
         """ Return true if a database needs to be authenticated """
@@ -686,16 +698,21 @@ class TardisDB(object):
                                { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
         return cursor.rowcount
 
+    def _getNameId(self, name, insert=True):
+            c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
+            row = c.fetchone()
+            if row:
+                return row[0]
+            elif insert:
+                self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
+                return self.cursor.lastrowid
+            else:
+                return None
+
     @authenticate
     def setNameID(self, files):
         for f in files:
-            c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", f)
-            row = c.fetchone()
-            if row:
-                f["nameid"] = row[0]
-            else:
-                self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", f)
-                f["nameid"] = self.cursor.lastrowid
+            f['nameid'] = self._getNameId(f['name'])
 
     @authenticate
     def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
@@ -882,6 +899,20 @@ class TardisDB(object):
         return row
 
     @authenticate
+    def getBackupSetInfoByTag(self, tag):
+        bset = self._executeWithResult("SELECT BackupSet FROM Tags JOIN Names on Tags.NameId = Names.NameId WHERE Names.name = :tag", {"tag": tag})[0]
+        if bset is None:
+            return None
+
+        c = self._execute("SELECT " +
+                          _backupSetInfoFields +
+                          _backupSetInfoJoin +
+                          "WHERE BackupSet = :bset",
+                          {"bset": bset })
+        row = c.fetchone()
+        return row
+
+    @authenticate
     def getBackupSetInfo(self, name):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
@@ -936,6 +967,7 @@ class TardisDB(object):
         endSpace = row[2] if row[2] else 0
 
         return (files, dirs, size, (newFiles, newSize, newSpace), (endFiles, endSize, endSpace))
+
 
     @authenticate
     def getNewFiles(self, bSet, other):
@@ -1119,6 +1151,7 @@ class TardisDB(object):
     @authenticate
     def deleteBackupSet(self, current=False):
         bset = self._bset(current)
+        self.cursor.execute("DELETE FROM Tags WHERE BackupSet = :backupset", {"backupset": bset})
         self.cursor.execute("DELETE FROM Backups WHERE BackupSet = :backupset", {"backupset": bset})
         # TODO: Move this to the removeOrphans phase
         # Then delete the files which are no longer referenced
@@ -1159,7 +1192,7 @@ class TardisDB(object):
     def compact(self):
         self.logger.debug("Removing unused names")
         # Purge out any unused names
-        self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files)")
+        self.conn.execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files) AND NameID NOT IN (SELECT NameID FROM Tags)")
         vacuumed = False
 
         # Check if we've hit an interval where we want to do a vacuum
@@ -1188,6 +1221,35 @@ class TardisDB(object):
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET ClientEndTime = :now WHERE BackupSet = :backup",
                               { "now": time.time(), "backup": self.currBackupSet })
+    
+    @authenticate
+    def setTag(self, tag, current=False):
+        backupset = self._bset(current)
+        nameid = self._getNameId(tag)
+        try:
+            self.conn.execute("INSERT INTO Tags (BackupSet, NameId) VALUES (:backup, :nameid)", {"backup": backupset, "nameid": nameid})
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    @authenticate
+    def removeTag(self, tag):
+        nameid = self._getNameID(tag, False)
+        if nameid:
+            self.conn.execute("DELETE FROM Tags WHERE NameID = :nameid", {"nameid": nameid})
+            return True
+        else:
+            return False
+
+    @authenticate
+    def getTags(self, bset):
+        c = self._execute("SELECT Name FROM Names JOIN Tags ON Tags.NameId = Names.NameId WHERE Tags.Backupset = :bset", {"bset": bset})
+        tags = []
+        row = c.fetchone()
+        while row:
+            tags.append(row['Name'])
+            row = c.fetchone()
+        return tags
 
     @authenticate
     def setFailure(self, ex):

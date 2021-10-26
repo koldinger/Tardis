@@ -261,12 +261,16 @@ def listBSets(db, crypt, cache):
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
-        print(f % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "Tags"))
+        print(f % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
+
+        # Get a list of the backup sets, and filter by priority
         sets = list(db.listBackupSets())
 
         if args.minpriority:
             sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
+
         sets = sets[-(args.number):]
+
 
         for bset in sets:
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
@@ -288,9 +292,14 @@ def listBSets(db, crypt, cache):
             print(f % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
+                tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
                 if commandLine:
                     print("    Command Line: %s" % (commandLine.decode('utf-8')))
+                if tags:
+                    print("    Tags: %s" % (",".join(tags)))
+                if tags or commandLine:
                     print()
+
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
         return 1
@@ -303,6 +312,9 @@ def listBSets(db, crypt, cache):
 # cache of paths we've already calculated.
 # the root (0, 0,) is always prepopulated
 _paths = {(0, 0): '/'}
+
+def _encryptFilename(name, crypt):
+    return crypt.encryptFilename(name) if crypt else name
 
 def _decryptFilename(name, crypt):
     return crypt.decryptFilename(name) if crypt else name
@@ -385,7 +397,7 @@ def listFiles(db, crypt):
             print(name)
 
 
-def _bsetInfo(db, info):
+def _bsetInfo(db, crypt, info):
     print("Backupset       : %s (%d)" % ((info['name']), info['backupset']))
     print("Completed       : %s" % ('True' if info['completed'] else 'False'))
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
@@ -395,9 +407,12 @@ def _bsetInfo(db, info):
         duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
         print("EndTime         : %s" % (t))
         print("Duration        : %s" % (duration))
+    tags = [_decryptFilename(tag, crypt) for tag in db.getTags(info['backupset'])]
+    print("Tags:           : %s" % ",".join(tags))
     print("SW Versions     : C:%s S:%s" % (info['clientversion'], info['serverversion']))
     print("Client IP       : %s" % (info['clientip']))
     details = db.getBackupSetDetails(info['backupset'])
+
     (files, dirs, size, newInfo, endInfo) = details
     print("Files           : %d" % (files))
     print("Directories     : %d" % (dirs))
@@ -411,19 +426,19 @@ def _bsetInfo(db, info):
     print("Purgeable Size  : %s" % (Util.fmtSize(endInfo[1])))
     print("Purgeable Space : %s" % (Util.fmtSize(endInfo[2])))
 
-def bsetInfo(db):
+def bsetInfo(db, crypt):
     printed = False
     if args.backup or args.date:
         info = getBackupSet(db, args.backup, args.date)
         if info:
-            _bsetInfo(db, info)
+            _bsetInfo(db, crypt, info)
             printed = True
     else:
         first = True
         for info in db.listBackupSets():
             if not first:
                 print("------------------------------------------------")
-            _bsetInfo(db, info)
+            _bsetInfo(db, crypt, info)
             first = False
             printed = True
     if printed:
@@ -436,6 +451,14 @@ def confirm():
         print("Proceed (y/n): ", end='', flush=True)
         yesno = sys.stdin.readline().strip().upper()
         return yesno == 'YES' or yesno == 'Y'
+
+def doTagging(db, crypt):
+    tag = _encryptFilename(args.tag, crypt)
+    if args.remove or args.move:
+        db.removeTag(tag)
+    if not args.remove:
+        bset = getBackupSet(db, args.backup, args.date, True)
+        db.setTag(tag, bset['backupset'])
 
 def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
@@ -576,6 +599,11 @@ def parseArgs():
     filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=Util.StoreBoolean,        help='Print chainlengths')
     filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=Util.StoreBoolean,          help='Print inodes')
 
+    tagParser = argparse.ArgumentParser(add_help=False)
+    tagParser.add_argument("--tag", "-t",      dest='tag',     default=None, required=True,             help="Set to tag")
+    tagParser.add_argument("--remove", "-R",   dest='remove',  default=False, action='store_true',      help="Remove the tag")
+    tagParser.add_argument("--move", "-m",     dest='move',    default=False, action='store_true',      help="Move the tag")
+
     common = argparse.ArgumentParser(add_help=False)
     Config.addPasswordOptions(common, addscheme=True)
     Config.addCommonOptions(common)
@@ -616,6 +644,7 @@ def parseArgs():
     subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')
     subs.add_parser('list',         parents=[common, listParser],                           help='List backup sets')
     subs.add_parser('files',        parents=[common, filesParser, bsetParser],              help='List new files in a backup set')
+    subs.add_parser('tag',          parents=[common, tagParser, bsetParser],                help='Add or delete tags on backup sets')
     subs.add_parser('info',         parents=[common, bsetParser],                           help='Print info on backup sets')
     subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],               help='Purge old backup sets')
     subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],              help='Delete a backup set')
@@ -670,6 +699,8 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
                 bInfo = db.lastBackupSet()
             else:
                 bInfo = db.getBackupSetInfo(backup)
+                if not bInfo:
+                    bInfo = db.getBackupSetInfoByTag(backup)
             if not bInfo:
                 logger.critical("No backupset at for name: %s", backup)
     elif defaultCurrent:
@@ -741,7 +772,9 @@ def main():
         elif args.command == 'files':
             return listFiles(db, crypt)
         elif args.command == 'info':
-            return bsetInfo(db)
+            return bsetInfo(db, crypt)
+        elif args.command == 'tag':
+            return doTagging(db, crypt)
         elif args.command == 'purge':
             return purge(db, cache)
         elif args.command == 'delete':

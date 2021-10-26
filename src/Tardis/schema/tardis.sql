@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS Files (
     FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumId)
 );
 
+CREATE TABLE IF NOT EXISTS Tags (
+    TagId       INTEGER PRIMARY KEY AUTOINCREMENT,
+    BackupSet   INTEGER NOT NULL,
+    NameId      INTEGER UNIQUE NOT NULL,
+    FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet),
+    FOREIGN KEY(NameId)      REFERENCES Names(NameId)
+);
+
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 
 CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, Device ASC, FirstSet ASC);
@@ -109,5 +117,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "18");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "19");
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
