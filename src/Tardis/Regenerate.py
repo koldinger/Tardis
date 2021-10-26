@@ -287,26 +287,44 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 setAttributes(regenerator, info, outname)
 
                 dirInode = (info['inode'], info['device'])
-                # For each file in the directory, regenerate it.
+                files = []
+                dirs = []
+                # Get info on each child object
                 for i in contents:
                     name = crypt.decryptFilename(i['name'])
                     logger.debug("Processing file %s", name)
                     # Get the Info
                     childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
                     logger.debug("Info on %s: %s", name, childInfo)
-
-                    # Recurse into the child, if it exists.
                     if childInfo:
-                        try:
-                            if args.recurse or not childInfo['dir']:
-                                recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
-                        except Exception as e:
-                            logger.error("Could not recover %s in %s", name, path)
-                            if args.exceptions:
-                                logger.exception(e)
+                        if childInfo['dir']:
+                            dirs.append((name, childInfo))
+                        else:
+                            files.append((name, childInfo))
                     else:
                         logger.warning("No info on %s", name)
                         retCode += 1
+
+
+                # Process the files
+                for (name, childInfo) in files:
+                    # Recurse into the child, if it exists.
+                    try:
+                        recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                    except Exception as e:
+                        logger.error("Could not recover file %s in %s", name, path)
+                        if args.exceptions:
+                            logger.exception(e)
+
+                # And descend into the directories
+                if args.recurse:
+                    for (name, childInfo) in dirs:
+                        try:
+                            recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                        except Exception as e:
+                            logger.error("Could not recover directory %s in %s", name, path)
+                            if args.exceptions:
+                                logger.exception(e)
             elif not skip:
                 doRecovery(regenerator, info, authenticate, path, outname)
 
