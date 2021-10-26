@@ -255,12 +255,13 @@ def getCommandLine(db, commandLineCksum):
 
 def listBSets(db, crypt, cache):
     global _regenerator
+    f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
     try:
         if args.longinfo:
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
-        print("%-30s %-4s %-6s %3s  %-5s  %-24s  %-7s %6s %5s %8s  %s" % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
+        print(f % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "Tags"))
         sets = list(db.listBackupSets())
 
         if args.minpriority:
@@ -284,7 +285,7 @@ def listBSets(db, crypt, cache):
             #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print("%-30s %-4d %-6s %3d  %-5s  %-24s  %-7s %6s %5s %8s  %s" % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
+            print(f % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 if commandLine:
