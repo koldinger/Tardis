@@ -508,10 +508,12 @@ def getBackupSet(db, bset):
         bsetInfo = db.getBackupSetInfoById(bset)
     except ValueError:
         # Else, let's look it up based on name
-        if bset == Defaults.getDefault('TARDIS_RECENT_SET') or bset == '' or bset == None:
+        if bset == Defaults.getDefault('TARDIS_RECENT_SET') or bset == '' or bset is None:
             bsetInfo = db.lastBackupSet()
         else:
             bsetInfo = db.getBackupSetInfo(bset)
+            if not bsetInfo:
+                bsetInfo = db.getBackupSetInfoByTag(bset)
         if not bsetInfo:
             # still nothing, hm, let's try a date format
             cal = parsedatetime.Calendar()
