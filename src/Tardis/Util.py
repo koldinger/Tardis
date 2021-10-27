@@ -593,14 +593,14 @@ def _chunks(stream, chunksize):
 
 _transmissionTime = 0
 
-def sendDataPlain(sender, data, chunksize=(16 * 1024), compress=None, stats=None):
+def sendDataPlain(sender, data, chunksize=(16 * 1024), compress=None, stats=None, log=None):
     """
     Send data, with no encryption, or calculation
     """
     encrypt = TardisCrypto.NullEncryptor()
-    sendData(sender, data, encrypt, chunksize=chunksize, compress=compress, stats=stats)
+    sendData(sender, data, encrypt, chunksize=chunksize, compress=compress, stats=stats, log=log)
 
-def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, progress=None, progressPeriod=8*1024*1024):
+def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress=None, stats=None, signature=False, progress=None, progressPeriod=8*1024*1024, log=None):
     """
     Send a block of data, optionally encrypt and/or compress it before sending
     Compress should be either None, for no compression, or one of the known compression types (zlib, bzip, lzma)
@@ -675,9 +675,11 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
         end = time.time()
         global _transmissionTime
         _transmissionTime += end - start
+        if log:
+            log.write("Sent %d bytes\n" % size)
     return size, ck, sig
 
-def receiveData(receiver, output):
+def receiveData(receiver, output, log=None):
     """ Receive a block of data from the sender, and store it in the specified file.
     Collect some info sent, and return it.
     """
@@ -706,6 +708,8 @@ def receiveData(receiver, output):
         checksum = chunk['checksum']
     if 'compressed' in chunk:
         compressed = chunk['compressed']
+    if log:
+        log.write("Received %d bytes\n" % size)
     return (bytesReceived, status, size, checksum, compressed)
 
 

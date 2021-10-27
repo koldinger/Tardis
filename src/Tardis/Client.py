@@ -485,13 +485,14 @@ def prefetchSigFiles(inodes):
     checkMessage(sigmessage, "SIG")
 
     while sigmessage['status'] != 'DONE':
+        logger.debug("Signature Message: %s", sigmessage)
         inode = tuple(sigmessage['inode'])
         if sigmessage['status'] == 'OK':
             logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
 
             sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
             #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-            Util.receiveData(conn.sender, sigfile)
+            Util.receiveData(conn.sender, sigfile, log=args.logmessages)
             logger.debug("Received sig file: %d", sigfile.tell())
             sigfile.seek(0)
             signatures[inode] = (sigfile, sigmessage['checksum'])
@@ -505,10 +506,15 @@ def prefetchSigFiles(inodes):
     return signatures
 
 def fetchSignature(inode):
-    logger.debug("Requesting checksum for %s", str(inode))
+    (_, pathname) = inodeDB[inode]
+    logger.debug("Requesting checksum for %s:: %s", str(inode), pathname)
+    path = pathname
+    if crypt.encrypting():
+        path = crypt.encryptPath(path)
     message = {
         "message" : "SGR",
-        "inode" : inode
+        "inode" : inode,
+        "path"  : path
     }
     setMessageID(message)
 
@@ -516,23 +522,23 @@ def fetchSignature(inode):
     ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
     ## Follow on by more data, which is unique
     sigmessage = sendAndReceive(message)
+    logger.debug("Got Response: %s", sigmessage)
     checkMessage(sigmessage, "SIG")
 
     if sigmessage['status'] == 'OK':
+        logger.debug("Receiving sig file: %s:: %s", inode, pathname)
         sigfile = io.StringIO()
         #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-        Util.receiveData(conn.sender, sigfile)
+        Util.receiveData(conn.sender, sigfile, log=args.logmessages)
         logger.debug("Received sig file: %d", sigfile.tell())
         sigfile.seek(0)
         checksum = sigmessage['checksum']
     else:
-        (_, pathname) = inodeDB[inode]
         logger.warning("No signature file received for %s: %s", inode, pathname)
         sigfile = None
         checksum = None
 
-    return (sigfile, None)
-
+    return (sigfile, checksum)
 
 def getInodeDBName(inode):
     (_, name) = inodeDB.get(inode)
@@ -558,6 +564,7 @@ def processDelta(inode, signatures):
         else:
             (sigfile, oldchksum) = fetchSignature(inode)
 
+        logger.debug("Ready to send Delta: %s -- %s", inode, sigfile)
         if sigfile is not None:
             try:
                 newsig = None
@@ -608,7 +615,7 @@ def processDelta(inode, signatures):
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -621,7 +628,7 @@ def processDelta(inode, signatures):
                     sendMessage(message)
                     #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats) # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, log=args.logmessages) # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report != 'none':
@@ -713,7 +720,8 @@ def sendContent(inode, reportType):
                                                       chunksize=args.chunksize,
                                                       compress=compress,
                                                       signature=makeSig,
-                                                      stats=stats)
+                                                      stats=stats,
+                                                      log=args.logmessages)
 
                 if sig:
                     sig.seek(0)
@@ -723,7 +731,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -761,10 +769,11 @@ def handleAckMeta(message):
             "checksum": cks,
             "encrypted": True if iv else False
         }
+        setMessageID(message)
 
         sendMessage(message)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
-        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats)
+        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -1432,8 +1441,8 @@ def sendMessage(message):
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
     if args.logmessages:
-        args.logmessages.write("Sending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
-        args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n\n')
+        args.logmessages.write("\nSending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
+        args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n')
     #setProgress("Sending...", "")
     conn.send(message)
 
@@ -1443,8 +1452,8 @@ def receiveMessage():
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
     if args.logmessages:
-        args.logmessages.write("Received message %s %s\n" % (response.get('respid', 'Unknown'), "-" * 40))
-        args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n\n')
+        args.logmessages.write("\nReceived message %s %s\n" % (response.get('respid', 'Unknown'), "-" * 40))
+        args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n')
     return response
 
 waittime = 0
