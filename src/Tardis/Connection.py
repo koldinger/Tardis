@@ -37,7 +37,7 @@ import queue
 import Tardis
 import Tardis.Messages as Messages
 
-protocolVersion = "1.4"
+protocolVersion = "1.5"
 headerString    = "TARDIS " + protocolVersion
 sslHeaderString = headerString + "/SSL"
 
