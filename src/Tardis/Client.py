@@ -460,10 +460,10 @@ def handleAckSum(response):
     if not args.full and len(delta) != 0:
         signatures = prefetchSigFiles(delta)
 
-    for i in [tuple(x) for x in delta]:
+    for i, basis in [tuple(x) for x in delta]:
         if logfiles:
             logFileInfo(i, 'd')
-        processDelta(i, signatures)
+        processDelta(i, basis, signatures)
         inodeDB.delete(i)
 
 def makeEncryptor():
@@ -547,7 +547,7 @@ def getInodeDBName(inode):
     else:
         return "Unknown"
 
-def processDelta(inode, signatures):
+def processDelta(inode, basis, signatures):
     """ Generate a delta and send it """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
@@ -884,7 +884,7 @@ def pushFiles():
     if not args.full and len(allDelta) != 0:
         signatures = prefetchSigFiles(allDelta)
 
-    for i in [tuple(x) for x in allDelta]:
+    for i, basis in [tuple(x) for x in allDelta]:
         # If doing a full backup, send the full file, else just a delta.
         try:
             if args.full:
@@ -896,7 +896,7 @@ def pushFiles():
                     (x, name) = inodeDB.get(i)
                     if name:
                         logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
-                processDelta(i, signatures)
+                processDelta(i, basis, signatures)
             processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: ", str(i), str(e))

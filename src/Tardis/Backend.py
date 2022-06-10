@@ -139,7 +139,7 @@ class BackendConfig:
 
     linkBasis       = False
 
-    skip            = 'tardis.skip'
+    skip            = '.tardis.skip'
 
 
 class Backend:
@@ -232,6 +232,7 @@ class Backend:
         """
         Process an individual file.  Check to see if it's different from what's there already
         """
+        basis = None
         xattr = None
         acl = None
         self.logger.debug("Processing file: %s %s", str(f), str(parent))
@@ -337,6 +338,7 @@ class Backend:
                         retVal = CONTENT
                     else:
                         retVal = DELTA
+                        basis = old['checksum']
             else:           # if old (i.e., if not old)
                 # Create a new record for this file
                 #self.logger.debug("No file found: %s", name)
@@ -379,7 +381,7 @@ class Backend:
                         #self.logger.debug("No old file.")
                         retVal = self.checkForSize(f['size'])
 
-        return retVal
+        return retVal, basis
 
     lastDirNode = None
     lastDirHash = {}
@@ -433,7 +435,7 @@ class Backend:
         for f in files:
             fileId = (f['inode'], f['dev'])
             self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
-            res = self.checkFile(parentInode, f, dirhash)
+            res, basis = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
             #if res == 0: done.append(inode)
             #elif res == 1: content.append(inode)
@@ -443,6 +445,8 @@ class Backend:
                 # Determine if this fileid is already in one of the queues
                 if not filter(lambda x: fileId in x, queues):
                     queues[DONE].add(fileId)
+            elif res == DELTA:
+                queues[DELTA].add((fileId, basis))
             else:
                 queues[res].add(fileId)
             if 'xattr' in f:
@@ -488,8 +492,9 @@ class Backend:
     def processManySigsRequest(self, message):
         inodes = message['inodes']
         for i in inodes:
-            (inode, dev) = i
-            self.sendSignature(inode, dev)
+            ((inode, dev), checksum) = i
+            self.logger.debug("ProcessManySigRequests: %s %s %s", inode, dev, checksum)
+            self.sendSignature(inode, dev, checksum)
         response = {
             'message': "SIG",
             'status' : "DONE"
@@ -498,21 +503,22 @@ class Backend:
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
-        #self.logger.debug("Processing signature request message: %s", str(message))
-        (inode, dev) = message["inode"]
-        return self.sendSignature(inode, dev)
+        self.logger.debug("Processing signature request message: %s", str(message))
+        ((inode, dev), checksum) = message["inode"]
+        return self.sendSignature(inode, dev, checksum)
 
-    def sendSignature(self, inode, dev):
+    def sendSignature(self, inode, dev, chksum):
         response = None
-        chksum = None
         errmsg = None
 
-        ### TODO: Remove this function.  Clean up.
-        info = self.db.getFileInfoByInode((inode, dev), current=False)
-        if info:
-            chksum = info['checksum']
-        else:
-            self.logger.warning("No Checksum Info available for (%d, %d)", inode, dev)
+        self.logger.debug("Signature requested: %s %s %s", inode, dev, chksum)
+        ### TODO: Remove this function.  Shouldn't be needed anymore.
+        if chksum is None:
+            info = self.db.getFileInfoByInode((inode, dev), current=False)
+            if info:
+                chksum = info['checksum']
+            else:
+                self.logger.warning("No Checksum Info available for (%d, %d)", inode, dev)
 
         self.logger.debug("Sending signature for (%d, %d): %s", inode, dev, str(chksum))
 
@@ -524,12 +530,8 @@ class Backend:
                     sig = sigfile.read()       # TODO: Does this always read the entire file?
                     sigfile.close()
                 else:
+                    ### TODO: Remove this?   Only valid for unencrypted backups.
                     rpipe = self.regenerator.recoverChecksum(chksum)
-                    #pipe = subprocess.Popen(["rdiff", "signature"], stdin=rpipe, stdout=subprocess.PIPE)
-                    #pipe = subprocess.Popen(["rdiff", "signature", self.cache.path(chksum)], stdout=subprocess.PIPE)
-                    #(sig, err) = pipe.communicate()
-                    # Cache the signature for later use.  Just in case.
-                    # TODO: Better logic on this?
                     if rpipe:
                         try:
                             s = librsync.signature(rpipe)
