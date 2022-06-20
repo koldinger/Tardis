@@ -308,8 +308,8 @@ By default, configurations are read from Tardis section, but can be overridden b
 | ExcludeFiles    |                     |                   | File containing patterns to ignore. |
 | ExcludeDirs     |                     |                   | Directories to exclude. |
 | GlobalExcludeFileName |               |                   | Path to a global file containing filename patterns to exclude.|
-| ExcludeFileName | .tardis-exclude     |                   | Check for this file in each directory, and exclude files which match it's pattern in current directory and all below. |
-| LocalExcludeFileName | .tardis-local-exclude |            | Same, but only in the current directory. |
+| ExcludeFileName | .tardis-excludes    |                   | Check for this file in each directory, and exclude files which match it's pattern in current directory and all below. |
+| LocalExcludeFileName | .tardis-local-excludes |            | Same, but only in the current directory. |
 | SkipFileName    | .tardis-skip        |                   | If this file exists, skip this directory and all below. |
 | ExcludeNoAccess | True                |                   | Exclude files to which the user doesn't have access/permission. |
 | LogFiles        |                     |                   | List of files to log to. |
