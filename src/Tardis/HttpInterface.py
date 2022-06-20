@@ -519,7 +519,7 @@ def removeTag(tag):
     return createResponse(db.removeTag(tag))
 
 @app.route('/getTags/<int:backupset>')
-def getTags(tag):
+def getTags(backupset):
     db = getDB()
     return createResponse(db.getTags(backupset))
 
