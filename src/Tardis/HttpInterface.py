@@ -516,7 +516,7 @@ def setTags(bset, tag):
 @app.route('/removeTag/<tag>')
 def removeTag(tag):
     db = getDB()
-    return createResponse(db.setTag(tag, backupset))
+    return createResponse(db.removeTag(tag))
 
 @app.route('/getTags/<int:backupset>')
 def getTags(tag):
