@@ -105,6 +105,9 @@ class InitFailedException(Exception):
 class ProtocolError(Exception):
     pass
 
+class ProcessingError(Exception):
+    pass
+
 class BackendConfig:
     umask           = 0
     cksContent      = 0
@@ -702,7 +705,7 @@ class Backend:
                     # FIXME: TODO: If no checksum, should we request a delta???
                     old = self.db.getFileInfoByInode((inode, dev))
                     if old and ((old['chainlength'] or self.maxChain + 1) < self.maxChain):
-                        delta.append(f['inode'])
+                        delta.append((f['inode'], old['checksum']))
                     else:
                         content.append(f['inode'])
             except Exception as e:
@@ -993,57 +996,65 @@ class Backend:
 
     def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """
-        messageType = message['message']
-        # Stats
-        self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
+        try:
+            messageType = message['message']
+            # Stats
+            self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
-        #if transaction:
-        #    self.db.beginTransaction()
+            #if transaction:
+            #    self.db.beginTransaction()
 
-        if messageType == "DIR":
-            (response, flush) = self.processDir(message)
-        elif messageType == "DHSH":
-            (response, flush) = self.processDirHash(message)
-        elif messageType == "SGR":
-            (response, flush) = self.processSigRequest(message)
-        elif messageType == "SGS":
-            (response, flush) = self.processManySigsRequest(message)
-        elif messageType == "SIG":
-            (response, flush) = self.processSignature(message)
-        elif messageType == "DEL":
-            (response, flush) = self.processDelta(message)
-        elif messageType == "CON":
-            (response, flush) = self.processContent(message)
-        elif messageType == "CKS":
-            (response, flush) = self.processChecksum(message)
-        elif messageType == "CLN":
-            (response, flush) = self.processClone(message)
-        elif messageType == "BATCH":
-            (response, flush) = self.processBatch(message)
-        elif messageType == "PRG":
-            (response, flush) = self.processPurge(message)
-        elif messageType == "CLICONFIG":
-            (response, flush) = self.processClientConfig(message)
-        elif messageType == "COMMANDLINE":
-            (response, flush) = self.processCommandLine(message)
-        elif messageType == "META":
-            (response, flush) = self.processMeta(message)
-        elif messageType == "METADATA":
-            (response, flush) = self.processMetaData(message)
-        elif messageType == "SETKEYS":
-            (response, flush) = self.processSetKeys(message)
-        elif messageType == "DONE":
-            (response, flush) = self.processDone(message)
-        else:
-            raise Exception("Unknown message type", messageType)
+            if messageType == "DIR":
+                (response, flush) = self.processDir(message)
+            elif messageType == "DHSH":
+                (response, flush) = self.processDirHash(message)
+            elif messageType == "SGR":
+                (response, flush) = self.processSigRequest(message)
+            elif messageType == "SGS":
+                (response, flush) = self.processManySigsRequest(message)
+            elif messageType == "SIG":
+                (response, flush) = self.processSignature(message)
+            elif messageType == "DEL":
+                (response, flush) = self.processDelta(message)
+            elif messageType == "CON":
+                (response, flush) = self.processContent(message)
+            elif messageType == "CKS":
+                (response, flush) = self.processChecksum(message)
+            elif messageType == "CLN":
+                (response, flush) = self.processClone(message)
+            elif messageType == "BATCH":
+                (response, flush) = self.processBatch(message)
+            elif messageType == "PRG":
+                (response, flush) = self.processPurge(message)
+            elif messageType == "CLICONFIG":
+                (response, flush) = self.processClientConfig(message)
+            elif messageType == "COMMANDLINE":
+                (response, flush) = self.processCommandLine(message)
+            elif messageType == "META":
+                (response, flush) = self.processMeta(message)
+            elif messageType == "METADATA":
+                (response, flush) = self.processMetaData(message)
+            elif messageType == "SETKEYS":
+                (response, flush) = self.processSetKeys(message)
+            elif messageType == "DONE":
+                (response, flush) = self.processDone(message)
+            else:
+                raise ProtocolError("Unknown message type", messageType)
 
-        if response and 'msgid' in message:
-            response['respid'] = message['msgid']
-        if transaction:
-            self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
-            self.db.commit()
+            if response and 'msgid' in message:
+                response['respid'] = message['msgid']
+            if transaction:
+                self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
+                self.db.commit()
 
-        return (response, flush)
+            return (response, flush)
+        except ProtocolError as e:
+            raise ProtocolError(str(e)) from e
+        except Exception as e:
+            self.logger.error("Caught exception processing message: %s", json.dumps(message))
+            if self.config.exceptions:
+                self.logger.exception(e)
+            raise ProcessingError(str(e)) from e
 
     def genPaths(self):
         self.logger.debug("Generating paths: %s", self.config.basedir)
