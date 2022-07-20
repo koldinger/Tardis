@@ -661,7 +661,7 @@ def parseArgs():
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
-    if args.command == None:
+    if args.command is None:
         parser.print_help()
         sys.exit(0)
 

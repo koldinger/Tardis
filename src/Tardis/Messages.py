@@ -61,12 +61,12 @@ class Messages:
             if chunk == b'':
                 raise RuntimeError("socket connection broken")
             msg.extend(chunk)
-        if self.__stats != None:
+        if self.__stats is not None:
             self.__stats['bytesRecvd'] += len(msg)
         return msg
 
     def sendBytes(self, bytes):
-        if self.__stats != None:
+        if self.__stats is not None:
             self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 

@@ -353,7 +353,7 @@ class TardisDB:
 
         self.currBackupSet = c.lastrowid
 
-        if name == None:
+        if name is None:
             name = "INCOMPLETE-{}".format(self.currBackupSet)
             self.setBackupSetName(name, priority)
 

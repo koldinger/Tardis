@@ -370,7 +370,7 @@ class RemoteDB:
     def getConfigValue(self, name, default=None):
         r = self.session.get(self.baseURL + "getConfigValue/" + name, headers=self.headers)
         r.raise_for_status()
-        if r.json() == None:
+        if r.json() is None:
             return default
         else:
             return r.json()

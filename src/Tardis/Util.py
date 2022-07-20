@@ -905,7 +905,7 @@ class ClearingStreamHandler(logging.StreamHandler):
 
     def __init__(self, stream = None):
         super().__init__(stream)
-        if stream == None: stream = sys.stderr
+        if stream is None: stream = sys.stderr
         self.clearLines = os.isatty(stream.fileno())
 
     def emit(self, record):

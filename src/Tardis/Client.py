@@ -772,7 +772,7 @@ def handleAckMeta(message):
 _defaultHash = None
 def sendDirHash(inode):
     global _defaultHash
-    if _defaultHash == None:
+    if _defaultHash is None:
         _defaultHash = crypt.getHash().hexdigest()
 
     i = tuple(inode)

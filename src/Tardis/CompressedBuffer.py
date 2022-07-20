@@ -210,7 +210,7 @@ class CompressedBufferedReader(BufferedReader):
         return self.origsize()
 
     def isCompressed(self):
-        return self.compressor != None
+        return self.compressor is not None
 
 class UncompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, compressor='zlib'):
