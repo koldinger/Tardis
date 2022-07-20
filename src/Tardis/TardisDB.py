@@ -35,13 +35,13 @@ import os.path
 import time
 import sys
 import uuid
-import srp
 import functools
 import importlib
 import gzip
-
-from binascii import hexlify, unhexlify
 import base64
+from binascii import hexlify, unhexlify
+
+import srp
 
 import Tardis
 from Tardis import ConnIdLogAdapter
@@ -1284,7 +1284,7 @@ class TardisDB:
         if self.authenticated:
             return True
         elif self.srpSrv is not None:
-            return self.sprSrv.authenticated()
+            return self.srpSrv.authenticated()
         else:
             return False
 

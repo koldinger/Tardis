@@ -85,7 +85,7 @@ if t[0] != 1:
 
 conn.execute("ALTER TABLE Files ADD COLUMN Device INTEGER")
 conn.execute("ALTER TABLE Files ADD COLUMN ParentDev INTEGER")
-conn.execute("UPDATE Files SET ParentDev = 0 WHERE Parent = 0");
+conn.execute("UPDATE Files SET ParentDev = 0 WHERE Parent = 0")
 
 for i in topfiles:
     (name, device) = i
@@ -94,7 +94,7 @@ for i in topfiles:
                      "WHERE Inode = (SELECT Inode FROM Files JOIN Names ON Files.nameid = Names.nameid AND ParentDev = 0 and Names.name = :name)",
                      {"name": name, "device": device})
 
-s = conn.execute("SELECT BackupSet, Name FROM Backups ORDER BY BackupSet ASC");
+s = conn.execute("SELECT BackupSet, Name FROM Backups ORDER BY BackupSet ASC")
 for row in s.fetchall():
     bset = row[0]
     name = row[1]

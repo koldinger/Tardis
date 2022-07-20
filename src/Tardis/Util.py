@@ -34,13 +34,11 @@ import argparse
 import configparser
 import sys
 import subprocess
-import hashlib
 import shlex
 import getpass
 import stat
 import fnmatch
 import json
-import types
 import base64
 import functools
 import pwd
@@ -52,9 +50,6 @@ import signal
 
 import urllib.request, urllib.parse, urllib.error
 
-import zlib
-import bz2
-import lzma
 import srp
 import passwordmeter
 import colorlog

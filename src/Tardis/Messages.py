@@ -32,10 +32,11 @@ import socket
 import os
 import sys
 import json
-import msgpack
 import base64
 import struct
 import zlib
+
+import msgpack
 import snappy
 
 try:

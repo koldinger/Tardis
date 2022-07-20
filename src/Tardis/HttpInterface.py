@@ -38,10 +38,11 @@ import json
 import argparse
 import configparser
 import zlib
-import daemonize
 import base64
 
-from flask import Flask, Response, session, request, url_for, abort, redirect, make_response
+import daemonize
+
+from flask import Flask, Response, session, request, abort, make_response
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop

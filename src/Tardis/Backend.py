@@ -28,9 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse
 import base64
-import configparser
 import io
 import json
 import logging
@@ -38,18 +36,14 @@ import logging.config
 import os
 import pprint
 import shutil
-import signal
 import string
-import sys
 import tempfile
 import types
 import uuid
 from datetime import datetime
 
-import Tardis
 from Tardis import CacheDir
 from Tardis import CompressedBuffer
-from Tardis import Connection
 from Tardis import ConnIdLogAdapter
 from Tardis import Defaults
 from Tardis import librsync

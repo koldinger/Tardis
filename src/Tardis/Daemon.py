@@ -43,7 +43,6 @@ import traceback
 import signal
 import threading
 import json
-import base64
 from datetime import datetime
 
 # For profiling

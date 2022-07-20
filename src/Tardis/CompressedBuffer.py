@@ -243,8 +243,8 @@ class UncompressedBufferedReader(BufferedReader):
         return None
 
 if __name__ == "__main__":
-    import time, hashlib
-    import Util
+    import time
+    from Tardis import Util
     print("Opening {}".format(sys.argv[1]))
     #line = x.get()
     readsize = 4 * 1024 * 1024
@@ -265,4 +265,3 @@ if __name__ == "__main__":
             print(f"{x.origsize()} ({Util.fmtSize(x.origsize())})  -- {x.compsize()} ({Util.fmtSize(x.compsize())})  -- {x.ratio():.2%} {duration:3.3f}  {(x.origsize() / (1024 * 1024) / duration):2.2f} MB/s :: {x.checksum()}")
         except Exception as e:
             print(f"Caught exception: {str(e)}")
-

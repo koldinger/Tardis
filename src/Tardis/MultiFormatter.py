@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
-import colorlog
 
 class MultiFormatter:
     def __init__(self, default_fmt = '%(levelname)s: %(message)s', formats=dict(), baseclass=logging.Formatter, **kwargs):

@@ -41,7 +41,6 @@ from Cryptodome.Cipher import AES, ChaCha20_Poly1305
 from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
-import srp
 
 from Tardis import Defaults
 

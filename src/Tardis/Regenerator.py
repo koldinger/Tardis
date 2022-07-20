@@ -28,12 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
 import binascii
 import logging
 import tempfile
 import shutil
-import hashlib
 
 from Tardis import CompressedBuffer
 

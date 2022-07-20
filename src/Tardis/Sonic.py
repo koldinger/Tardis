@@ -28,7 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging
 import argparse
 import os
 import os.path
@@ -40,7 +39,6 @@ import urllib.parse
 import srp
 
 import parsedatetime
-import passwordmeter
 
 import Tardis
 from Tardis import Util
@@ -790,7 +788,7 @@ def main():
         elif args.command == 'orphans':
             return removeOrphans(db, cache)
         elif args.command == 'upgrade':
-            return
+            return 0
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
@@ -803,6 +801,7 @@ def main():
     finally:
         if db:
             db.close()
+
 
 if __name__ == "__main__":
     main()

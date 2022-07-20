@@ -28,14 +28,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
 import sys
+import os
 import os.path
-import signal
 import logging
 import logging.handlers
-import fnmatch
-import re
 import glob
 import itertools
 import json
@@ -44,8 +41,6 @@ import configparser
 import time
 import datetime
 import base64
-import subprocess
-import hashlib
 import tempfile
 import io
 import shlex
@@ -58,10 +53,11 @@ import unicodedata
 import pprint
 import traceback
 import threading
-import cProfile
 import socket
 import concurrent.futures
 
+from functools import reduce
+from collections import defaultdict
 from binascii import hexlify
 
 import magic
@@ -70,8 +66,6 @@ import parsedatetime
 import srp
 import colorlog
 from pathmatch import wildmatch
-from functools import reduce
-from collections import defaultdict
 
 import Tardis
 from Tardis import TardisCrypto
@@ -1876,7 +1870,7 @@ def processCommandLine():
                            help='Load keys from file.  Keys are not stored in database')
 
     parser.add_argument('--send-config', '-S',      dest='sendconfig', action=Util.StoreBoolean, default=c.getboolean(t, 'SendClientConfig'),
-                        help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s');
+                        help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s')
 
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  ' + _def)
@@ -2252,7 +2246,6 @@ def main():
 
     try:
         starttime = datetime.datetime.now()
-        subserver = None
 
         # Get the actual names we're going to use
         (server, port, client) = parseServerInfo(args)
@@ -2261,7 +2254,7 @@ def main():
             lockRun(server, port, client)
 
         # Figure out the name and the priority of this backupset
-        (name, priority, auto) = setBackupName(args)
+        (name, _, auto) = setBackupName(args)
 
         # setup purge times
         setPurgeValues(args)
@@ -2349,7 +2342,6 @@ def main():
 
     # Open the connection
 
-    backend = None
     backendThread = None
 
     # Create a scheduler thread, if need be
@@ -2358,7 +2350,7 @@ def main():
     # Get the connection object
     try:
         if localmode:
-            (conn, backend, backendThread) = runBackend(jobname)
+            (conn, _, backendThread) = runBackend(jobname)
         else:
             conn = getConnection(server, port)
 

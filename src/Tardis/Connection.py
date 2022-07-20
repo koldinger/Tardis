@@ -30,7 +30,6 @@
 
 import socket
 import json
-import time
 import ssl
 import queue
 
@@ -214,5 +213,3 @@ if __name__ == "__main__":
     print(server.recvMessage())
     server.sendMessage({"b": 2, "c": ['a', 'b', 'c']})
     print(conn.receive())
-
-
