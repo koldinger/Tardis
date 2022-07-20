@@ -41,10 +41,10 @@ import time
 import termcolor
 
 import Tardis
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.Config as Config
-import Tardis.TardisDB as TardisDB
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import Config
+from Tardis import TardisDB
 
 columns = None
 columnfmt = None

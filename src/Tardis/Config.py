@@ -31,9 +31,9 @@
 import sys
 import configparser
 
-import Tardis.Defaults as Defaults
-import Tardis.Util as Util
-import Tardis.TardisCrypto as TardisCrypto
+from Tardis import Defaults
+from Tardis import Util
+from Tardis import TardisCrypto
 
 
 configDefaults = {

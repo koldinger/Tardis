@@ -43,14 +43,14 @@ import parsedatetime
 import passwordmeter
 
 import Tardis
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.TardisDB as TardisDB
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.CacheDir as CacheDir
-import Tardis.RemoteDB as RemoteDB
-import Tardis.Regenerator as Regenerator
-import Tardis.Config as Config
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import TardisDB
+from Tardis import TardisCrypto
+from Tardis import CacheDir
+from Tardis import RemoteDB
+from Tardis import Regenerator
+from Tardis import Config
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
@@ -346,7 +346,7 @@ def listFiles(db, crypt):
     files = db.getNewFiles(info['backupset'], args.previous)
     for fInfo in files:
         name = _decryptFilename(fInfo['name'], crypt)
-        
+
         if not args.dirs and fInfo['dir']:
             continue
         dirInode = (fInfo['parent'], fInfo['parentdev'])
@@ -376,7 +376,7 @@ def listFiles(db, crypt):
                 else:
                     size = "%8d" % int(fInfo['size'])
             else:
-                size = ''           
+                size = ''
             print('  %s%9s %-8s %-8s %8s %12s' % (status, mode, owner, group, size, mtime), end=' ')
             if args.cksums:
                 print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
@@ -728,7 +728,7 @@ def main():
             if args.exceptions:
                 logger.exception(e)
             return -1
-            
+
         if args.command == 'create':
             if password and not Util.checkPasswordStrength(password):
                 return -1

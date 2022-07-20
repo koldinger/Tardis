@@ -35,9 +35,9 @@ import tempfile
 import shutil
 import hashlib
 
-import Tardis.CompressedBuffer as CompressedBuffer
+from Tardis import CompressedBuffer
 
-import Tardis.librsync as librsync
+from Tardis import librsync
 
 
 class RegenerateException(Exception):

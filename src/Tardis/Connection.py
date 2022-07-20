@@ -35,7 +35,7 @@ import ssl
 import queue
 
 import Tardis
-import Tardis.Messages as Messages
+from Tardis import Messages
 
 protocolVersion = "1.5"
 headerString    = "TARDIS " + protocolVersion
@@ -44,7 +44,7 @@ sslHeaderString = headerString + "/SSL"
 class ConnectionException(Exception):
     pass
 
-class Connection(object):
+class Connection:
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, encoding, compress, timeout=None, validate=False):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
@@ -129,7 +129,7 @@ class ProtocolConnection(Connection):
         if error:
             message["error"] = error
         self.send(message)
-        super(ProtocolConnection, self).close()
+        super().close()
 
     def encode(self, string):
         return self.sender.encode(string)

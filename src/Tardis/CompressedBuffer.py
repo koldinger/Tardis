@@ -40,7 +40,7 @@ _defaultChunksize = 1024 * 1024
 
 # Dummy class to just pass empty data through
 # Looks like a compressor, but doesn't do anything.
-class _NullCompressor(object):
+class _NullCompressor:
     def compress(self, data):
         return data
 
@@ -80,7 +80,7 @@ def getDecompressor(alg='zlib'):
 def getCompressors():
     return list(_compressors.keys())
 
-class BufferedReader(object):
+class BufferedReader:
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, signature=False):
         self.stream = stream
         self.chunksize = chunksize
@@ -145,7 +145,7 @@ class BufferedReader(object):
 
 class CompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor='zlib'):
-        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
+        super().__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
@@ -214,7 +214,7 @@ class CompressedBufferedReader(BufferedReader):
 
 class UncompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, compressor='zlib'):
-        super(UncompressedBufferedReader, self).__init__(stream, chunksize=chunksize)
+        super().__init__(stream, chunksize=chunksize)
         self.compressed = 0.0
         self.uncompressed = 0.0
         self.compressor = getDecompressor(compressor)

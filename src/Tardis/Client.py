@@ -74,17 +74,17 @@ from functools import reduce
 from collections import defaultdict
 
 import Tardis
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.Connection as Connection
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.librsync as librsync
-import Tardis.MultiFormatter as MultiFormatter
-import Tardis.StatusBar as StatusBar
-import Tardis.Backend as Backend
-#import Tardis.Throttler as Throttler
-import Tardis.ThreadedScheduler as ThreadedScheduler
+from Tardis import TardisCrypto
+from Tardis import CompressedBuffer
+from Tardis import Connection
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import librsync
+from Tardis import MultiFormatter
+from Tardis import StatusBar
+from Tardis import Backend
+from Tardis import ThreadedScheduler
+#from Tardis import Throttler
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -145,7 +145,7 @@ configDefaults = {
     'Stats':                str(False),
     'Report':               'none',
     'Directories':          '.',
-    
+
     # Backend parameters
     'Formats'               : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
     'Priorities'            : '40, 30, 20',
@@ -282,7 +282,7 @@ class MessageOnlyFormatter(logging.Formatter):
 # or commented lines
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
-        super(CustomArgumentParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def convert_arg_line_to_args(self, line):
         for arg in line.split():
@@ -948,7 +948,7 @@ def mkFileInfo(f):
 
     mode = s.st_mode
 
-    # If we don't want to even create dir entries for things we can't access, just return None 
+    # If we don't want to even create dir entries for things we can't access, just return None
     # if we can't access the file itself
     if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
         return None
@@ -1700,7 +1700,7 @@ def doSrpAuthentication(response):
     except KeyError as e:
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
-    
+
 
 def startBackup(name, priority, client, autoname, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey, crypt
@@ -2351,7 +2351,7 @@ def main():
 
     backend = None
     backendThread = None
-    
+
     # Create a scheduler thread, if need be
     scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
 

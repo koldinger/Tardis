@@ -55,12 +55,12 @@ import daemonize
 import colorlog
 
 import Tardis
-import Tardis.Backend as Backend
-import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
-import Tardis.Messages as Messages
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.Connection as Connection
+from Tardis import Backend
+from Tardis import ConnIdLogAdapter
+from Tardis import Messages
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import Connection
 
 DONE    = 0
 CONTENT = 1
@@ -272,7 +272,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             self.logger.info("Session from %s {%s} Ending: %s: %s", backend.client, self.sessionid, str(completed), str(datetime.now() - starttime))
 
-class TardisServer(object):
+class TardisServer:
     # HACK.  Operate on an object, but not in the class.
     # Want to do this in multiple classes.
     def __init__(self):

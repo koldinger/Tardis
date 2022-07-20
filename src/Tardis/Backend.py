@@ -47,17 +47,17 @@ import uuid
 from datetime import datetime
 
 import Tardis
-import Tardis.CacheDir as CacheDir
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.Connection as Connection
-import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
-import Tardis.Defaults as Defaults
-import Tardis.librsync as librsync
-import Tardis.Messages as Messages
-import Tardis.Regenerator as Regenerator
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.TardisDB as TardisDB
-import Tardis.Util as Util
+from Tardis import CacheDir
+from Tardis import CompressedBuffer
+from Tardis import Connection
+from Tardis import ConnIdLogAdapter
+from Tardis import Defaults
+from Tardis import librsync
+from Tardis import Messages
+from Tardis import Regenerator
+from Tardis import TardisCrypto
+from Tardis import TardisDB
+from Tardis import Util
 
 DONE    = 0
 CONTENT = 1

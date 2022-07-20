@@ -35,6 +35,7 @@ import os.path
 import sys
 import base64
 import binascii
+from functools import reduce
 
 from Cryptodome.Cipher import AES, ChaCha20_Poly1305
 from Cryptodome.Protocol.KDF import PBKDF2, scrypt
@@ -42,8 +43,7 @@ from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
 import srp
 
-import Tardis.Defaults as Defaults
-from functools import reduce
+from Tardis import Defaults
 
 defaultCryptoScheme = 4
 maxCryptoScheme = 4
@@ -302,7 +302,7 @@ class Crypto_Null:
         pass
 
     def padzero(self, data, length=None):
-        return 
+        return
 
     def encryptPath(self, path):
         return path
@@ -607,10 +607,7 @@ if __name__ == '__main__':
             dp = c.decryptPath(cp)
 
             assert(path == dp)
-            
+
         except Exception as e:
             print(f"Caught exception: {e}")
             print(e)
-
-
-

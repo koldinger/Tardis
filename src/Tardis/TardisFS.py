@@ -49,13 +49,13 @@ import functools
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
-import Tardis.CacheDir as CacheDir
-import Tardis.Regenerator as Regenerator
-import Tardis.Util as Util
-import Tardis.Cache as Cache
-import Tardis.Defaults as Defaults
-import Tardis.TardisDB as TardisDB
-import Tardis.Config as Config
+from Tardis import CacheDir
+from Tardis import Regenerator
+from Tardis import Util
+from Tardis import Cache
+from Tardis import Defaults
+from Tardis import TardisDB
+from Tardis import Config
 
 _BackupSetInfo = 0
 _LastBackupSet = 1

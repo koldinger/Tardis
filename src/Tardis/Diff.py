@@ -41,11 +41,11 @@ import parsedatetime
 import binaryornot.check
 
 import Tardis
-import Tardis.Util as Util
-import Tardis.Regenerator as Regenerator
-import Tardis.Defaults as Defaults
-import Tardis.Config as Config
-import Tardis.TardisDB as TardisDB
+from Tardis import Util
+from Tardis import Regenerator
+from Tardis import Defaults
+from Tardis import Config
+from Tardis import TardisDB
 
 logger = None
 args = None
@@ -129,7 +129,7 @@ def runDiff(f1, f2, name, then, now):
     l1 = f1.readlines()
     l2 = f2.readlines()
 
-    # If we only want to list files, just see if the 
+    # If we only want to list files, just see if the
     if args.list and l1 != l2:
         color = 'yellow' if args.color else None
         termcolor.cprint('File {} (versions {} and {}) differs.'.format(name, then, now), color)
@@ -141,7 +141,7 @@ def runDiff(f1, f2, name, then, now):
             termcolor.cprint('Binary file {} (versions {} and {}) differs.'.format(name, then, now), color)
         return
 
-    # Convert the binary blobs to strings so that 
+    # Convert the binary blobs to strings so that
     l1 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l1))
     l2 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l2))
 
@@ -169,7 +169,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
     if not info1:
         logger.error("No data available for %s", path)
-        return  
+        return
 
     entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
     names1 = ([x['name'] for x in entries1])
