@@ -454,11 +454,12 @@ def handleAckSum(response):
     if not args.full and len(delta) != 0:
         signatures = prefetchSigFiles(delta)
 
-    for i, basis in [tuple(x) for x in delta]:
+    for i, basis in delta:
+        inode = tuple(i)
         if logfiles:
-            logFileInfo(i, 'd')
-        processDelta(i, basis, signatures)
-        inodeDB.delete(i)
+            logFileInfo(inode, 'd')
+        processDelta(inode, basis, signatures)
+        inodeDB.delete(inode)
 
 def makeEncryptor():
     iv = crypt.getIV()
