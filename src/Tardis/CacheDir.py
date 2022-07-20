@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import configparser
 
 from functools import reduce
 
-from . import Defaults
+from Tardis import Defaults
 
 logger = logging.getLogger("CacheDir")
 

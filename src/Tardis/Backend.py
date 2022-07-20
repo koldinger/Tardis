@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2019, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse
 import base64
-import configparser
 import io
 import json
 import logging
@@ -38,26 +36,22 @@ import logging.config
 import os
 import pprint
 import shutil
-import signal
 import string
-import sys
 import tempfile
 import types
 import uuid
 from datetime import datetime
 
-import Tardis
-import Tardis.CacheDir as CacheDir
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.Connection as Connection
-import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
-import Tardis.Defaults as Defaults
-import Tardis.librsync as librsync
-import Tardis.Messages as Messages
-import Tardis.Regenerator as Regenerator
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.TardisDB as TardisDB
-import Tardis.Util as Util
+from Tardis import CacheDir
+from Tardis import CompressedBuffer
+from Tardis import ConnIdLogAdapter
+from Tardis import Defaults
+from Tardis import librsync
+from Tardis import Messages
+from Tardis import Regenerator
+from Tardis import TardisCrypto
+from Tardis import TardisDB
+from Tardis import Util
 
 DONE    = 0
 CONTENT = 1

@@ -129,7 +129,7 @@ patch_callback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_longlo
 
 class LibrsyncError(Exception):
     def __init__(self, r):
-        super(LibrsyncError, self).__init__(_librsync.rs_strerror(
+        super().__init__(_librsync.rs_strerror(
             ctypes.c_int(r)))
 
 
@@ -264,7 +264,7 @@ New code by Eric Koldinger, (c) 2014-2015, derived from above code.
 Licensing terms as above
 """
 
-class SignatureJob(object):
+class SignatureJob:
     def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC):
         if s is None:
             s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')

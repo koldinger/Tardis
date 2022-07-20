@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,15 +35,14 @@ import os.path
 import sys
 import base64
 import binascii
+from functools import reduce
 
 from Cryptodome.Cipher import AES, ChaCha20_Poly1305
 from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
-import srp
 
-import Tardis.Defaults as Defaults
-from functools import reduce
+from Tardis import Defaults
 
 defaultCryptoScheme = 4
 maxCryptoScheme = 4
@@ -302,7 +301,7 @@ class Crypto_Null:
         pass
 
     def padzero(self, data, length=None):
-        return 
+        return
 
     def encryptPath(self, path):
         return path
@@ -607,10 +606,7 @@ if __name__ == '__main__':
             dp = c.decryptPath(cp)
 
             assert(path == dp)
-            
+
         except Exception as e:
             print(f"Caught exception: {e}")
             print(e)
-
-
-

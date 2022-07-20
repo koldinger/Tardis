@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@ _defaultChunksize = 1024 * 1024
 
 # Dummy class to just pass empty data through
 # Looks like a compressor, but doesn't do anything.
-class _NullCompressor(object):
+class _NullCompressor:
     def compress(self, data):
         return data
 
@@ -80,7 +80,7 @@ def getDecompressor(alg='zlib'):
 def getCompressors():
     return list(_compressors.keys())
 
-class BufferedReader(object):
+class BufferedReader:
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, signature=False):
         self.stream = stream
         self.chunksize = chunksize
@@ -145,7 +145,7 @@ class BufferedReader(object):
 
 class CompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor='zlib'):
-        super(CompressedBufferedReader, self).__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
+        super().__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
@@ -210,11 +210,11 @@ class CompressedBufferedReader(BufferedReader):
         return self.origsize()
 
     def isCompressed(self):
-        return self.compressor != None
+        return self.compressor is not None
 
 class UncompressedBufferedReader(BufferedReader):
     def __init__(self, stream, chunksize=_defaultChunksize, compressor='zlib'):
-        super(UncompressedBufferedReader, self).__init__(stream, chunksize=chunksize)
+        super().__init__(stream, chunksize=chunksize)
         self.compressed = 0.0
         self.uncompressed = 0.0
         self.compressor = getDecompressor(compressor)
@@ -243,8 +243,8 @@ class UncompressedBufferedReader(BufferedReader):
         return None
 
 if __name__ == "__main__":
-    import time, hashlib
-    import Util
+    import time
+    from Tardis import Util
     print("Opening {}".format(sys.argv[1]))
     #line = x.get()
     readsize = 4 * 1024 * 1024
@@ -265,4 +265,3 @@ if __name__ == "__main__":
             print(f"{x.origsize()} ({Util.fmtSize(x.origsize())})  -- {x.compsize()} ({Util.fmtSize(x.compsize())})  -- {x.ratio():.2%} {duration:3.3f}  {(x.origsize() / (1024 * 1024) / duration):2.2f} MB/s :: {x.checksum()}")
         except Exception as e:
             print(f"Caught exception: {str(e)}")
-

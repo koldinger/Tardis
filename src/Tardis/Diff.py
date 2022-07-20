@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,19 +33,17 @@ import os.path
 import sys
 import difflib
 import argparse
-import logging
 import time
 
 import termcolor
-import parsedatetime
 import binaryornot.check
 
 import Tardis
-import Tardis.Util as Util
-import Tardis.Regenerator as Regenerator
-import Tardis.Defaults as Defaults
-import Tardis.Config as Config
-import Tardis.TardisDB as TardisDB
+from Tardis import Util
+from Tardis import Regenerator
+from Tardis import Defaults
+from Tardis import Config
+from Tardis import TardisDB
 
 logger = None
 args = None
@@ -78,7 +76,7 @@ def parseArgs():
     parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
     parser.add_argument('--list', '-l',     dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
-    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data");
+    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
@@ -129,7 +127,7 @@ def runDiff(f1, f2, name, then, now):
     l1 = f1.readlines()
     l2 = f2.readlines()
 
-    # If we only want to list files, just see if the 
+    # If we only want to list files, just see if the
     if args.list and l1 != l2:
         color = 'yellow' if args.color else None
         termcolor.cprint('File {} (versions {} and {}) differs.'.format(name, then, now), color)
@@ -141,7 +139,7 @@ def runDiff(f1, f2, name, then, now):
             termcolor.cprint('Binary file {} (versions {} and {}) differs.'.format(name, then, now), color)
         return
 
-    # Convert the binary blobs to strings so that 
+    # Convert the binary blobs to strings so that
     l1 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l1))
     l2 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l2))
 
@@ -169,7 +167,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
     if not info1:
         logger.error("No data available for %s", path)
-        return  
+        return
 
     entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
     names1 = ([x['name'] for x in entries1])

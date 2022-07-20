@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -32,10 +32,11 @@ import socket
 import os
 import sys
 import json
-import msgpack
 import base64
 import struct
 import zlib
+
+import msgpack
 import snappy
 
 try:
@@ -46,7 +47,7 @@ except:
     pass
 
 
-class Messages(object):
+class Messages:
     __socket = None
 
     def __init__(self, socket, stats=None):
@@ -60,12 +61,12 @@ class Messages(object):
             if chunk == b'':
                 raise RuntimeError("socket connection broken")
             msg.extend(chunk)
-        if self.__stats != None:
+        if self.__stats is not None:
             self.__stats['bytesRecvd'] += len(msg)
         return msg
 
     def sendBytes(self, bytes):
-        if self.__stats != None:
+        if self.__stats is not None:
             self.__stats['bytesSent'] += len(bytes)
         self.__socket.sendall(bytes)
 
@@ -145,18 +146,18 @@ class TextMessages(Messages):
 class JsonMessages(TextMessages):
     def __init__(self, socket, stats=None, compress=False):
         TextMessages.__init__(self, socket, stats)
-    
+
     def sendMessage(self, message, compress=False, raw=False):
         if raw:
-            super(JsonMessages, self).sendMessage(message)
+            super().sendMessage(message)
         else:
-            super(JsonMessages, self).sendMessage(json.dumps(message))
+            super().sendMessage(json.dumps(message))
 
     def recvMessage(self, raw=False):
         if raw:
-            message = super(JsonMessages, self).recvMessage()
+            message = super().recvMessage()
         else:
-            message = json.loads(super(JsonMessages, self).recvMessage())
+            message = json.loads(super().recvMessage())
         return message
 
     def encode(self, data):
@@ -171,18 +172,18 @@ class JsonMessages(TextMessages):
 class MsgPackMessages(BinMessages):
     def __init__(self, socket, stats=None, compress=True):
         BinMessages.__init__(self, socket, stats, compress=compress)
-    
+
     def sendMessage(self, message, compress=True, raw=False):
         if raw:
-            super(MsgPackMessages, self).sendMessage(message, compress=compress, raw=True)
+            super().sendMessage(message, compress=compress, raw=True)
         else:
-            super(MsgPackMessages, self).sendMessage(msgpack.packb(message, use_bin_type=True), compress=compress)
+            super().sendMessage(msgpack.packb(message, use_bin_type=True), compress=compress)
 
     def recvMessage(self, raw=False):
         if raw:
-            message = super(MsgPackMessages, self).recvMessage()
+            message = super().recvMessage()
         else:
-            mess = super(MsgPackMessages, self).recvMessage()
+            mess = super().recvMessage()
             message = msgpack.unpackb(mess, encoding='utf-8')
         return message
 
@@ -198,18 +199,18 @@ class MsgPackMessages(BinMessages):
 class BsonMessages(BinMessages):
     def __init__(self, socket, stats=None, compress=True):
         BinMessages.__init__(self, socket, stats, compress=compress)
-    
+
     def sendMessage(self, message, compress=True, raw=False):
         if raw:
-            super(BsonMessages, self).sendMessage(message, compress=compress, raw=True)
+            super().sendMessage(message, compress=compress, raw=True)
         else:
-            super(BsonMessages, self).sendMessage(bson.dumps(message), compress=compress)
+            super().sendMessage(bson.dumps(message), compress=compress)
 
     def recvMessage(self, raw=False):
         if raw:
-            message = super(BsonMessages, self).recvMessage()
+            message = super().recvMessage()
         else:
-            message = bson.loads(super(BsonMessages, self).recvMessage())
+            message = bson.loads(super().recvMessage())
         return message
 
     def encode(self, data):

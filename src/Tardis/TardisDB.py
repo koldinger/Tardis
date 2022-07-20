@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2021, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,17 +35,17 @@ import os.path
 import time
 import sys
 import uuid
-import srp
 import functools
 import importlib
 import gzip
-
-from binascii import hexlify, unhexlify
 import base64
+from binascii import hexlify, unhexlify
+
+import srp
 
 import Tardis
-import Tardis.ConnIdLogAdapter as ConnIdLogAdapter
-import Tardis.Rotator as Rotator
+from Tardis import ConnIdLogAdapter
+from Tardis import Rotator
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -128,7 +128,7 @@ conversionModules = {}
 
 # Class TardisDB
 
-class TardisDB(object):
+class TardisDB:
     """ Main source for all interaction with the Tardis DB """
     conn    = None
     cursor  = None
@@ -201,7 +201,7 @@ class TardisDB(object):
         else:
             self.logger.debug("Setting authenticated false")
             self.authenticated = False
-    
+
     def needsAuthentication(self):
         """ Return true if a database needs to be authenticated """
         salt, vkey = self.getSrpValues()
@@ -353,7 +353,7 @@ class TardisDB(object):
 
         self.currBackupSet = c.lastrowid
 
-        if name == None:
+        if name is None:
             name = "INCOMPLETE-{}".format(self.currBackupSet)
             self.setBackupSetName(name, priority)
 
@@ -499,7 +499,7 @@ class TardisDB(object):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         backupset = self._bset(current)
         self.logger.debug("Looking up file for similar info: %s", checksum)
-        c = self.cursor.execute("SELECT " + 
+        c = self.cursor.execute("SELECT " +
                                  _fileInfoFields + _fileInfoJoin +
                                  "WHERE C1.Checksum = :cksum AND :backup BETWEEN Files.FirstSet AND Files.LastSet",
                                  {'cksum': checksum, 'backup': backupset})
@@ -977,7 +977,7 @@ class TardisDB(object):
         else:
             pSet = bSet
         self.logger.debug("Getting new files for changesets %s -> %s", pSet, bSet)
-        cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin + 
+        cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin +
                                "WHERE Files.FirstSet >= :pSet AND Files.LastSet >= :bSet",
                                {'bSet': bSet, 'pSet': pSet})
         return _fetchEm(cursor)
@@ -1098,7 +1098,7 @@ class TardisDB(object):
         backupset = self._bset(current)
         # Select all sets that are purgeable.
         c = self.cursor.execute("SELECT " +
-                                _backupSetInfoFields + 
+                                _backupSetInfoFields +
                                 _backupSetInfoJoin +
                                 " WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
@@ -1221,7 +1221,7 @@ class TardisDB(object):
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET ClientEndTime = :now WHERE BackupSet = :backup",
                               { "now": time.time(), "backup": self.currBackupSet })
-    
+
     @authenticate
     def setTag(self, tag, current=False):
         backupset = self._bset(current)
@@ -1284,7 +1284,7 @@ class TardisDB(object):
         if self.authenticated:
             return True
         elif self.srpSrv is not None:
-            return self.sprSrv.authenticated()
+            return self.srpSrv.authenticated()
         else:
             return False
 

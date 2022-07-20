@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -30,12 +30,11 @@
 
 import socket
 import json
-import time
 import ssl
 import queue
 
 import Tardis
-import Tardis.Messages as Messages
+from Tardis import Messages
 
 protocolVersion = "1.5"
 headerString    = "TARDIS " + protocolVersion
@@ -44,7 +43,7 @@ sslHeaderString = headerString + "/SSL"
 class ConnectionException(Exception):
     pass
 
-class Connection(object):
+class Connection:
     """ Root class for handling connections to the tardis server """
     def __init__(self, host, port, encoding, compress, timeout=None, validate=False):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
@@ -129,7 +128,7 @@ class ProtocolConnection(Connection):
         if error:
             message["error"] = error
         self.send(message)
-        super(ProtocolConnection, self).close()
+        super().close()
 
     def encode(self, string):
         return self.sender.encode(string)
@@ -214,5 +213,3 @@ if __name__ == "__main__":
     print(server.recvMessage())
     server.sendMessage({"b": 2, "c": ['a', 'b', 'c']})
     print(conn.receive())
-
-

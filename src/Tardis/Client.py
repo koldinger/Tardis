@@ -1,7 +1,7 @@
 # vi: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,14 +28,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
 import sys
+import os
 import os.path
-import signal
 import logging
 import logging.handlers
-import fnmatch
-import re
 import glob
 import itertools
 import json
@@ -44,8 +41,6 @@ import configparser
 import time
 import datetime
 import base64
-import subprocess
-import hashlib
 import tempfile
 import io
 import shlex
@@ -58,10 +53,11 @@ import unicodedata
 import pprint
 import traceback
 import threading
-import cProfile
 import socket
 import concurrent.futures
 
+from functools import reduce
+from collections import defaultdict
 from binascii import hexlify
 
 import magic
@@ -70,21 +66,19 @@ import parsedatetime
 import srp
 import colorlog
 from pathmatch import wildmatch
-from functools import reduce
-from collections import defaultdict
 
 import Tardis
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.Connection as Connection
-import Tardis.Util as Util
-import Tardis.Defaults as Defaults
-import Tardis.librsync as librsync
-import Tardis.MultiFormatter as MultiFormatter
-import Tardis.StatusBar as StatusBar
-import Tardis.Backend as Backend
-#import Tardis.Throttler as Throttler
-import Tardis.ThreadedScheduler as ThreadedScheduler
+from Tardis import TardisCrypto
+from Tardis import CompressedBuffer
+from Tardis import Connection
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import librsync
+from Tardis import MultiFormatter
+from Tardis import StatusBar
+from Tardis import Backend
+from Tardis import ThreadedScheduler
+#from Tardis import Throttler
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -145,7 +139,7 @@ configDefaults = {
     'Stats':                str(False),
     'Report':               'none',
     'Directories':          '.',
-    
+
     # Backend parameters
     'Formats'               : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
     'Priorities'            : '40, 30, 20',
@@ -282,7 +276,7 @@ class MessageOnlyFormatter(logging.Formatter):
 # or commented lines
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
-        super(CustomArgumentParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def convert_arg_line_to_args(self, line):
         for arg in line.split():
@@ -778,7 +772,7 @@ def handleAckMeta(message):
 _defaultHash = None
 def sendDirHash(inode):
     global _defaultHash
-    if _defaultHash == None:
+    if _defaultHash is None:
         _defaultHash = crypt.getHash().hexdigest()
 
     i = tuple(inode)
@@ -948,7 +942,7 @@ def mkFileInfo(f):
 
     mode = s.st_mode
 
-    # If we don't want to even create dir entries for things we can't access, just return None 
+    # If we don't want to even create dir entries for things we can't access, just return None
     # if we can't access the file itself
     if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
         return None
@@ -1700,7 +1694,7 @@ def doSrpAuthentication(response):
     except KeyError as e:
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
-    
+
 
 def startBackup(name, priority, client, autoname, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey, crypt
@@ -1876,7 +1870,7 @@ def processCommandLine():
                            help='Load keys from file.  Keys are not stored in database')
 
     parser.add_argument('--send-config', '-S',      dest='sendconfig', action=Util.StoreBoolean, default=c.getboolean(t, 'SendClientConfig'),
-                        help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s');
+                        help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s')
 
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  ' + _def)
@@ -2252,7 +2246,6 @@ def main():
 
     try:
         starttime = datetime.datetime.now()
-        subserver = None
 
         # Get the actual names we're going to use
         (server, port, client) = parseServerInfo(args)
@@ -2261,7 +2254,7 @@ def main():
             lockRun(server, port, client)
 
         # Figure out the name and the priority of this backupset
-        (name, priority, auto) = setBackupName(args)
+        (name, _, auto) = setBackupName(args)
 
         # setup purge times
         setPurgeValues(args)
@@ -2349,16 +2342,15 @@ def main():
 
     # Open the connection
 
-    backend = None
     backendThread = None
-    
+
     # Create a scheduler thread, if need be
     scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
 
     # Get the connection object
     try:
         if localmode:
-            (conn, backend, backendThread) = runBackend(jobname)
+            (conn, _, backendThread) = runBackend(jobname)
         else:
             conn = getConnection(server, port)
 

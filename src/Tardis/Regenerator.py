@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
 import binascii
 import logging
 import tempfile
 import shutil
-import hashlib
 
-import Tardis.CompressedBuffer as CompressedBuffer
+from Tardis import CompressedBuffer
 
-import Tardis.librsync as librsync
+from Tardis import librsync
 
 
 class RegenerateException(Exception):

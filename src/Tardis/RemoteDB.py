@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import requests
 import requests_cache
 
 import Tardis
-import Tardis.TardisDB as TardisDB
+from Tardis import TardisDB
 
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)
@@ -77,7 +77,7 @@ def fs_encode(val):
     else:
         return val
 
-class RemoteDB(object):
+class RemoteDB:
     """ Proxy class to retrieve objects via HTTP queries """
     session = None
     headers = {}
@@ -146,7 +146,7 @@ class RemoteDB(object):
         srpValueS = base64.b64decode(data['srpValueS'])
         srpValueB = base64.b64decode(data['srpValueB'])
         return srpValueS, srpValueB
-        
+
     def authenticate2(self, srpValueM):
         postData = {
             'srpValueM': str(base64.b64encode(srpValueM), 'utf8')
@@ -370,7 +370,7 @@ class RemoteDB(object):
     def getConfigValue(self, name, default=None):
         r = self.session.get(self.baseURL + "getConfigValue/" + name, headers=self.headers)
         r.raise_for_status()
-        if r.json() == None:
+        if r.json() is None:
             return default
         else:
             return r.json()
@@ -386,7 +386,7 @@ class RemoteDB(object):
         r = self.session.get(self.baseURL + "setPriority/" + str(backupset) + "/" + str(priority), headers=self.headers)
         r.raise_for_status()
         return r.json()
-    
+
     @reconnect
     def setBackupsetName(self, name, priority, current=True):
         backupset = self._bset(current)

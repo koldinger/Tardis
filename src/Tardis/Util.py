@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -34,13 +34,11 @@ import argparse
 import configparser
 import sys
 import subprocess
-import hashlib
 import shlex
 import getpass
 import stat
 import fnmatch
 import json
-import types
 import base64
 import functools
 import pwd
@@ -52,22 +50,18 @@ import signal
 
 import urllib.request, urllib.parse, urllib.error
 
-import zlib
-import bz2
-import lzma
 import srp
 import passwordmeter
 import colorlog
 import parsedatetime
 
-import Tardis.Connection as Connection
-import Tardis.CompressedBuffer as CompressedBuffer
-import Tardis.Defaults as Defaults
-
-import Tardis.TardisDB as TardisDB
-import Tardis.TardisCrypto as TardisCrypto
-import Tardis.CacheDir as CacheDir
-import Tardis.RemoteDB as RemoteDB
+from Tardis import Connection
+from Tardis import CompressedBuffer
+from Tardis import Defaults
+from Tardis import TardisDB
+from Tardis import TardisCrypto
+from Tardis import CacheDir
+from Tardis import RemoteDB
 
 try:
     import genzshcomp
@@ -424,7 +418,7 @@ def checkPasswordStrength(password):
 # Get the database, cachedir, and crypto object.
 
 def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, allow_upgrade=False, retpassword=False):
-    """ Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem, 
+    """ Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem,
     or via TardisRemote (http).
     Returns a 3-tuple, the TardisDB object, the CacheDir object, and the appropriate crypto object
     """
@@ -831,7 +825,7 @@ class StoreBoolean(argparse.Action):
         self.negative_option = "--" + negate + option_strings[0][2:]
         self.help_option = "--[" + negate + "]" + option_strings[0][2:]
         option_strings.append(self.negative_option)
-        super(StoreBoolean, self).__init__(option_strings, dest, nargs=0, **kwargs)
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
 
     def __call__(self, parser, arguments, values, option_string=None):
         #print "Here: ", option_string, " :: ", self.option_strings
@@ -852,7 +846,7 @@ class Toggle(argparse.Action):
                  default=None,
                  required=False,
                  help=None):
-        super(Toggle, self).__init__(
+        super().__init__(
             option_strings=option_strings,
             dest=dest,
             nargs=0,
@@ -887,7 +881,7 @@ class HelpFormatter(argparse.RawTextHelpFormatter):
         if hasattr(action, 'help_option'):
             ret = action.help_option
         else:
-            ret = super(argparse.RawTextHelpFormatter, self)._format_action_invocation(action)
+            ret = super()._format_action_invocation(action)
         #print "Got ", ret
         return ret
 
@@ -910,8 +904,8 @@ class ClearingStreamHandler(logging.StreamHandler):
     clearLines = False
 
     def __init__(self, stream = None):
-        super(ClearingStreamHandler, self).__init__(stream)
-        if stream == None: stream = sys.stderr
+        super().__init__(stream)
+        if stream is None: stream = sys.stderr
         self.clearLines = os.isatty(stream.fileno())
 
     def emit(self, record):
@@ -920,7 +914,7 @@ class ClearingStreamHandler(logging.StreamHandler):
         if self.clearLines:
             self.stream.write(_ansiClearEol)
 
-        super(ClearingStreamHandler, self).emit(record)
+        super().emit(record)
 
 # AN exception logging mechanism
 class ExceptionLogger:
@@ -938,20 +932,20 @@ class ExceptionLogger:
 
 class bidict(dict):
     def __init__(self, *args, **kwargs):
-        super(bidict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.inverse = {}
         for key, value in self.items():
             self.inverse.setdefault(value,[]).append(key)
 
     def __setitem__(self, key, value):
-        super(bidict, self).__setitem__(key, value)
+        super().__setitem__(key, value)
         self.inverse.setdefault(value,[]).append(key)
 
     def __delitem__(self, key):
         self.inverse.setdefault(self[key],[]).remove(key)
         if self[key] in self.inverse and not self.inverse[self[key]]:
             del self.inverse[self[key]]
-        super(bidict, self).__delitem__(key)
+        super().__delitem__(key)
 
 # Get a hash function.  Configurable.
 

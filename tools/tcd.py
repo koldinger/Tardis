@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ Examples:
     tcd +3              - Change 3 backup sets forward
     tcd "last week"     - Change to a backup set from a week ago.
     tcd Current         - Change to the current backup set.
-    tcd Monthly-2020-01 - Change to the backup set namely "Monthly-2020-01" """
+    tcd Monthly-2022-01 - Change to the backup set namely "Monthly-2022-01" """
 
 def findMount(path):
     origpath = os.path.realpath(path)

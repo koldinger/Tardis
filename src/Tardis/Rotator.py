@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2020, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ import os.path
 import time
 import gzip
 
-class Rotator(object):
+class Rotator:
     def __init__(self, rotations=5, compress=32 * 1024):
         self.logger = logging.getLogger("Rotator")
         self.rotations = rotations
