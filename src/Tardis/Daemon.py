@@ -216,7 +216,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             if self.server.ssl:
                 sock.sendall(bytes(Connection.sslHeaderString, 'utf-8'))
-                sock = ssl.wrap_socket(sock, server_side=True, certfile=self.server.certfile, keyfile=self.server.keyfile)
+                sock = self.server.sslCtx.wrap_socket(sock, server_side=True)
             else:
                 sock.sendall(bytes(Connection.headerString, 'utf-8'))
 
@@ -339,6 +339,16 @@ class TardisServer:
         self.ssl            = args.ssl
         self.certfile       = args.certfile
         self.keyfile        = args.keyfile
+
+        if self.ssl:
+            try:
+                self.sslCtx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                self.sslCtx.load_cert_chain(self.certfile, self.keyfile)
+            except Exception as e:
+                logger.critical("Unable to create SSL Context: %s", str(e))
+                raise Exception(str(e)) from e
+        else:
+            self.sslCtx = None
 
         # Create a session ID
         self.serverSessionID = str(uuid.uuid1())

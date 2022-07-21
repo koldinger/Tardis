@@ -248,6 +248,7 @@ Environment Variables
 | TARDIS_SEND_CONFIG    | Send the running configuration to the server, mainly for debug. | True | Client
 | TARDIS_CONFIG         | Configuration file to use | None | Client, User Tools |
 | TARDIS_JOB            | Job to run, from a configuration file | Tardis | Client, User Tools |
+| TARDIS_VALIDATE_CERTS | Validate certificates if using SSL | Client |
 
 Notes:
     * User tools are lstardis, regenerate, tardiff, tardisfs, and sonic.

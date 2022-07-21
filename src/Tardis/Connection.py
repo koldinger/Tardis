@@ -45,7 +45,7 @@ class ConnectionException(Exception):
 
 class Connection:
     """ Root class for handling connections to the tardis server """
-    def __init__(self, host, port, encoding, compress, timeout=None, validate=False):
+    def __init__(self, host, port, encoding, compress, timeout, validate):
         self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
         # Create and open the socket
@@ -62,13 +62,16 @@ class Connection:
             self.sock.connect(port)
 
         try:
-            # Receive a string.  TARDIS proto=1.0
+            # Receive a string.  TARDIS proto=1.5
             message = str(self.sock.recv(32).strip(), 'utf8')
             if message == sslHeaderString:
                 # Overwrite self.sock
-                self.sock = ssl.wrap_socket(self.sock, server_side=False) #, cert_reqs=ssl.CERT_REQUIRED, ca_certs="/etc/ssl/certs/ca-bundle.crt")
-                if validate:
-                    pass        # TODO Check the certificate hostname.  Requires python 2.7.9 or higher.
+                self.sslCtx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                if not validate:
+                    self.sslCtx.check_hostname=False
+                    self.sslCtx.verify_mode=ssl.CERT_NONE
+
+                self.sock = self.sslCtx.wrap_socket(self.sock, server_side=False, server_hostname=host)
             elif not message:
                 raise Exception("No header string.")
             elif message != headerString:
@@ -80,9 +83,9 @@ class Connection:
             fields = json.loads(message)
             if fields['status'] != 'OK':
                 raise ConnectionException("Unable to connect")
-        except Exception:
+        except Exception as e:
             self.sock.close()
-            raise
+            raise e
 
     def put(self, message):
         self.sock.sendall(message)
@@ -111,8 +114,8 @@ class Connection:
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, protocol, compress, timeout):
-        Connection.__init__(self, host, port, protocol, compress)
+    def __init__(self, host, port, protocol, compress, timeout, validate):
+        super().__init__(host, port, protocol, compress, timeout, validate)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -140,20 +143,20 @@ _defaultVersion = Tardis.__buildversion__  or Tardis.__version__
 
 class JsonConnection(ProtocolConnection):
     """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, compress, timeout):
-        ProtocolConnection.__init__(self, host, port, 'JSON', False, timeout)
+    def __init__(self, host, port, compress, timeout, validate):
+        ProtocolConnection.__init__(self, host, port, 'JSON', False, timeout, validate)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
 class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, compress, timeout):
-        ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout)
+    def __init__(self, host, port, compress, timeout, validate):
+        ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout, validate)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
-    def __init__(self, host, port, compress, timeout):
-        ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout)
+    def __init__(self, host, port, compress, timeout, validate):
+        ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout, validate)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 

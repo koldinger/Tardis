@@ -66,6 +66,7 @@ _defaults = {
     'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults',
     'TARDIS_PWFILE'         : '',
     'TARDIS_KEYFILE'        : '',
+    'TARDIS_VALIDATE_CERTS' : 'false',          # TODO: Fix this, once we get it working
 }
 
 try:

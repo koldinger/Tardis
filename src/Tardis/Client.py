@@ -117,6 +117,7 @@ configDefaults = {
     'PasswordProg':         None,
     'Crypt':                str(True),
     'KeyFile':              Defaults.getDefault('TARDIS_KEYFILE'),
+    'ValidateCerts':        Defaults.getDefault('TARDIS_VALIDATE_CERTS'),
     'SendClientConfig':     Defaults.getDefault('TARDIS_SEND_CONFIG'),
     'CompressData':         'none',
     'CompressMin':          str(4096),
@@ -443,7 +444,6 @@ def handleAckSum(response):
         inodeDB.delete(i)
 
     # First, then send content for any files which don't
-    # FIXME: TODO: There should be a test in here for Delta's
     for i in [tuple(x) for x in content]:
         if logfiles:
             logFileInfo(i, 'n')
@@ -880,19 +880,20 @@ def pushFiles():
         signatures = prefetchSigFiles(allDelta)
 
     for i, basis in [tuple(x) for x in allDelta]:
+        inode = tuple(i)
         # If doing a full backup, send the full file, else just a delta.
         try:
             if args.full:
                 if logger.isEnabledFor(logging.FILES):
-                    logFileInfo(i, 'N')
-                sendContent(i, 'Full')
+                    logFileInfo(inode, 'N')
+                sendContent(inode, 'Full')
             else:
                 if logger.isEnabledFor(logging.FILES):
-                    (x, name) = inodeDB.get(i)
+                    (_, name) = inodeDB.get(inode)
                     if name:
                         logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
-                processDelta(i, basis, signatures)
-            processed.append(i)
+                processDelta(inode, basis, signatures)
+            processed.append(inode)
         except Exception as e:
             logger.error("Unable to backup %s: ", str(i), str(e))
 
@@ -1770,7 +1771,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             sys.exit(1)
         crypt.setKeys(f, c)
 
-def getConnection(server, port, maxBandwidth=None):
+def getConnection(server, port):
     #if args.protocol == 'json':
     #    conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout, full=args.full)
     #    setEncoder("base64")
@@ -1782,7 +1783,7 @@ def getConnection(server, port, maxBandwidth=None):
     #if maxBandwidth:
     #    throttler = Throttler(maxBandwidth, blocking=True)
 
-    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout)
+    conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
     setEncoder("bin")
     return conn
 
@@ -1918,6 +1919,8 @@ def processCommandLine():
     comgrp.add_argument('--compress-msgs', '-Y',    dest='compressmsgs', nargs='?', const='snappy',
                         choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  ' + _def)
+    comgrp.add_argument('--validate-certs',         dest='validatecerts', action=Util.StoreBoolean, default=c.getboolean(t, 'ValidateCerts'),
+                        help="Validate Certificates.   Set to false for self-signed certificates. " + _def)
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  ' + _def))
     comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: ' + _def))
