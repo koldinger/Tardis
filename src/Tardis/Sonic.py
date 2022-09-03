@@ -334,6 +334,16 @@ def _path(db, crypt, bset, inode):
         else:
             return ''
 
+def humanify(size):
+    if size is not None:
+        if args.human:
+            size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+        else:
+            size = size
+    else:
+        size = ''
+    return size
+
 def listFiles(db, crypt):
     #print args
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
@@ -368,20 +378,21 @@ def listFiles(db, crypt):
             group = Util.getGroupName(fInfo['gid'])
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])
-            if fInfo['size'] is not None:
-                if args.human:
-                    size = "%8s" % Util.fmtSize(fInfo['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
-                else:
-                    size = "%8d" % int(fInfo['size'])
-            else:
-                size = ''
-            print('  %s%9s %-8s %-8s %8s %12s' % (status, mode, owner, group, size, mtime), end=' ')
+            size = humanify(fInfo['size'])
+            print('  %s%9s %-8s %-8s %9s %12s' % (status, mode, owner, group, size, mtime), end=' ')
             if args.cksums:
                 print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
             if args.chnlen:
                 print(' %4s ' % (fInfo['chainlength']), end=' ')
             if args.inode:
                 print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+
+            if args.type:
+                print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
+            if args.size:
+                size = humanify(fInfo['disksize'])
+                print(' %9s ' % (size), end=' ')
+
 
             print(name)
         else:
@@ -392,6 +403,11 @@ def listFiles(db, crypt):
                 print(' %4s ' % (fInfo['chainlength']), end=' ')
             if args.inode:
                 print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+            if args.type:
+                print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
+            if args.size:
+                size = humanify(fInfo['disksize'])
+                print(' %9s ' % (size), end=' ')
             print(name)
 
 
@@ -596,6 +612,8 @@ def parseArgs():
     filesParser.add_argument('--checksums', '-c', dest='cksums', default=False, action=Util.StoreBoolean,       help='Print checksums')
     filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=Util.StoreBoolean,        help='Print chainlengths')
     filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=Util.StoreBoolean,          help='Print inodes')
+    filesParser.add_argument('--type', '-t',    dest='type', default=False, action=Util.StoreBoolean,           help='Print backup type')
+    filesParser.add_argument('--size', '-s',    dest='size', default=False, action=Util.StoreBoolean,           help='Print backup size')
 
     tagParser = argparse.ArgumentParser(add_help=False)
     tagParser.add_argument("--tag", "-t",      dest='tag',     default=None, required=True,             help="Set to tag")
