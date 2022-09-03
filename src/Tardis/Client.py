@@ -826,7 +826,7 @@ def handleAckDir(message):
 
     if verbosity > 2:
         path = message['path']
-        if crypt:
+        if crypt and path:
             path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
@@ -879,8 +879,10 @@ def pushFiles():
     if not args.full and len(allDelta) != 0:
         signatures = prefetchSigFiles(allDelta)
 
+    logger.debug("Ready to send delta's for %d files: %s", len(allDelta), str(allDelta))
     for i, basis in [tuple(x) for x in allDelta]:
         inode = tuple(i)
+        logger.debug("Sending Delta for inode %s - Basis: %s", str(inode), str(basis))
         # If doing a full backup, send the full file, else just a delta.
         try:
             if args.full:
