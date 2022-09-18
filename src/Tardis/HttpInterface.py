@@ -233,6 +233,11 @@ def getBackupSetInfoById(backupset):
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoById(backupset)))
 
+@app.route('/getBackupSetInfoById/<tag>')
+def getBackupSetInfoByTag(tag):
+    db = getDB()
+    return creatRespones(makeDict(db.getBackupSetInfoByTag(tag)))
+
 @app.route('/getBackupSetDetails/<backupset>')
 def getBackupSetDetails(backupset):
     db = getDB()
