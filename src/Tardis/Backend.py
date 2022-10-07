@@ -136,7 +136,7 @@ class BackendConfig:
 
     linkBasis       = False
 
-    skip            = '.tardis.skip'
+    skip            = Defaults.getDefault('TARDIS_SKIP');
 
 
 class Backend:
