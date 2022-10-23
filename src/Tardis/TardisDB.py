@@ -978,7 +978,7 @@ class TardisDB:
             pSet = bSet
         self.logger.debug("Getting new files for changesets %s -> %s", pSet, bSet)
         cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin +
-                               "WHERE Files.FirstSet >= :pSet AND Files.LastSet >= :bSet",
+                               "WHERE Files.FirstSet >= :pSet AND Files.LastSet <= :bSet",
                                {'bSet': bSet, 'pSet': pSet})
         return _fetchEm(cursor)
 

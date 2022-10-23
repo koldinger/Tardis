@@ -351,7 +351,7 @@ def listFiles(db, crypt):
     lastDir = '/'
     lastDirInode = (-1, -1)
     bset = info['backupset']
-    files = db.getNewFiles(info['backupset'], args.previous)
+    files = db.getNewFiles(bset, args.previous)
     for fInfo in files:
         name = _decryptFilename(fInfo['name'], crypt)
 
