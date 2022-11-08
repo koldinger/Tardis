@@ -121,7 +121,7 @@ def createClient(password):
 def setPassword(password):
     try:
         (db, _, _) = getDB(None)
-        crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password, args.client)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)

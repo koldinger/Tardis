@@ -349,6 +349,8 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
         self._random = Cryptodome.Random.new()
         if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
+        if client is None:
+            raise Exception("No client set for encryption")
 
         self.client = bytes(client, 'utf8')
         self.salt = hashlib.sha256(self.client).digest()

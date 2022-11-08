@@ -2464,7 +2464,6 @@ def main():
         if localmode:
             conn.send(Exception("Terminate connection"))
 
-
     if localmode:
         logger.info("Waiting for server to complete")
         backendThread.join()        # Should I do communicate?
