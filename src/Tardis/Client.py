@@ -1236,9 +1236,7 @@ def recurseTree(dir, top, depth=0, excludes=[]):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
     global dirHashes
 
-    newdepth = 0
-    if depth > 0:
-        newdepth = depth - 1
+    newdepth = max(depth - 1, 0)
 
     setProgress("Dir:", dir)
 
@@ -1857,7 +1855,6 @@ def processCommandLine():
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
     parser.add_argument('--create',                 dest='create', default=False, action=Util.StoreBoolean,             help='Create a new client.')
 
-    parser.add_argument('--timeout',                dest='timeout', default=300.0, type=float, const=None,              help='Set the timeout to N seconds.  ' + _def)
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
@@ -1866,8 +1863,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),              help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1),
-                           default=None,
+    passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1), default=None,
                            help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
 
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
@@ -1884,9 +1880,9 @@ def processCommandLine():
     parser.add_argument('--nocompress', '-z',       dest='nocompress', default=splitList(c.get(t, 'NoCompress')), action='append',
                         help='MIME type to not compress. Can be repeated')
     if support_xattr:
-        parser.add_argument('--xattr',              dest='xattr', default=True, action=Util.StoreBoolean,               help='Backup file extended attributes')
+        parser.add_argument('--xattr',              dest='xattr', default=support_xattr, action=Util.StoreBoolean,               help='Backup file extended attributes')
     if support_acl:
-        parser.add_argument('--acl',                dest='acl', default=True, action=Util.StoreBoolean,                 help='Backup file access control lists')
+        parser.add_argument('--acl',                dest='acl', default=support_acl, action=Util.StoreBoolean,                 help='Backup file access control lists')
 
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
@@ -1937,6 +1933,7 @@ def processCommandLine():
     #                    help=_d('Protocol for data transfer.  ' + _def))
     comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
                         help=_d('Always send a signature.  ' + _def))
+    comgrp.add_argument('--timeout',                dest='timeout', default=c.getfloat(t, 'Timeout'), type=float, const=None,              help='Set the timeout to N seconds.  ' + _def)
 
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  ' + _def))
@@ -1957,7 +1954,7 @@ def processCommandLine():
                         help='Print stats about the transfer.  Default=%(default)s')
     parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
                         help='Print a report on all files or directories transferred.  ' + _def)
-    parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
+    parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getfloat(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
@@ -2497,4 +2494,7 @@ def main():
     print('')
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit("Interrupted")
