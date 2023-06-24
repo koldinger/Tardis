@@ -94,9 +94,12 @@ logger = None
 
 def getDB():
     if 'host' not in session:
-        abort(401)
+        abort(401, "Host not in session"))
     host = session['host']
-    db = dbs[host]
+    try:
+        db = dbs[host]
+    except KeyError:
+        abort(401, f"{host} not in db list"))
     return db
 
 def makeDict(row):
