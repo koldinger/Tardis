@@ -34,6 +34,7 @@ import sys
 import urllib.request, urllib.parse, urllib.error
 import functools
 import base64
+import datetime
 
 from binascii import unhexlify
 
@@ -117,7 +118,7 @@ class RemoteDB:
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
-        self.session = requests.Session()
+        self.session = requests_cache.CachedSession(expire_after = datetime.timedelta(days=31))
         self.session.verify = self.verify
 
         postData = { 'host': self.host }
