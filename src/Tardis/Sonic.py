@@ -36,9 +36,10 @@ import time
 import datetime
 import pprint
 import urllib.parse
-import srp
+import functools
 
 import parsedatetime
+import srp
 
 import Tardis
 from Tardis import Util
@@ -63,7 +64,7 @@ args = None
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
     loc = urllib.parse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
-    if (loc.scheme == 'http') or (loc.scheme == 'https'):
+    if loc.scheme in ['http', 'https']:
         if not allowRemote:
             raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
         # If no port specified, insert the port
@@ -103,7 +104,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
 
 def createClient(password):
     try:
-        (db, _, crypt) = getDB(None, True, allowRemote=False)
+        getDB(None, True, allowRemote=False)
         if password:
             setPassword(password)
         return 0
@@ -134,7 +135,7 @@ def setPassword(password):
             db.setKeys(salt, vkey, f, c)
             db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
         return 0
-    except TardisDB.NotAuthenticated:
+    except TardisDB.NotAuthenticated as e:
         logger.error('Client %s already has a password', args.client)
         if args.exceptions:
             logger.exception(e)
@@ -314,9 +315,11 @@ _paths = {(0, 0): '/'}
 def _encryptFilename(name, crypt):
     return crypt.encryptFilename(name) if crypt else name
 
+@functools.lru_cache(maxsize=1024)
 def _decryptFilename(name, crypt):
     return crypt.decryptFilename(name) if crypt else name
 
+@functools.lru_cache(maxsize=1024)
 def _path(db, crypt, bset, inode):
     global _paths
     if inode in _paths:
@@ -338,8 +341,6 @@ def humanify(size):
     if size is not None:
         if args.human:
             size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
-        else:
-            size = size
     else:
         size = ''
     return size
@@ -351,8 +352,10 @@ def listFiles(db, crypt):
     lastDir = '/'
     lastDirInode = (-1, -1)
     bset = info['backupset']
+
     files = db.getNewFiles(bset, args.previous)
-    for fInfo in files:
+
+    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x['parent'], x['parentdev'])),  _decryptFilename(x['name'], crypt))):
         name = _decryptFilename(fInfo['name'], crypt)
 
         if not args.dirs and fInfo['dir']:
@@ -538,7 +541,6 @@ def removeOrphans(db, cache):
 def _printConfigKey(db, key):
     value = db.getConfigValue(key)
     print("%-18s: %s" % (key, value))
-
 
 def getConfig(db):
     keys = args.configKeys
@@ -781,6 +783,7 @@ def main():
                 logger.exception(e)
             sys.exit(1)
 
+        # Dispatch the command
         if args.command == 'keys':
             return moveKeys(db, crypt)
         elif args.command == 'list':
@@ -806,7 +809,7 @@ def main():
         elif args.command == 'orphans':
             return removeOrphans(db, cache)
         elif args.command == 'upgrade':
-            return 0
+                return 0
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
