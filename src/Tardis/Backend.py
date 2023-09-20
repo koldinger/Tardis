@@ -691,16 +691,21 @@ class Backend:
             # Check to see if the checksum exists
             # TODO: Is this faster than checking if the file exists?  Probably, but should test.
             try:
+                self.logger.debug("Try Block")
+                # Check to see if the checksum already exists
                 info = self.db.getChecksumInfo(cksum)
                 if info and info['isfile'] and info['size'] >= 0:
+                    # if it does, set the new checksum
                     self.db.setChecksum(inode, dev, cksum)
                     done.append(f['inode'])
                 else:
-                    # FIXME: TODO: If no checksum, should we request a delta???
+                    # else, check the old version
                     old = self.db.getFileInfoByInode((inode, dev))
-                    if old and ((old['chainlength'] or self.maxChain + 1) < self.maxChain):
+                    # if it exists, and the chainlength is low, add a chain
+                    if old and (old['chainlength'] < self.maxChain):
                         delta.append((f['inode'], old['checksum']))
                     else:
+                        # else get the whol thing.
                         content.append(f['inode'])
             except Exception as e:
                 self.logger.error("Could not check checksum for %s: %s", cksum, str(e))
