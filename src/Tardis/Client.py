@@ -1954,7 +1954,7 @@ def processCommandLine():
                         help='Print stats about the transfer.  Default=%(default)s')
     parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
                         help='Print a report on all files or directories transferred.  ' + _def)
-    parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getfloat(t, 'Verbosity'),
+    parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
