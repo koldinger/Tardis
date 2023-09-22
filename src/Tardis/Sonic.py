@@ -1,4 +1,3 @@
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
 # Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
@@ -83,7 +82,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
             dbdir = os.path.join(args.dbdir, args.client)
         dbfile = os.path.join(dbdir, args.dbname)
         if new and os.path.exists(dbfile):
-            raise Exception("Database for client %s already exists." % (args.client))
+            raise Exception(f"Database for client {args.client} already exists.")
 
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
         schema = args.schema if new else None
@@ -91,7 +90,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
 
     if tardisdb.needsAuthentication():
         if password is None:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=False, confirm=False)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ", allowNone=False, confirm=False)
         Util.authenticate(tardisdb, args.client, password)
 
         scheme = tardisdb.getCryptoScheme()
@@ -157,7 +156,7 @@ def changePassword(crypt, oldpw) :
 
         # Get the new password
         try:
-            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt="New Password for %s: " % (args.client),
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"New Password for {args.client}: ",
                                      allowNone=False, confirm=True, strength=True)
         except Exception as e:
             logger.critical(str(e))
@@ -238,6 +237,7 @@ def moveKeys(db, crypt):
 
 _cmdLineHash = {}
 _regenerator = None
+
 def getCommandLine(db, commandLineCksum):
     global _cmdLineHash, _regenerator
     if commandLineCksum is None:
@@ -248,8 +248,7 @@ def getCommandLine(db, commandLineCksum):
         data = _regenerator.recoverChecksum(commandLineCksum).read().strip()
         _cmdLineHash[commandLineCksum] = data
         return data
-    else:
-        return None
+    return None
 
 
 def listBSets(db, crypt, cache):
@@ -293,13 +292,13 @@ def listBSets(db, crypt, cache):
                 commandLine = getCommandLine(db, bset['commandline'])
                 tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
                 if commandLine:
-                    print("    Command Line: %s" % (commandLine.decode('utf-8')))
+                    print(f"    Command Line: {commandLine.decode('utf-8')}")
                 if tags:
-                    print("    Tags: %s" % (",".join(tags)))
+                    print(f"    Tags: {','.join(tags)}")
                 if tags or commandLine:
                     print()
 
-    except TardisDB.AuthenticationException as e:
+    except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         return 1
     except Exception as e:
@@ -324,18 +323,16 @@ def _path(db, crypt, bset, inode):
     global _paths
     if inode in _paths:
         return _paths[inode]
-    else:
-        fInfo = db.getFileInfoByInode(inode, bset)
-        if fInfo:
-            parent = (fInfo['parent'], fInfo['parentdev'])
-            prefix = _path(db, crypt, bset, parent)
+    fInfo = db.getFileInfoByInode(inode, bset)
+    if fInfo:
+        parent = (fInfo['parent'], fInfo['parentdev'])
+        prefix = _path(db, crypt, bset, parent)
 
-            name = _decryptFilename(fInfo['name'], crypt)
-            path = os.path.join(prefix, name)
-            _paths[inode] = path
-            return path
-        else:
-            return ''
+        name = _decryptFilename(fInfo['name'], crypt)
+        path = os.path.join(prefix, name)
+        _paths[inode] = path
+        return path
+    return ''
 
 def humanify(size):
     if size is not None:
@@ -368,7 +365,7 @@ def listFiles(db, crypt):
             lastDirInode = dirInode
             lastDir = path
             if not args.fullname:
-                print("%s:" % (path))
+                print(f"{path}:")
         if args.status:
             status = '[New]   ' if fInfo['chainlength'] == 0 else '[Delta] '
         else:
@@ -382,30 +379,35 @@ def listFiles(db, crypt):
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])
             size = humanify(fInfo['size'])
-            print('  %s%9s %-8s %-8s %9s %12s' % (status, mode, owner, group, size, mtime), end=' ')
+            #print('  %s%9s %-8s %-8s %9s %12s' % (status, mode, owner, group, size, mtime), end=' ')
+            print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
             if args.cksums:
-                print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
+                #print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
+                print(f" {fInfo.get('checksum', ''):32}", end=' ')
             if args.chnlen:
-                print(' %4s ' % (fInfo['chainlength']), end=' ')
+                #print(' %4s ' % (fInfo['chainlength']), end=' ')
+                print(f" {fInfo['chainlength']:4}", end=' ')
             if args.inode:
-                print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+                print(' %-16s ' % ("({}, {})".format(fInfo['device'], fInfo['inode'])), end=' ')
+                #print(f' {:16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
 
             if args.type:
-                print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
+                #print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
+                print(f" {'Delta' if fInfo['chainlength'] else 'Full'} " , end=' ')
             if args.size:
                 size = humanify(fInfo['disksize'])
-                print(' %9s ' % (size), end=' ')
+                print(f' {size:9} ', end=' ')
 
 
             print(name)
         else:
-            print("    %s" % status, end=' ')
+            print(f"    {status}", end=' ')
             if args.cksums:
                 print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
             if args.chnlen:
                 print(' %4s ' % (fInfo['chainlength']), end=' ')
             if args.inode:
-                print(' %-16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+                print(' %-16s ' % ("({}, {})".format(fInfo['device'], fInfo['inode'])), end=' ')
             if args.type:
                 print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
             if args.size:
@@ -416,32 +418,32 @@ def listFiles(db, crypt):
 
 def _bsetInfo(db, crypt, info):
     print("Backupset       : %s (%d)" % ((info['name']), info['backupset']))
-    print("Completed       : %s" % ('True' if info['completed'] else 'False'))
+    print(f"Completed       : {'True' if info['completed'] else 'False'}")
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
-    print("StartTime       : %s" % (t))
+    print(f"StartTime       : {t}")
     if info['endtime'] is not None:
         t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['endtime'])))
         duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
-        print("EndTime         : %s" % (t))
-        print("Duration        : %s" % (duration))
+        print(f"EndTime         : {t}")
+        print(f"Duration        : {duration}")
     tags = [_decryptFilename(tag, crypt) for tag in db.getTags(info['backupset'])]
-    print("Tags:           : %s" % ",".join(tags))
-    print("SW Versions     : C:%s S:%s" % (info['clientversion'], info['serverversion']))
-    print("Client IP       : %s" % (info['clientip']))
+    print(f"Tags:           : {','.join(tags)}")
+    print(f"SW Versions     : C:{info['clientversion']} S:{info['serverversion']}")
+    print(f"Client IP       : {info['clientip']}")
     details = db.getBackupSetDetails(info['backupset'])
 
     (files, dirs, size, newInfo, endInfo) = details
-    print("Files           : %d" % (files))
-    print("Directories     : %d" % (dirs))
-    print("Total Size      : %s" % (Util.fmtSize(size)))
+    print(f"Files           : {files}")
+    print(f"Directories     : {directories}")
+    print(f"Total Size      : {Util.fmtSize(size)}")
 
-    print("New Files       : %d" % (newInfo[0]))
-    print("New File Size   : %s" % (Util.fmtSize(newInfo[1])))
-    print("New File Space  : %s" % (Util.fmtSize(newInfo[2])))
+    print(f"New Files       : %{newInfo[0]}")
+    print(f"New File Size   : {Util.fmtSize(newInfo[1])}")
+    print(f"New File Space  : {Util.fmtSize(newInfo[2])}")
 
-    print("Purgeable Files : %d" % (endInfo[0]))
-    print("Purgeable Size  : %s" % (Util.fmtSize(endInfo[1])))
-    print("Purgeable Space : %s" % (Util.fmtSize(endInfo[2])))
+    print(f"Purgeable Files : {endInfo[0]}")
+    print(f"Purgeable Size  : {Util.fmtSize(endInfo[1])}")
+    print(f"Purgeable Space : {Util.fmtSize(endInfo[2])}")
 
 def bsetInfo(db, crypt):
     printed = False
@@ -518,7 +520,7 @@ def deleteBsets(db, cache):
         bsets.append(bset)
 
     names = [b['name'] for b in bsets]
-    print("Sets to be deleted: %s" % (names))
+    print(f"Sets to be deleted: {names}")
     if confirm():
         filesDeleted = 0
         for bset in bsets:
@@ -737,10 +739,10 @@ def main():
     crypt   = None
     cache   = None
     try:
-        confirm = args.command in ['setpass', 'create']
+        confirmPw = args.command in ['setpass', 'create']
         allowNone = args.command not in ['setpass', 'chpass']
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client), allowNone=allowNone, confirm=confirm)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ", allowNone=allowNone, confirm=confirmPw)
         except Exception as e:
             logger.critical(str(e))
             if args.exceptions:
@@ -809,7 +811,7 @@ def main():
         elif args.command == 'orphans':
             return removeOrphans(db, cache)
         elif args.command == 'upgrade':
-                return 0
+            return 0
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
