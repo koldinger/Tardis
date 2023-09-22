@@ -900,17 +900,13 @@ class TardisDB:
 
     @authenticate
     def getBackupSetInfoByTag(self, tag):
-        bset = self._executeWithResult("SELECT BackupSet FROM Tags JOIN Names on Tags.NameId = Names.NameId WHERE Names.name = :tag", {"tag": tag})[0]
+        bset = self._executeWithResult("SELECT BackupSet FROM Tags JOIN Names on Tags.NameId = Names.NameId WHERE Names.name = :tag", {"tag": tag})
         if bset is None:
+            # No such backup set.
             return None
 
-        c = self._execute("SELECT " +
-                          _backupSetInfoFields +
-                          _backupSetInfoJoin +
-                          "WHERE BackupSet = :bset",
-                          {"bset": bset })
-        row = c.fetchone()
-        return row
+        # Retrieve the data corresponding to that tag
+        return self.getBackupSetInfoById(self, bset[0])
 
     @authenticate
     def getBackupSetInfo(self, name):
