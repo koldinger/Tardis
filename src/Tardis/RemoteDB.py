@@ -118,7 +118,7 @@ class RemoteDB:
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
-        self.session = requests_cache.CachedSession(expire_after = datetime.timedelta(days=31))
+        self.session = requests.Session()
         self.session.verify = self.verify
 
         postData = { 'host': self.host }
