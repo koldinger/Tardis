@@ -383,19 +383,19 @@ def listFiles(db, crypt):
             print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
             if args.cksums:
                 #print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
-                print(f" {fInfo.get('checksum', ''):32}", end=' ')
+                print(f" {fInfo.get('checksum', '') or '' :32}", end=' ')
             if args.chnlen:
                 #print(' %4s ' % (fInfo['chainlength']), end=' ')
-                print(f" {fInfo['chainlength']:4}", end=' ')
+                print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
             if args.inode:
                 print(' %-16s ' % ("({}, {})".format(fInfo['device'], fInfo['inode'])), end=' ')
                 #print(f' {:16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
 
             if args.type:
                 #print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
-                print(f" {'Delta' if fInfo['chainlength'] else 'Full'} " , end=' ')
+                print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full'} " , end=' ')
             if args.size:
-                size = humanify(fInfo['disksize'])
+                size = humanify(fInfo.get('disksize', 0))
                 print(f' {size:9} ', end=' ')
 
 
@@ -405,9 +405,9 @@ def listFiles(db, crypt):
             if args.cksums:
                 print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
             if args.chnlen:
-                print(' %4s ' % (fInfo['chainlength']), end=' ')
+                print(' %4s ' % (fInfo['chainlength'] or 0), end=' ')
             if args.inode:
-                print(' %-16s ' % ("({}, {})".format(fInfo['device'], fInfo['inode'])), end=' ')
+                print(' %-16s ' % ("({}, {})".format(fInfo['device'] or '', fInfo['inode'] or '')), end=' ')
             if args.type:
                 print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
             if args.size:
