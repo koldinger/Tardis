@@ -1,0 +1,20 @@
+#! /bin/sh
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
+# Config Files
+install -D -t /etc/tardis                     tardisd.cfg-template types.ignore tardisremote.cfg-template
+
+# System startup files
+#install -t /etc/init.d                     init/tardisd init/tardisremote
+install -t /usr/lib/systemd/system         init/tardisd.service init/tardisremote.service
+
+# Log rotate files
+install -t /etc/logrotate.d                logrotate/tardisd logrotate/tardisremote
+
+#logwatch files
+install -t /etc/logwatch/conf/services     logwatch/conf/services/tardisd.conf
+install -t /etc/logwatch/conf/logfiles     logwatch/conf/logfiles/tardisd.conf
+install -t /etc/logwatch/scripts/services  logwatch/scripts/services/tardisd

@@ -49,8 +49,6 @@ buildVersion = subprocess.check_output(['git', 'describe', '--dirty', '--tags', 
 versionfile = "src/Tardis/tardisversion"
 print(buildVersion.decode('utf8'), file=open(versionfile, "w"))
 
-root = os.environ.setdefault('VIRTUAL_ENV', '')
-
 version = Tardis.__version__
 add_pkgs = Tardis.check_features()
 
@@ -72,15 +70,6 @@ setup(  name                    = 'Tardis-Backup',
                             'colorlog',       'progressbar2',   'reportlab',     'qrcode',          'fusepy',
                             'requests_cache', 'requests',       'flask',         'tornado',      
                             'Tardis_Backup'] + add_pkgs,
-        data_files = [( root + '/etc/tardis',                     [ 'tardisd.cfg-template', 'types.ignore', 'tardisremote.cfg-template' ]),
-                      ( root + '/etc/init.d',                     [ 'init/tardisd', 'init/tardisremote' ]),
-                      ( root + '/usr/lib/systemd/system',         [ 'init/tardisd.service', 'init/tardisremote.service' ]),
-                      ( root + '/etc/logrotate.d',                [ 'logrotate/tardisd', 'logrotate/tardisremote' ]),
-                      ( root + '/etc/logwatch/conf/services',     [ 'logwatch/conf/services/tardisd.conf' ]),
-                      ( root + '/etc/logwatch/conf/services',     [ 'logwatch/conf/services/tardisd.conf' ]),
-                      ( root + '/etc/logwatch/conf/logfiles',     [ 'logwatch/conf/logfiles/tardisd.conf' ]),
-                      ( root + '/etc/logwatch/scripts/services',  [ 'logwatch/scripts/services/tardisd' ]),
-                     ],
         package_dir = {'': 'src'},
         package_data = {
                         'Tardis':   [ 'tardisversion', 'schema/tardis.sql' ],
