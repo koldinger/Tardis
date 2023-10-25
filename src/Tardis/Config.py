@@ -55,7 +55,7 @@ configDefaults = {
 config = configparser.ConfigParser(configDefaults, allow_no_value=True)
 job = None
 
-def parseConfigOptions(parser):
+def parseConfigOptions(parser, exit_on_error=True):
     global job
     configGroup = parser.add_argument_group("Configuration File Options")
     configGroup.add_argument('--config',         dest='config', default=Defaults.getDefault('TARDIS_CONFIG'),    help='Location of the configuration file.   Default: %(default)s')
@@ -67,8 +67,11 @@ def parseConfigOptions(parser):
     if args.config:
         config.read(args.config)
         if not config.has_section(job):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(job, str(config.sections()).strip('[]')))
+            sys.stderr.write(f"WARNING: No Job named {job} available.  Using defaults.  Jobs available: {str(config.sections()).strip('[]')}\n")
             config.add_section(job)                    # Make it safe for reading other values from.
+            if exit_on_error:
+                sys.exit(1)
+            raise KeyError(f"No such job: {job}")
     else:
         config.add_section(job)                        # Make it safe for reading other values from.
 
