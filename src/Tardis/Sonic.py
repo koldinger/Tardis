@@ -253,13 +253,14 @@ def getCommandLine(db, commandLineCksum):
 
 def listBSets(db, crypt, cache):
     global _regenerator
-    f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
+    #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
+    f = "{:30s} {:4s} {:6s} {:>3s}  {:5s} {:24s}  {:8} {:>7s} {:>6s} {:>6s}  {:s}"
     try:
         if args.longinfo:
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
-        print(f % ("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
+        print(f.format("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
 
         # Get a list of the backup sets, and filter by priority
         sets = list(db.listBackupSets())
@@ -287,7 +288,7 @@ def listBSets(db, crypt, cache):
             #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print(f % (bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
+            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
@@ -343,9 +344,7 @@ def humanify(size):
     return size
 
 def listFiles(db, crypt):
-    #print args
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
-    #print info, info['backupset']
     lastDir = '/'
     lastDirInode = (-1, -1)
     bset = info['backupset']
@@ -379,21 +378,16 @@ def listFiles(db, crypt):
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])
             size = humanify(fInfo['size'])
-            #print('  %s%9s %-8s %-8s %9s %12s' % (status, mode, owner, group, size, mtime), end=' ')
             print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
             if args.cksums:
-                #print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
                 print(f" {fInfo.get('checksum', '') or '' :32}", end=' ')
             if args.chnlen:
-                #print(' %4s ' % (fInfo['chainlength']), end=' ')
                 print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
             if args.inode:
-                print(' %-16s ' % ("({}, {})".format(fInfo['device'], fInfo['inode'])), end=' ')
-                #print(f' {:16s ' % ("(%s, %s)" % (fInfo['device'], fInfo['inode'])), end=' ')
+                print(' {16s} ' .format(f"({fInfo['device']}, {fInfo['inode']})"), end=' ')
 
             if args.type:
-                #print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
-                print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full'} " , end=' ')
+                print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
             if args.size:
                 size = humanify(fInfo.get('disksize', 0))
                 print(f' {size:9} ', end=' ')
@@ -403,21 +397,21 @@ def listFiles(db, crypt):
         else:
             print(f"    {status}", end=' ')
             if args.cksums:
-                print(' %32s ' % (fInfo['checksum'] or ''), end=' ')
+                print(f" {fInfo['checksum'] or '':32s}", end=' ')
             if args.chnlen:
-                print(' %4s ' % (fInfo['chainlength'] or 0), end=' ')
+                print(f" {fInfo['chainlength'] or 0:>4}", end=' ')
             if args.inode:
-                print(' %-16s ' % ("({}, {})".format(fInfo['device'] or '', fInfo['inode'] or '')), end=' ')
+                print(' %-16s ' % (f"({fInfo['device'] or ''}, {fInfo['inode'] or ''})"), end=' ')
             if args.type:
-                print(' %-5s ' % ("Delta" if fInfo['chainlength'] else "Full"), end=' ')
+                print(f" {'Delta' if fInfo['chainlength'] else 'Full':5s}", end=' ')
             if args.size:
                 size = humanify(fInfo['disksize'])
-                print(' %9s ' % (size), end=' ')
+                print(f' {size:9} ', end=' ')
             print(name)
 
 
 def _bsetInfo(db, crypt, info):
-    print("Backupset       : %s (%d)" % ((info['name']), info['backupset']))
+    print(f"Backupset       : {info['name']} ({int(info['backupset'])})")
     print(f"Completed       : {'True' if info['completed'] else 'False'}")
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
     print(f"StartTime       : {t}")
@@ -504,7 +498,7 @@ def purge(db, cache):
             (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
         else:
             (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset['endtime'], bset['backupset'])
-        print("Purged %d sets, containing %d files" % (setsDeleted, filesDeleted))
+        print(f"Purged {int(setsDeleted)} sets, containing {int(filesDeleted)} files")
         removeOrphans(db, cache)
 
 def deleteBsets(db, cache):
@@ -525,7 +519,7 @@ def deleteBsets(db, cache):
         filesDeleted = 0
         for bset in bsets:
             filesDeleted = filesDeleted + db.deleteBackupSet(bset['backupset'])
-        print("Deleted %d files" % (filesDeleted))
+        print(f"Deleted {int(filesDeleted)} files")
         if args.purge:
             removeOrphans(db, cache)
 
@@ -538,11 +532,11 @@ def removeOrphans(db, cache):
         rounds = r['rounds']
     else:
         count, size, rounds = Util.removeOrphans(db, cache)
-    print("Removed %d orphans, for %s, in %d rounds" % (count, Util.fmtSize(size), rounds))
+    print(f"Removed {int(count)} orphans, for {Util.fmtSize(size)}, in {int(rounds)} rounds")
 
 def _printConfigKey(db, key):
     value = db.getConfigValue(key)
-    print("%-18s: %s" % (key, value))
+    print(f"{key:18s}: {value}")
 
 def getConfig(db):
     keys = args.configKeys
