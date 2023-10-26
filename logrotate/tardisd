@@ -1,4 +1,5 @@
 /var/log/tardisd/tardisd.log {
+    su tardis tardis
     rotate 7
     missingok
     notifempty
