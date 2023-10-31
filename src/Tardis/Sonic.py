@@ -254,7 +254,7 @@ def getCommandLine(db, commandLineCksum):
 def listBSets(db, crypt, cache):
     global _regenerator
     #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
-    f = "{:30s} {:4s} {:6s} {:>3s}  {:5s} {:24s}  {:8} {:>7s} {:>6s} {:>6s}  {:s}"
+    f = "{:30} {:4} {:6} {:>3}  {:5} {:24}  {:8} {:>7} {:>6} {:>9}  {:}"
     try:
         if args.longinfo:
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
