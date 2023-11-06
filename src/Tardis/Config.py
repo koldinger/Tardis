@@ -92,6 +92,6 @@ def addPasswordOptions(parser, addscheme=False):
     pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
 
     if addscheme:
-        passgroup.add_argument('--crypt',      dest='scheme', type=int, choices=range(TardisCrypto.maxCryptoScheme+1), default=TardisCrypto.defaultCryptoScheme,
+        passgroup.add_argument('--crypt',      dest='scheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME + 1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
                                help='Use cryptography scheme\n' + TardisCrypto.getCryptoNames())
     passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')

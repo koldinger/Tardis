@@ -50,6 +50,8 @@ from Tardis import RemoteDB
 from Tardis import Regenerator
 from Tardis import Config
 
+from icecream import ic
+
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
 # Config keys which can be gotten or set.
@@ -288,7 +290,7 @@ def listBSets(db, crypt, cache):
             #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
 
-            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'], bset['filesdelta'], size, status))
+            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
@@ -384,15 +386,12 @@ def listFiles(db, crypt):
             if args.chnlen:
                 print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
             if args.inode:
-                print(' {16s} ' .format(f"({fInfo['device']}, {fInfo['inode']})"), end=' ')
-
+                print(' {16s} '.format(f"({fInfo['device']}, {fInfo['inode']})"), end=' ')
             if args.type:
                 print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
             if args.size:
                 size = humanify(fInfo.get('disksize', 0))
                 print(f' {size:9} ', end=' ')
-
-
             print(name)
         else:
             print(f"    {status}", end=' ')

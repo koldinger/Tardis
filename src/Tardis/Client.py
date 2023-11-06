@@ -1739,7 +1739,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
     if 'contentKey' in resp:
         contentKey = resp['contentKey']
     if crypt is None:
-        crypt = TardisCrypto.getCrypto(TardisCrypto.noCryptoScheme, None, client)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
     # Set up the encryption, if needed.
     ### TODO
@@ -1863,7 +1863,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=c.get(t, 'PasswordFile'),              help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
-    passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.defaultCryptoScheme+1), default=None,
+    passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=None,
                            help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
 
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
@@ -2294,7 +2294,7 @@ def main():
                 scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.defaultCryptoScheme
                 crypt = TardisCrypto.getCrypto(scheme, password, client)
         elif args.create:
-            crypt = TardisCrypto.getCrypto(TardisCrypto.noCryptoScheme, None, client)
+            crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
         # If no compression types are specified, load the list
         types = []

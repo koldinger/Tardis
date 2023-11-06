@@ -1362,7 +1362,7 @@ class Backend:
                         self.db.setConfigValue('CryptoScheme', cryptoScheme)
                         keys = None
                     else:
-                        self.db.setConfigValue('CryptoScheme', TardisCrypto.noCryptoScheme)
+                        self.db.setConfigValue('CryptoScheme', TardisCrypto.NO_CRYPTO_SCHEME)
 
 
                 self.logger.debug("Ready for authentication")

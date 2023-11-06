@@ -44,37 +44,43 @@ import Cryptodome.Random
 
 from Tardis import Defaults
 
-defaultCryptoScheme = 4
-maxCryptoScheme = 4
-noCryptoScheme = 0
+DEF_CRYPTO_SCHEME = 4
+MAX_CRYPTO_SCHEME = 4
+NO_CRYPTO_SCHEME = 0
 
 def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
+    """
+    Create a crypto object based on the scheme ID passed in.
+    Set the password, client name, and encoding.
+    """
     scheme = int(scheme)
 
     if scheme == 0:
         return Crypto_Null(password, client, fsencoding)
-    elif scheme == 1:
+    if scheme == 1:
         return Crypto_AES_CBC_HMAC__AES_ECB(password, client, fsencoding)
-    elif scheme == 2:
+    if scheme == 2:
         return Crypto_AES_CBC_HMAC__AES_SIV(password, client, fsencoding)
-    elif scheme == 3:
+    if scheme == 3:
         return Crypto_AES_GCM__AES_SIV(password, client, fsencoding)
-    elif scheme == 4:
+    if scheme == 4:
         return Crypto_ChaCha20_Poly1305__AES_SIV(password, client, fsencoding)
-    else:
-        raise Exception(f"Unknown Crypto Scheme: {scheme}")
+    raise ValueError(f"Unknown Crypto Scheme: {scheme}")
 
 
 def getCryptoNames(scheme=None):
+    """
+    Get names of scheme, or all schemes if none passed in.
+    """
     if scheme is None:
-        x = range(0, 5)
+        schemes = range(0, 5)
     else:
-        x = range(scheme, scheme + 1)
+        schemes = [scheme]
 
     names = []
-    for i in x:
+    for i in schemes:
         crypto = getCrypto(i, 'password')
-        names.append(f"{i}: {crypto._cryptoName}")
+        names.append(f"{i}: {crypto.getName()}")
     return '\n'.join(names)
 
 
@@ -89,19 +95,20 @@ class HasherMixin:
         self.hasher.update(data)
 
     def encrypt(self, data):
-        ct = super().encrypt(data)
-        if ct:
-            self.hasher.update(ct)
-        return ct
+        ctext = super().encrypt(data)
+        if ctext:
+            self.hasher.update(ctext)
+        return ctext
 
     def finish(self):
-        ct = super().finish()
-        self.hasher.update(ct)
-        return ct
+        ctext = super().finish()
+        if ctext:
+            self.hasher.update(ctext)
+        return ctext
 
-    def decrypt(self, ct, last=False):
-        self.hasher.update(ct)
-        plain = super().decrypt(ct, last)
+    def decrypt(self, ctext, last=False):
+        self.hasher.update(ctext)
+        plain = super().decrypt(ctext, last)
         return plain
 
     def digest(self):
@@ -114,11 +121,11 @@ class HasherMixin:
     def getDigestSize(self):
         return self.hasher.digest_size
 
-class BlockEncryptor:
-    done = False
-    prev = None
-    iv = None
+class EncryptionCompletedException(Exception):
+    pass
 
+
+class BlockEncryptor:
     def __init__(self, cipher):
         self.cipher = cipher
         self.iv = cipher.iv
@@ -129,7 +136,7 @@ class BlockEncryptor:
 
     def encrypt(self, data):
         if self.done:
-            raise Exception("Already completed")
+            raise EncryptionCompletedException("Already completed")
         if self.prev:
             data = self.prev + data
             self.prev = None
@@ -141,14 +148,12 @@ class BlockEncryptor:
             ret = self.cipher.encrypt(data)
             if ret:
                 return ret
-            else:
-                return b''
-        else:
             return b''
+        return b''
 
     def decrypt(self, data, last=False):
         if self.done:
-            raise Exception("Already completed")
+            raise EncryptionCompletedException("Already completed")
         if self.prev:
             data = self.prev + data
             self.prev = None
@@ -162,12 +167,11 @@ class BlockEncryptor:
                 self.done = True
                 output = unpad(output, self.cipher.block_size)
             return output
-        else:
-            return b''
+        return b''
 
     def finish(self):
         if self.done:
-            raise Exception("Already completed")
+            raise EncryptionCompletedException("Already completed")
         self.done = True
         if self.prev:
             padded = pad(self.prev, self.cipher.block_size)
@@ -228,8 +232,6 @@ def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
 
 
 class NullEncryptor:
-    iv = b''
-
     def encrypt(self, data):
         return data
     def decrypt(self, data, last=False):
@@ -241,7 +243,15 @@ class NullEncryptor:
     def verify(self, tag):
         pass
 
+class NullCipher():
+    def encrypt(self, data):
+        return data
+
 class Crypto_Null:
+    """
+    An encryption scheme which does nothing, always returns the given text when asked to encrypt or decrypt
+    Works as the basis for other encryption schemes.
+    """
     _cryptoScheme = '0'
     _cryptoName   = 'None'
     _contentKey  = None
@@ -256,12 +266,12 @@ class Crypto_Null:
 
     ivLength    = 0
 
-    class NullCipher():
-        def encrypt(data):
-            return data
 
     def __init__(self, password=None, client=None, fsencoding=sys.getfilesystemencoding()):
         pass
+
+    def getName(self):
+        return self._cryptoName
 
     def getCryptoScheme(self):
         return self._cryptoScheme
@@ -283,7 +293,6 @@ class Crypto_Null:
             return name.decode('utf8')
         else:
             return name
-
 
     def getHash(self, func=hashlib.md5):
         return func()
@@ -309,9 +318,6 @@ class Crypto_Null:
     def decryptPath(self, path):
         return path
 
-    def encryptFilename(self, name):
-        return name
-
     def genKeys(self):
         pass
 
@@ -323,9 +329,9 @@ class Crypto_Null:
 
 
 
-
 class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
-    """ Original Crypto Scheme.
+    """
+    Original Crypto Scheme.
     AES-256 CBC encyrption for files, with HMAC/SHA-512 for authentication.
     AES-256 ECB for filenames with no authentictaion.
     No authentication of key values.
@@ -389,9 +395,8 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     def unpad(self, data):
         #if validate:
             #self.checkpad(data)
-        l = data[-1]
-        x = len(data) - l
-        return data[:x]
+        unPaddedLen = len(data) - data[-1]
+        return data[:unPaddedLen]
 
     def checkpad(self, data):
         l = data[-1]
@@ -404,8 +409,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
         remainder = len(x) % self._blocksize
         if remainder == 0:
             return x
-        else:
-            return x + (self._blocksize - remainder) * b'\0'
+        return x + (self._blocksize - remainder) * b'\0'
 
     def encryptPath(self, path):
         rooted = False
@@ -518,8 +522,8 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
             _contentKey  = str(base64.b64encode(self._encryptSIV(self._keyKey, self._contentKey, "ContentKey")), 'utf8')
             _filenameKey = str(base64.b64encode(self._encryptSIV(self._keyKey, self._filenameKey, "FilenameKey")), 'utf8')
             return (_filenameKey, _contentKey)
-        else:
-            return (None, None)
+
+        return (None, None)
 
 
 class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
@@ -583,31 +587,33 @@ if __name__ == '__main__':
             print(f"Type: {c._cryptoName}")
             c.genKeys()
 
-            print(f"DigestSize: {c.getDigestSize()}")
 
             print("--- Testing Content Encryptor ---")
             e = c.getContentEncryptor()
             d = c.getContentEncryptor(e.iv)
 
-            ct = e.encrypt(string) + e.finish()
-            pt = d.decrypt(ct, True)
+            print(f"DigestSize: {e.getDigestSize()}")
+            print(f"DigestSize: {d.getDigestSize()}")
 
-            assert(pt == string)
+            ctext = e.encrypt(string) + e.finish()
+            plaintext = d.decrypt(ctext, True)
+
+            assert plaintext == string
             d.verify(e.digest())
 
             print("--- Testing Filename Encryptor ---")
-            cf = c.encryptFilename(fname)
+            cname = c.encryptFilename(fname)
             #print(cf)
-            df = c.decryptFilename(cf)
+            plainname = c.decryptFilename(cname)
 
-            assert(fname == df)
+            assert plainname == fname
 
             print("--- Testing FilePath Encryptor ---")
-            cp = c.encryptPath(path)
+            cpath = c.encryptPath(path)
             #print(cp)
-            dp = c.decryptPath(cp)
+            plainpath = c.decryptPath(cpath)
 
-            assert(path == dp)
+            assert plainpath == path
 
         except Exception as e:
             print(f"Caught exception: {e}")
