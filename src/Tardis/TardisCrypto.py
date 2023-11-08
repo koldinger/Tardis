@@ -197,11 +197,10 @@ class HashingBlockEncryptor(HasherMixin, BlockEncryptor):
         HasherMixin.__init__(self, cipher, hasher)
 
 class StreamEncryptor:
-    done = False
-    iv = None
 
     def __init__(self, cipher):
         self.cipher = cipher
+        self.done = False
         self.iv = cipher.nonce
         self.update(self.iv)
 
@@ -232,6 +231,8 @@ def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
 
 
 class NullEncryptor:
+    def __init__(self):
+        self.iv = b''
     def encrypt(self, data):
         return data
     def decrypt(self, data, last=False):
