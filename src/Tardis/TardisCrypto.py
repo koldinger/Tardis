@@ -130,6 +130,8 @@ class BlockEncryptor:
         self.cipher = cipher
         self.iv = cipher.iv
         self.update(self.iv)
+        self.done = False
+        self.prev = None
 
     def update(self, data):
         self.cipher.update(data)
@@ -233,6 +235,7 @@ def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
 class NullEncryptor:
     def __init__(self):
         self.iv = b''
+
     def encrypt(self, data):
         return data
     def decrypt(self, data, last=False):
