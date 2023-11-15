@@ -14,7 +14,7 @@ Installation
 ------------
 * Pick machines to use as both your client and server.   They can be the same machine, but if you want to backup to your client machine, it is recommended that you backup to a drive that you only use for backups, so that a failure of your main drive(s) will not cause a loss of your backups.
 * Install the tardis package on your client and server machines.
-  * `python setup.py install`
+  * `pip install .`
   * Sometimes this fails, complaining about requests not being available.  If so, just rerun it, and it should work the second time.
   * If this doesn't work, you may need to install additional packages that this installer can't.   See the [Installation](#Installation) section below for more details.
 * Edit the daemon configuration file to indicate where you want to store the backups.   The configuration is stored (on linux) in `/etc/tardis/tardisd.cfg`, the database base directory is specified in the `BaseDir` option.   By default, the location is `/media/Backup/tardis`
@@ -110,9 +110,14 @@ Installing  up the server is relatively straightforward.
     * Fedora: `{yum|dnf} install librsync libacl-devel libffi-devel python-devel python-setuptools gmp snappy-devel openssl-devel`
     * Ubuntu/Debian: `apt-get install librsync1 libacl1-dev libffi-dev python3-dev python3-cffi python3-setuptools libcurl4-openssl-dev python3-setuptools libgmp3-dev libsnappy-dev`
   * Run the python setup:
-    * `python3 setup.py install`
-    * Note, on Debian based systems (Debian, Ubuntu, and Raspbian, for instance), add the `--install-layout deb` optios
-      * `python3 setup.py install --install-layout deb`
+    * `pip install .`
+  * [Opional] Install the service infrastructure.
+    * `./install_service`
+  * [Optional] Enable the service infrastructure.
+    * `systemctl add-wants multi-user.target tardisd tardisremote`
+    * `systemctl daemon-reload`
+    * `systemctl enable tardisd tardisremote`
+
 
 Server Setup
 ============
