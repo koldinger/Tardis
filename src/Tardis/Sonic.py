@@ -428,7 +428,7 @@ def _bsetInfo(db, crypt, info):
 
     (files, dirs, size, newInfo, endInfo) = details
     print(f"Files           : {files}")
-    print(f"Directories     : {directories}")
+    print(f"Directories     : {dirs}")
     print(f"Total Size      : {Util.fmtSize(size)}")
 
     print(f"New Files       : %{newInfo[0]}")
