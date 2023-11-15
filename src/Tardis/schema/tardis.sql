@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS Backups (
     Priority        INTEGER DEFAULT 1,
     Full            INTEGER DEFAULT 0,
     Vacuumed        INTEGER DEFAULT 0,
-    Locked          INTEGER DEFAULT -1,
+    Locked          INTEGER DEFAULT 0,
     
     ClientVersion   TEXT,
     ServerVersion   TEXT,
