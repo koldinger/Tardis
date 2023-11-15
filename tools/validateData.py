@@ -1,8 +1,8 @@
-2022 /usr/bin/env python3
+2023 /usr/bin/env python3
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
