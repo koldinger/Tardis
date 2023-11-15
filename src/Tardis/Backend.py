@@ -507,6 +507,7 @@ class Backend:
     def sendSignature(self, inode, dev, chksum):
         response = None
         errmsg = None
+        sig = b''
 
         self.logger.debug("Signature requested: %s %s %s", inode, dev, chksum)
         ### TODO: Remove this function.  Shouldn't be needed anymore.
@@ -528,9 +529,9 @@ class Backend:
                     sigfile.close()
                 else:
                     ### TODO: Remove this?   Only valid for unencrypted backups.
-                    rpipe = self.regenerator.recoverChecksum(chksum)
-                    if rpipe:
-                        try:
+                    try:
+                        rpipe = self.regenerator.recoverChecksum(chksum)
+                        if rpipe:
                             s = librsync.signature(rpipe)
                             sig = s.read()
 
@@ -538,8 +539,8 @@ class Backend:
                             outfile.write(sig)
                             outfile.close()
 
-                        except (librsync.LibrsyncError, Regenerator.RegenerateException) as e:
-                            self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
+                    except (librsync.LibrsyncError, Regenerator.RegenerateException) as e:
+                        self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
                 # TODO: Break the signature out of here.
                 response = {
                     "message": "SIG",
