@@ -256,13 +256,13 @@ def getCommandLine(db, commandLineCksum):
 def listBSets(db, crypt, cache):
     global _regenerator
     #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
-    f = "{:30} {:4} {:6} {:>3}  {:5} {:24}  {:8} {:>7} {:>6} {:>9}  {:}"
+    f = "{:30} {:4} {:6} {:>3}  {:5}  {:24}  {:8} {:>7} {:>6} {:>9} {:1} {:}"
     try:
         if args.longinfo:
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
-        print(f.format("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", ""))
+        print(f.format("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "", ""))
 
         # Get a list of the backup sets, and filter by priority
         sets = list(db.listBackupSets())
@@ -271,7 +271,6 @@ def listBSets(db, crypt, cache):
             sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
 
         sets = sets[-(args.number):]
-
 
         for bset in sets:
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
@@ -289,8 +288,9 @@ def listBSets(db, crypt, cache):
                 status = ''
             #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
+            locked = '*' if bset['locked'] else ' '
 
-            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, status))
+            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
             if args.longinfo:
                 commandLine = getCommandLine(db, bset['commandline'])
                 tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
@@ -472,6 +472,15 @@ def doTagging(db, crypt):
         bset = getBackupSet(db, args.backup, args.date, True)
         db.setTag(tag, bset['backupset'])
 
+def doLock(db, lock):
+    bset = getBackupSet(db, args.backup, args.date, True)
+    if bset is None:
+        logger.error("No backup set found for %s", i)
+        sys.exit(1)
+
+    logger.info("Locking set %s", bset['name'])
+    db.setLock(lock, bset['backupset'])
+
 def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
     if bset is None:
@@ -650,6 +659,11 @@ def parseArgs():
     listParser.add_argument('--minpriority',    dest='minpriority', default=0, type=int,            help='Minimum priority to list')
     listParser.add_argument('--number', '-n',   dest='number', default=sys.maxsize, type=int,       help='Maximum number to show')
 
+    lockParser = argparse.ArgumentParser(add_help=False)
+    lockGroup = lockParser.add_mutually_exclusive_group()
+    lockGroup.add_argument("--lock", "-L",     dest='lock', default=True, action='store_true',      help='Lock the set(s)')
+    lockGroup.add_argument("--unlock", "-U",   dest='lock', default=True, action='store_false',     help='Unlock the set(s)')
+
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
     subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
@@ -658,6 +672,7 @@ def parseArgs():
     subs.add_parser('list',         parents=[common, listParser],                           help='List backup sets')
     subs.add_parser('files',        parents=[common, filesParser, bsetParser],              help='List new files in a backup set')
     subs.add_parser('tag',          parents=[common, tagParser, bsetParser],                help='Add or delete tags on backup sets')
+    subs.add_parser('lock',         parents=[common, lockParser, bsetParser],               help='Lock backup sets')
     subs.add_parser('info',         parents=[common, bsetParser],                           help='Print info on backup sets')
     subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],               help='Purge old backup sets')
     subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],              help='Delete a backup set')
@@ -789,6 +804,8 @@ def main():
             return bsetInfo(db, crypt)
         elif args.command == 'tag':
             return doTagging(db, crypt)
+        elif args.command == 'lock':
+            return doLock(db, args.lock)
         elif args.command == 'purge':
             return purge(db, cache)
         elif args.command == 'delete':

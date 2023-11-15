@@ -1,5 +1,5 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
-#
+
 # Tardis: A Backup System
 # Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
@@ -95,7 +95,7 @@ _fileInfoJoin =    "FROM Files " \
                    "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
-                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name, " \
+                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name, Locked AS locked, " \
                        "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
                        "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline, "\
                        "Exception AS exception, ErrorMsg AS errormsg "
@@ -105,7 +105,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 19
+_schemaVersion = 20
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -342,12 +342,23 @@ class TardisDB:
         c = self.cursor
         now = time.time()
         try:
-            c.execute("INSERT INTO Backups (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, SchemaVersion, ClientIP, ServerSession) "
-                      "             VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :schemaversion, :clientip, :serversessionid)",
-                      {"name": name, "now": now, "session": session, "priority": priority, "full": full,
-                       "clienttime": clienttime, "clientversion": version, "clientip": ip, "schemaversion": _schemaVersion,
-                       "serversessionid": serverID,
-                       "serverversion": (Tardis.__buildversion__ or Tardis.__version__)})
+            c.execute("INSERT INTO Backups "
+                      "           (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, SchemaVersion, ClientIP, ServerSession) "
+                      "    VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :schemaversion, :clientip, :serversessionid)",
+                      {
+                          "name": name,
+                          "now": now,
+                          "session": session,
+                          "priority": priority,
+                          "full": full,
+                          "clienttime": clienttime,
+                          "clientversion": version,
+                          "clientip": ip,
+                          "schemaversion": _schemaVersion,
+                          "serversessionid": serverID,
+                          "serverversion": (Tardis.__buildversion__ or Tardis.__version__)
+                        }
+                    )
         except sqlite3.IntegrityError:
             raise Exception("Backupset {} already exists".format(name))
 
@@ -361,7 +372,8 @@ class TardisDB:
         self.conn.commit()
         self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
         if self.journal:
-            self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__buildversion__))
+            # self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__buildversion__))
+            self.journal.write(f"===== S: {self.currBackupSet} {name} {session} D: {time.strftime('%Y-%m-%d %H:%M:%S')} V:{version} {Tardis.__buildversion__}\n")
 
         return self.currBackupSet
 
@@ -1096,7 +1108,7 @@ class TardisDB:
         c = self.cursor.execute("SELECT " +
                                 _backupSetInfoFields +
                                 _backupSetInfoJoin +
-                                " WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+                                " WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Locked = 0",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         for row in c:
             yield row
@@ -1121,7 +1133,7 @@ class TardisDB:
         backupset = self._bset(current)
         self.logger.debug("Purging backupsets below priority %d, before %s, and backupset: %d", priority, timestamp, backupset)
         # First, purge out the backupsets that don't match
-        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset",
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Locked = 0",
                             {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         setsDeleted = self.cursor.rowcount
         # Then delete the files which are no longer referenced
@@ -1135,7 +1147,7 @@ class TardisDB:
         backupset = self._bset(current)
         self.logger.debug("Purging incomplete backupsets below priority %d, before %s, and backupset: %d", priority, timestamp, backupset)
         # First, purge out the backupsets that don't match
-        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
+        self.cursor.execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0 AND Locked = 0",
                             {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         setsDeleted = self.cursor.rowcount
 
@@ -1248,29 +1260,37 @@ class TardisDB:
         return tags
 
     @authenticate
+    def setLock(self, locked, current=False):
+        bset = self._bset(current)
+        c = self._execute("UPDATE Backups SET Locked = :locked WHERE BackupSet = :bset", { "locked": locked, "bset": bset })
+
+    @authenticate
     def setFailure(self, ex):
         if self.currBackupSet:
             self.conn.execute("UPDATE Backups SET Exception = :ex, ErrorMsg = :msg WHERE BackupSet = :backup",
                               { "ex": type(ex).__name__, "msg": str(ex), "backup": self.currBackupSet})
 
-
     def close(self, completeBackup=False):
-        #self.logger.debug("Closing DB: %s", self.dbName)
-        # Apparently logger will get shut down if we're executing in __del__, so leave the debugging message out
-        if self.currBackupSet:
-            self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
-                              { "now": time.time(), "backup": self.currBackupSet })
-        self.conn.commit()
-        self.conn.close()
-        self.conn = None
+        if self._isAuthenticated():
+            #self.logger.debug("Closing DB: %s", self.dbName)
+            # Apparently logger will get shut down if we're executing in __del__, so leave the debugging message out
+            if self.currBackupSet:
+                self.conn.execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
+                                  { "now": time.time(), "backup": self.currBackupSet })
+            self.conn.commit()
 
-        if self.backup and completeBackup:
-            r = Rotator.Rotator(rotations=self.numbackups)
-            try:
-                r.backup(self.dbName)
-                r.rotate(self.dbName)
-            except Exception as e:
-                self.logger.error("Error detected creating database backup: %s", e)
+            if self.backup and completeBackup:
+                r = Rotator.Rotator(rotations=self.numbackups)
+                try:
+                    r.backup(self.dbName)
+                    r.rotate(self.dbName)
+                except Exception as e:
+                    self.logger.error("Error detected creating database backup: %s", e)
+
+        # And close it
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
     def __del__(self):
         if self.conn:

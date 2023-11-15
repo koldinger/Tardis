@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS Backups (
     Priority        INTEGER DEFAULT 1,
     Full            INTEGER DEFAULT 0,
     Vacuumed        INTEGER DEFAULT 0,
+    Locked          INTEGER DEFAULT -1,
+    
     ClientVersion   TEXT,
     ServerVersion   TEXT,
     SchemaVersion   INTEGER,
@@ -148,4 +150,5 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "19");
+
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
