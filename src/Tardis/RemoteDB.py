@@ -491,6 +491,13 @@ class RemoteDB:
         return r.json()
 
     @reconnect
+    def setLock(self, locked, current=False):
+        bset = self._bset(current)
+        r = self.session.get(self.baseURL + 'setLock/' + bset + '/' + str(int(locked)), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def open(self, checksum, mode, streaming=True):
         if mode[0] != 'r':
             raise PermissionError("Read only file system")

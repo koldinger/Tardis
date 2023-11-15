@@ -532,6 +532,11 @@ def getTags(backupset):
     db = getDB()
     return createResponse(db.getTags(backupset))
 
+@app.route('/setLock/<int:backupset>/<int:lock>')
+def setLock(lock, backupset):
+    db = getDB()
+    return createResponse(db.setLock(lock, backupset))
+
 @app.route('/removeOrphans')
 def removeOrphans():
     db = getDB()
