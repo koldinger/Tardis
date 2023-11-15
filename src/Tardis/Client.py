@@ -221,8 +221,6 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 
 report = {}
 
-
-
 class InodeEntry:
     def __init__(self):
         self.paths = []
@@ -501,7 +499,7 @@ def prefetchSigFiles(inodes):
     return signatures
 
 def fetchSignature(inode):
-    (_, pathname) = inodeDB[inode]
+    (_, pathname) = inodeDB.get(inode)
     logger.debug("Requesting checksum for %s:: %s", str(inode), pathname)
     path = pathname
     if crypt.encrypting():
@@ -2479,7 +2477,7 @@ def main():
         #if len(inodeDB) != 0:
             #logger.warning("%d InodeDB entries not processed", len(inodeDB))
             #for key in list(inodeDB.keys()):
-                #(_, path) = inodeDB[key]
+                #(_, path) = inodeDB.get(key)
                 #print("{}:: {}".format(key, path))
 
     if args.progress:
