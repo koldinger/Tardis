@@ -124,7 +124,7 @@ def createClient(password):
 def setPassword(password):
     try:
         (db, _, _) = getDB(None)
-        crypt = TardisCrypto.getCrypto(TardisCrypto.defaultCryptoScheme, password, args.client)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.DEF_CRYPTO_SCHEME, password, args.client)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)
@@ -133,6 +133,7 @@ def setPassword(password):
             db.setSrpValues(salt, vkey)
             db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
             Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+            db.commit()
         else:
             db.setKeys(salt, vkey, f, c)
             db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
@@ -258,6 +259,7 @@ def listBSets(db, crypt, cache):
     global _regenerator
     #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
     f = "{:30} {:4} {:6} {:>3}  {:5}  {:24}  {:8} {:>7} {:>6} {:>9} {:1} {:}"
+    #f = "{:30s} {:4s} {:6s} {:>3s}  {:5s} {:24s}  {:8} {:>7s} {:>6s} {:>6s}  {:s}"
     try:
         if args.longinfo:
             _regenerator = Regenerator.Regenerator(cache, db, crypt)
@@ -476,7 +478,7 @@ def doTagging(db, crypt):
 def doLock(db, lock):
     bset = getBackupSet(db, args.backup, args.date, True)
     if bset is None:
-        logger.error("No backup set found for %s", i)
+        logger.error("No backup set found for %s", bset)
         sys.exit(1)
 
     logger.info("Locking set %s", bset['name'])
@@ -573,7 +575,7 @@ def renameSet(db):
         logger.error("Unable to rename %s to %s", info['name'], args.newname)
     return result
 
-def parseArgs():
+def parseArgs() -> argparse.Namespace:
     global args, minPwStrength
 
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
