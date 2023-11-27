@@ -68,8 +68,8 @@ setup(  name                    = 'Tardis-Backup',
                             'termcolor',      'passwordmeter',  'pathmatch',     'python-snappy',   'zstandard',
                             'srp',            'pid',            'python-magic',  'urllib3',         'binaryornot',     
                             'colorlog',       'progressbar2',   'reportlab',     'qrcode',          'fusepy',
-                            'requests_cache', 'requests',       'flask',         'tornado',      
-                            'Tardis_Backup'] + add_pkgs,
+                            'requests_cache', 'requests',       'flask',         'tornado',      ]
+                            + add_pkgs,
         package_dir = {'': 'src'},
         package_data = {
                         'Tardis':   [ 'tardisversion', 'schema/tardis.sql' ],
