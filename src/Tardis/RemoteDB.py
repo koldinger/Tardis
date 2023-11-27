@@ -34,7 +34,6 @@ import sys
 import urllib.request, urllib.parse, urllib.error
 import functools
 import base64
-import datetime
 
 from binascii import unhexlify
 
@@ -406,6 +405,16 @@ class RemoteDB:
         cnKey = self.getConfigValue('ContentKey')
         #self.logger.info("Got keys: %s %s", fnKey, cnKey)
         return (fnKey, cnKey)
+
+    @reconnect
+    def beginTransaction(self):
+        r = self.session.get(self.baseURL + "beginTransation")
+        r.raise_for_status()
+
+    @reconnect
+    def commit(self):
+        r = self.session.get(self.baseURL + "commit")
+        r.raise_for_status()
 
     @reconnect
     def setKeys(self, salt, vkey, fKey, cKey):

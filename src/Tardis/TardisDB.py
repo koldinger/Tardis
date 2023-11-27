@@ -1091,6 +1091,11 @@ class TardisDB:
         self.cursor.execute("BEGIN")
 
     @authenticate
+    def commit(self):
+        self.conn.commit()
+
+
+    @authenticate
     def completeBackup(self):
         self._execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
         self.commit()
@@ -1219,10 +1224,6 @@ class TardisDB:
         self.logger.debug("Deleting checksum: %s", checksum)
         self.cursor.execute("DELETE FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})
         return self.cursor.rowcount
-
-    @authenticate
-    def commit(self):
-        self.conn.commit()
 
     @authenticate
     def setClientEndTime(self):

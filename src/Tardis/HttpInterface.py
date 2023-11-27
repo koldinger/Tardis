@@ -537,6 +537,17 @@ def setLock(lock, backupset):
     db = getDB()
     return createResponse(db.setLock(lock, backupset))
 
+@app.route('/beginTransaction')
+def beginTransaction():
+    db = getDB()
+    return createResponse(db.beginTransaction())
+
+@app.route('/commit')
+def commit():
+    db = getDB()
+    return createResponse(db.commit())
+
+
 @app.route('/removeOrphans')
 def removeOrphans():
     db = getDB()
