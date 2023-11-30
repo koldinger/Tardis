@@ -149,6 +149,6 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "19");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "20");
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
