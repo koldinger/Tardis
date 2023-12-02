@@ -31,7 +31,7 @@
 import os
 import sys
 
-__version__ = '1.3.8'
+__version__ = '1.3.9'
 v = sys.version_info
 
 __buildversion__ = ''
