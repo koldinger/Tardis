@@ -184,7 +184,7 @@ class MsgPackMessages(BinMessages):
             message = super().recvMessage()
         else:
             mess = super().recvMessage()
-            message = msgpack.unpackb(mess, encoding='utf-8')
+            message = msgpack.unpackb(mess)
         return message
 
     def encode(self, data):
