@@ -2289,7 +2289,7 @@ def main():
             srpUsr = srp.User(client, password)
 
             if args.create:
-                scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.defaultCryptoScheme
+                scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.DEF_CRYPTO_SCHEME
                 crypt = TardisCrypto.getCrypto(scheme, password, client)
         elif args.create:
             crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
