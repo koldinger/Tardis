@@ -238,7 +238,7 @@ class InodeDB:
         entry.finfo = finfo
 
     def get(self, inode, num=0):
-        if not inode in self.db:
+        if inode not in self.db:
             return (None, None)
         entry = self.db[inode]
         if num >= len(entry.paths):
@@ -348,8 +348,10 @@ def filelist(dirname, excludes):
 #_deletedInodes = {}
 
 def msgInfo(resp=None, batch=None):
-    if resp is None: resp = currentResponse
-    if batch is None: batch = currentBatch
+    if resp is None:
+        resp = currentResponse
+    if batch is None:
+        batch = currentBatch
     respId = resp['respid']
     respType = resp['message']
     if batch:
@@ -452,11 +454,11 @@ def handleAckSum(response):
     if not args.full and len(delta) != 0:
         signatures = prefetchSigFiles(delta)
 
-    for i, basis in delta:
+    for i, _ in delta:
         inode = tuple(i)
         if logfiles:
             logFileInfo(inode, 'd')
-        processDelta(inode, basis, signatures)
+        processDelta(inode, signatures)
         inodeDB.delete(inode)
 
 def makeEncryptor():
@@ -480,6 +482,7 @@ def prefetchSigFiles(inodes):
     while sigmessage['status'] != 'DONE':
         logger.debug("Signature Message: %s", sigmessage)
         inode = tuple(sigmessage['inode'])
+        (_, pathname) = inodeDB.get(inode)
         if sigmessage['status'] == 'OK':
             logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
 
@@ -540,7 +543,7 @@ def getInodeDBName(inode):
     else:
         return "Unknown"
 
-def processDelta(inode, basis, signatures):
+def processDelta(inode, signatures):
     """ Generate a delta and send it """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
@@ -628,7 +631,7 @@ def processDelta(inode, basis, signatures):
                     x = { 'type': 'Delta', 'size': sent, 'sigsize': sigsize }
                     # Convert to Unicode, and normalize any characters, so lengths become reasonable
                     name = unicodedata.normalize('NFD', pathname)
-                    report[os.path.split(pathname)] = x
+                    report[os.path.split(name)] = x
                 logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
             else:
                 if logger.isEnabledFor(logging.DEBUG):
@@ -750,7 +753,8 @@ def sendContent(inode, reportType):
 def handleAckMeta(message):
     checkMessage(message, 'ACKMETA')
     content = message.setdefault('content', {})
-    done    = message.setdefault('done', {})
+    # Ignore the done field.
+    #done    = message.setdefault('done', {})
 
     for cks in content:
         data = metaCache.inverse[cks][0]
@@ -791,7 +795,7 @@ def sendDirHash(inode):
     batchMessage(message)
     try:
         del dirHashes[i]
-    except KeyError as e:
+    except KeyError:
         pass
         # This kindof isn't an error.   The BatchMessages call can cause the sendDirHashes to be sent again, which ends up deleteing
         # the message before it's deleted here.
@@ -845,7 +849,7 @@ def pushFiles():
     logger.debug("Pushing files")
     # If checksum content in NOT specified, send the data for each file
     if args.loginodes:
-        args.loginodes.write(f"Pushing Files\n".encode('utf8'))
+        args.loginodes.write("Pushing Files\n".encode('utf8'))
         args.loginodes.write(f"AllContent: {len(allContent)}: {str(allContent)}\n".encode('utf8'))
         args.loginodes.write(f"AllRefresh: {len(allRefresh)}: {str(allRefresh)}\n".encode('utf8'))
         args.loginodes.write(f"AllDelta:   {len(allDelta)}: {str(allDelta)}\n".encode('utf8'))
@@ -892,7 +896,7 @@ def pushFiles():
                     (_, name) = inodeDB.get(inode)
                     if name:
                         logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
-                processDelta(inode, basis, signatures)
+                processDelta(inode, signatures)
             processed.append(inode)
         except Exception as e:
             logger.error("Unable to backup %s: ", str(i), str(e))
@@ -978,7 +982,7 @@ def mkFileInfo(f):
                     attr_string = json.dumps(dict([(str(x[0]), str(base64.b64encode(x[1]), 'utf8')) for x in sorted(attrs.items())]))
                     cks = addMeta(attr_string)
                     finfo['xattr'] = cks
-            except:
+            except Exception:
                 logger.warning("Could not read extended attributes from %s.   Ignoring", pathname)
 
         if support_acl and args.acl and not stat.S_ISLNK(mode):
@@ -989,7 +993,7 @@ def mkFileInfo(f):
                     acl = posix1e.ACL(file=pathname)
                     cks = addMeta(str(acl))
                     finfo['acl'] = cks
-            except:
+            except Exception:
                 logger.warning("Could not read ACL's from %s.   Ignoring", pathname.encode('utf8', 'backslashreplace').decode('utf8'))
 
         # Insert into the inode DB
@@ -1407,7 +1411,7 @@ def loadExcludeFile(name):
         with open(name) as f:
             excludes = [mkExcludePattern(x.rstrip('\n')) for x in f.readlines()]
         return set(excludes)
-    except IOError as e:
+    except IOError:
         #traceback.print_exc()
         return set()
 
@@ -1573,7 +1577,6 @@ def sendDirEntry(parent, device, files):
         'files': files,
         'path' : None,
         'inode': [parent, device],
-        'files': files,
         'last' : True
         }
 
@@ -1633,7 +1636,7 @@ def setCrypto(confirm, chkStrength=False, version=None):
 
 def doSendKeys(password):
     if srpUsr is None:
-        password = setCrypto(True, True, cryptoVersion)
+        password = setCrypto(True, True, crypt.getCryptoScheme())
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1770,17 +1773,6 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
         crypt.setKeys(f, c)
 
 def getConnection(server, port):
-    #if args.protocol == 'json':
-    #    conn = Connection.JsonConnection(server, port, name, priority, client, autoname=auto, token=token, force=args.force, timeout=args.timeout, full=args.full)
-    #    setEncoder("base64")
-    #elif args.protocol == 'bson':
-    #    conn = Connection.BsonConnection(server, port, name, priority, client, autoname=auto, token=token, compress=args.compressmsgs, force=args.force, timeout=args.timeout, full=args.full)
-    #    setEncoder("bin")
-    #elif args.protocol == 'msgp':
-    throttler = None
-    #if maxBandwidth:
-    #    throttler = Throttler(maxBandwidth, blocking=True)
-
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
     setEncoder("bin")
     return conn
@@ -1797,7 +1789,7 @@ def checkConfig(c, t):
     comp = c.get(t, 'CompressData').lower()
     if (comp == 'true') or (comp == '1'):
         c.set(t, 'CompressData', 'zlib')
-    elif not (comp in CompressedBuffer.getCompressors()):
+    elif comp not in CompressedBuffer.getCompressors():
         c.set(t, 'CompressData', 'none')
 
 def processCommandLine():
@@ -2040,7 +2032,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
 
     # Generate a handler and formatter for each logfile
     for logfile in logfiles:
-        if type(logfile) is str:
+        if isinstance(logfile, str):
             if logfile == ':STDERR:':
                 isatty = os.isatty(sys.stderr.fileno())
                 handler = Util.ClearingStreamHandler(sys.stderr)
@@ -2440,7 +2432,7 @@ def main():
         }
         batchMessage(message, batch=False, flush=True)
 
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         logger.warning("Backup Interupted")
         exc = "Backup Interrupted"
         #exceptionLogger.log(e)
