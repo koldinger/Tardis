@@ -239,7 +239,7 @@ def getBackupSetInfoById(backupset):
 @app.route('/getBackupSetInfoByTag/<tag>')
 def getBackupSetInfoByTag(tag):
     db = getDB()
-    return creatRespones(makeDict(db.getBackupSetInfoByTag(tag)))
+    return createResponse(makeDict(db.getBackupSetInfoByTag(tag)))
 
 @app.route('/getBackupSetDetails/<backupset>')
 def getBackupSetDetails(backupset):
@@ -421,7 +421,7 @@ def getFileData(checksum):
         resp.headers['Content-Length'] = ckinfo['disksize']
         resp.headers['Content-Type'] = 'application/octet-stream'
         return resp
-    except:
+    except Exception:
         abort(404)
 
 @app.route('/getConfigValue/<name>')
@@ -518,7 +518,7 @@ def deleteOrphanChecksums(isfile):
     return createResponse(db.deleteOrphanChecksums(isfile))
 
 @app.route('/setTag/<int:backupset>/<tag>')
-def setTags(bset, tag):
+def setTags(backupset, tag):
     db = getDB()
     return createResponse(db.setTag(tag, backupset))
 

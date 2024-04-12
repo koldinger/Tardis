@@ -136,7 +136,7 @@ class BackendConfig:
 
     linkBasis       = False
 
-    skip            = Defaults.getDefault('TARDIS_SKIP');
+    skip            = Defaults.getDefault('TARDIS_SKIP')
 
 
 class Backend:
@@ -284,7 +284,7 @@ class Backend:
                 if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
-                    if not old["checksum"] is None:
+                    if old["checksum"] is not None:
                         #self.db.setChecksum(inode, device, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
@@ -307,7 +307,7 @@ class Backend:
                         self.setXattrAcl(inode, device, xattr, acl)
                         retVal = CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
-                elif (osize == fsize) and (not old["checksum"] is None):
+                elif (osize == fsize) and (old["checksum"] is not None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
@@ -627,7 +627,7 @@ class Backend:
                     #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
                     # Can't use isinstance
-                    if type(basisFile) != types.FileType:
+                    if isinstance(basisFile, types.FileType):
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
                         basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
@@ -744,7 +744,7 @@ class Backend:
                 self.logger.error("Could process metadata for %s: %s", cksum, str(e))
                 if self.config.exceptions:
                     self.logger.exception(e)
-                content.append(f['inode'])
+                content.append(cksum)
         message = {
             'message': 'ACKMETA',
             'content': content,
@@ -977,7 +977,7 @@ class Backend:
         if ckInfo is None:
             self.logger.debug("Inserting command line file")
             f = self.cache.open(cksum, 'wb')
-            if type(message['line']) == bytes:
+            if isinstance(message['line'], bytes):
                 f.write(message['line'])
             else:
                 f.write(bytes(message['line'], 'utf8'))
@@ -1072,7 +1072,7 @@ class Backend:
                                      user=self.config.user,
                                      group=self.config.group,
                                      skipFile=self.config.skip)
-        except CacheDir.CacheDirDoesNotExist as e:
+        except CacheDir.CacheDirDoesNotExist:
             if not self.config.allowNew:
                 raise InitFailedException("Server does not allow new clients")
             else:
@@ -1172,7 +1172,7 @@ class Backend:
                     self.autoPurge = bool(autoPurge)
                 if saveConfig is not None:
                     self.logger.debug("Overriding global saveconfig value: %s", bool(autoPurge))
-                    self.saveconfig = bool(saveconfig)
+                    self.saveconfig = bool(saveConfig)
             except Exception as e:
                 self.logger.error("Client %s: Unable to override global configuration: %s", self.client, str(e))
 
@@ -1324,8 +1324,8 @@ class Backend:
             create      = fields.get('create', False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
-        except ValueError as e:
-            raise InitFailedException("Cannot parse JSON field: {}".format(message))
+        except ValueError:
+            raise InitFailedException("Parsing error on backup message")
         except KeyError as e:
             raise InitFailedException(str(e))
 
@@ -1359,7 +1359,7 @@ class Backend:
                         self.logger.debug("Setting keys into new client DB")
                         (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
                         self.logger.info("Setting CryptoScheme %d", cryptoScheme)
-                        ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+                        self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
                         self.db.setConfigValue('CryptoScheme', cryptoScheme)
                         keys = None
                     else:

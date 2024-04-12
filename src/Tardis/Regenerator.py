@@ -86,7 +86,7 @@ class Regenerator:
                 if authenticate:
                     try:
                         encryptor.verify(digest)
-                    except:
+                    except ValueError:
                         self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), binascii.hexlify(encryptor.digest()))
                         raise RegenerateException("HMAC did not authenticate.")
             outfile.write(pt)
@@ -191,3 +191,4 @@ class Regenerator:
             self.errors += 1
             return None
             #raise RegenerateException("Error recovering file: {}".format(filename))
+

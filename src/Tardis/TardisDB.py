@@ -179,11 +179,11 @@ class TardisDB:
                 with open(initialize, "r") as f:
                     script = f.read()
                     self.conn.executescript(script)
-            except IOError as e:
+            except IOError:
                 self.logger.error("Could not read initialization script %s", initialize)
                 #self.logger.exception(e)
                 raise
-            except sqlite3.Error as e:
+            except sqlite3.Error:
                 self.logger.error("Could not execute initialization script %s", initialize)
                 #self.logger.exception(e)
                 raise
@@ -285,7 +285,7 @@ class TardisDB:
         """ Determine the backupset we're being asked about.
             True == current, False = previous, otherwise a number is returned
         """
-        if type(current) is bool:
+        if isinstance(current, bool):
             return self.currBackupSet if current else self.prevBackupSet
         else:
             return current
@@ -1263,7 +1263,7 @@ class TardisDB:
     @authenticate
     def setLock(self, locked, current=False):
         bset = self._bset(current)
-        c = self._execute("UPDATE Backups SET Locked = :locked WHERE BackupSet = :bset", { "locked": locked, "bset": bset })
+        self._execute("UPDATE Backups SET Locked = :locked WHERE BackupSet = :bset", { "locked": locked, "bset": bset })
 
     @authenticate
     def setFailure(self, ex):

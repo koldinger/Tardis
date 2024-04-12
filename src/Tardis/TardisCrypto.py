@@ -403,11 +403,11 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
         return data[:unPaddedLen]
 
     def checkpad(self, data):
-        l = data[-1]
+        length = data[-1]
         # Make sure last L bytes are all set to L
-        pad = chr(l) * l
-        if data[-l:] != pad:
-            raise Exception("Invalid padding: %s (%d)", binascii.hexlify(data[-l:]), l)
+        pad = chr(length) * length
+        if data[-length:] != pad:
+            raise Exception("Invalid padding: %s (%d)", binascii.hexlify(data[-length:]), length)
 
     def padzero(self, x):
         remainder = len(x) % self._blocksize

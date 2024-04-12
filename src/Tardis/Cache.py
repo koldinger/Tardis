@@ -58,7 +58,7 @@ class Cache:
                 self.cache.popitem(False)
 
     def retrieve(self, key):
-        if not key in self.cache:
+        if key not in self.cache:
             self.logger.debug("Retrieving key %s failed", key)
             return None
         (value, timeout) = self.cache[key]
@@ -86,7 +86,7 @@ class Cache:
                     return
                 self.cache.popitem(False)
                 z = next(i)
-        except:
+        except Exception:
             # If something goes wrong, just punt.
             pass
 

@@ -28,8 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sqlite3
-import logging
 
 def checkVersion(conn, version, log):
     s = conn.execute('SELECT Value FROM Config WHERE Key = "SchemaVersion"')

@@ -31,9 +31,12 @@
 import logging
 import tempfile
 import sys
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 import functools
 import base64
+import errno
 
 from binascii import unhexlify
 
@@ -66,6 +69,9 @@ def reconnect(func):
                 self.connect()
                 logger.info("Retrying %s(%s %s)", str(func), str(args), str(kwargs))
                 return func(self, *args, **kwargs)
+            # Set theerrno field.   Alas, HTTPError extends IOError extends OSError.
+            # OSError should have a errno, but HTTPError doesn't set one.   Grumble
+            e.errno = errno.EIO
             raise e
     return doit
 
@@ -186,7 +192,7 @@ class RemoteDB:
         """ Determine the backupset we're being asked about.
             True == current, false = previous, otherwise a number is returned
         """
-        if type(current) is bool:
+        if isinstance(current, bool):
             if current:
                 return str(None)
             else:

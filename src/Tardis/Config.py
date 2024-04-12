@@ -32,7 +32,6 @@ import sys
 import configparser
 
 from Tardis import Defaults
-from Tardis import Util
 from Tardis import TardisCrypto
 
 

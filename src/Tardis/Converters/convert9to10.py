@@ -30,8 +30,6 @@
 
 import sqlite3
 import sys
-import os.path
-from Tardis import CacheDir
 import logging
 
 from . import convertutils

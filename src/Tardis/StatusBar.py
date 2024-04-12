@@ -156,7 +156,7 @@ class StatusBar():
 
         try:
             print(output + _ansiClearEol + _startOfLine + _hideCursor, end='', flush=True)
-        except:
+        except Exception:
             print(_ansiClearEol + _startOfLine, end='', flush=True)
 
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
@@ -166,7 +166,8 @@ class StatusBar():
 
 
 if __name__ == "__main__":
-    import os, os.path
+    import os
+    import os.path
     myargs = {"files": 0}
     sb = StatusBar("{__elapsed__} :: Files: {files} Delta: {delta}: {amount!B} {mode} --> ", myargs)
     sb.setValue("mode", "Testing")

@@ -30,6 +30,7 @@
 
 import os
 import sys
+import subprocess
 
 __version__ = '1.3.9'
 v = sys.version_info
@@ -42,11 +43,10 @@ try:
     parentDir     = os.path.dirname(os.path.realpath(__file__))
     versionFile   = os.path.join(parentDir, 'tardisversion')
     __buildversion__ = str(open(versionFile, 'r').readline()).strip()
-except Exception as e:
+except Exception:
     try:
-        import subprocess
         __buildversion__ = str(subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip(), 'utf-8')
-    except:
+    except subprocess.CalledProcessError:
         pass
 
 if __buildversion__:

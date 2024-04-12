@@ -28,9 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import socket
-import os
-import sys
 import json
 import base64
 import struct
@@ -39,12 +36,7 @@ import zlib
 import msgpack
 import snappy
 
-try:
-    import bson
-    _supportBson = True
-except:
-    _supportBson = False
-    pass
+#import bson
 
 
 class Messages:
@@ -196,6 +188,7 @@ class MsgPackMessages(BinMessages):
     def getEncoding(self):
         return "bin"
 
+"""
 class BsonMessages(BinMessages):
     def __init__(self, socket, stats=None, compress=True):
         BinMessages.__init__(self, socket, stats, compress=compress)
@@ -221,6 +214,7 @@ class BsonMessages(BinMessages):
 
     def getEncoding(self):
         return "bin"
+"""
 
 class ObjectMessages():
     def __init__(self, inQueue, outQueue, stats=None, compress=True, timeout=None):

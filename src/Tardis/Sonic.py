@@ -230,7 +230,7 @@ def moveKeys(db, crypt):
             if args.deleteKeys:
                 Util.saveKeys(args.keys, clientId, None, None)
         return 0
-    except TardisDB.AuthenticationException as e:
+    except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         return 1
     except Exception as e:
@@ -383,13 +383,14 @@ def listFiles(db, crypt):
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])
             size = humanify(fInfo['size'])
+            inode = fInfo['inode']
             print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
             if args.cksums:
                 print(f" {fInfo.get('checksum', '') or '' :32}", end=' ')
             if args.chnlen:
                 print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
             if args.inode:
-                print(' {16s} '.format(f"({fInfo['device']}, {fInfo['inode']})"), end=' ')
+                print(f" {inode:16}", end=' ')
             if args.type:
                 print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
             if args.size:
@@ -827,7 +828,7 @@ def main():
             return 0
     except KeyboardInterrupt:
         pass
-    except TardisDB.AuthenticationException as e:
+    except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         sys.exit(1)
     except Exception as e:

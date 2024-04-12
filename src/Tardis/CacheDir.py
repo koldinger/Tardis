@@ -109,7 +109,7 @@ class CacheDir:
         try:
             s = os.stat(self.path(name))
             return s.st_size
-        except:
+        except Exception:
             return 0
 
     def mkdir(self, name):
@@ -187,7 +187,7 @@ if __name__ == "__main__":
 
     try:
         c.open(test, "r")
-    except IOError as ex:
+    except IOError:
         print("Caught IOError")
 
     with c.open(test, "w") as fd:

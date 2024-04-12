@@ -114,7 +114,7 @@ def doAuthenticate(outname, checksum, digest):
                 action = 'Renaming to ' + target + '.'
                 try:
                     os.rename(outname, target)
-                except:
+                except os.error:
                     action = "Unable to rename to " + target + ".  File saved as " + outname + "."
             elif args.authfailaction == 'delete':
                 action = 'Deleting.'
@@ -143,25 +143,25 @@ def setAttributes(regenerator, info, outname):
             try:
                 logger.debug("Setting permissions on %s to %o", outname, info['mode'])
                 os.chmod(outname, info['mode'])
-            except Exception as e:
+            except Exception:
                 logger.warning("Unable to set permissions for %s", outname)
             try:
                 # Change the group, then the owner.
                 # Change the group first, as only root can change owner, and that might fail.
                 os.chown(outname, -1, info['gid'])
                 os.chown(outname, info['uid'], -1)
-            except Exception as e:
+            except Exception:
                 logger.warning("Unable to set owner and group of %s", outname)
         if args.settime:
             try:
                 logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
                 os.utime(outname, (info['atime'], info['mtime']))
-            except Exception as e:
+            except Exception:
                 logger.warning("Unable to set times on %s", outname)
 
         if args.setattrs and 'attr' in info and info['attr']:
             try:
-                f = regenerator.recoverChecksum(info['attr'], authenticate)
+                f = regenerator.recoverChecksum(info['attr'], True)
                 xattrs = json.loads(f.read())
                 x = xattr.xattr(outname)
                 for attr in xattrs.keys():
@@ -170,15 +170,15 @@ def setAttributes(regenerator, info, outname):
                         x.set(attr, value)
                     except IOError:
                         logger.warning("Unable to set extended attribute %s on %s", attr, outname)
-            except Exception as e:
+            except Exception:
                 logger.warning("Unable to process extended attributes for %s", outname)
         if args.setacl and 'acl' in info and info['acl']:
             try:
-                f = regenerator.recoverChecksum(info['acl'], authenticate)
+                f = regenerator.recoverChecksum(info['acl'], True)
                 acl = json.loads(f.read())
                 a = posix1e.ACL(text=acl)
                 a.applyto(outname)
-            except Exception as e:
+            except Exception:
                 logger.warning("Unable to process extended attributes for %s", outname)
 
 def doRecovery(regenerator, info, authenticate, path, outname):
@@ -236,7 +236,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     retCode = 0
     outname = None
     skip = False
-    hasher = None
+
     try:
         if info:
             realname = crypt.decryptFilename(info['name'])
@@ -392,7 +392,7 @@ def mkOutputDir(name):
     if os.path.isdir(name):
         return name
     elif os.path.exists(name):
-        self.logger.error("%s is not a directory")
+        logger.error("%s is not a directory", name)
     else:
         os.mkdir(name)
         return name
@@ -452,7 +452,7 @@ def main():
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
-    except TardisDB.AuthenticationException as e:
+    except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         #if args.exceptions:
             #logger.exception(e)
@@ -546,7 +546,7 @@ def main():
                             if os.path.exists(outname) and owMode == OW_NEVER:
                                 logger.warning("File %s exists.  Skipping", outname)
                                 continue
-                            output = file(outname,  "wb")
+                            output = open(outname,  "wb")
                         try:
                             x = f.read(64 * 1024)
                             while x:
@@ -565,7 +565,7 @@ def main():
                             logger.debug("Checking authentication")
                             outname = doAuthenticate(outname, i, hasher.hexdigest())
 
-                except TardisDB.AuthenticationException as e:
+                except TardisDB.AuthenticationException:
                     logger.error("Authentication failed.  Bad password")
                     #if args.exceptions:
                         #logger.exception(e)
@@ -607,7 +607,7 @@ def main():
                     else:
                         logger.error("Could not recover info for %s (File not found)", i)
                         retcode += 1
-                except TardisDB.AuthenticationException as e:
+                except TardisDB.AuthenticationException:
                     logger.error("Authentication failed.  Bad password")
                     #if args.exceptions:
                         #logger.exception(e)

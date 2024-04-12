@@ -30,9 +30,7 @@
 
 import sqlite3
 import sys
-import os.path
 import logging
-from Tardis import CacheDir
 from . import convertutils
 
 version = 6

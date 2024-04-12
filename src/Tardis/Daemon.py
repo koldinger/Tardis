@@ -450,7 +450,7 @@ def runServer():
         else:
             try:
                 server.serve_forever()
-            except:
+            except Exception:
                 logger.info("Socket server completed")
         logger.info("Ending")
     except Exception as e:
@@ -568,5 +568,5 @@ def main():
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except Exception as e:
+    except Exception:
         traceback.print_exc()

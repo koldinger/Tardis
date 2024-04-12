@@ -726,7 +726,7 @@ def main():
         password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt="Password for %s: " % (getarg('client')))
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(getarg('database'), getarg('client'), password, getarg('keys'), getarg('dbname'), getarg('dbdir'))
-    except TardisDB.AuthenticationException as e:
+    except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         #if args.exceptions:
             #logger.exception(e)

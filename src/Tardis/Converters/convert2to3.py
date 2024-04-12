@@ -35,6 +35,8 @@ import logging
 
 from . import convertutils
 
+from Tardis import CacheDir
+
 version = 2
 
 def upgrade(conn, logger):

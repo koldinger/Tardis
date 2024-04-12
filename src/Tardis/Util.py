@@ -48,7 +48,9 @@ import struct
 import io
 import signal
 
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 
 import srp
 import passwordmeter
@@ -375,7 +377,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         # Nothing specified, and it wants a value.  Set password to True to fetch
         password = True
 
-    if password == True or password == '':
+    if password is True or password == '':
         password = _readWithTimeout(prompt, int(timeout))
         password = password.rstrip()       # Delete trailing characters
         if confirm:
@@ -760,7 +762,7 @@ def loadKeys(name, client):
         contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
         nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
         return (nameKey, contentKey)
-    except configparser.NoOptionError as e:
+    except configparser.NoOptionError:
         raise Exception("No keys available for client " + client)
 
 def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
@@ -905,7 +907,8 @@ class ClearingStreamHandler(logging.StreamHandler):
 
     def __init__(self, stream = None):
         super().__init__(stream)
-        if stream is None: stream = sys.stderr
+        if stream is None:
+            stream = sys.stderr
         self.clearLines = os.isatty(stream.fileno())
 
     def emit(self, record):
