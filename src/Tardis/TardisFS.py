@@ -723,7 +723,7 @@ def main():
         pwfile = kwargs.get('pwfile') or argsDict.get('passwordfile')
         pwprog = kwargs.get('pwprog') or argsDict.get('passwordprog')
 
-        password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt="Password for %s: " % (getarg('client')))
+        password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt=f"Password for {getarg('client')}: ")
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(getarg('database'), getarg('client'), password, getarg('keys'), getarg('dbname'), getarg('dbdir'))
     except TardisDB.AuthenticationException:

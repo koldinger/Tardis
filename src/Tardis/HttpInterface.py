@@ -665,7 +665,7 @@ def tornado():
             daemon = daemonize.Daemonize(app="tardisremote", pid=pidfile, action=run_server, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
-            logger.critical("Caught Exception on Daemonize call: {}".format(e))
+            logger.critical(f"Caught Exception on Daemonize call: {e}")
             if args.exceptions:
                 logger.exception(e)
     else:
@@ -674,7 +674,7 @@ def tornado():
         except KeyboardInterrupt:
             pass
         except Exception as e:
-            logger.critical("Unable to run server: {}".format(e))
+            logger.critical(f"Unable to run server: {e}")
             if args.exceptions:
                 logger.exception(e)
 

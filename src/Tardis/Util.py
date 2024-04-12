@@ -453,7 +453,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
 
     needsAuth = tardis.needsAuthentication()
     if needsAuth and password is None:
-        password = getPassword(True, None, None, "Password for %s: " % client, allowNone=False)
+        password = getPassword(True, None, None, f"Password for {client}: ", allowNone=False)
 
     if needsAuth:
         authenticate(tardis, client, password)

@@ -217,7 +217,7 @@ def doRecovery(regenerator, info, authenticate, path, outname):
                         hasher.update(x)
                     x = i.read(16 * 1024)
             except Exception as e:
-                logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                logger.error(f"Unable to read file: {i}: {repr(e)}")
                 raise
             finally:
                 i.close()
@@ -268,7 +268,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             if info['dir']:
                 if not outname:
                     #logger.error("Cannot regenerate directory %s without outputdir specified", path)
-                    raise Exception("Cannot regenerate directory %s without outputdir specified" % (path))
+                    raise Exception(f"Cannot regenerate directory {path} without outputdir specified")
 
                 try:
                     logger.info("Processing directory %s", Util.shortPath(path))
@@ -447,7 +447,7 @@ def main():
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
 
     try:
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
@@ -555,7 +555,7 @@ def main():
                                     hasher.update(x)
                                 x = f.read(64 * 1024)
                         except Exception as e:
-                            logger.error("Unable to read file: {}: {}".format(i, repr(e)))
+                            logger.error(f"Unable to read file: {i}: {repr(e)}")
                             raise
                         finally:
                             f.close()

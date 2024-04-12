@@ -33,5 +33,5 @@ import logging
 class ConnIdLogAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         if self.extra and 'connid' in self.extra:
-            msg = "[{}]: {}".format(self.extra['connid'], msg)
+            msg = f"[{self.extra['connid']}]: {msg}"
         return (msg, kwargs)

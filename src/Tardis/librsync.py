@@ -39,7 +39,7 @@ if os.name == 'posix':
     try:
         _librsync = ctypes.cdll.LoadLibrary(path)
     except OSError:
-        raise ImportError('Could not load librsync at "%s"' % path)
+        raise ImportError(f'Could not load librsync at "{path}"')
 elif os.name == 'nt':
     try:
         _librsync = ctypes.cdll.librsync

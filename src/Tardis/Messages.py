@@ -97,7 +97,7 @@ class BinMessages(Messages):
             self.compress = snappy.compress
             self.decompress = snappy.decompress
         elif compress != 'none':
-            raise Exception("Unrecognized compression method: %s" % str(compress))
+            raise Exception(f"Unrecognized compression method: {str(compress)}")
 
     def sendMessage(self, message, compress=True, raw=False):
         if compress and self.compress:
@@ -127,7 +127,7 @@ class TextMessages(Messages):
 
     def sendMessage(self, message, compress=True):
         length = len(message)
-        output = "{:06d}".format(length)
+        output = f"{length:06d}"
         self.sendBytes(output)
         self.sendBytes(message)
 

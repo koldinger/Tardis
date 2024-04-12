@@ -244,7 +244,7 @@ class TardisDB:
                 self.upgradeSchema(int(version))
             else:
                 self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", self.dbName, int(version), _schemaVersion)
-                raise Exception("Schema version mismatch: Database {} is {}:  Expected {}.   Please convert".format(self.dbName, version, _schemaVersion))
+                raise Exception(f"Schema version mismatch: Database {self.dbName} is {version}:  Expected {_schemaVersion}.   Please convert")
 
         if self.prevSet:
             f = self.getBackupSetInfo(self.prevSet)
@@ -360,12 +360,12 @@ class TardisDB:
                         }
                     )
         except sqlite3.IntegrityError:
-            raise Exception("Backupset {} already exists".format(name))
+            raise Exception(f"Backupset {name} already exists")
 
         self.currBackupSet = c.lastrowid
 
         if name is None:
-            name = "INCOMPLETE-{}".format(self.currBackupSet)
+            name = f"INCOMPLETE-{self.currBackupSet}"
             self.setBackupSetName(name, priority)
 
         self.currBackupName = name
@@ -419,7 +419,7 @@ class TardisDB:
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self._bset(current)
         (inode, device) = parent
-        self.logger.debug("Looking up file by name {} {} {}".format(name, parent, backupset))
+        self.logger.debug(f"Looking up file by name {name} {parent} {backupset}")
         c = self.cursor
         c.execute("SELECT " +
                   _fileInfoFields +
@@ -437,7 +437,7 @@ class TardisDB:
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self._bset(current)
-        self.logger.debug("Looking up file by path {} {}".format(path, backupset))
+        self.logger.debug(f"Looking up file by path {path} {backupset}")
         parent = (0, 0)         # Root directory value
         info = None
 
@@ -734,7 +734,7 @@ class TardisDB:
             return x if x is not None else ''
 
         if self.journal:
-            self.journal.write("{}:{}:{}:{}\n".format(checksum, _xstr(basis), int(encrypted), compressed))
+            self.journal.write(f"{checksum}:{_xstr(basis)}:{int(encrypted)}:{compressed}\n")
 
         if basis is None:
             chainlength = 0

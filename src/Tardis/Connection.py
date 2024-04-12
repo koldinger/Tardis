@@ -75,7 +75,7 @@ class Connection:
             elif not message:
                 raise Exception("No header string.")
             elif message != headerString:
-                raise Exception("Unknown protocol: {}".format(message))
+                raise Exception(f"Unknown protocol: {message}")
             resp = { 'encoding': encoding, 'compress': compress }
             self.put(bytes(json.dumps(resp), 'utf8'))
 

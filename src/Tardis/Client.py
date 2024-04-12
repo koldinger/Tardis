@@ -335,8 +335,8 @@ def fs_encode(val):
 def checkMessage(message, expected):
     """ Check that a message is of the expected type.  Throw an exception if not """
     if not message['message'] == expected:
-        logger.critical("Expected {} message, received {}".format(expected, message['message']))
-        raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
+        logger.critical(f"Expected {expected} message, received {message['message']}")
+        raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
 def filelist(dirname, excludes):
     """ List the files in a directory, except those that match something in a set of patterns """
@@ -1395,7 +1395,7 @@ def setPurgeValues(args):
                 purgeTime = time.mktime(then)
             else:
                 #logger.error("Could not parse --keep-time argument: %s", args.purgetime)
-                raise Exception("Could not parse --keep-time argument: {} ".format(args.purgetime))
+                raise Exception(f"Could not parse --keep-time argument: {args.purgetime} ")
 
 
 @functools.lru_cache(maxsize=128)
@@ -1439,7 +1439,7 @@ def sendMessage(message):
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
     if args.logmessages:
-        args.logmessages.write("\nSending message %s %s\n" % (message.get('msgid', 'Unknown'), "-" * 40))
+        args.logmessages.write(f"\nSending message {message.get('msgid', 'Unknown')} {'-' * 40}\n")
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n')
     #setProgress("Sending...", "")
     conn.send(message)
@@ -1450,7 +1450,7 @@ def receiveMessage():
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
     if args.logmessages:
-        args.logmessages.write("\nReceived message %s %s\n" % (response.get('respid', 'Unknown'), "-" * 40))
+        args.logmessages.write(f"\nReceived message {response.get('respid', 'Unknown')} {'-' * 40}\n")
         args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n')
     return response
 
@@ -1627,7 +1627,7 @@ def createPrefixPath(root, path):
 
 def setCrypto(confirm, chkStrength=False, version=None):
     global srpUsr, crypt
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, "Password for %s:" % (args.client),
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, f"Password for {args.client}:",
                                 confirm=confirm, strength=chkStrength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.getCrypto(version, password, args.client)
@@ -1814,7 +1814,7 @@ def processCommandLine():
     if args.config:
         c.read(args.config)
         if not c.has_section(t):
-            sys.stderr.write("WARNING: No Job named %s listed.  Using defaults.  Jobs available: %s\n" %(t, str(c.sections()).strip('[]')))
+            sys.stderr.write(f"WARNING: No Job named {t} listed.  Using defaults.  Jobs available: {str(c.sections()).strip('[]')}\n")
             c.add_section(t)                    # Make it safe for reading other values from.
         checkConfig(c, t)
     else:
@@ -1973,14 +1973,14 @@ def parseServerInfo(args):
     try:
         info = urllib.parse.urlparse(serverStr)
         if info.scheme != 'tardis':
-            raise Exception("Invalid URL scheme: {}".format(info.scheme))
+            raise Exception(f"Invalid URL scheme: {info.scheme}")
 
         sServer = info.hostname
         sPort   = info.port
         sClient = info.path.lstrip('/')
 
     except Exception as e:
-        raise Exception("Invalid URL: {} -- {}".format(args.server, e.message))
+        raise Exception(f"Invalid URL: {args.server} -- {e.message}")
 
     server = sServer or args.server
     port = sPort or args.port
@@ -2073,19 +2073,19 @@ def printStats(starttime, endtime):
     duration = endtime - starttime
     duration = datetime.timedelta(duration.days, duration.seconds, duration.seconds - (duration.seconds % 100000))          # Truncate the microseconds
 
-    logger.log(logging.STATS, "Runtime:          {}".format(duration))
-    logger.log(logging.STATS, "Backed Up:        Dirs: {:,}  Files: {:,}  Links: {:,}  Total Size: {:}".format(stats['dirs'], stats['files'], stats['links'], Util.fmtSize(stats['backed'])))
-    logger.log(logging.STATS, "Files Sent:       Full: {:,}  Deltas: {:,}".format(stats['new'], stats['delta']))
-    logger.log(logging.STATS, "Data Sent:        Sent: {:}   Backed: {:}".format(Util.fmtSize(stats['dataSent']), Util.fmtSize(stats['dataBacked'])))
-    logger.log(logging.STATS, "Messages:         Sent: {:,} ({:}) Received: {:,} ({:})".format(connstats['messagesSent'], Util.fmtSize(connstats['bytesSent']), connstats['messagesRecvd'], Util.fmtSize(connstats['bytesRecvd'])))
-    logger.log(logging.STATS, "Data Sent:        {:}".format(Util.fmtSize(stats['dataSent'])))
+    logger.log(logging.STATS, f"Runtime:          {duration}")
+    logger.log(logging.STATS, f"Backed Up:        Dirs: {stats['dirs']:,}  Files: {stats['files']:,}  Links: {stats['links']:,}  Total Size: {Util.fmtSize(stats['backed'])}")
+    logger.log(logging.STATS, f"Files Sent:       Full: {stats['new']:,}  Deltas: {stats['delta']:,}")
+    logger.log(logging.STATS, f"Data Sent:        Sent: {Util.fmtSize(stats['dataSent'])}   Backed: {Util.fmtSize(stats['dataBacked'])}")
+    logger.log(logging.STATS, f"Messages:         Sent: {connstats['messagesSent']:,} ({Util.fmtSize(connstats['bytesSent'])}) Received: {connstats['messagesRecvd']:,} ({Util.fmtSize(connstats['bytesRecvd'])})")
+    logger.log(logging.STATS, f"Data Sent:        {Util.fmtSize(stats['dataSent'])}")
 
     if (stats['denied'] or stats['gone']):
-        logger.log(logging.STATS, "Files Not Sent:   Disappeared: {:,}  Permission Denied: {:,}".format(stats['gone'], stats['denied']))
+        logger.log(logging.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
 
 
-    logger.log(logging.STATS, "Wait Times:   {:}".format(str(datetime.timedelta(0, waittime))))
-    logger.log(logging.STATS, "Sending Time: {:}".format(str(datetime.timedelta(0, Util._transmissionTime))))
+    logger.log(logging.STATS, f"Wait Times:   {str(datetime.timedelta(0, waittime))}")
+    logger.log(logging.STATS, f"Sending Time: {str(datetime.timedelta(0, Util._transmissionTime))}")
 
 def pickMode():
     if args.local != '' and args.local is not None:
@@ -2121,9 +2121,9 @@ def printReport(repFormat):
 
         filefmts = ['','KB','MB','GB', 'TB', 'PB']
         dirfmts  = ['B','KB','MB','GB', 'TB', 'PB']
-        fmt  = '%-{}s %-6s %-10s %-10s'.format(length + 4)
-        fmt2 = '  %-{}s   %-6s %-10s %-10s'.format(length)
-        fmt3 = '  %-{}s   %-6s %-10s'.format(length)
+        fmt  = f'%-{length + 4}s %-6s %-10s %-10s'
+        fmt2 = f'  %-{length}s   %-6s %-10s %-10s'
+        fmt3 = f'  %-{length}s   %-6s %-10s'
         fmt4 = '  %d files (%d full, %d delta, %s)'
 
         logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
@@ -2166,7 +2166,7 @@ def lockRun(server, port, client):
     try:
         pidfile.create()
     except pid.PidFileError as e:
-        raise Exception("Tardis already running: %s" % e)
+        raise Exception(f"Tardis already running: {e}")
     return pidfile
 
 def mkBackendConfig(jobname):
@@ -2265,7 +2265,7 @@ def main():
 
         # Load any password info
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (client),
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ",
                                         confirm=args.create, strength=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.: %s", str(e))
@@ -2353,7 +2353,7 @@ def main():
         exceptionLogger.log(e)
         sys.exit(1)
     if verbosity or args.stats or args.report != 'none':
-        logger.log(logging.STATS, "Name: {} Server: {}:{} Session: {}".format(backupName, server, port, sessionid))
+        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
 
 
@@ -2463,7 +2463,7 @@ def main():
             logger.warning("Some cloned directories not processed: %d", len(cloneContents))
             for key in cloneContents:
                 (path, files) = cloneContents[key]
-                print("{}:: {}".format(path, len(files)))
+                print(f"{path}:: {len(files)}")
 
         # This next one is usually non-zero, for some reason.  Enable to debug.
         #if len(inodeDB) != 0:

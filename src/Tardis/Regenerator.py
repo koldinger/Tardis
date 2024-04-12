@@ -117,7 +117,7 @@ class Regenerator:
 
         try:
             if not cksInfo['isfile']:
-                raise RegenerateException("{} is not a file".format(cksum))
+                raise RegenerateException(f"{cksum} is not a file")
 
             if cksInfo['basis']:
                 if basisFile:
@@ -144,7 +144,7 @@ class Regenerator:
                     return output
                 except librsync.LibrsyncError as e:
                     self.logger.error("Recovering checksum: %s : %s", cksum, e)
-                    raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
+                    raise RegenerateException(f"Checksum: {cksum}: Error: {e}")
             else:
                 if cksInfo['encrypted']:
                     output =  self.decryptFile(cksum, cksInfo['disksize'])
@@ -166,7 +166,7 @@ class Regenerator:
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
             #self.logger.exception(e)
-            raise RegenerateException("Checksum: {}: Error: {}".format(cksum, e))
+            raise RegenerateException(f"Checksum: {cksum}: Error: {e}")
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
         self.logger.info("Recovering file: %s", filename)

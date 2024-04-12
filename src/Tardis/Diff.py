@@ -130,13 +130,13 @@ def runDiff(f1, f2, name, then, now):
     # If we only want to list files, just see if the
     if args.list and l1 != l2:
         color = 'yellow' if args.color else None
-        termcolor.cprint('File {} (versions {} and {}) differs.'.format(name, then, now), color)
+        termcolor.cprint(f'File {name} (versions {then} and {now}) differs.', color)
         return
 
     if not args.binary and (isBinary(l1) or isBinary(l2)):
         if l1 != l2:
             color = 'yellow' if args.color else None
-            termcolor.cprint('Binary file {} (versions {} and {}) differs.'.format(name, then, now), color)
+            termcolor.cprint(f'Binary file {name} (versions {then} and {now}) differs.', color)
         return
 
     # Convert the binary blobs to strings so that
@@ -196,11 +196,11 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
             logger.info('Diffing %s', os.path.join(path, i))
             diffFile(os.path.join(path, i), regenerator, bsets, tardis, crypt, reducePath, True, now, then)
         else:
-            termcolor.cprint('{} in {}, not in {}'.format(os.path.join(path, i), bsets[0]['name'], otherName), missing)
+            termcolor.cprint(f"{os.path.join(path, i)} in {bsets[0]['name']}, not in {otherName}", missing)
 
     for i in names2:
         if i not in names1:
-            termcolor.cprint('{} in {}, not in {}'.format(os.path.join(path, i), otherName, bsets[0]['name']), missing)
+            termcolor.cprint(f"{os.path.join(path, i)} in {otherName}, not in {bsets[0]['name']}", missing)
 
 def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now, then):
     """
@@ -278,7 +278,7 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
         args.password = None
         (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
         password = None

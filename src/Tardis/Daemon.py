@@ -197,7 +197,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         elif encoding == "BSON":
             return Messages.BsonMessages(sock, compress=compress)
         else:
-            message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
+            message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
             sock.sendall(bytes(json.dumps(message), 'utf-8'))
             raise InitFailedException("Unknown encoding: ", encoding)
 
@@ -454,7 +454,7 @@ def runServer():
                 logger.info("Socket server completed")
         logger.info("Ending")
     except Exception as e:
-        logger.critical("Unable to run server: {}".format(e))
+        logger.critical(f"Unable to run server: {e}")
         if args.exceptions:
             logger.exception(e)
 
@@ -535,7 +535,7 @@ def main():
     try:
         logger = setupLogging()
     except Exception as e:
-        print("Unable to initialize logging: {}".format(str(e)), file=sys.stderr)
+        print(f"Unable to initialize logging: {str(e)}", file=sys.stderr)
         if args.exceptions:
             traceback.print_exc()
         sys.exit(1)
@@ -551,7 +551,7 @@ def main():
             daemon = daemonize.Daemonize(app="tardisd", pid=pidfile, action=runServer, user=user, group=group, keep_fds=fds)
             daemon.start()
         except Exception as e:
-            logger.critical("Caught Exception on Daemonize call: {}".format(e))
+            logger.critical(f"Caught Exception on Daemonize call: {e}")
             if args.exceptions:
                 logger.exception(e)
     else:
@@ -561,7 +561,7 @@ def main():
             logger.warning("Killed by Keyboard")
             pass
         except Exception as e:
-            logger.critical("Unable to run server: {}".format(e))
+            logger.critical(f"Unable to run server: {e}")
             if args.exceptions:
                 logger.exception(e)
 

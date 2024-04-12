@@ -321,7 +321,7 @@ def printit(info, name, color, gone):
 
     if args.long:
         if gone:
-            doprint('  %s' % (name), color, eol=True)
+            doprint(f'  {name}', color, eol=True)
         else:
             mode = Util.filemode(info['mode'])
             group = Util.getGroupName(info['gid'])
@@ -344,7 +344,7 @@ def printit(info, name, color, gone):
                 doprint(' %32s ' % (cksum))
             if args.chnlen:
                 doprint(' %-3s ' % (chnlen))
-            doprint('%s' % (name), color, eol=True)
+            doprint(f'{name}', color, eol=True)
     elif args.cksums or args.chnlen or args.inode or args.size:
         doprint(columnfmt % name, color)
         if args.size:
@@ -490,7 +490,7 @@ def findSet(name):
     for i in backupSets:
         if i['name'] == name:
             return i['backupset']
-    doprint("Could not find backupset %s" % name, color=colors['error'], eol=True)
+    doprint(f"Could not find backupset {name}", color=colors['error'], eol=True)
     return -1
 
 def pruneBackupSets(startRange, endRange):
@@ -510,7 +510,7 @@ def pruneBackupSetsByRange():
     """
     setRange = args.range.split(':')
     if len(setRange) > 2:
-        doprint("Invalid range '%s'" % args.range, color=colors['error'], eol=True)
+        doprint(f"Invalid range '{args.range}'", color=colors['error'], eol=True)
         sys.exit(1)
     elif len(setRange) == 1:
         setRange.append(setRange[0])
@@ -548,7 +548,7 @@ def pruneBackupSetsByDateRange(tardis):
     cal = parsedatetime.Calendar()
     daterange = args.daterange.split(':')
     if len(daterange) > 2:
-        doprint("Invalid range '%s'" % args.daterange, color=colors['error'], eol=True)
+        doprint(f"Invalid range '{args.daterange}'", color=colors['error'], eol=True)
         sys.exit(1)
     elif len(daterange) == 1:
         daterange.append('')
@@ -567,7 +567,7 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 startRange = 0
         else:
-            doprint("Invalid time: %s" % daterange[0], color=colors['error'], eol=True)
+            doprint(f"Invalid time: {daterange[0]}", color=colors['error'], eol=True)
             sys.exit(1)
     else:
         startRange = 0
@@ -583,7 +583,7 @@ def pruneBackupSetsByDateRange(tardis):
             else:
                 endRange = sys.maxsize
         else:
-            doprint("Invalid time: %s" % daterange[1], color=colors['error'], eol=True)
+            doprint(f"Invalid time: {daterange[1]}", color=colors['error'], eol=True)
             sys.exit(1)
     else:
         endRange = sys.maxsize
@@ -745,7 +745,7 @@ def main():
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
         args.password = None
 
         (tardis, _, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
@@ -753,7 +753,7 @@ def main():
         setupDisplay(tardis)
 
         if args.headers:
-            doprint("Client: %s    DB: %s" %(args.client, args.database), color=colors['name'], eol=True)
+            doprint(f"Client: {args.client}    DB: {args.database}", color=colors['name'], eol=True)
 
         if args.glob:
             directories = []

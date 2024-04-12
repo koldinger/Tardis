@@ -187,8 +187,8 @@ class Backend:
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
         if not message['message'] == expected:
-            self.logger.critical("Expected {} message, received {}".format(expected, message['message']))
-            raise ProtocolError("Expected {} message, received {}".format(expected, message['message']))
+            self.logger.critical(f"Expected {expected} message, received {message['message']}")
+            raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
     def setXattrAcl(self, inode, device, xattr, acl):
         self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
@@ -540,7 +540,7 @@ class Backend:
                             outfile.close()
 
                     except (librsync.LibrsyncError, Regenerator.RegenerateException) as e:
-                        self.logger.error("Unable to generate signature for inode: {}, checksum: {}: {}".format(inode, chksum, e))
+                        self.logger.error(f"Unable to generate signature for inode: {inode}, checksum: {chksum}: {e}")
                 # TODO: Break the signature out of here.
                 response = {
                     "message": "SIG",
@@ -777,7 +777,7 @@ class Backend:
         return (None, False)
 
     def processPurge(self, message = {}):
-        self.logger.debug("Processing purge message: {}".format(str(message)))
+        self.logger.debug(f"Processing purge message: {str(message)}")
         prevTime = None
         if 'time' in message:
             if message['relative']:
@@ -1086,7 +1086,7 @@ class Backend:
         (dbdir, dbfile) = self.genPaths()
 
         if create and os.path.exists(dbfile):
-            raise InitFailedException("Cannot create client %s.  Already exists" % (client))
+            raise InitFailedException(f"Cannot create client {client}.  Already exists")
 
         self.cache = self.getCacheDir(create)
 
@@ -1186,7 +1186,7 @@ class Backend:
                 self.logger.warning("Staring session %s while previous backup still warning: %s", name, prev['name'])
             else:
                 if checkSession(prev['session']):
-                    raise InitFailedException("Previous backup session still running: {}.  Run with --force to force starting the new backup".format(prev['name']))
+                    raise InitFailedException(f"Previous backup session still running: {prev['name']}.  Run with --force to force starting the new backup")
                 else:
                     self.logger.warning('Previous session for client %s (%s) did not complete.', self.client, prev['session'])
 
@@ -1233,7 +1233,7 @@ class Backend:
         elif encoding == "BSON":
             self.messenger = Messages.BsonMessages(sock, compress=compress)
         else:
-            message = {"status": "FAIL", "error": "Unknown encoding: {}".format(encoding)}
+            message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
             sock.sendall(bytes(json.dumps(message), 'utf-8'))
             raise InitFailedException("Unknown encoding: ", encoding)
 
@@ -1310,7 +1310,7 @@ class Backend:
             fields = self.recvMessage()
             messType    = fields['message']
             if not messType == 'BACKUP':
-                raise InitFailedException("Unknown message type: {}".format(messType))
+                raise InitFailedException(f"Unknown message type: {messType}")
 
             client      = fields['host']            # TODO: Change at client as well.
             clienttime  = fields['time']
@@ -1342,9 +1342,9 @@ class Backend:
                 self.logger.debug("Database File: %s", dbfile)
 
                 if create and os.path.exists(dbfile):
-                    raise Exception("Client %s already exists" % client)
+                    raise Exception(f"Client {client} already exists")
                 elif not create and not os.path.exists(dbfile):
-                    raise Exception("Unknown client: %s" % client)
+                    raise Exception(f"Unknown client: {client}")
 
                 if self.config.requirePW and create and self.config.allowNew:
                     keys = self.doGetKeys()
@@ -1372,7 +1372,7 @@ class Backend:
 
                 disabled = self.db.getConfigValue('Disabled')
                 if disabled is not None and int(disabled) != 0:
-                    raise InitFailedException("Client %s is currently disabled." % client)
+                    raise InitFailedException(f"Client {client} is currently disabled.")
 
                 self.setConfig(self.config)
                 self.startSession(name, force)
