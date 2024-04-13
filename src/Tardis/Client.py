@@ -422,7 +422,7 @@ def logFileInfo(i, c):
             size = x["size"]
         else:
             size = 0
-        size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+        size = Util.fmtSize(size, suffixes=['','KB','MB','GB', 'TB', 'PB'])
         logger.log(logging.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         cname = crypt.encryptPath(name)
         logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))

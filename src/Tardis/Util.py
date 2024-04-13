@@ -73,18 +73,18 @@ except ImportError:
 
 logger = logging.getLogger('UTIL')
 
-def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
+def fmtSize(num, base=1024, suffixes=['bytes','KB','MB','GB', 'TB', 'PB', 'EB']):
     fmt = "%d %s"
     if num is None:
         return 'None'
     num = float(num)
-    for x in formats:
+    for x in suffixes[:-1]:
         #if num < base and num > -base:
         if -base < num < base:
             return (fmt % (num, x)).strip()
         num /= float(base)
         fmt = "%3.1f %s"
-    return (fmt % (num, 'EB')).strip()
+    return (fmt % (num, suffixes[-1])).strip()
 
 def getIntOrNone(config, section, name):
     try:
@@ -335,10 +335,6 @@ def filemode(mode):
     else:
         str += 'T' if mode & stat.S_ISVTX else 'x'
     return str
-
-def getTerminalSize():
-    rows, columns = os.popen('stty size', 'r').read().split()
-    return (int(rows), int(columns))
 
 """
 Retrieve a password.

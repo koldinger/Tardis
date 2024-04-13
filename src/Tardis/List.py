@@ -35,6 +35,7 @@ import stat
 import argparse
 import fnmatch
 import time
+import shutil
 
 import parsedatetime
 import termcolor
@@ -313,7 +314,7 @@ def printit(info, name, color, gone):
     if args.size:
         if info and info['size'] is not None:
             if args.human:
-                fsize = "%8s" % Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
+                fsize = "%8s" % Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
             else:
                 fsize = "%8d" % int(info['size'])
         else:
@@ -330,7 +331,7 @@ def printit(info, name, color, gone):
             nlinks = info['nlinks']
             if info['size'] is not None:
                 if args.human:
-                    size = Util.fmtSize(info['size'], formats=['','KB','MB','GB', 'TB', 'PB'])
+                    size = Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
                 else:
                     size = "%8d" % info['size']
             else:
@@ -611,7 +612,7 @@ def computeColumnWidth(names):
         columns = args.columns
     else:
         if os.isatty(sys.stdout.fileno()):
-            (_, width) = Util.getTerminalSize()
+            (width, _) = shutil.get_terminal_size((80, 32))  # getTerminalSize()
             logger.debug("Setting width to %d", width)
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
             columns = int(width / (longestName + 4))

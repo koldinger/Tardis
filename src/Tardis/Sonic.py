@@ -290,7 +290,7 @@ def listBSets(db, crypt, cache):
             else:
                 status = ''
             #isCurrent = current if bset['backupset'] == last['backupset'] else ''
-            size = Util.fmtSize(bset['bytesreceived'], formats=['', 'KB', 'MB', 'GB', 'TB'])
+            size = Util.fmtSize(bset['bytesreceived'], suffixes=['', 'KB', 'MB', 'GB', 'TB'])
             locked = '*' if bset['locked'] else ' '
 
             print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
@@ -343,7 +343,7 @@ def _path(db, crypt, bset, inode):
 def humanify(size):
     if size is not None:
         if args.human:
-            size = Util.fmtSize(size, formats=['','KB','MB','GB', 'TB', 'PB'])
+            size = Util.fmtSize(size, suffixes=['','KB','MB','GB', 'TB', 'PB'])
     else:
         size = ''
     return size
