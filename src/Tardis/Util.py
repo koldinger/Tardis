@@ -73,7 +73,9 @@ except ImportError:
 
 logger = logging.getLogger('UTIL')
 
-def fmtSize(num, base=1024, suffixes=['bytes','KB','MB','GB', 'TB', 'PB', 'EB']):
+def fmtSize(num, base=1024, suffixes=None):
+    if suffixes is None:
+        suffixes = ['bytes','KB','MB','GB', 'TB', 'PB', 'EB']
     fmt = "%d %s"
     if num is None:
         return 'None'
@@ -93,33 +95,19 @@ def getIntOrNone(config, section, name):
     except Exception:
         return None
 
-# Get group and user names.  Very unixy
-_groups = {}
-_users = {}
-
+@functools.cache
 def getGroupName(gid):
-    if gid in _groups:
-        return _groups[gid]
-    else:
-        group = grp.getgrgid(gid)
-        if group:
-            name = group.gr_name
-            _groups[gid] = name
-            return name
-        else:
-            return None
+    group = grp.getgrgid(gid)
+    if group:
+        return group.gr_name
+    return None
 
+@functools.cache
 def getUserId(uid):
-    if uid in _users:
-        return _users[uid]
-    else:
-        user = pwd.getpwuid(uid)
-        if user:
-            name = user.pw_name
-            _users[uid] = name
-            return name
-        else:
-            return None
+    user = pwd.getpwuid(uid)
+    if user:
+        return user.pw_name
+    return None
 
 # Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
 # then Jan 12, 2014.  Same as ls.
@@ -140,12 +128,11 @@ def stripComments(line):
 def parseInt(x):
     if x.startswith('0x'):
         return int(x[2:], 16)
-    elif x.startswith('0o'):
+    if x.startswith('0o'):
         return int(x[2:], 8)
-    elif x.startswith('0'):
+    if x.startswith('0'):
         return int(x[1:], 8)
-    else:
-        return int(x)
+    return int(x)
 
 # Make a path look short.
 def shortPath(path, width=80):
@@ -189,10 +176,9 @@ def shortPath(path, width=80):
         #print(retPath, len(retPath), path, tail)
         if not path or not tail:
             break
-        elif len(tail) + len(os.sep) + len(retPath) > width:
+        if len(tail) + len(os.sep) + len(retPath) > width:
             break
-        else:
-            retPath = os.path.join(tail, retPath)
+        retPath = os.path.join(tail, retPath)
 
     return "..." + os.sep + retPath
 
@@ -200,22 +186,22 @@ def accumulateStat(stats, name, amount=1):
     if stats:
         stats[name] = stats.setdefault(name, 0) + amount
 
-def setupLogging(verbosity=1, levels=None, format=None, stream=sys.stdout):
+def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout):
     if levels is None:
         levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
 
-    if format is None:
+    if fmt is None:
         if loglevel <= logging.DEBUG:
-            format = "%(log_color)s%(levelname)s%(reset)s : %(filename)s:%(lineno)d: %(message)s"
+            fmt = "%(log_color)s%(levelname)s%(reset)s : %(filename)s:%(lineno)d: %(message)s"
         else:
-            format = "%(log_color)s%(levelname)s%(reset)s : %(message)s"
+            fmt = "%(log_color)s%(levelname)s%(reset)s : %(message)s"
 
     colors = colorlog.default_log_colors.copy()
     colors.update({ 'DEBUG': 'green' })
 
-    formatter = colorlog.TTYColoredFormatter(format, log_colors=colors, stream=stream)
+    formatter = colorlog.TTYColoredFormatter(fmt, log_colors=colors, stream=stream)
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     logging.root.addHandler(handler)
@@ -300,8 +286,7 @@ def matchPath(pattern, path):
 
     if len(pats) or len(dirs):
         return False
-    else:
-        return True
+    return True
 
 def fullPath(name):
     return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
@@ -313,29 +298,33 @@ Not necessary in Python 3, but stat.filemode() doesn't exist in Python 2
 _fmtypes = { stat.S_IFDIR: 'd', stat.S_IFCHR: 'c', stat.S_IFBLK: 'b', stat.S_IFREG: '-', stat.S_IFLNK: 'l', stat.S_IFSOCK: 's', stat.S_IFIFO: 'p' }
 
 def filemode(mode):
-    str = _fmtypes.setdefault(stat.S_IFMT(mode), '?')
-    str += 'r' if mode & stat.S_IRUSR else '-'
-    str += 'w' if mode & stat.S_IWUSR else '-'
+    string = _fmtypes.setdefault(stat.S_IFMT(mode), '?')
+    string += 'r' if mode & stat.S_IRUSR else '-'
+    string += 'w' if mode & stat.S_IWUSR else '-'
     if mode & stat.S_IXUSR:
-        str += 's' if mode & stat.S_ISUID else 'x'
+        string += 's' if mode & stat.S_ISUID else 'x'
     else:
-        str += 's' if mode & stat.S_ISUID else 'x'
+        string += 's' if mode & stat.S_ISUID else 'x'
 
-    str += 'r' if mode & stat.S_IRGRP else '-'
-    str += 'w' if mode & stat.S_IWGRP else '-'
+    string += 'r' if mode & stat.S_IRGRP else '-'
+    string += 'w' if mode & stat.S_IWGRP else '-'
     if mode & stat.S_IXGRP:
-        str += 's' if mode & stat.S_ISGID else 'x'
+        string += 's' if mode & stat.S_ISGID else 'x'
     else:
-        str += 's' if mode & stat.S_ISGID else 'x'
+        string += 's' if mode & stat.S_ISGID else 'x'
 
-    str += 'r' if mode & stat.S_IROTH else '-'
-    str += 'w' if mode & stat.S_IWOTH else '-'
+    string += 'r' if mode & stat.S_IROTH else '-'
+    string += 'w' if mode & stat.S_IWOTH else '-'
     if mode & stat.S_IXOTH:
-        str += 't' if mode & stat.S_ISVTX else 'x'
+        string += 't' if mode & stat.S_ISVTX else 'x'
     else:
-        str += 'T' if mode & stat.S_ISVTX else 'x'
-    return str
+        string += 'T' if mode & stat.S_ISVTX else 'x'
+    return string
 
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 """
 Retrieve a password.
 Either takes a URL, a program name, a plain password string.
@@ -410,8 +399,7 @@ def checkPasswordStrength(password):
         for i in improvements:
             logger.error("    %s", improvements[i])
         return False
-    else:
-        return True
+    return True
 
 # Get the database, cachedir, and crypto object.
 
@@ -424,7 +412,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
     crypt = None
 
     loc = urllib.parse.urlparse(dataLoc)
-    if (loc.scheme == 'http') or (loc.scheme == 'https'):
+    if loc.scheme in ['http', 'https']:
         logger.debug("Creating remote connection to %s", dataLoc)
         # If no port specified, insert the port
         if loc.port is None:
@@ -469,8 +457,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
 
     if retpassword:
         return (tardis, cache, crypt, password)
-    else:
-        return (tardis, cache, crypt)
+    return (tardis, cache, crypt)
 
 # Perform SRP authentication locally against the DB
 def authenticate(db, client, password):
@@ -717,16 +704,16 @@ def checkPermission(pUid, pGid, mode, uid=_uidForPerm, groups=_groupForPerm):
     if stat.S_ISDIR(mode):
         if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
             return True
-        elif (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
+        if (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
             return True
-        elif (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
+        if (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
             return True
     else:
         if (uid == pUid) and (stat.S_IRUSR & mode):
             return True
-        elif (pGid in groups) and (stat.S_IRGRP & mode):
+        if (pGid in groups) and (stat.S_IRGRP & mode):
             return True
-        elif stat.S_IROTH & mode:
+        if stat.S_IROTH & mode:
             return True
     return False
 
@@ -890,12 +877,10 @@ class ArgJsonEncoder(json.JSONEncoder):
         if isinstance(obj, io.IOBase):
             if obj == sys.stderr:
                 return "<stderr>"
-            elif obj == sys.stdout:
+            if obj == sys.stdout:
                 return "<stdout>"
-            else:
-                return "<file>"
-        else:
-            return json.JSONEncoder(self, obj)
+            return "<file>"
+        return json.JSONEncoder(self, obj)
 
 # Stream Handler which will always clear the line before printing
 class ClearingStreamHandler(logging.StreamHandler):
@@ -980,10 +965,9 @@ def hashDir(crypt, files, decrypt=False):
 def asString(a, policy='ignore'):
     if isinstance(a, str):
         return a
-    elif isinstance(a, bytes):
+    if isinstance(a, bytes):
         return a.decode('utf-8', policy)
-    else:
-        return str(a)
+    return str(a)
 
 
 # 'Test' code

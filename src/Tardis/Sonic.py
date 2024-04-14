@@ -206,7 +206,7 @@ def changePassword(crypt, oldpw) :
             logger.exception(e)
         return 1
 
-def moveKeys(db, crypt):
+def moveKeys(db, _):
     try:
         if args.keys is None:
             logger.error("Must specify key file for key manipulation")
@@ -217,7 +217,7 @@ def moveKeys(db, crypt):
         if args.extract:
             (f, c) = db.getKeys()
             if not (f and c):
-                raise Exception("Unable to retrieve keys from server.  Aborting.")
+                raise ValueError("Unable to retrieve keys from server.  Aborting.")
             Util.saveKeys(args.keys, clientId, f, c)
             if args.deleteKeys:
                 db.setKeys(salt, vkey, None, None)
@@ -225,11 +225,10 @@ def moveKeys(db, crypt):
             (f, c) = Util.loadKeys(args.keys, clientId)
             logger.info("Keys: F: %s C: %s", f, c)
             if not (f and c):
-                raise Exception("Unable to retrieve keys from key database.  Aborting.")
+                raise ValueError("Unable to retrieve keys from key database.  Aborting.")
             db.setKeys(salt, vkey, f, c)
             if args.deleteKeys:
                 Util.saveKeys(args.keys, clientId, None, None)
-        return 0
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         return 1
@@ -238,6 +237,7 @@ def moveKeys(db, crypt):
         if args.exceptions:
             logger.exception(e)
         return 1
+    return 0
 
 _cmdLineHash = {}
 _regenerator = None
@@ -312,6 +312,7 @@ def listBSets(db, crypt, cache):
         if args.exceptions:
             logger.exception(e)
         return 1
+    return 0
 
 # cache of paths we've already calculated.
 # the root (0, 0,) is always prepopulated
@@ -463,10 +464,9 @@ def bsetInfo(db, crypt):
 def confirm():
     if not args.confirm:
         return True
-    else:
-        print("Proceed (y/n): ", end='', flush=True)
-        yesno = sys.stdin.readline().strip().upper()
-        return yesno == 'YES' or yesno == 'Y'
+    print("Proceed (y/n): ", end='', flush=True)
+    yesno = sys.stdin.readline().strip().upper()
+    return yesno in ['YES', 'Y']
 
 def doTagging(db, crypt):
     tag = _encryptFilename(args.tag, crypt)
@@ -475,6 +475,7 @@ def doTagging(db, crypt):
     if not args.remove:
         bset = getBackupSet(db, args.backup, args.date, True)
         db.setTag(tag, bset['backupset'])
+    return 0
 
 def doLock(db, lock):
     bset = getBackupSet(db, args.backup, args.date, True)
@@ -484,6 +485,7 @@ def doLock(db, lock):
 
     logger.info("Locking set %s", bset['name'])
     db.setLock(lock, bset['backupset'])
+    return 0
 
 def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
@@ -513,6 +515,8 @@ def purge(db, cache):
         print(f"Purged {int(setsDeleted)} sets, containing {int(filesDeleted)} files")
         removeOrphans(db, cache)
 
+    return 0
+
 def deleteBsets(db, cache):
     if not args.backups:
         logger.error("No backup sets specified")
@@ -534,6 +538,8 @@ def deleteBsets(db, cache):
         print(f"Deleted {int(filesDeleted)} files")
         if args.purge:
             removeOrphans(db, cache)
+
+    return 0
 
 def removeOrphans(db, cache):
     if hasattr(cache, 'removeOrphans'):
@@ -568,6 +574,7 @@ def setConfig(db):
 def setPriority(db):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
     db.setPriority(info['backupset'], args.priority)
+    return 0
 
 def renameSet(db):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
@@ -790,41 +797,41 @@ def main():
             logger.error("Authentication failed.  Bad password")
             if args.exceptions:
                 logger.exception(e)
-            sys.exit(1)
+            return 1
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
             if args.exceptions:
                 logger.exception(e)
-            sys.exit(1)
+            return 1
 
         # Dispatch the command
         if args.command == 'keys':
             return moveKeys(db, crypt)
-        elif args.command == 'list':
+        if args.command == 'list':
             return listBSets(db, crypt, cache)
-        elif args.command == 'files':
+        if args.command == 'files':
             return listFiles(db, crypt)
-        elif args.command == 'info':
+        if args.command == 'info':
             return bsetInfo(db, crypt)
-        elif args.command == 'tag':
+        if args.command == 'tag':
             return doTagging(db, crypt)
-        elif args.command == 'lock':
+        if args.command == 'lock':
             return doLock(db, args.lock)
-        elif args.command == 'purge':
+        if args.command == 'purge':
             return purge(db, cache)
-        elif args.command == 'delete':
+        if args.command == 'delete':
             return deleteBsets(db, cache)
-        elif args.command == 'priority':
+        if args.command == 'priority':
             return setPriority(db)
-        elif args.command == 'rename':
+        if args.command == 'rename':
             return renameSet(db)
-        elif args.command == 'getconfig':
+        if args.command == 'getconfig':
             return getConfig(db)
-        elif args.command == 'setconfig':
+        if args.command == 'setconfig':
             return setConfig(db)
-        elif args.command == 'orphans':
+        if args.command == 'orphans':
             return removeOrphans(db, cache)
-        elif args.command == 'upgrade':
+        if args.command == 'upgrade':
             return 0
     except KeyboardInterrupt:
         pass

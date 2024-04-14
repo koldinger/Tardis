@@ -29,10 +29,24 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+"""
+A class to allow different logging levels to have different logging formats
+"""
 
-class MultiFormatter:
-    def __init__(self, default_fmt = '%(levelname)s: %(message)s', formats=dict(), baseclass=logging.Formatter, **kwargs):
+class MultiFormatter(logging.Formatter):
+    """
+    A class to allow different logging levels to have different logging formats
+    """
+    def __init__(self, default_fmt = '%(levelname)s: %(message)s', formats=None, baseclass=logging.Formatter, **kwargs):
+        """
+        default_fmt:    A string containing the default format to use
+        formats:        A dict containing loggingLevel -> format string for that level
+        baseclass:      Base formatter for logging
+        """
+        super().__init__(default_fmt)
         self.formatters = {}
+        if formats is None:
+            formats = {}
         for i in formats:
             self.formatters[i] = baseclass(formats[i], **kwargs)
         self.defaultFormatter = baseclass(default_fmt, **kwargs)

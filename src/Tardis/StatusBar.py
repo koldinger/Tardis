@@ -42,24 +42,37 @@ _hideCursor = '\x1b[?25l'
 _showCursor = '\x1b[?25h'
 _statusBars = []
 
-def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
-    fmt = "%d %s"
+def fmtSize(num, base=1024, suffixes=None):
+    """
+    Format into something like 4 ->"4 bytes", 4096 -> "4KB"
+    Arguments:
+    num:        The number to convert
+    base:       The base value for each field, eg base^0, base^1, etc
+    formats:    list of formats for each value
+    """
     if num is None:
         return 'None'
+    if suffixes is None:
+        suffixes = ['bytes','KB','MB','GB', 'TB', 'PB', 'EB']
+    fmt = "%d %s"
     num = float(num)
-    for x in formats:
+    for x in suffixes[:-1]:
         #if num < base and num > -base:
         if -base < num < base:
             return (fmt % (num, x)).strip()
         num /= float(base)
         fmt = "%3.1f %s"
-    return (fmt % (num, 'EB')).strip()
+    return (fmt % (num, suffixes[-1])).strip()
 
 
-def _handle_resize(sig, frame):
+def _handle_resize(_, _):
+    """
+    Process a resize event, and change the width of all the status bars
+    Parameters ignored.
+    """
     (width, _) = shutil.get_terminal_size((80, 32))  # getTerminalSize()
-    for i in _statusBars:
-        i.setWidth(width)
+    for sbar in _statusBars:
+        sbar.setWidth(width)
 
 class StatusBarFormatter(string.Formatter):
     def __init__(self):
@@ -71,22 +84,22 @@ class StatusBarFormatter(string.Formatter):
             seconds = time.time() - self.starttime
             if seconds > 3600:
                 return (time.strftime("%H:%M:%S", time.gmtime(seconds)), field_name)
-            else:
-                return (time.strftime("%M:%S", time.gmtime(seconds)), field_name)
-        else:
-            return super().get_field(field_name, args, kwargs)
+            return (time.strftime("%M:%S", time.gmtime(seconds)), field_name)
+        return super().get_field(field_name, args, kwargs)
 
     def convert_field(self, value, conversion):
         if conversion == "B":
             return fmtSize(value)
-        else:
-            return super().convert_field(value, conversion)
+
+        return super().convert_field(value, conversion)
 
 def resetCursor():
     print(_showCursor, end='')
 
 class StatusBar():
-    def __init__(self, base, live={}, formatter=None, delay=0.25, scheduler=None, priority=10):
+    def __init__(self, base, live=None, formatter=None, delay=0.25, scheduler=None, priority=10):
+        if live is None:
+            live = {}
         self.base = base
         self.live = live
         self.trailer = None
@@ -97,7 +110,7 @@ class StatusBar():
         self.scheduler = scheduler if scheduler else sched.scheduler()
         self.priority = priority
 
-        (width, _) = shutil.get_terminal_size((80, 32))
+        (self.width, _) = shutil.get_terminal_size((80, 32))
         _statusBars.append(self)
 
         _handle_resize(None, None)
@@ -107,12 +120,18 @@ class StatusBar():
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
         atexit.register(resetCursor)
 
-    def start(self, delay=0.25, name="StatusBar"):
+    def start(self, name="StatusBar"):
+        """
+        Start the status bar updating
+        """
         self.thread = threading.Thread(name=name, target=self.scheduler.run)
         self.thread.setDaemon(True)
         self.thread.start()
 
     def shutdown(self):
+        """
+        Stop the status bar from further updating
+        """
         self.scheduler.cancel(self.event)
         self.halt = True
         self.clearStatus()
@@ -121,30 +140,56 @@ class StatusBar():
             self.thread.join()
 
     def pTime(self, seconds):
+        """
+        Print the time
+        """
         if seconds > 3600:
             return time.strftime("%H:%M:%S", time.gmtime(seconds))
-        else:
-            return time.strftime("%M:%S", time.gmtime(seconds))
+        return time.strftime("%M:%S", time.gmtime(seconds))
 
     def setWidth(self, width):
+        """
+        Set the width of the status bar
+        """
         self.width = width
 
     def setLiveValues(self, live):
+        """
+        Set a new dictionary to use for live values
+        """
         self.live = live
 
     def setTrailer(self, trailer):
+        """
+        Set a trailing field for the status bar
+        """
         self.trailer = trailer
 
     def setValue(self, key, value):
+        """
+        Set a value to be printed
+        key:    The name of the value
+        value:  The actual value, most likely an int
+        """
         self.values[key] = value
 
     def setValues(self, values):
+        """
+        Set a dict of values into the values array
+        """
         self.values.update(values)
 
-    def processTrailer(self, length, s):
-        return s[:length]
+    def processTrailer(self, length, string):
+        """
+        Process (shorten) the trailer to length, so things can fit.
+        """
+        return string[:length]
 
     def printStatus(self):
+        """
+        Print the status bar.
+        Normally only handled by running thread, not meant to be called externally
+        """
         try:
             output = self.formatter.format(self.base, **{**self.live, **self.values}).encode('utf8', 'backslashreplace').decode('utf8')
             if self.trailer:
@@ -162,6 +207,9 @@ class StatusBar():
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
 
     def clearStatus(self):
+        """
+        Clear the status bar area.   Should only be used after a stop
+        """
         print(_showCursor + _startOfLine + _ansiClearEol, end='')
 
 

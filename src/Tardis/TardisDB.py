@@ -46,6 +46,7 @@ import srp
 import Tardis
 from Tardis import ConnIdLogAdapter
 from Tardis import Rotator
+from Tardis import Util
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -65,8 +66,7 @@ class TardisRow(sqlite3.Row):
         try:
             if self[value] is not None:
                 return self[value]
-            else:
-                return default
+            return default
         except IndexError:
             return default
 
@@ -76,8 +76,7 @@ def authenticate(func):
     def doit(self, *args, **kwargs):
         if self._isAuthenticated():
             return func(self, *args, **kwargs)
-        else:
-            raise NotAuthenticated("Not authenticated to database.")
+        raise NotAuthenticated("Not authenticated to database.")
     return doit
 
 # Be sure to end all these lists with a space.
@@ -204,11 +203,8 @@ class TardisDB:
 
     def needsAuthentication(self):
         """ Return true if a database needs to be authenticated """
-        salt, vkey = self.getSrpValues()
-        if salt:
-            return True
-        else:
-            return False
+        salt, _ = self.getSrpValues()
+        return bool(salt)
 
     def authenticate1(self, uname, srpValueA):
         salt, vkey = self.getSrpValues()
@@ -287,8 +283,7 @@ class TardisDB:
         """
         if isinstance(current, bool):
             return self.currBackupSet if current else self.prevBackupSet
-        else:
-            return current
+        return current
 
     def _getConverter(self, name):
         try:
@@ -300,7 +295,7 @@ class TardisDB:
 
     def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
-            name = 'convert%dto%d' % (i, i + 1)
+            name = f'convert{i}to{i+1}'
             #from schema import name name
             converter = self._getConverter(name)
             self.logger.debug("Running conversion script from version %d, %s", i, name)
@@ -412,7 +407,7 @@ class TardisDB:
         c = self.conn.execute("SELECT COUNT(*) FROM Backups WHERE Name = :name",
                               { "name": name })
         row = c.fetchone()
-        return True if row[0] == 0 else False
+        return (row[0] == 0)
 
     @authenticate
     def getFileInfoByName(self, name, parent, current=True):
@@ -612,8 +607,7 @@ class TardisDB:
         f = self.getFileInfoByPath(name, current, permchecker=permchecker)
         if f:
             return self.getChecksumByName(f["name"], (f["parent"], f["parentdev"]), current)
-        else:
-            return None
+        return None
 
     @authenticate
     def getChecksumInfoByPath(self, name, current=False, permchecker=None):
@@ -621,8 +615,7 @@ class TardisDB:
         cksum = self.getChecksumByPath(name, backupset, permchecker)
         if cksum:
             return self.getChecksumInfo(cksum)
-        else:
-            return None
+        return None
 
     @authenticate
     def getChecksumInfoChainByPath(self, name, current=False, permchecker=None):
@@ -632,8 +625,7 @@ class TardisDB:
         self.logger.debug("Got checksum %s", name)
         if cksum:
             return self.getChecksumInfoChain(cksum)
-        else:
-            return None
+        return None
 
     @authenticate
     def getFirstBackupSet(self, name, current=False):
@@ -711,15 +703,14 @@ class TardisDB:
         return cursor.rowcount
 
     def _getNameId(self, name, insert=True):
-            c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
-            row = c.fetchone()
-            if row:
-                return row[0]
-            elif insert:
-                self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
-                return self.cursor.lastrowid
-            else:
-                return None
+        c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
+        row = c.fetchone()
+        if row:
+            return row[0]
+        if insert:
+            self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
+            return self.cursor.lastrowid
+        return None
 
     @authenticate
     def setNameID(self, files):
@@ -730,6 +721,7 @@ class TardisDB:
     def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
+
         def _xstr(x):
             return x if x is not None else ''
 
@@ -805,8 +797,7 @@ class TardisDB:
         data = self.getChecksumInfo(checksum)
         if data:
             return data['chainlength']
-        else:
-            return -1
+        return -1
         """
         Could do this, but not all versions of SQLite3 seem to support "WITH RECURSIVE" statements
         c = self._execute("WITH RECURSIVE x(n) AS (VALUES(:checksum) UNION SELECT Basis FROM Checksums, x WHERE x.n=Checksums.Checksum) "
@@ -1054,9 +1045,7 @@ class TardisDB:
 
     @authenticate
     def setKeys(self, salt, vkey, filenameKey, contentKey, backup=True):
-        import Tardis.Util as Util      # Import it here, as Util imports TardisDB
         try:
-            os.rename
             self.beginTransaction()
             self.setSrpValues(salt, vkey)
             if filenameKey:
@@ -1243,12 +1232,11 @@ class TardisDB:
 
     @authenticate
     def removeTag(self, tag):
-        nameid = self._getNameID(tag, False)
+        nameid = self._getNameId(tag, False)
         if nameid:
             self.conn.execute("DELETE FROM Tags WHERE NameID = :nameid", {"nameid": nameid})
             return True
-        else:
-            return False
+        return False
 
     @authenticate
     def getTags(self, bset):
@@ -1300,10 +1288,9 @@ class TardisDB:
     def _isAuthenticated(self):
         if self.authenticated:
             return True
-        elif self.srpSrv is not None:
+        if self.srpSrv is not None:
             return self.srpSrv.authenticated()
-        else:
-            return False
+        return False
 
 if __name__ == "__main__":
     db = TardisDB(sys.argv[1])

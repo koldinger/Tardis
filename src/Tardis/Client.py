@@ -59,6 +59,7 @@ import concurrent.futures
 from functools import reduce
 from collections import defaultdict
 from binascii import hexlify
+from dataclasses import dataclass
 
 import magic
 import pid
@@ -188,9 +189,11 @@ config              = None
 cloneDirs           = []
 cloneContents       = {}
 batchMsgs           = []
-metaCache           = Util.bidict()                 # A cache of metadata.  Since many files can have the same metadata, we check that
-                                                    # that we haven't sent it yet.
-newmeta             = []                            # When we encounter new metadata, keep it here until we flush it to the server.
+# A cache of metadata.  Since many files can have the same metadata, we check that
+# that we haven't sent it yet.
+metaCache           = Util.bidict()
+# When we encounter new metadata, keep it here until we flush it to the server.
+newmeta             = []
 
 noCompTypes         = []
 
@@ -222,12 +225,18 @@ stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'da
 report = {}
 
 class InodeEntry:
+    """
+    Dataclass to hold inodes, so we can determine which files they correspond to
+    """
     def __init__(self):
         self.paths = []
         self.numEntries = 0
         self.finfo = None
 
 class InodeDB:
+    """
+    Database of inodes that we currently care about.
+    """
     def __init__(self):
         self.db = defaultdict(InodeEntry)
 
@@ -259,9 +268,11 @@ class InodeDB:
 inodeDB             = InodeDB()
 dirHashes           = {}
 
-# Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
-# will only have a message
 class MessageOnlyFormatter(logging.Formatter):
+    """
+    Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
+    will only have a message
+    """
     def __init__(self, fmt = '%(levelname)s: %(message)s', levels=[logging.INFO]):
         logging.Formatter.__init__(self, fmt)
         self.levels = levels
@@ -271,14 +282,15 @@ class MessageOnlyFormatter(logging.Formatter):
             return record.getMessage()
         return logging.Formatter.format(self, record)
 
-# A custom argument parser to nicely handle argument files, and strip out any blank lines
-# or commented lines
 class CustomArgumentParser(argparse.ArgumentParser):
+    """
+    A custom argument parser to nicely handle argument files, and strip out any blank lines or commented lines
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def convert_arg_line_to_args(self, line):
-        for arg in line.split():
+    def convert_arg_line_to_args(self, arg_line):
+        for arg in arg_line.split():
             if not arg.strip():
                 continue
             if arg[0] == '#':
@@ -286,30 +298,38 @@ class CustomArgumentParser(argparse.ArgumentParser):
             yield arg
 
 class ShortPathStatusBar(StatusBar.StatusBar):
-    def processTrailer(self, width, name):
-        return Util.shortPath(name, width)
-
+    """
+    Extend the status bar class so that it shorten's pathnames into a pathname field
+    """
+    def processTrailer(self, length, name):
+        return Util.shortPath(name, length)
 
 class ProtocolError(Exception):
-    pass
+    """
+    Communications protocol error
+    """
 
 class AuthenticationFailed(Exception):
-    pass
+    """
+    Authentication failure
+    """
 
 class ExitRecursionException(Exception):
     def __init__(self, rootException):
         self.rootException = rootException
 
+@dataclass
 class FakeDirEntry:
-    def __init__(self, dirname, filename):
-        self.name = filename
-        self.path = os.path.join(dirname, filename)
+    dirname: str
+    filename: str
+
+    def path(self):
+        return os.path.join(self.dirname, self.filename)
 
     def stat(self, follow_symlinks=True):
         if follow_symlinks:
             return os.stat(self.path)
-        else:
-            return os.lstat(self.path)
+        return os.lstat(self.path)
 
 def setEncoder(format):
     global encoder, encoding, decoder
@@ -540,8 +560,7 @@ def getInodeDBName(inode):
     (_, name) = inodeDB.get(inode)
     if name:
         return name
-    else:
-        return "Unknown"
+    return "Unknown"
 
 def processDelta(inode, signatures):
     """ Generate a delta and send it """
@@ -673,7 +692,7 @@ def sendContent(inode, reportType):
                 "message":      "CON",
                 "inode":        inode,
                 "encoding":     encoding,
-                "encrypted":    True if iv else False
+                "encrypted":    bool(iv)
             }
 
             # Attempt to open the data source
@@ -1044,8 +1063,7 @@ def getDirContents(dirname, dirstat, excludes=set()):
                         if sub in excludeDirs:
                             logger.debug("%s excluded.  Skipping", sub)
                             continue
-                        else:
-                            subdirs.append(sub)
+                        subdirs.append(sub)
 
                     files.append(fInfo)
             except (IOError, OSError) as e:
@@ -1162,11 +1180,10 @@ def sendBatchMsgs():
     handleResponse(response)
 
 def flushBatchMsgs():
-    if len(batchMsgs):
+    if batchMsgs:
         sendBatchMsgs()
         return True
-    else:
-        return False
+    return False
 
 def sendPurge(relative):
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
@@ -1201,10 +1218,10 @@ def sendDirChunks(path, inode, files):
                 i['name'] = crypt.encryptFilename(i['name'])
 
         message["files"] = chunk
-        message["last"]  = (x + args.dirslice > len(files))
+        message["last"]  = x + args.dirslice > len(files)
         if verbosity > 3:
             logger.debug("---- Sending chunk at %d ----", x)
-        batch = (len(chunk) < args.dirslice)
+        batch = len(chunk) < args.dirslice
         batchMessage(message, batch=batch)
 
     sendDirHash(inode)
@@ -1715,6 +1732,8 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             'full'      : full,
             'create'    : create
     }
+    if name:
+        message['name'] = name
 
     # BACKUP { json message }
     resp = sendAndReceive(message)
@@ -1780,8 +1799,7 @@ def getConnection(server, port):
 def splitList(line):
     if not line:
         return []
-    else:
-        return shlex.split(line.strip())
+    return shlex.split(line.strip())
 
 def checkConfig(c, t):
     # Check things in the config file that might be confusing
@@ -1794,9 +1812,9 @@ def checkConfig(c, t):
 
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
-    def _d(help):
+    def _d(helpstr):
         """ Only print the help message if --debug is specified """
-        return help if args.debug else argparse.SUPPRESS
+        return helpstr if args.debug else argparse.SUPPRESS
 
     _def = 'Default: %(default)s'
 
@@ -2093,19 +2111,20 @@ def pickMode():
             if args.server is None:
                 raise Exception("Remote mode specied without a server")
             return True
-        elif args.local is False or args.local == 'False':
+
+        if args.local is False or args.local == 'False':
             if args.database is None:
                 raise Exception("Local mode specied without a database")
             return False
     else:
         if args.server is not None and args.database is not None:
             raise Exception("Both database and server specified.  Unable to determine mode.   Use --local/--remote switches")
+
         if args.server is not None:
             return False
-        elif args.database is not None:
+        if args.database is not None:
             return True
-        else:
-            raise Exception("Neither database nor remote server is set.   Unable to backup")
+        raise Exception("Neither database nor remote server is set.   Unable to backup")
 
 
 def printReport(repFormat):
@@ -2461,8 +2480,7 @@ def main():
         # Sanity checks.  Enable for debugging.
         if len(cloneContents) != 0:
             logger.warning("Some cloned directories not processed: %d", len(cloneContents))
-            for key in cloneContents:
-                (path, files) = cloneContents[key]
+            for (path, files) in cloneContents.values():
                 print(f"{path}:: {len(files)}")
 
         # This next one is usually non-zero, for some reason.  Enable to debug.

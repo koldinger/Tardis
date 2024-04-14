@@ -97,9 +97,9 @@ def setcolor(line):
                 color = 'red'
             elif c == '+':
                 color = 'green'
-            elif c == '!' or c == '@':
+            elif c in ['!', '@']:
                 color = 'yellow'
-            elif c == '?' or c == '*':
+            elif c in ['?', '*']:
                 color = 'cyan'
             else:
                 color = 'white'
@@ -234,32 +234,32 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
         if dir1 != dir2:
             logger.error("%s Is directory in one, but not other", path)
             return
-        elif dir1:
+
+        if dir1:
             logger.info("%s is a directory", path)
             if args.recurse:
                 diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
             return
-        else:
-            logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
-            #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
-            f1 = regenerator.recoverChecksum(info1['checksum'])
-            if not f1:
-                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
-                return
+        logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
+        #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
+        f1 = regenerator.recoverChecksum(info1['checksum'])
+        if not f1:
+            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+            return
 
-            if bsets[1] is not None:
-                logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
-                f2 = regenerator.recoverChecksum(info2['checksum'])
-                if not f2:
-                    logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
-                    return
-            else:
-                logger.debug("Opening %s", path)
-                try:
-                    f2 = open(path, "rb")
-                except IOError as e:
-                    logger.error("Could not open %s: %s", path, str(e))
-                    return
+        if bsets[1] is not None:
+            logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
+            f2 = regenerator.recoverChecksum(info2['checksum'])
+            if not f2:
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                return
+        else:
+            logger.debug("Opening %s", path)
+            try:
+                f2 = open(path, "rb")
+            except IOError as e:
+                logger.error("Could not open %s: %s", path, str(e))
+                return
 
         runDiff(f1, f2, fName, then, now)
     except Exception as e:

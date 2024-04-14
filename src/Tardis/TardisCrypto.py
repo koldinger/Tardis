@@ -55,18 +55,19 @@ def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencodin
     """
     scheme = int(scheme)
 
-    if scheme == 0:
-        return Crypto_Null(password, client, fsencoding)
-    if scheme == 1:
-        return Crypto_AES_CBC_HMAC__AES_ECB(password, client, fsencoding)
-    if scheme == 2:
-        return Crypto_AES_CBC_HMAC__AES_SIV(password, client, fsencoding)
-    if scheme == 3:
-        return Crypto_AES_GCM__AES_SIV(password, client, fsencoding)
-    if scheme == 4:
-        return Crypto_ChaCha20_Poly1305__AES_SIV(password, client, fsencoding)
-    raise ValueError(f"Unknown Crypto Scheme: {scheme}")
-
+    match scheme:
+        case 0:
+            return Crypto_Null(password, client, fsencoding)
+        case 1:
+            return Crypto_AES_CBC_HMAC__AES_ECB(password, client, fsencoding)
+        case 2:
+            return Crypto_AES_CBC_HMAC__AES_SIV(password, client, fsencoding)
+        case 3:
+            return Crypto_AES_GCM__AES_SIV(password, client, fsencoding)
+        case 4:
+            return Crypto_ChaCha20_Poly1305__AES_SIV(password, client, fsencoding)
+        case _:
+            raise ValueError(f"Unknown Crypto Scheme: {scheme}")
 
 def getCryptoNames(scheme=None):
     """
@@ -78,11 +79,10 @@ def getCryptoNames(scheme=None):
         schemes = [scheme]
 
     names = []
-    for i in schemes:
-        crypto = getCrypto(i, 'password')
-        names.append(f"{i}: {crypto.getName()}")
+    for scheme in schemes:
+        crypto = getCrypto(scheme, 'password')
+        names.append(f"{scheme}: {crypto.getName()}")
     return '\n'.join(names)
-
 
 class HasherMixin:
     hasher = None
@@ -199,7 +199,6 @@ class HashingBlockEncryptor(HasherMixin, BlockEncryptor):
         HasherMixin.__init__(self, cipher, hasher)
 
 class StreamEncryptor:
-
     def __init__(self, cipher):
         self.cipher = cipher
         self.done = False
@@ -588,7 +587,7 @@ if __name__ == '__main__':
         print(f"\nTesting {i}")
         try:
             c = getCrypto(i, 'PassWordXYZ123')
-            print(f"Type: {c._cryptoName}")
+            print(f"Type: {c.getName()}")
             c.genKeys()
 
 

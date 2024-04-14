@@ -90,4 +90,4 @@ def getDefault(var):
 if __name__ == "__main__":
     print(_default_file)
     for i in _defaults:
-        print("%-24s: %s" % (i, getDefault(i)))
+        print(f"{i:-24s}: {getDefault(i)}")

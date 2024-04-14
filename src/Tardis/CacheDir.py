@@ -55,7 +55,6 @@ class CacheDir:
         self.group = group if group else -1
         self.chown = user or group
 
-
         if not os.path.isdir(self.root):
             if create:
                 os.makedirs(self.root)
@@ -122,7 +121,7 @@ class CacheDir:
                     path = os.path.join(path, i)
                     os.chown(path, self.user, self.group)
 
-    def open(self, name, mode, streaming=False):
+    def open(self, name, mode):
         iswrite = mode.startswith('w') or mode.startswith('a')
         if iswrite:
             self.mkdir(name)

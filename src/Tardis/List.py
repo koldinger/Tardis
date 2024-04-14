@@ -218,13 +218,13 @@ def collectDirContents2(tardis, dirList, crypt):
         # If we don't have an entry here, the range ends.
         # OR if the inode is different from the previous
         if prev and ((not d) or (prev['inode'] != d['inode']) or (prev['device'] != d['device'])):
-            if len(dirRange):
+            if dirRange:
                 ranges.append(dirRange)
                 dirRange = []
         if d:
             dirRange.append(bset)
         prev = d
-    if len(dirRange):
+    if dirRange:
         ranges.append(dirRange)
 
     # Now, for each range, populate
@@ -303,20 +303,20 @@ def printit(info, name, color, gone):
             cksum = ''
     if args.chnlen:
         if info and info['chainlength'] is not None:
-            chnlen = "%-3d" % int(info['chainlength'])
+            chnlen = f"{int(info['chainlength']):-3)}"
         else:
             chnlen = ''
     if args.inode:
         if info and info['inode'] is not None:
-            inode = "%8d" % int(info['inode'])
+            inode = f"{int(info['inode']):8d}"
         else:
             inode = ''
     if args.size:
         if info and info['size'] is not None:
             if args.human:
-                fsize = "%8s" % Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
+                fsize = f"8s" % Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
             else:
-                fsize = "%8d" % int(info['size'])
+                fsize = f"{int(info['size']):8}"
         else:
             fsize = ''
 
@@ -333,29 +333,30 @@ def printit(info, name, color, gone):
                 if args.human:
                     size = Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
                 else:
-                    size = "%8d" % info['size']
+                    size = f"{info['size']:8}"
             else:
                 size = ''
-            doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
+            #doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
+            doprint(f"  {mode:9} {nlinks:3} {owner:-8} {group:-8} {size:8} {mtime:12} ", color=colors['name'])
             if args.size:
-                doprint(' %8s ' % (fsize))
+                doprint(f' {fsize:8} ')
             if args.inode:
-                doprint(' %8s ' % (inode))
+                doprint(f' {inode:8} ')
             if args.cksums:
-                doprint(' %32s ' % (cksum))
+                doprint(f' {cksum:32} ')
             if args.chnlen:
-                doprint(' %-3s ' % (chnlen))
+                doprint(f' {chnlen:-3} ')
             doprint(f'{name}', color, eol=True)
     elif args.cksums or args.chnlen or args.inode or args.size:
         doprint(columnfmt % name, color)
         if args.size:
-            doprint(' ' + fsize, color=colors['name'])
+            doprint(f' {fsize}', color=colors['name'])
         if args.inode:
-            doprint(' ' + inode, color=colors['name'])
+            doprint(f' {inode}', color=colors['name'])
         if args.cksums:
-            doprint(' ' + cksum, color=colors['name'])
+            doprint(f' {cksum}', color=colors['name'])
         if args.chnlen:
-            doprint(' ' + chnlen, color=colors['name'])
+            doprint(f' {chnlen}', color=colors['name'])
         doprint(' ', eol=True)
     else:
         column += 1
@@ -372,7 +373,7 @@ def printVersions(fInfos):
     Doesn't actually do the printing, but calls printit to do it.
     """
     global column
-    prevInfo = None        # Previous version's info
+    prevInfo = {}        # Previous version's info
     lSet     = None
     column = 0
 
@@ -396,7 +397,7 @@ def printVersions(fInfos):
             # Check for the error case where a file isn't connected to a checksum.  Not good.
             color = colors['error']
             broken = True
-        elif (prevInfo is None) or (info['checksum'] != prevInfo['checksum']) or \
+        elif prevInfo or (info['checksum'] != prevInfo['checksum']) or \
              ((args.checktimes or args.checkmeta) and (info['mtime'] != prevInfo['mtime'] or info['ctime'] != prevInfo['ctime'])) or \
              (args.checkmeta and (info['uid'] != prevInfo['uid'] or info['gid'] != prevInfo['gid'])):
             if info['chainlength'] == 0 and not info['dir']:
