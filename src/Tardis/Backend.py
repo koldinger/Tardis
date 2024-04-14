@@ -222,8 +222,7 @@ class Backend:
 
         if (size > self.config.cksContent) and (size in self.sizes):
             return CKSUM
-        else:
-            return CONTENT
+        return CONTENT
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -1004,42 +1003,43 @@ class Backend:
             #if transaction:
             #    self.db.beginTransaction()
 
-            if messageType == "DIR":
-                (response, flush) = self.processDir(message)
-            elif messageType == "DHSH":
-                (response, flush) = self.processDirHash(message)
-            elif messageType == "SGR":
-                (response, flush) = self.processSigRequest(message)
-            elif messageType == "SGS":
-                (response, flush) = self.processManySigsRequest(message)
-            elif messageType == "SIG":
-                (response, flush) = self.processSignature(message)
-            elif messageType == "DEL":
-                (response, flush) = self.processDelta(message)
-            elif messageType == "CON":
-                (response, flush) = self.processContent(message)
-            elif messageType == "CKS":
-                (response, flush) = self.processChecksum(message)
-            elif messageType == "CLN":
-                (response, flush) = self.processClone(message)
-            elif messageType == "BATCH":
-                (response, flush) = self.processBatch(message)
-            elif messageType == "PRG":
-                (response, flush) = self.processPurge(message)
-            elif messageType == "CLICONFIG":
-                (response, flush) = self.processClientConfig(message)
-            elif messageType == "COMMANDLINE":
-                (response, flush) = self.processCommandLine(message)
-            elif messageType == "META":
-                (response, flush) = self.processMeta(message)
-            elif messageType == "METADATA":
-                (response, flush) = self.processMetaData(message)
-            elif messageType == "SETKEYS":
-                (response, flush) = self.processSetKeys(message)
-            elif messageType == "DONE":
-                (response, flush) = self.processDone(message)
-            else:
-                raise ProtocolError("Unknown message type", messageType)
+            match messageType:
+                case "DIR":
+                    (response, flush) = self.processDir(message)
+                case "DHSH":
+                    (response, flush) = self.processDirHash(message)
+                case "SGR":
+                    (response, flush) = self.processSigRequest(message)
+                case "SGS":
+                    (response, flush) = self.processManySigsRequest(message)
+                case "SIG":
+                    (response, flush) = self.processSignature(message)
+                case "DEL":
+                    (response, flush) = self.processDelta(message)
+                case "CON":
+                    (response, flush) = self.processContent(message)
+                case "CKS":
+                    (response, flush) = self.processChecksum(message)
+                case "CLN":
+                    (response, flush) = self.processClone(message)
+                case "BATCH":
+                    (response, flush) = self.processBatch(message)
+                case "PRG":
+                    (response, flush) = self.processPurge(message)
+                case "CLICONFIG":
+                    (response, flush) = self.processClientConfig(message)
+                case "COMMANDLINE":
+                    (response, flush) = self.processCommandLine(message)
+                case "META":
+                    (response, flush) = self.processMeta(message)
+                case "METADATA":
+                    (response, flush) = self.processMetaData(message)
+                case "SETKEYS":
+                    (response, flush) = self.processSetKeys(message)
+                case "DONE":
+                    (response, flush) = self.processDone(message)
+                case _:
+                    raise ProtocolError("Unknown message type", messageType)
 
             if response and 'msgid' in message:
                 response['respid'] = message['msgid']
@@ -1441,14 +1441,15 @@ class Backend:
                 message = self.recvMessage()
                 if message is None:
                     raise Exception("No message received")
+
                 if message["message"] == "BYE":
                     if 'error' in message:
                         raise Exception("Client Error: " + message['error'])
                     break
-                else:
-                    (response, flush) = self.processMessage(message)
-                    if response:
-                        self.sendMessage(response)
+
+                (response, flush) = self.processMessage(message)
+                if response:
+                    self.sendMessage(response)
                 if flush:
                     self.db.commit()
 

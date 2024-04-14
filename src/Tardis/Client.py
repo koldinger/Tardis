@@ -1517,35 +1517,36 @@ def handleResponse(response, doPush=True, pause=0):
     try:
         currentResponse = response
         msgtype = response['message']
-        if msgtype == 'ACKDIR':
-            handleAckDir(response)
-        elif msgtype == 'ACKCLN':
-            handleAckClone(response)
-        elif msgtype == 'ACKPRG':
-            pass
-        elif msgtype == 'ACKSUM':
-            handleAckSum(response)
-        elif msgtype == 'ACKMETA':
-            handleAckMeta(response)
-        elif msgtype == 'ACKDHSH':
-            # TODO: Respond
-            pass
-        elif msgtype == 'ACKCLICONFIG':
-            # Ignore
-            pass
-        elif msgtype == 'ACKCMDLN':
-            # Ignore
-            pass
-        elif msgtype == 'ACKDONE':
-            # Ignore
-            pass
-        elif msgtype == 'ACKBTCH':
-            currentBatch = response
-            for ack in response['responses']:
-                handleResponse(ack, doPush=False, pause=0)
-            currentBatch = None
-        else:
-            logger.error("Unexpected response: %s", msgtype)
+        match msgtype:
+            case 'ACKDIR':
+                handleAckDir(response)
+            case 'ACKCLN':
+                handleAckClone(response)
+            case 'ACKPRG':
+                pass
+            case 'ACKSUM':
+                handleAckSum(response)
+            case 'ACKMETA':
+                handleAckMeta(response)
+            case 'ACKDHSH':
+                # TODO: Respond
+                pass
+            case 'ACKCLICONFIG':
+                # Ignore
+                pass
+            case 'ACKCMDLN':
+                # Ignore
+                pass
+            case 'ACKDONE':
+                # Ignore
+                pass
+            case 'ACKBTCH':
+                currentBatch = response
+                for ack in response['responses']:
+                    handleResponse(ack, doPush=False, pause=0)
+                currentBatch = None
+            case _:
+                logger.error("Unexpected response: %s", msgtype)
 
         if doPush:
             pushFiles()

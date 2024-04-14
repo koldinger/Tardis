@@ -321,10 +321,6 @@ def filemode(mode):
         string += 'T' if mode & stat.S_ISVTX else 'x'
     return string
 
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
 """
 Retrieve a password.
 Either takes a URL, a program name, a plain password string.

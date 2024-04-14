@@ -54,12 +54,12 @@ import daemonize
 import colorlog
 
 import Tardis
-from Tardis import Backend
-from Tardis import ConnIdLogAdapter
-from Tardis import Messages
-from Tardis import Util
-from Tardis import Defaults
-from Tardis import Connection
+from . import Backend
+from . import ConnIdLogAdapter
+from . import Messages
+from . import Util
+from . import Defaults
+from . import Connection
 
 DONE    = 0
 CONTENT = 1
@@ -84,7 +84,7 @@ timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
 logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
 skipFile        = Defaults.getDefault('TARDIS_SKIP')
 
-if  os.path.isabs(schemaName):
+if os.path.isabs(schemaName):
     schemaFile = schemaName
 else:
     parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -190,16 +190,17 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         """
         Create the messenger object to handle communications with the client
         """
-        if encoding == "JSON":
-            return Messages.JsonMessages(sock, compress=compress)
-        elif encoding == 'MSGP':
-            return Messages.MsgPackMessages(sock, compress=compress)
-        elif encoding == "BSON":
-            return Messages.BsonMessages(sock, compress=compress)
-        else:
-            message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
-            sock.sendall(bytes(json.dumps(message), 'utf-8'))
-            raise InitFailedException("Unknown encoding: ", encoding)
+        match encoding:
+            case "JSON":
+                return Messages.JsonMessages(sock, compress=compress)
+            case 'MSGP':
+                return Messages.MsgPackMessages(sock, compress=compress)
+            #case "BSON":
+            #     return Messages.BsonMessages(sock, compress=compress)
+            case _:
+                message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
+                sock.sendall(bytes(json.dumps(message), 'utf-8'))
+                raise InitFailedException("Unknown encoding: ", encoding)
 
     def handle(self):
         started = False
@@ -524,7 +525,7 @@ def processArgs():
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
-    return(args, config)
+    return (args, config)
 
 def main():
     global logger, args, config
