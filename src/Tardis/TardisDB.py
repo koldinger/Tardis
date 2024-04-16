@@ -909,7 +909,7 @@ class TardisDB:
             return None
 
         # Retrieve the data corresponding to that tag
-        return self.getBackupSetInfoById(self, bset[0])
+        return self.getBackupSetInfoById(bset[0])
 
     @authenticate
     def getBackupSetInfo(self, name):

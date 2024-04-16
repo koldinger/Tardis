@@ -379,14 +379,14 @@ def recoverName(cksum):
     names = tardis.getNamesForChecksum(cksum)
     #print names
     if names:
-        names = map(crypt.decryptFilename, names)
+        names = list(map(crypt.decryptFilename, names))
         name = names[0]
         if len(names) > 1:
             logger.warning("Multiple (%d) names for checksum %s %s.  Choosing '%s'.", len(names), cksum, map(str, list(names)), name)
         return name
-    else:
-        logger.error("No name discovered for checksum %s", cksum)
-        return cksum
+
+    logger.error("No name discovered for checksum %s", cksum)
+    return cksum
 
 def mkOutputDir(name):
     if os.path.isdir(name):

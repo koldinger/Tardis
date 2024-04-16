@@ -148,11 +148,11 @@ class JsonConnection(ProtocolConnection):
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
 
-class BsonConnection(ProtocolConnection):
-    def __init__(self, host, port, compress, timeout, validate):
-        ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout, validate)
-        # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
-        self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
+#class BsonConnection(ProtocolConnection):
+#   def __init__(self, host, port, compress, timeout, validate):
+#       ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout, validate)
+#       # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
+#       self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
 
 class MsgPackConnection(ProtocolConnection):
     def __init__(self, host, port, compress, timeout, validate):

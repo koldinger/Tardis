@@ -321,10 +321,11 @@ class ExitRecursionException(Exception):
 @dataclass
 class FakeDirEntry:
     dirname: str
-    filename: str
+    name: str
 
+    @property
     def path(self):
-        return os.path.join(self.dirname, self.filename)
+        return os.path.join(self.dirname, self.name)
 
     def stat(self, follow_symlinks=True):
         if follow_symlinks:
@@ -918,7 +919,7 @@ def pushFiles():
                 processDelta(inode, signatures)
             processed.append(inode)
         except Exception as e:
-            logger.error("Unable to backup %s: ", str(i), str(e))
+            logger.error("Unable to backup %s: %s ", str(i), str(e))
 
     # clear it out
     for i in processed:
@@ -1417,7 +1418,7 @@ def setPurgeValues(args):
 
 @functools.lru_cache(maxsize=128)
 def mkExcludePattern(pattern):
-    logger.debug("Excluding {}", pattern)
+    logger.debug("Excluding %s", pattern)
     if not pattern.startswith('/'):
         pattern = '/**/' + pattern
     return wildmatch.translate(pattern)
@@ -1907,7 +1908,8 @@ def processCommandLine():
                         help='Skip directories with valid CACHEDIR.TAG files.  ' + _def)
     excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append', default=splitList(c.get(t, 'ExcludePatterns')),
                         help='Patterns to exclude globally (may be repeated)')
-    excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',                           help='Load patterns from exclude file (may be repeated)')
+    excgrp.add_argument('--exclude-file', '-X',         dest='excludefiles', action='append',
+                        help='Load patterns from exclude file (may be repeated)')
     excgrp.add_argument('--exclude-dir',                dest='excludedirs', action='append', default=splitList(c.get(t, 'ExcludeDirs')),
                         help='Exclude certain directories by path')
 
@@ -1999,7 +2001,7 @@ def parseServerInfo(args):
         sClient = info.path.lstrip('/')
 
     except Exception as e:
-        raise Exception(f"Invalid URL: {args.server} -- {e.message}")
+        raise Exception(f"Invalid URL: {args.server} -- {e}")
 
     server = sServer or args.server
     port = sPort or args.port
@@ -2154,7 +2156,7 @@ def printReport(repFormat):
 
             if d != lastDir:
                 if repFormat == 'dirs' and lastDir:
-                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=dirfmts))
+                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
                 numFiles = 0
                 deltas = 0
                 dataSize = 0
@@ -2168,11 +2170,11 @@ def printReport(repFormat):
 
             if repFormat == 'all' or repFormat is True:
                 if r['sigsize']:
-                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], formats=filefmts), Util.fmtSize(r['sigsize'], formats=filefmts))
+                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts), Util.fmtSize(r['sigsize'], suffixes=filefmts))
                 else:
-                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], formats=filefmts))
+                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts))
         if repFormat == 'dirs' and lastDir:
-            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, formats=dirfmts))
+            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
     else:
         logger.log(logging.STATS, "No files backed up")
 
@@ -2186,7 +2188,11 @@ def lockRun(server, port, client):
     try:
         pidfile.create()
     except pid.PidFileError as e:
+        exceptionLogger.log(e)
         raise Exception(f"Tardis already running: {e}")
+    except Exception as e:
+        exceptionLogger.log(e)
+        raise 
     return pidfile
 
 def mkBackendConfig(jobname):
@@ -2243,7 +2249,7 @@ def runBackend(jobname):
     return conn, backend, backendThread
 
 def main():
-    global starttime, args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
+    global args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
     # Read the command line arguments.
     commandLine = ' '.join(sys.argv) + '\n'
     (args, config, jobname) = processCommandLine()
@@ -2277,6 +2283,7 @@ def main():
 
         # Load any excluded directories
         loadExcludedDirs(args)
+
 
         # Error check the purge parameter.  Disable it if need be
         #if args.purge and not (purgeTime is not None or auto):
@@ -2398,7 +2405,7 @@ def main():
         'hash': h,
         'line': data,
         'size': len(commandLine),
-        'encrypted': True if iv else False
+        'encrypted': bool(iv)
     }
     batchMessage(message)
 

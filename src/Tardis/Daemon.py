@@ -241,7 +241,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             # Create a backend, and run it.
             backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid)
 
-            (started, completed, endtime, orphansRemoved, orphanSize) = backend.runBackup()
+            started, completed, endtime, orphansRemoved, orphanSize = backend.runBackup()
 
             if self.server.profiler:
                 self.logger.info("Stopping Profiler")

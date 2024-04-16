@@ -876,7 +876,7 @@ class ArgJsonEncoder(json.JSONEncoder):
             if obj == sys.stdout:
                 return "<stdout>"
             return "<file>"
-        return json.JSONEncoder(self, obj)
+        return json.JSONEncoder()
 
 # Stream Handler which will always clear the line before printing
 class ClearingStreamHandler(logging.StreamHandler):

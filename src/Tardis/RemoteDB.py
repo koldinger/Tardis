@@ -104,8 +104,8 @@ class RemoteDB:
 
         # Disable insecure requests warning, if verify is disabled.
         # Generates too much output
-        if not self.verify:
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        #if not self.verify:
+        #   requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
         if compress:
             self.headers['Accept-Encoding'] = "deflate"

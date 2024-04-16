@@ -626,7 +626,7 @@ class Backend:
                     #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
                     # Can't use isinstance
-                    if isinstance(basisFile, types.FileType):
+                    if not basisFile.seekable():
                         # TODO: Is it possible to get here?  Is this just dead code?
                         temp = basisFile
                         basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
@@ -1136,7 +1136,7 @@ class Backend:
 
                 if formats:
                     self.logger.debug("Overriding global name formats: %s", formats)
-                    self.formats        = list(map(string.strip, formats.split(',')))
+                    self.formats        = list(map(str.strip, formats.split(',')))
                 if priorities:
                     self.logger.debug("Overriding global priorities: %s", priorities)
                     self.priorities     = list(map(int, priorities.split(',')))
@@ -1230,8 +1230,8 @@ class Backend:
             self.messenger = Messages.JsonMessages(sock, compress=compress)
         elif encoding == 'MSGP':
             self.messenger = Messages.MsgPackMessages(sock, compress=compress)
-        elif encoding == "BSON":
-            self.messenger = Messages.BsonMessages(sock, compress=compress)
+        #elif encoding == "BSON":
+            #self.messenger = Messages.BsonMessages(sock, compress=compress)
         else:
             message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
             sock.sendall(bytes(json.dumps(message), 'utf-8'))
@@ -1252,7 +1252,7 @@ class Backend:
             return(srpSalt, srpVkey, filenameKey, contentKey)
 
         except KeyError as e:
-            raise InitFailedException(e.message)
+            raise InitFailedException(str(e))
 
     def doSrpAuthentication(self):
         """
@@ -1493,4 +1493,4 @@ class Backend:
                 self.db.compact()
                 self.db.close(started)
 
-            return (started, completed, endtime, count, size)
+            return started, completed, endtime, count, size

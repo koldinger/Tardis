@@ -65,7 +65,7 @@ def fmtSize(num, base=1024, suffixes=None):
     return (fmt % (num, suffixes[-1])).strip()
 
 
-def _handle_resize(_, _):
+def _handle_resize(signal, frame):
     """
     Process a resize event, and change the width of all the status bars
     Parameters ignored.

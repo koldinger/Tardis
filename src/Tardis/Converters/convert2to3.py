@@ -39,7 +39,7 @@ from Tardis import CacheDir
 
 version = 2
 
-def upgrade(conn, logger):
+def upgrade(conn, logger, db):
     convertutils.checkVersion(conn, version, logger)
 
     conn.execute("ALTER TABLE Files ADD COLUMN XattrId INTEGER")
@@ -104,4 +104,4 @@ if __name__ == "__main__":
         db = "tardis.db"
 
     conn = sqlite3.connect(db)
-    upgrade(conn, logger)
+    upgrade(conn, logger, db)
