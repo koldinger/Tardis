@@ -1294,7 +1294,7 @@ class TardisDB:
 
 if __name__ == "__main__":
     db = TardisDB(sys.argv[1])
-    db.newBackupSet(sys.argv[2], str(uuid.uuid1()))
+    db.newBackupSet(sys.argv[2], str(uuid.uuid1()), 25, time.time())
     rec =  db.getFileInfoByName("File1", 1)
     print(rec)
     print(db.getFileInfoByInode(2))
