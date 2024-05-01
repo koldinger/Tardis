@@ -359,10 +359,14 @@ def checkMessage(message, expected):
         logger.critical(f"Expected {expected} message, received {message['message']}")
         raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
-def filelist(dirname, excludes):
+def filelist(dirname, excludes, skipfile):
     """ List the files in a directory, except those that match something in a set of patterns """
     files = os.scandir(dirname)
     for f in files:
+        # if it's a directory, and there's a skipfile in it, then just skip the directory
+        if f.is_dir() and os.path.lexists(os.path.join(f, skipfile)):
+            continue
+        # If the file name is not in the excludes list, yield it.
         if all(not p.match(f.path) for p in excludes):
             yield f
 
@@ -1048,7 +1052,7 @@ def getDirContents(dirname, dirstat, excludes=set()):
     subdirs = []
 
     try:
-        for f in filelist(dirname, localExcludes):
+        for f in filelist(dirname, localExcludes, args.skipfile):
             try:
                 fInfo = mkFileInfo(f)
                 if fInfo and (args.crossdev or device == fInfo['dev']):
@@ -1272,6 +1276,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             logger.debug("%s excluded.  Skipping", dir)
             return
 
+        # Return if a skipfile exists.   Realistically this 
+        # Should happen because we should have handled it in the filelist for then
+        # directory, above, but just in case, check it
         if os.path.lexists(os.path.join(dir, args.skipfile)):
             logger.debug("Skip file found.  Skipping %s", dir)
             return
@@ -2223,17 +2230,14 @@ def mkBackendConfig(jobname):
     bc.allowNew        = True
     bc.allowUpgrades   = True
 
-    if args.dbdir:
-        bc.dbdir       = args.dbdir
-    else:
-        bc.dbdir       = bc.basedir
+    bc.dbdir       = args.dbdir or bc.basedir
 
     bc.allowOverrides  = True
     bc.linkBasis       = config.getboolean(j, 'LinkBasis')
 
     bc.requirePW       = config.getboolean(j, 'RequirePassword')
 
-    bc.sxip            = args.skipfile
+    bc.skip            = args.skipfile
 
     bc.exceptions      = args.exceptions
 
