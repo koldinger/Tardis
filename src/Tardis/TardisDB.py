@@ -1209,6 +1209,22 @@ class TardisDB:
         self.conn.execute("UPDATE Backups SET Vacuumed = :vacuumed WHERE BackupSet = :backup", {"backup": self.currBackupSet, "vacuumed": vacuumed})
 
     @authenticate
+    def enumerateChecksums(self, isFile=True):
+        c = self.conn.execute("SELECT Checksum FROM Checksums WHERE IsFile = :isfile", {"isfile": int(isFile)})
+
+        while True:
+            batch = c.fetchmany(self.chunksize)
+            if not batch:
+                break
+            for row in batch:
+                yield row[0]
+
+    @authenticate
+    def getChecksumCount(self, isFile=True):
+        r = self._executeWithResult("SELECT COUNT(*) FROM Checksums WHERE IsFile = :isfile", {"isfile": int(isFile)})
+        return r[0]
+
+    @authenticate
     def deleteChecksum(self, checksum):
         self.logger.debug("Deleting checksum: %s", checksum)
         self.cursor.execute("DELETE FROM Checksums WHERE Checksum = :checksum", {"checksum": checksum})

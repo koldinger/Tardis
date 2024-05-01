@@ -36,6 +36,7 @@ import shutil
 import configparser
 
 from functools import reduce
+from pathlib import Path
 
 from Tardis import Defaults
 
@@ -174,6 +175,22 @@ class CacheDir:
             return True
         except OSError:
             return False
+
+    def enumerateDirs(self):
+        root = Path(self.root)
+        yield from self._enumerateDirs(self.parts, root)
+
+    def _enumerateDirs(self, parts, root):
+        for i in root.iterdir():
+            if i.is_dir() and len(i.name) == self.partsize:
+                if parts > 1:
+                    yield from self._enumerateDirs(parts - 1, i)
+                else:
+                    yield i
+
+    def enumerateFiles(self):
+        for i in self.enumerateDirs():
+            yield from i.iterdir()
 
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
