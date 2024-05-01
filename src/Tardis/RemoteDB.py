@@ -44,7 +44,7 @@ import requests
 import requests_cache
 
 import Tardis
-from Tardis import TardisDB
+from . import TardisDB
 
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)

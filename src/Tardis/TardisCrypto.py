@@ -42,7 +42,7 @@ from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
 import Cryptodome.Random
 
-from Tardis import Defaults
+from . import Defaults
 
 DEF_CRYPTO_SCHEME = 4
 MAX_CRYPTO_SCHEME = 4

@@ -43,11 +43,11 @@ import xattr
 import posix1e
 
 import Tardis
-from Tardis import TardisDB
-from Tardis import Regenerator
-from Tardis import Util
-from Tardis import Config
-from Tardis import Defaults
+from . import TardisDB
+from . import Regenerator
+from . import Util
+from . import Config
+from . import Defaults
 
 logger  = None
 crypt = None

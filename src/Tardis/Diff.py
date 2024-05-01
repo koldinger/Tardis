@@ -39,11 +39,11 @@ import termcolor
 import binaryornot.check
 
 import Tardis
-from Tardis import Util
-from Tardis import Regenerator
-from Tardis import Defaults
-from Tardis import Config
-from Tardis import TardisDB
+from . import Util
+from . import Regenerator
+from . import Defaults
+from . import Config
+from . import TardisDB
 
 logger = None
 args = None

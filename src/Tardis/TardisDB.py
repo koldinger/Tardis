@@ -44,9 +44,9 @@ from binascii import hexlify, unhexlify
 import srp
 
 import Tardis
-from Tardis import ConnIdLogAdapter
-from Tardis import Rotator
-from Tardis import Util
+from . import ConnIdLogAdapter
+from . import Rotator
+from . import Util
 
 # Exception classes
 class AuthenticationException(Exception):

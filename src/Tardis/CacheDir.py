@@ -38,7 +38,7 @@ import configparser
 from functools import reduce
 from pathlib import Path
 
-from Tardis import Defaults
+from . import Defaults
 
 logger = logging.getLogger("CacheDir")
 

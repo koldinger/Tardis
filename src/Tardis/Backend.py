@@ -42,16 +42,16 @@ import types
 import uuid
 from datetime import datetime
 
-from Tardis import CacheDir
-from Tardis import CompressedBuffer
-from Tardis import ConnIdLogAdapter
-from Tardis import Defaults
-from Tardis import librsync
-from Tardis import Messages
-from Tardis import Regenerator
-from Tardis import TardisCrypto
-from Tardis import TardisDB
-from Tardis import Util
+from . import CacheDir
+from . import CompressedBuffer
+from . import ConnIdLogAdapter
+from . import Defaults
+from . import librsync
+from . import Messages
+from . import Regenerator
+from . import TardisCrypto
+from . import TardisDB
+from . import Util
 
 DONE    = 0
 CONTENT = 1

@@ -244,7 +244,7 @@ class UncompressedBufferedReader(BufferedReader):
 
 if __name__ == "__main__":
     import time
-    from Tardis import Util
+    from . import Util
     print(f"Opening {sys.argv[1]}")
     #line = x.get()
     readsize = 4 * 1024 * 1024

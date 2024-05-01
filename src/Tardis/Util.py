@@ -57,13 +57,13 @@ import passwordmeter
 import colorlog
 import parsedatetime
 
-from Tardis import Connection
-from Tardis import CompressedBuffer
-from Tardis import Defaults
-from Tardis import TardisDB
-from Tardis import TardisCrypto
-from Tardis import CacheDir
-from Tardis import RemoteDB
+from . import Connection
+from . import CompressedBuffer
+from . import Defaults
+from . import TardisDB
+from . import TardisCrypto
+from . import CacheDir
+from . import RemoteDB
 
 try:
     import genzshcomp

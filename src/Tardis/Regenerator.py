@@ -33,9 +33,9 @@ import logging
 import tempfile
 import shutil
 
-from Tardis import CompressedBuffer
+from . import CompressedBuffer
 
-from Tardis import librsync
+from . import librsync
 
 
 class RegenerateException(Exception):

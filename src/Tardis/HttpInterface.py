@@ -48,10 +48,10 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 
 import Tardis
-from Tardis import TardisDB
-from Tardis import Util
-from Tardis import CacheDir
-from Tardis import Defaults
+from . import TardisDB
+from . import Util
+from . import CacheDir
+from . import Defaults
 
 basedir     = Defaults.getDefault('TARDIS_DB')
 dbname      = Defaults.getDefault('TARDIS_DBNAME')

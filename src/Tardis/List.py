@@ -41,10 +41,10 @@ import parsedatetime
 import termcolor
 
 import Tardis
-from Tardis import Util
-from Tardis import Defaults
-from Tardis import Config
-from Tardis import TardisDB
+from . import Util
+from . import Defaults
+from . import Config
+from . import TardisDB
 
 columns = None
 columnfmt = None
@@ -377,7 +377,9 @@ def printVersions(fInfos):
     lSet     = None
     column = 0
 
+    print(fInfos.keys())
     for bset in backupSets:
+        print(bset['backupset'])
         info = fInfos[bset['backupset']]
         color = None
         new = False
@@ -418,7 +420,9 @@ def printVersions(fInfos):
         # Skip out if we're not printing something here
         # Bascially we stay if we're print everything or it's a new file
         # OR if we're printing deletions and we disappered
-        if args.versions == 'last' or args.versions == 'none' or (args.versions == 'change' and not (new or gone or broken)) or (gone and not args.deletions) or (broken and not args.broken):
+        if args.versions in ['last' 'none'] or \
+            (args.versions == 'change' and not (new or gone or broken)) or \
+            (not args.deletions and gone) or (not args.broken and broken):
             continue
 
         logger.debug("Bset: %s", bset)

@@ -69,17 +69,17 @@ import colorlog
 from pathmatch import wildmatch
 
 import Tardis
-from Tardis import TardisCrypto
-from Tardis import CompressedBuffer
-from Tardis import Connection
-from Tardis import Util
-from Tardis import Defaults
-from Tardis import librsync
-from Tardis import MultiFormatter
-from Tardis import StatusBar
-from Tardis import Backend
-from Tardis import ThreadedScheduler
-#from Tardis import Throttler
+from . import TardisCrypto
+from . import CompressedBuffer
+from . import Connection
+from . import Util
+from . import Defaults
+from . import librsync
+from . import MultiFormatter
+from . import StatusBar
+from . import Backend
+from . import ThreadedScheduler
+#from . import Throttler
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
