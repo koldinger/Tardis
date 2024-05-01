@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -373,7 +373,7 @@ def printVersions(fInfos):
     Doesn't actually do the printing, but calls printit to do it.
     """
     global column
-    prevInfo = {}        # Previous version's info
+    prevInfo = None
     lSet     = None
     column = 0
 
@@ -397,7 +397,7 @@ def printVersions(fInfos):
             # Check for the error case where a file isn't connected to a checksum.  Not good.
             color = colors['error']
             broken = True
-        elif prevInfo or (info['checksum'] != prevInfo['checksum']) or \
+        elif (prevInfo is None) or (info['checksum'] != prevInfo['checksum']) or \
              ((args.checktimes or args.checkmeta) and (info['mtime'] != prevInfo['mtime'] or info['ctime'] != prevInfo['ctime'])) or \
              (args.checkmeta and (info['uid'] != prevInfo['uid'] or info['gid'] != prevInfo['gid'])):
             if info['chainlength'] == 0 and not info['dir']:
