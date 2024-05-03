@@ -79,6 +79,7 @@ from . import MultiFormatter
 from . import StatusBar
 from . import Backend
 from . import ThreadedScheduler
+from . import Protocol
 #from . import Throttler
 
 features = Tardis.check_features()
@@ -810,7 +811,7 @@ def sendDirHash(inode):
     (h,s) = dirHashes.setdefault(i, (_defaultHash, 0))
 
     message = {
-        'message': 'DHSH',
+        'message': Protocol.Commands.DHSH,
         'inode'  : inode,
         'hash'   : h,
         'size'   : s
@@ -1122,7 +1123,7 @@ def handleAckClone(message):
 def makeCloneMessage():
     global cloneDirs
     message = {
-        'message': 'CLN',
+        'message': Protocol.Commands.CLN,
         'clones': cloneDirs
     }
     cloneDirs = []
@@ -1192,7 +1193,7 @@ def flushBatchMsgs():
 
 def sendPurge(relative):
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
-    message =  { 'message': 'PRG' }
+    message =  { 'message': Protocol.Commands.PRG }
     if purgePriority:
         message['priority'] = purgePriority
     if purgeTime:
@@ -1205,7 +1206,7 @@ def sendDirChunks(path, inode, files):
     if crypt.encrypting():
         path = crypt.encryptPath(path)
     message = {
-        'message': 'DIR',
+        'message': Protocol.Commands.DIR,
         'path'   : path,
         'inode'  : list(inode),
     }
@@ -1234,7 +1235,7 @@ def sendDirChunks(path, inode, files):
 def makeMetaMessage():
     global newmeta
     message = {
-        'message': 'META',
+        'message': Protocol.Commands.META,
         'metadata': newmeta
         }
     newmeta = []
@@ -1517,7 +1518,7 @@ def handleResponse(response, doPush=True, pause=0):
     # TODO: REMOVE THIS DEBUG CODE and the pause parameter
     if pause:
         subs = ""
-        if response.get('message') == 'ACKBTCH':
+        if response.get('message') == Protocol.Responses.ACKDIR:
             subs = "-- " + " ".join(map(lambda x: x.get('message', 'NONE') + " (" + str(x.get('respid', -1)) + ")" , response['responses']))
         logger.warning("Sleeping for %d seconds.  Do your thing: %d %s %s", pause, response.get('respid', -1), response.get('message', 'NONE'), subs)
         time.sleep(pause)
@@ -1526,29 +1527,18 @@ def handleResponse(response, doPush=True, pause=0):
         currentResponse = response
         msgtype = response['message']
         match msgtype:
-            case 'ACKDIR':
+            case Protocol.Responses.ACKDIR:
                 handleAckDir(response)
-            case 'ACKCLN':
+            case Protocol.Responses.ACKCLN:
                 handleAckClone(response)
-            case 'ACKPRG':
-                pass
-            case 'ACKSUM':
+            case Protocol.Responses.ACKSUM:
                 handleAckSum(response)
-            case 'ACKMETA':
+            case Protocol.Responses.ACKMETA:
                 handleAckMeta(response)
-            case 'ACKDHSH':
-                # TODO: Respond
+            case Protocol.Responses.ACKPRG | Protocol.Responses.ACKDHSH | Protocol.Responses.ACKCLICONFIG | \
+                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKDONE:
                 pass
-            case 'ACKCLICONFIG':
-                # Ignore
-                pass
-            case 'ACKCMDLN':
-                # Ignore
-                pass
-            case 'ACKDONE':
-                # Ignore
-                pass
-            case 'ACKBTCH':
+            case Protocol.Responses.ACKBTCH:
                 currentBatch = response
                 for ack in response['responses']:
                     handleResponse(ack, doPush=False, pause=0)
@@ -1599,7 +1589,7 @@ def batchMessage(message, batch=True, flush=False, response=True):
 def sendDirEntry(parent, device, files):
     # send a fake root directory
     message = {
-        'message': 'DIR',
+        'message': Protocol.Commands.DIR,
         'files': files,
         'path' : None,
         'inode': [parent, device],
@@ -1685,7 +1675,7 @@ def doSrpAuthentication(response):
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
         message = {
-            'message': 'AUTH1',
+            'message': Protocol.Commands.AUTH1,
             'srpUname': base64.b64encode(bytes(srpUname, 'utf8')),           # Probably unnecessary, uname == client
             'srpValueA': base64.b64encode(srpValueA),
             }
@@ -1708,7 +1698,7 @@ def doSrpAuthentication(response):
         logger.debug("Authentication Challenge response: %s", hexlify(srpValueM))
 
         message = {
-            'message': 'AUTH2',
+            'message': Protocol.Commands.AUTH2,
             'srpValueM': base64.b64encode(srpValueM)
         }
 
@@ -2405,7 +2395,7 @@ def main():
     data = iv + encrypt.encrypt(bytes(commandLine, 'utf8')) + encrypt.finish() + encrypt.digest()
 
     message = {
-        'message': 'COMMANDLINE',
+        'message': Protocol.Commands.COMMANDLINE,
         'hash': h,
         'line': data,
         'size': len(commandLine),

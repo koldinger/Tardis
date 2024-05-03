@@ -36,11 +36,10 @@ import logging.config
 import os
 import pprint
 import shutil
-import string
 import tempfile
-import types
 import uuid
 from datetime import datetime
+from enum import IntEnum
 
 from . import CacheDir
 from . import CompressedBuffer
@@ -52,13 +51,15 @@ from . import Regenerator
 from . import TardisCrypto
 from . import TardisDB
 from . import Util
+from . import Protocol
 
-DONE    = 0
-CONTENT = 1
-CKSUM   = 2
-DELTA   = 3
-REFRESH = 4                     # Perform a full content update
-LINKED  = 5                     # Check if it's already linked
+class SendDataType(IntEnum):
+    DONE    = 0
+    CONTENT = 1
+    CKSUM   = 2
+    DELTA   = 3
+    REFRESH = 4                     # Perform a full content update
+    LINKED  = 5                     # Check if it's already linked
 
 config = None
 args   = None
@@ -212,6 +213,7 @@ class Backend:
 
     sizes = set()
     sizesLoaded = False
+
     def checkForSize(self, size):
         if not self.sizesLoaded:
             self.logger.debug("Loading sizes")
@@ -221,8 +223,8 @@ class Backend:
             self.sizesLoaded = True
 
         if (size > self.config.cksContent) and (size in self.sizes):
-            return CKSUM
-        return CONTENT
+            return SendDataType.CKSUM
+        return SendDataType.CONTENT
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -260,7 +262,7 @@ class Backend:
             else:
                 self.db.insertFile(f, parent)
                 self.setXattrAcl(inode, device, xattr, acl)
-            retVal = DONE
+            retVal = SendDataType.DONE
         else:       # Not a directory, it's a file
             # Check to see if there's an updated version.
             if not self.lastCompleted:
@@ -296,22 +298,22 @@ class Backend:
                             self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
                         if self.full and old['chainlength'] != 0:
-                            retVal = REFRESH
+                            retVal = SendDataType.REFRESH
                         else:
-                            retVal = DONE       # we're done either way
+                            retVal = SendDataType.DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
                         #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
                         self.setXattrAcl(inode, device, xattr, acl)
-                        retVal = CONTENT
+                        retVal = SendDataType.CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
                 elif (osize == fsize) and (old["checksum"] is not None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = CKSUM
+                    retVal = SendDataType.CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
                      ((old["basis"] is not None) and (old["chainlength"]) >= self.maxChain):
@@ -323,7 +325,7 @@ class Backend:
                     # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = REFRESH
+                    retVal = SendDataType.REFRESH
                 else:
                     # Otherwise, let's just get the delta
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
@@ -331,9 +333,9 @@ class Backend:
                     self.setXattrAcl(inode, device, xattr, acl)
                     if self.full:
                         # Full backup, request the full version anyhow.
-                        retVal = CONTENT
+                        retVal = SendDataType.CONTENT
                     else:
-                        retVal = DELTA
+                        retVal = SendDataType.DELTA
                         basis = old['checksum']
             else:           # if old (i.e., if not old)
                 # Create a new record for this file
@@ -366,12 +368,12 @@ class Backend:
                             #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                             if old["checksum"] is not None:
                                 self.db.setChecksum(inode, device, old['checksum'])
-                                retVal = DONE
+                                retVal = SendDataType.DONE
                             else:
                                 retVal = self.checkForSize(f['size'])
                         else:
                             # otherwise
-                            retVal = CKSUM
+                            retVal = SendDataType.CKSUM
                     else:
                         # TODO: Lookup based on inode.
                         #self.logger.debug("No old file.")
@@ -437,14 +439,15 @@ class Backend:
             #elif res == 1: content.append(inode)
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
-            if res == LINKED:
+            if res == SendDataType.LINKED:
                 # Determine if this fileid is already in one of the queues
                 if not filter(lambda x: fileId in x, queues):
-                    queues[DONE].add(fileId)
-            elif res == DELTA:
-                queues[DELTA].add((fileId, basis))
+                    queues[SendDataType.DONE].add(fileId)
+            elif res == SendDataType.DELTA:
+                queues[SendDataType.DELTA].add((fileId, basis))
             else:
                 queues[res].add(fileId)
+
             if 'xattr' in f:
                 xattr = f['xattr']
                 # Check to see if we have this checksum
@@ -454,7 +457,7 @@ class Backend:
 
 
         response = {
-            "message"   : "ACKDIR",
+            "message"   : Protocol.Responses.ACKDIR,
             "status"    : "OK",
             "path"      : data["path"],
             "inode"     : data["inode"],
@@ -480,7 +483,7 @@ class Backend:
             self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         self.db.updateDirChecksum(inode, cksid)
         response = {
-            "message" : "ACKDHSH",
+            "message" : Protocol.Responses.ACKDHSH,
             "status"  : "OK"
         }
         return (response, False)
@@ -492,7 +495,7 @@ class Backend:
             self.logger.debug("ProcessManySigRequests: %s %s %s", inode, dev, checksum)
             self.sendSignature(inode, dev, checksum)
         response = {
-            'message': "SIG",
+            'message': Protocol.Commands.SIG,
             'status' : "DONE"
         }
         return(response, True)
@@ -542,7 +545,7 @@ class Backend:
                         self.logger.error(f"Unable to generate signature for inode: {inode}, checksum: {chksum}: {e}")
                 # TODO: Break the signature out of here.
                 response = {
-                    "message": "SIG",
+                    "message": Protocol.Commands.SIG,
                     "inode": (inode, dev),
                     "status": "OK",
                     "encoding": self.messenger.getEncoding(),
@@ -560,7 +563,7 @@ class Backend:
 
         if response is None:
             response = {
-                "message": "SIG",
+                "message": Protocol.Commands.SIG,
                 "inode": inode,
                 "status": "FAIL"
             }
@@ -713,7 +716,7 @@ class Backend:
                     self.logger.exception(e)
                 content.append(f['inode'])
         message = {
-            "message": "ACKSUM",
+            "message": Protocol.Responses.ACKSUM,
             "status" : "OK",
             "done"   : done,
             "content": content,
@@ -745,7 +748,7 @@ class Backend:
                     self.logger.exception(e)
                 content.append(cksum)
         message = {
-            'message': 'ACKMETA',
+            'message': Protocol.Responses.ACKMETA,
             'content': content,
             'done': done
         }
@@ -799,9 +802,9 @@ class Backend:
             self.logger.info("Purged %d files in %d backup sets", files, sets)
             if files:
                 self.purged = True
-            return ({"message": "ACKPRG", "status": "OK"}, True)
+            return ({"message": Protocol.Responses.ACKPRG, "status": "OK"}, True)
         else:
-            return ({"message": "ACKPRG", "status": "FAIL"}, True)
+            return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
 
     def processClone(self, message):
         """ Clone an entire directory """
@@ -845,7 +848,7 @@ class Backend:
             else:
                 #self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append(inoDev)
-        return ({"message" : "ACKCLN", "done" : done, 'content' : content }, True)
+        return ({"message" : Protocol.Responses.ACKCLN, "done" : done, 'content' : content }, True)
 
 
     _sequenceNumber = 0
@@ -929,7 +932,7 @@ class Backend:
                 responses.append(response)
 
         response = {
-            'message': 'ACKBTCH',
+            'message': Protocol.Responses.ACKBTCH,
             'responses': responses
         }
         self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
@@ -946,7 +949,7 @@ class Backend:
         ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
         self.db.setConfigValue('CryptoScheme', cryptoScheme)
         response = {
-            'message': 'ACKSETKEYS',
+            'message': Protocol.Responses.ACKSETKEYS,
             'response': 'OK' if ret else 'FAIL'
         }
         return (response, True)
@@ -957,7 +960,7 @@ class Backend:
             self.logger.debug("Received client config: %s", clientConfig)
             self.db.setClientConfig(clientConfig)
         response = {
-            'message': 'ACKCLICONFIG',
+            'message': Protocol.Responses.ACKCLICONFIG,
             'saved': self.saveConfig
         }
         return (response, False)
@@ -965,7 +968,7 @@ class Backend:
     def processDone(self, message):
         self.done = True
         response = {
-            'message': 'ACKDONE'
+            'message': Protocol.Responses.ACKDONE
         }
         return (response, True)
 
@@ -989,7 +992,7 @@ class Backend:
         self.db.setCommandLine(cksid)
 
         response = {
-            'message': 'ACKCMDLN'
+            'message': Protocol.Responses.ACKCMDLN
         }
         return (response, False)
 
@@ -1004,39 +1007,39 @@ class Backend:
             #    self.db.beginTransaction()
 
             match messageType:
-                case "DIR":
+                case Protocol.Commands.DIR:
                     (response, flush) = self.processDir(message)
-                case "DHSH":
+                case Protocol.Commands.DHSH:
                     (response, flush) = self.processDirHash(message)
-                case "SGR":
+                case Protocol.Commands.SGR:
                     (response, flush) = self.processSigRequest(message)
-                case "SGS":
+                case Protocol.Commands.SGS:
                     (response, flush) = self.processManySigsRequest(message)
-                case "SIG":
+                case Protocol.Commands.SIG:
                     (response, flush) = self.processSignature(message)
-                case "DEL":
+                case Protocol.Commands.DEL:
                     (response, flush) = self.processDelta(message)
-                case "CON":
+                case Protocol.Commands.CON:
                     (response, flush) = self.processContent(message)
-                case "CKS":
+                case Protocol.Commands.CKS:
                     (response, flush) = self.processChecksum(message)
-                case "CLN":
+                case Protocol.Commands.CLN:
                     (response, flush) = self.processClone(message)
-                case "BATCH":
+                case Protocol.Commands.BATCH:
                     (response, flush) = self.processBatch(message)
-                case "PRG":
+                case Protocol.Commands.PRG:
                     (response, flush) = self.processPurge(message)
-                case "CLICONFIG":
+                case Protocol.Commands.CLICONFIG:
                     (response, flush) = self.processClientConfig(message)
-                case "COMMANDLINE":
+                case Protocol.Commands.COMMANDLINE:
                     (response, flush) = self.processCommandLine(message)
-                case "META":
+                case Protocol.Commands.META:
                     (response, flush) = self.processMeta(message)
-                case "METADATA":
+                case Protocol.Commands.METADATA:
                     (response, flush) = self.processMetaData(message)
-                case "SETKEYS":
+                case Protocol.Commands.SETKEYS:
                     (response, flush) = self.processSetKeys(message)
-                case "DONE":
+                case Protocol.Commands.DONE:
                     (response, flush) = self.processDone(message)
                 case _:
                     raise ProtocolError("Unknown message type", messageType)
