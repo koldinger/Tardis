@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,19 +37,20 @@ import datetime
 import pprint
 import urllib.parse
 import functools
+import collections
 
 import parsedatetime
 import srp
 
 import Tardis
-from . import Util
-from . import Defaults
-from . import TardisDB
-from . import TardisCrypto
-from . import CacheDir
-from . import RemoteDB
-from . import Regenerator
-from . import Config
+from Tardis import Util
+from Tardis import Defaults
+from Tardis import TardisDB
+from Tardis import TardisCrypto
+from Tardis import CacheDir
+from Tardis import RemoteDB
+from Tardis import Regenerator
+from Tardis import Config
 
 # from icecream import ic
 
@@ -327,6 +328,7 @@ def _decryptFilename(name, crypt):
 
 @functools.lru_cache(maxsize=1024)
 def _path(db, crypt, bset, inode):
+    print(f"_Path: {inode}")
     global _paths
     if inode in _paths:
         return _paths[inode]
@@ -461,11 +463,12 @@ def bsetInfo(db, crypt):
     if printed:
         print("\n * Purgeable numbers are estimates only")
 
-def confirm():
+def confirm(message='Proceed (y/n): '):
     if not args.confirm:
         return True
-    print("Proceed (y/n): ", end='', flush=True)
-    yesno = sys.stdin.readline().strip().upper()
+    #jprint(message, end='', flush=True)
+    #yesno = sys.stdin.readline().strip().upper()
+    yesno = input(message).strip().upper()
     return yesno in ['YES', 'Y']
 
 def doTagging(db, crypt):
@@ -551,6 +554,86 @@ def removeOrphans(db, cache):
     else:
         count, size, rounds = Util.removeOrphans(db, cache)
     print(f"Removed {int(count)} orphans, for {Util.fmtSize(size)}, in {int(rounds)} rounds")
+
+def checkSanity(db, cache, crypt):
+    if not isinstance(db, TardisDB.TardisDB):
+        print("DB must be on the local system for sanity checking")
+        return
+
+    try:
+        print("Checking backup sanity.   Scanning for files")
+        cachefiles = list(cache.enumerateFiles())
+        cacheNames = set([x.stem for x in cachefiles])
+        print(f"{len(cacheNames)} files found")
+        print("Scanning for checksums")
+        checksums = set(db.enumerateChecksums())
+        print(f"{len(checksums)} checksums found")
+
+        filesets = collections.defaultdict(list)
+
+        for i in cachefiles:
+            filesets[i.stem].append(i.suffix)
+
+        # Compare the sets, using set arithmetic.   Anything in the first that's not in the second is left.
+        # Go both ways, to get ones in the DB, and ones in the cache.
+        inCache = sorted(list(cacheNames - checksums))
+        inDB    = sorted(list(checksums - cacheNames))
+
+        print("Calculating groupings")
+        groupings = collections.Counter()
+        for i in filesets.values():
+            k = tuple(sorted(i))
+            groupings[k] += 1
+
+        print(f"{len(inCache)} files in the store which don't have a matching DB entry")
+        print(f"{len(inDB)} files in the DB which don't have a matching store entry")
+
+
+        for (k, v) in groupings.items():
+            match k:
+                case ('',):
+                    print(f"{v} files with only data (no metadata or signature, often ACL or Xattr)")
+                case ('.meta', '.sig') | ('.meta') | ('.sig'):
+                    print(f"{v} files with no data")
+                case ('', '.meta'):
+                    print(f"{v} files without a signature")
+                case ('', '.sig'):
+                    print(f"{v} files without metadata")
+                case ('', '.meta', '.sig'):
+                    print(f"{v} fully populated files")
+                case x:
+                    print(f"{v} files with unknown files types : {x}")
+
+        # If we found something, let's talk about it.
+        if inCache or inDB:
+            if args.details:
+                #width, _ = shutil.get_terminal_size((132, 24))
+                if inCache:
+                    print("Unmatched files in store:")
+                    for i in inCache:
+                        print(f"  {i}  {Util.fmtSize(cache.size(i))}")
+                if inDB:
+                    print('Unmatched checksums in DB')
+                    for i in inDB:
+                        names = db.getNamesForChecksum(i)
+                        names = map(crypt.decryptFilename, names)
+                        print(i, names)
+
+            # And get rid of it, 
+            if args.cleanup:
+                if args.confirm():
+                    for i in inCache:
+                        for suffix in filesets[i]:
+                            cache.remove(i + suffix)
+                        db.beginTransaction()
+                        for i in inDB:
+                            db.removeChecksumReferences(i)
+                            db.deleteChecksum(i)
+                        db.commit()
+    except Exception as e:
+        logger.exception(e)
+
+    return True
 
 def _printConfigKey(db, key):
     value = db.getConfigValue(key)
@@ -675,6 +758,10 @@ def parseArgs() -> argparse.Namespace:
     lockGroup.add_argument("--lock", "-L",     dest='lock', default=True, action='store_true',      help='Lock the set(s)')
     lockGroup.add_argument("--unlock", "-U",   dest='lock', default=True, action='store_false',     help='Unlock the set(s)')
 
+    sanityParser = argparse.ArgumentParser(add_help=False)
+    sanityParser.add_argument("--details", dest='details', default=False, action=Util.StoreBoolean, help="Print mismatched files")
+    sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=Util.StoreBoolean, help="Delete mismatched files")
+
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
     subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
@@ -692,6 +779,7 @@ def parseArgs() -> argparse.Namespace:
     subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
     subs.add_parser('priority',     parents=[common, priorityParser, bsetParser],           help='Set backupset priority')
     subs.add_parser('rename',       parents=[common, renameParser, bsetParser],             help='Rename a backup set')
+    subs.add_parser('sanity',       parents=[common, sanityParser, cnfParser],              help='Perform a sanity check')
     subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
     parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
@@ -805,34 +893,37 @@ def main():
             return 1
 
         # Dispatch the command
-        if args.command == 'keys':
-            return moveKeys(db, crypt)
-        if args.command == 'list':
-            return listBSets(db, crypt, cache)
-        if args.command == 'files':
-            return listFiles(db, crypt)
-        if args.command == 'info':
-            return bsetInfo(db, crypt)
-        if args.command == 'tag':
-            return doTagging(db, crypt)
-        if args.command == 'lock':
-            return doLock(db, args.lock)
-        if args.command == 'purge':
-            return purge(db, cache)
-        if args.command == 'delete':
-            return deleteBsets(db, cache)
-        if args.command == 'priority':
-            return setPriority(db)
-        if args.command == 'rename':
-            return renameSet(db)
-        if args.command == 'getconfig':
-            return getConfig(db)
-        if args.command == 'setconfig':
-            return setConfig(db)
-        if args.command == 'orphans':
-            return removeOrphans(db, cache)
-        if args.command == 'upgrade':
-            return 0
+        match args.command:
+            case 'keys':
+                return moveKeys(db, crypt)
+            case 'list':
+                return listBSets(db, crypt, cache)
+            case 'files':
+                return listFiles(db, crypt)
+            case 'info':
+                return bsetInfo(db, crypt)
+            case 'tag':
+                return doTagging(db, crypt)
+            case 'lock':
+                return doLock(db, args.lock)
+            case 'purge':
+                return purge(db, cache)
+            case 'delete':
+                return deleteBsets(db, cache)
+            case 'priority':
+                return setPriority(db)
+            case 'rename':
+                return renameSet(db)
+            case 'getconfig':
+                return getConfig(db)
+            case 'setconfig':
+                return setConfig(db)
+            case 'orphans':
+                return removeOrphans(db, cache)
+            case 'sanity':
+                return checkSanity(db, cache, crypt)
+            case 'upgrade':
+                return 0
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException:
@@ -845,7 +936,6 @@ def main():
     finally:
         if db:
             db.close()
-
 
 if __name__ == "__main__":
     main()
