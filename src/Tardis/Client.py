@@ -433,7 +433,7 @@ def processChecksums(inodes):
         inode, checksum = job
         files.append({ "inode": inode, "checksum": checksum })
     message = {
-        "message": "CKS",
+        "message": Protocol.Commands.CKS,
         "files": files
     }
 
@@ -454,7 +454,7 @@ def logFileInfo(i, c):
         logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
-    checkMessage(response, 'ACKSUM')
+    checkMessage(response, Protocol.Responses.ACKSUM)
     logfiles = logger.isEnabledFor(logging.FILES)
 
     done    = response.setdefault('done', {})
@@ -497,7 +497,7 @@ def prefetchSigFiles(inodes):
     signatures = {}
 
     message = {
-        "message": "SGS",
+        "message": Protocol.Commands.SGS,
         "inodes": inodes
     }
     setMessageID(message)
@@ -624,7 +624,7 @@ def processDelta(inode, signatures):
                 encrypt, iv, = makeEncryptor()
                 Util.accumulateStat(stats, 'delta')
                 message = {
-                    "message": "DEL",
+                    "message": Protocol.Commands.DEL,
                     "inode": inode,
                     "size": filesize,
                     "checksum": checksum,
@@ -695,7 +695,7 @@ def sendContent(inode, reportType):
                 return
             encrypt, iv, = makeEncryptor()
             message = {
-                "message":      "CON",
+                "message":      Protocol.Commands.CON,
                 "inode":        inode,
                 "encoding":     encoding,
                 "encrypted":    bool(iv)
@@ -776,7 +776,7 @@ def sendContent(inode, reportType):
         exceptionLogger.log(e)
 
 def handleAckMeta(message):
-    checkMessage(message, 'ACKMETA')
+    checkMessage(message, Protocol.Responses.ACKMETA)
     content = message.setdefault('content', {})
     # Ignore the done field.
     #done    = message.setdefault('done', {})
@@ -787,7 +787,7 @@ def handleAckMeta(message):
 
         encrypt, iv = makeEncryptor()
         message = {
-            "message": "METADATA",
+            "message": Protocol.Commands.METADATA,
             "checksum": cks,
             "encrypted": True if iv else False
         }
@@ -843,7 +843,7 @@ allDone    = []
 def handleAckDir(message):
     global allContent, allDelta, allCkSum, allRefresh, allDone
 
-    checkMessage(message, 'ACKDIR')
+    checkMessage(message, Protocol.Responses.ACKDIR)
 
     content = message.setdefault("content", {})
     done    = message.setdefault("done", {})
@@ -1084,7 +1084,7 @@ def getDirContents(dirname, dirstat, excludes=set()):
     return (files, subdirs, excludes)
 
 def handleAckClone(message):
-    checkMessage(message, 'ACKCLN')
+    checkMessage(message, Protocol.Responses.ACKCLN)
     if verbosity > 2:
         logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
@@ -1133,7 +1133,7 @@ def sendClones():
     message = makeCloneMessage()
     setMessageID(message)
     response = sendAndReceive(message)
-    checkMessage(response, 'ACKCLN')
+    checkMessage(response, Protocol.Responses.ACKCLN)
     handleAckClone(response)
 
 def flushClones():
@@ -1155,7 +1155,7 @@ def sendBatchMsgs():
     else:
         logger.debug("Sending %d batch messages", len(batchMsgs))
         message = {
-            'message'  : 'BATCH',
+            'message'  : Protocol.Commands.BATCH,
             'batchsize': batchSize,
             'batch'    : batchMsgs
         }
@@ -1169,7 +1169,7 @@ def sendBatchMsgs():
         batchMsgs = []
 
         response = sendAndReceive(message)
-        checkMessage(response, 'ACKBTCH')
+        checkMessage(response, Protocol.Responses.ACKBTCH)
         respSize = len(response['responses'])
         logger.debug("Got response.  %d responses", respSize)
         if respSize != batchSize:
@@ -1498,7 +1498,7 @@ def sendKeys(password, client, includeKeys=True):
     #salt, vkey = TardisCrypto.createSRPValues(password, client)
 
     (salt, vkey) = srp.create_salted_verification_key(client, password)
-    message = { "message": "SETKEYS",
+    message = { "message": Protocol.Commands.SETKEYS,
                 "filenameKey": f,
                 "contentKey": c,
                 "srpSalt": salt,
@@ -1506,7 +1506,7 @@ def sendKeys(password, client, includeKeys=True):
                 "cryptoScheme": crypt.getCryptoScheme()
               }
     response = sendAndReceive(message)
-    checkMessage(response, 'ACKSETKEYS')
+    checkMessage(response, Protocol.Responses.ACKSETKEYS)
     if response['response'] != 'OK':
         logger.error("Could not set keys")
 
@@ -1658,7 +1658,7 @@ def doSendKeys(password):
     (f, c) = crypt.getKeys()
     #salt, vkey = crypt.createSRPValues(password, args.client)
     (salt, vkey) = srp.create_salted_verification_key(args.client, password)
-    message = { "message": "SETKEYS",
+    message = { "message": Protocol.Commands.SETKEYS,
                 "filenameKey": f,
                 "contentKey": c,
                 "srpSalt": salt,
@@ -2411,7 +2411,7 @@ def main():
             a['password'] = '-- removed --'
         jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
         message = {
-            "message": "CLICONFIG",
+            "message": Protocol.Commands.CLICONFIG,
             "args":    jsonArgs
         }
         batchMessage(message)
@@ -2449,7 +2449,7 @@ def main():
             else:
                 sendPurge(True)
         message = {
-            "message": "DONE"
+            "message": Protocol.Commands.DONE
         }
         batchMessage(message, batch=False, flush=True)
 

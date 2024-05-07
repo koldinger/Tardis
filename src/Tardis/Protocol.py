@@ -62,3 +62,4 @@ class Responses(StrEnum):
     ACKCMDLN = auto()
     ACKDONE = auto()
     ACKBTCH = auto()
+    INIT = auto()
