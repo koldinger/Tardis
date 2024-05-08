@@ -327,7 +327,6 @@ def _decryptFilename(name, crypt):
 
 @functools.lru_cache(maxsize=1024)
 def _path(db, crypt, bset, inode):
-    print(f"_Path: {inode}")
     global _paths
     if inode in _paths:
         return _paths[inode]

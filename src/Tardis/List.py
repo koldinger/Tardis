@@ -377,9 +377,7 @@ def printVersions(fInfos):
     lSet     = None
     column = 0
 
-    print(fInfos.keys())
     for bset in backupSets:
-        print(bset['backupset'])
         info = fInfos[bset['backupset']]
         color = None
         new = False
