@@ -38,19 +38,20 @@ import pprint
 import urllib.parse
 import functools
 import collections
+import stat
 
 import parsedatetime
 import srp
 
 import Tardis
-from Tardis import Util
-from Tardis import Defaults
-from Tardis import TardisDB
-from Tardis import TardisCrypto
-from Tardis import CacheDir
-from Tardis import RemoteDB
-from Tardis import Regenerator
-from Tardis import Config
+from . import Util
+from . import Defaults
+from . import TardisDB
+from . import TardisCrypto
+from . import CacheDir
+from . import RemoteDB
+from . import Regenerator
+from . import Config
 
 # from icecream import ic
 
@@ -380,7 +381,7 @@ def listFiles(db, crypt):
             name = os.path.join(path, name)
 
         if args.long:
-            mode  = Util.filemode(fInfo['mode'])
+            mode  = stat.filemode(fInfo['mode'])
             group = Util.getGroupName(fInfo['gid'])
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])

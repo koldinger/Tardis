@@ -281,7 +281,9 @@ The actual work of printing the data.
 """
 def printit(info, name, color, gone):
     global column
-    annotation = ''
+    fsize = chnlen = inode = cksum = annotation = ''
+    mode = group = owner = mtime = nlinks = ''
+
     if args.annotate and info is not None:
         if info['dir']:
             annotation = '/'
@@ -296,39 +298,29 @@ def printit(info, name, color, gone):
     if column == 0:
         doprint('  ')
 
-    if args.cksums:
-        if info and info['checksum']:
+    if info:
+        if args.cksums and info['checksum']:
             cksum = info['checksum']
-        else:
-            cksum = ''
-    if args.chnlen:
-        if info and info['chainlength'] is not None:
-            chnlen = f"{int(info['chainlength']):-3)}"
-        else:
-            chnlen = ''
-    if args.inode:
-        if info and info['inode'] is not None:
+        if args.chnlen and info['chainlength'] is not None:
+            chnlen = f"{int(info['chainlength']):<3}"
+        if args.inode and info['inode'] is not None:
             inode = f"{int(info['inode']):8d}"
-        else:
-            inode = ''
-    if args.size:
-        if info and info['size'] is not None:
+        if args.size and info['size'] is not None:
             if args.human:
-                fsize = f"8s" % Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
+                fsize = f"{Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB']):8}"
             else:
                 fsize = f"{int(info['size']):8}"
-        else:
-            fsize = ''
+
+        mode = stat.filemode(info['mode'])
+        group = Util.getGroupName(info['gid'])
+        owner = Util.getUserId(info['uid'])
+        mtime = Util.formatTime(info['mtime'])
+        nlinks = info['nlinks']
 
     if args.long:
         if gone:
             doprint(f'  {name}', color, eol=True)
         else:
-            mode = Util.filemode(info['mode'])
-            group = Util.getGroupName(info['gid'])
-            owner = Util.getUserId(info['uid'])
-            mtime = Util.formatTime(info['mtime'])
-            nlinks = info['nlinks']
             if info['size'] is not None:
                 if args.human:
                     size = Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB'])
@@ -337,7 +329,7 @@ def printit(info, name, color, gone):
             else:
                 size = ''
             #doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
-            doprint(f"  {mode:9} {nlinks:3} {owner:-8} {group:-8} {size:8} {mtime:12} ", color=colors['name'])
+            doprint(f"  {mode:9} {nlinks:3} {owner:8} {group:8} {size:8} {mtime:12} ", color=colors['name'])
             if args.size:
                 doprint(f' {fsize:8} ')
             if args.inode:
@@ -345,7 +337,7 @@ def printit(info, name, color, gone):
             if args.cksums:
                 doprint(f' {cksum:32} ')
             if args.chnlen:
-                doprint(f' {chnlen:-3} ')
+                doprint(f' {chnlen:<3} ')
             doprint(f'{name}', color, eol=True)
     elif args.cksums or args.chnlen or args.inode or args.size:
         doprint(columnfmt % name, color)
