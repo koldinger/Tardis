@@ -104,7 +104,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 20
+_schemaVersion = 21
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """

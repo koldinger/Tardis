@@ -139,6 +139,7 @@ CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, Device ASC, LastSe
 CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, Device ASC, Parent ASC, ParentDev ASC, FirstSet ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS FileChksumIndex ON Files(ChecksumID ASC);
 
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority, FilesFull, FilesDelta, BytesReceived) VALUES (".Initial", 0, 0, 0, 1, 0, 0, 0, 0);
     
@@ -149,6 +150,6 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "20");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "21");
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");
