@@ -32,7 +32,6 @@
 import os
 import os.path
 import sys
-import pprint
 import parsedatetime
 import datetime
 import re
@@ -49,7 +48,7 @@ Examples:
 def findMount(path):
     origpath = os.path.realpath(path)
     path = origpath
-    while path is not '/':
+    while path != '/':
         path, f = os.path.split(path)
         if os.path.ismount(path):
             return path, f
@@ -82,7 +81,7 @@ def main():
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} target", file=sys.stderr)
         print(usage, file=sys.stderr)
-        raise Exception("Usage")
+        sys.exit(0)
 
     # Get the target
     target = sys.argv[1]
@@ -97,7 +96,7 @@ def main():
     allSets = sorted(os.scandir(root), key=lambda x: x.stat().st_mtime)
 
     # Check if we're of the form +/-Number
-    relative = re.match('[-+]\d+$', target)
+    relative = re.match(r'[-+]\d+$', target)
     if relative:
         x = findRelative(target, current, allSets)
         print(os.path.join(x.path, me))
@@ -123,10 +122,11 @@ def main():
     else:
         raise Exception(f"Can't parse date: {target}")
 
+    sys.exit(1)
+
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

@@ -57,7 +57,7 @@ import socket
 import concurrent.futures
 
 from functools import reduce
-from collections import defaultdict
+from collections import defaultdict, deque
 from binascii import hexlify
 from dataclasses import dataclass
 
@@ -184,8 +184,10 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
 verbosity           = 0
 
 conn                = None
-args                = None
+args: argparse.Namespace
 config              = None
+
+directoryQueue = deque()
 
 cloneDirs           = []
 cloneContents       = {}
@@ -199,8 +201,8 @@ newmeta             = []
 noCompTypes         = []
 
 crypt               = None
-logger              = None
-exceptionLogger     = None
+logger: logging.Logger
+exceptionLogger: Util.ExceptionLogger
 
 srpUsr              = None
 
@@ -318,6 +320,13 @@ class AuthenticationFailed(Exception):
 class ExitRecursionException(Exception):
     def __init__(self, rootException):
         self.rootException = rootException
+
+@dataclass
+class DirectoryJob:
+    subdir: str
+    top: bool
+    newdepth: int
+    subexcludes: list[str]
 
 @dataclass
 class FakeDirEntry:
@@ -1257,7 +1266,7 @@ def setProgress(mode, name):
 
 processedDirs = set()
 
-def recurseTree(dir, top, depth=0, excludes=[]):
+def processDirectory(dir, top, depth=0, excludes=[]):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
     global dirHashes
 
@@ -1349,9 +1358,9 @@ def recurseTree(dir, top, depth=0, excludes=[]):
             files = oldFiles = newFiles = None
             # Process the sub directories
             for subdir in sorted(subdirs):
-                recurseTree(subdir, top, newdepth, subexcludes)
-    except ExitRecursionException:
-        raise
+                #recurseTree(subdir, top, newdepth, subexcludes)
+                dirJob = DirectoryJob(subdir, top, newdepth, subexcludes)
+                directoryQueue.appendleft(dirJob)
     except OSError as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
         raise ExitRecursionException(e)
@@ -1364,6 +1373,35 @@ def recurseTree(dir, top, depth=0, excludes=[]):
         # TODO: Clean this up
         exceptionLogger.log(e)
         raise ExitRecursionException(e)
+
+def processDirectories(rootdir, directories):
+    logger.debug("Processing directories %s", directories)
+    for directory in directories:
+        # skip if already processed.
+        if directory in processedDirs:
+            continue
+        # Create the fake directory entry(s) for this.
+        if rootdir:
+            createPrefixPath(rootdir, directory)
+            root = rootdir
+        else:
+            (root, name) = os.path.split(directory)
+            f = mkFileInfo(FakeDirEntry(root, name))
+            sendDirEntry(0, 0, [f])
+        # And run the directory
+        dirJob = DirectoryJob(directory, root, args.maxdepth, globalExcludes)
+        directoryQueue.append(dirJob)
+
+    try:
+        while True:
+            dirJob = directoryQueue.popleft()
+            processDirectory(dirJob.subdir, dirJob.top, dirJob.newdepth, dirJob.subexcludes)
+    except IndexError:
+        logger.info("Done with directory traversal")
+        pass
+    except Exception as e:
+        logger.error(e)
+        exceptionLogger.log(e)
 
 
 def cloneDir(inode, device, files, path, info=None):
@@ -2377,7 +2415,6 @@ def main():
         logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
 
-
     # Initialize the progress bar, if requested
     if args.progress:
         statusBar = initProgressBar(scheduler)
@@ -2420,20 +2457,7 @@ def main():
     exc = None
     try:
         # Now, process all the actual directories
-        for directory in directories:
-            # skip if already processed.
-            if directory in processedDirs:
-                continue
-            # Create the fake directory entry(s) for this.
-            if rootdir:
-                createPrefixPath(rootdir, directory)
-                root = rootdir
-            else:
-                (root, name) = os.path.split(directory)
-                f = mkFileInfo(FakeDirEntry(root, name))
-                sendDirEntry(0, 0, [f])
-            # And run the directory
-            recurseTree(directory, root, depth=args.maxdepth, excludes=globalExcludes)
+        processDirectories(rootdir, directories)
 
         # If any metadata, clone or batch requests still lying around, send them now
         if newmeta:

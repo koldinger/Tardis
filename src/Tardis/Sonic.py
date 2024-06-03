@@ -38,6 +38,7 @@ import pprint
 import urllib.parse
 import functools
 import collections
+import stat
 
 import parsedatetime
 import srp
@@ -380,7 +381,7 @@ def listFiles(db, crypt):
             name = os.path.join(path, name)
 
         if args.long:
-            mode  = Util.filemode(fInfo['mode'])
+            mode  = stat.filemode(fInfo['mode'])
             group = Util.getGroupName(fInfo['gid'])
             owner = Util.getUserId(fInfo['uid'])
             mtime = Util.formatTime(fInfo['mtime'])

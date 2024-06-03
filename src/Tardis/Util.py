@@ -291,35 +291,6 @@ def matchPath(pattern, path):
 def fullPath(name):
     return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
 
-"""
-Filemode printer.  Translated from Perl's File::Strmode function (from cpan.org)
-Not necessary in Python 3, but stat.filemode() doesn't exist in Python 2
-"""
-_fmtypes = { stat.S_IFDIR: 'd', stat.S_IFCHR: 'c', stat.S_IFBLK: 'b', stat.S_IFREG: '-', stat.S_IFLNK: 'l', stat.S_IFSOCK: 's', stat.S_IFIFO: 'p' }
-
-def filemode(mode):
-    string = _fmtypes.setdefault(stat.S_IFMT(mode), '?')
-    string += 'r' if mode & stat.S_IRUSR else '-'
-    string += 'w' if mode & stat.S_IWUSR else '-'
-    if mode & stat.S_IXUSR:
-        string += 's' if mode & stat.S_ISUID else 'x'
-    else:
-        string += 's' if mode & stat.S_ISUID else 'x'
-
-    string += 'r' if mode & stat.S_IRGRP else '-'
-    string += 'w' if mode & stat.S_IWGRP else '-'
-    if mode & stat.S_IXGRP:
-        string += 's' if mode & stat.S_ISGID else 'x'
-    else:
-        string += 's' if mode & stat.S_ISGID else 'x'
-
-    string += 'r' if mode & stat.S_IROTH else '-'
-    string += 'w' if mode & stat.S_IWOTH else '-'
-    if mode & stat.S_IXOTH:
-        string += 't' if mode & stat.S_ISVTX else 'x'
-    else:
-        string += 'T' if mode & stat.S_ISVTX else 'x'
-    return string
 
 """
 Retrieve a password.

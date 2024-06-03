@@ -104,7 +104,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 20
+_schemaVersion = 21
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -783,7 +783,7 @@ class TardisDB:
     def getNamesForChecksum(self, checksum):
         """ Recover a list of names that represent a checksum """
         self.logger.debug("Recovering name(s) for checksum %s", checksum)
-        c = self._execute('SELECT DISTINCT Name FROM Names JOIN Files ON Names.NameID = Files.NameID JOIN Checksums ON Checksums.ChecksumID = Files.ChecksumID '
+        c = self._execute('SELECT Name FROM Names JOIN Files ON Names.NameID = Files.NameID JOIN Checksums ON Checksums.ChecksumID = Files.ChecksumID '
                           'WHERE Checksums.Checksum = :checksum',
                           {'checksum': checksum})
         names = []
