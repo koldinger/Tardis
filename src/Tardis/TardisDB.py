@@ -165,7 +165,12 @@ class TardisDB:
         self.backup = backup
         self.numbackups = numbackups
 
-        conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
+        try:
+            conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
+        except sqlite3.Error as e:
+            self.logger.critical(f"Unable to open database: {e}")
+            raise
+
         conn.text_factory = lambda x: x.decode('utf-8', 'backslashreplace')
         conn.row_factory = TardisRow
 
@@ -179,11 +184,11 @@ class TardisDB:
                     script = f.read()
                     self.conn.executescript(script)
             except IOError:
-                self.logger.error("Could not read initialization script %s", initialize)
+                self.logger.critical("Could not read initialization script %s", initialize)
                 #self.logger.exception(e)
                 raise
             except sqlite3.Error:
-                self.logger.error("Could not execute initialization script %s", initialize)
+                self.logger.critical("Could not execute initialization script %s", initialize)
                 #self.logger.exception(e)
                 raise
             self._setConfigValue('ClientID', str(uuid.uuid1()))
@@ -323,7 +328,7 @@ class TardisDB:
             ret = self.conn.execute(query, data)
             return ret
         except sqlite3.IntegrityError as e:
-            self.logger.warning("Error processing data: %s %s", data, e)
+            self.logger.error("Error processing data: %s %s", data, e)
             raise e
 
     def _executeWithResult(self, query, data):
@@ -355,6 +360,7 @@ class TardisDB:
                         }
                     )
         except sqlite3.IntegrityError:
+            self.logger.critical(f"Backupset {name} already exists")
             raise Exception(f"Backupset {name} already exists")
 
         self.currBackupSet = c.lastrowid
