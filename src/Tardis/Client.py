@@ -745,7 +745,8 @@ def sendContent(inode, reportType):
                 sendMessage(message)
                 #batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(conn.sender, data,
-                                                      encrypt, hasher=crypt.getHash(),
+                                                      encrypt,
+                                                      hasher=crypt.getHash(),
                                                       chunksize=args.chunksize,
                                                       compress=compress,
                                                       signature=makeSig,
@@ -1258,7 +1259,7 @@ def initProgressBar(scheduler):
     statusBar.start()
     return statusBar
 
-def setProgress(mode, name):
+def setProgress(mode, name=""):
     if statusBar:
         statusBar.setValue('mode', mode)
         statusBar.setTrailer(name)
@@ -1373,7 +1374,7 @@ def processDirectory(dir, top, depth=0, excludes=[]):
         exceptionLogger.log(e)
         raise ExitRecursionException(e)
 
-def processDirectories(rootdir, directories):
+def processTopLevelDirs(rootdir, directories):
     logger.debug("Processing directories %s", directories)
     for directory in directories:
         # skip if already processed.
@@ -1391,6 +1392,7 @@ def processDirectories(rootdir, directories):
         dirJob = DirectoryJob(directory, root, args.maxdepth, globalExcludes)
         directoryQueue.append(dirJob)
 
+def runBackup():
     try:
         while True:
             dirJob = directoryQueue.popleft()
@@ -1426,20 +1428,6 @@ def splitDir(files, when):
             newFiles.append(f)
     return newFiles, oldFiles
 
-
-def setBackupName(args):
-    """ Calculate the name of the backup set """
-    name = args.name
-    priority = args.priority
-    auto = True
-
-    # If a name has been specified, we're not an automatic set.
-    if name:
-        auto = False
-    #else:
-    #   # Else, no name specified, we're auto.  Create a default name.
-    #   name = time.strftime("Backup_%Y-%m-%d_%H:%M:%S")
-    return (name, priority, auto)
 
 def setPurgeValues(args):
     global purgeTime, purgePriority
@@ -1508,7 +1496,7 @@ def sendMessage(message):
     conn.send(message)
 
 def receiveMessage():
-    setProgress("Receiving...", "")
+    setProgress("Receiving...")
     response = conn.receive()
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
@@ -1753,8 +1741,11 @@ def doSrpAuthentication(response):
         raise AuthenticationFailed("response incomplete")
 
 
-def startBackup(name, priority, client, autoname, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
+def startBackup(name, priority, client, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
     global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey, crypt
+
+    # if no name is specified, let the backend pick it
+    autoname = name is None
 
     # Create a BACKUP message
     message = {
@@ -1762,7 +1753,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
             'host'      : client,
             'encoding'  : encoding,
             'priority'  : priority,
-            'autoname'  : autoname,
+            'autoname'  : name is None,
             'force'     : force,
             'time'      : time.time(),
             'version'   : version,
@@ -1790,7 +1781,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
     clientId       = uuid.UUID(resp['clientid'])
     lastTimestamp  = float(resp['prevDate'])
     backupName     = resp['name']
-    newBackup      = resp['new']
+    newBackup      = resp['new'] == 'NEW'
     if 'filenameKey' in resp:
         filenameKey = resp['filenameKey']
     if 'contentKey' in resp:
@@ -1802,7 +1793,7 @@ def startBackup(name, priority, client, autoname, force, full=False, create=Fals
     ### TODO
     (f, c) = (None, None)
 
-    if newBackup == 'NEW':
+    if newBackup:
         # if new DB, generate new keys, and save them appropriately.
         if password:
             logger.debug("Generating new keys")
@@ -1866,6 +1857,7 @@ def processCommandLine():
 
     t = args.job
     c = configparser.RawConfigParser(configDefaults, allow_no_value=True)
+
     if args.config:
         c.read(args.config)
         if not c.has_section(t):
@@ -2111,7 +2103,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
         logging.root.addHandler(handler)
 
     # Default logger
-    logger = logging.getLogger('')
+    logger = logging.getLogger('Client')
 
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
@@ -2280,21 +2272,9 @@ def runBackend(jobname):
     backendThread.start()
     return conn, backend, backendThread
 
-def main():
-    global args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
-    # Read the command line arguments.
-    commandLine = ' '.join(sys.argv) + '\n'
-    (args, config, jobname) = processCommandLine()
-
-    # Memory debugging.
-    # Enable only if you really need it.
-    #from dowser import launch_memory_usage_server
-    #launch_memory_usage_server()
-
-    # Set up logging
-    verbosity=args.verbose if args.verbose else 0
-    setupLogging(args.logfiles, verbosity, args.exceptions)
-
+def initialize():
+    global starttime, server, port, client, priority
+    setProgress("Initializing...")
     try:
         starttime = datetime.datetime.now()
 
@@ -2304,9 +2284,6 @@ def main():
         if args.exclusive:
             lockRun(server, port, client)
 
-        # Figure out the name and the priority of this backupset
-        (name, _, auto) = setBackupName(args)
-
         # setup purge times
         setPurgeValues(args)
 
@@ -2315,7 +2292,6 @@ def main():
 
         # Load any excluded directories
         loadExcludedDirs(args)
-
 
         # Error check the purge parameter.  Disable it if need be
         #if args.purge and not (purgeTime is not None or auto):
@@ -2328,8 +2304,7 @@ def main():
                                         confirm=args.create, strength=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.: %s", str(e))
-            if args.exceptions:
-                logger.exception(e)
+            exceptionLogger.log(e)
             sys.exit(1)
 
         # Purge out the original password.  Maybe it might go away.
@@ -2337,8 +2312,6 @@ def main():
             #args.password = '-- removed --'
 
         if password or (args.create and args.cryptoScheme):
-            srpUsr = srp.User(client, password)
-
             if args.create:
                 scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.DEF_CRYPTO_SCHEME
                 crypt = TardisCrypto.getCrypto(scheme, password, client)
@@ -2389,47 +2362,24 @@ def main():
         exceptionLogger.log(e)
         sys.exit(1)
 
-    # determine mode:
-    localmode = pickMode()
+    return password, directories, rootdir
 
-    # Open the connection
-
-    backendThread = None
-
-    # Create a scheduler thread, if need be
-    scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
-
-    # Get the connection object
-    try:
-        if localmode:
-            (conn, _, backendThread) = runBackend(jobname)
-        else:
-            conn = getConnection(server, port)
-
-        startBackup(name, args.priority, args.client, auto, args.force, args.full, args.create, password)
-    except Exception as e:
-        logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
-        exceptionLogger.log(e)
-        sys.exit(1)
-    if verbosity or args.stats or args.report != 'none':
-        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
-
-
-    # Initialize the progress bar, if requested
-    if args.progress:
-        statusBar = initProgressBar(scheduler)
-
-    if scheduler:
-        scheduler.start()
-
-    # Send a command line
+def encryptString(string):
     clHash = crypt.getHash()
-    clHash.update(bytes(commandLine, 'utf8'))
+    clHash.update(bytes(string, 'utf8'))
     h = clHash.hexdigest()
     encrypt, iv = makeEncryptor()
     if iv is None:
         iv = b''
-    data = iv + encrypt.encrypt(bytes(commandLine, 'utf8')) + encrypt.finish() + encrypt.digest()
+    data = iv + encrypt.encrypt(bytes(string, 'utf8')) + encrypt.finish() + encrypt.digest()
+    return h, iv, data
+
+def sendConfigInfo(directories):
+    # Generate a string of the command line
+    commandLine = ' '.join(sys.argv) + '\n'
+
+    # Send a command line (encrypted), and a hash of it, so it can be saved easily.
+    h, iv, data = encryptString(commandLine)
 
     message = {
         'message': 'COMMANDLINE',
@@ -2441,6 +2391,7 @@ def main():
     batchMessage(message)
 
     # Send the full configuration, if so desired.
+    # Note, this should probably be encrypted too.  It contains more information than the above.
     if args.sendconfig:
         a = vars(args)
         a['directories'] = directories
@@ -2453,11 +2404,67 @@ def main():
         }
         batchMessage(message)
 
+def main():
+    global args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
+
+    # Read the command line arguments.
+    (args, config, jobname) = processCommandLine()
+
+    # Memory debugging.
+    # Enable only if you really need it.
+    #from dowser import launch_memory_usage_server
+    #launch_memory_usage_server()
+
+    # Set up logging
+    verbosity=args.verbose or 0
+    setupLogging(args.logfiles, verbosity, args.exceptions)
+
+    # determine mode:
+    localmode = pickMode()
+
+    # Open the connection
+    backendThread = None
+
+    # Create a scheduler thread, if need be
+    scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
+
+    # Initialize the progress bar, if requested
+    if args.progress:
+        statusBar = initProgressBar(scheduler)
+
+    if scheduler:
+        scheduler.start()
+
+    # Get the connection object
+    try:
+        password, directories, rootdir = initialize()
+
+        if localmode:
+            (conn, _, backendThread) = runBackend(jobname)
+        else:
+            conn = getConnection(server, port)
+
+
+    except Exception as e:
+        logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
+        exceptionLogger.log(e)
+        sys.exit(1)
+    if verbosity or args.stats or args.report != 'none':
+        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
+
+
     # Now, do the actual work here.
     exc = None
     try:
-        # Now, process all the actual directories
-        processDirectories(rootdir, directories)
+        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password)
+
+        sendConfigInfo(directories)
+
+        # Now, process top level directories
+        processTopLevelDirs(rootdir, directories)
+
+        # Do the actual backup
+        runBackup()
 
         # If any metadata, clone or batch requests still lying around, send them now
         if newmeta:
@@ -2491,10 +2498,10 @@ def main():
         exc = str(e)
         exceptionLogger.log(e)
     finally:
-        setProgress("Finishing backup", "")
-        conn.close(exc)
+        setProgress("Finishing backup...")
         if localmode:
             conn.send(Exception("Terminate connection"))
+        conn.close()
 
     if localmode:
         logger.info("Waiting for server to complete")
