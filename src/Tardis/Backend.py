@@ -91,7 +91,7 @@ def rmSession(sessionId):
         pass
 
 def checkSession(sessionId):
-    return (sessionId in _sessions)
+    return sessionId in _sessions
 
 class InitFailedException(Exception):
     pass
@@ -140,14 +140,13 @@ class BackendConfig:
 
 
 class Backend:
-
-    def __init__(self, messenger, config, logSession=True, sessionid=None):
+    def __init__(self, messenger: Messages.Messages, config, logSession=True, sessionid=None):
         self.numfiles       = 0
-        self.logger         = None
+        self.logger: logging.Logger     = None
         self.sessionid      = None
+        self.cache: CacheDir.CacheDir   = None
         self.tempdir        = None
-        self.cache          = None
-        self.db             = None
+        self.db: TardisDB.TardisDB      = None
         self.purged         = False
         self.full           = False
         self.done           = False
@@ -204,7 +203,7 @@ class Backend:
             self.logger.log(logging.TRACE, "Sending:\n" + pp.pformat(message))
         self.messenger.sendMessage(message)
 
-    def recvMessage(self):
+    def recvMessage(self) -> dict[str, str]|bytearray:
         message = self.messenger.recvMessage()
         if self.printMessages:
             self.logger.log(logging.TRACE, "Received:\n" + pp.pformat(message))
@@ -671,7 +670,7 @@ class Backend:
             output = self.cache.open(sigfile, "wb")
 
         # TODO: Record these in stats
-        (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
+        (_, _, _, checksum, _) = Util.receiveData(self.messenger, output)
 
         if output is not None:
             output.close()
@@ -763,7 +762,7 @@ class Backend:
 
         encrypted = message.get('encrypted', False)
 
-        (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
+        (bytesReceived, status, size, _, compressed) = Util.receiveData(self.messenger, output)
         self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
@@ -775,8 +774,9 @@ class Backend:
 
         return (None, False)
 
-    def processPurge(self, message = {}):
-        self.logger.debug(f"Processing purge message: {str(message)}")
+    def processPurge(self, message = None):
+        self.logger.debug("Processing purge message: %s", str(message))
+        message = message or {}
         prevTime = None
         if 'time' in message:
             if message['relative']:
@@ -800,8 +800,8 @@ class Backend:
             if files:
                 self.purged = True
             return ({"message": "ACKPRG", "status": "OK"}, True)
-        else:
-            return ({"message": "ACKPRG", "status": "FAIL"}, True)
+
+        return ({"message": "ACKPRG", "status": "FAIL"}, True)
 
     def processClone(self, message):
         """ Clone an entire directory """
@@ -1293,14 +1293,14 @@ class Backend:
                 'srpValueHAMK': base64.b64encode(srpValueHAMK)
             }
             self.logger.debug("Authenticated")
-            return message
         except TardisDB.AuthenticationFailed as e:
             message = {
                 'status': 'AUTHFAIL',
                 'message': str(e)
             }
             self.sendMessage(message)
-            raise e
+            raise
+        return message
 
     def runBackup(self):
         started   = False
