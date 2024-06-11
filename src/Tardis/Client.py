@@ -172,6 +172,9 @@ encoding            = None
 encoder             = None
 decoder             = None
 
+systemencoding      = sys.getfilesystemencoding()
+
+
 purgePriority       = None
 purgeTime           = None
 
@@ -205,13 +208,7 @@ exceptionLogger: Util.ExceptionLogger
 
 srpUsr              = None
 
-sessionid           = None
-clientId            = None
 lastTimestamp       = None
-backupName          = None
-newBackup           = None
-filenameKey         = None
-contentKey          = None
 
 # Stats block.
 # dirs/files/links  == Number of directories/files/links backed up total
@@ -303,8 +300,8 @@ class ShortPathStatusBar(StatusBar.StatusBar):
     """
     Extend the status bar class so that it shorten's pathnames into a pathname field
     """
-    def processTrailer(self, length, name):
-        return Util.shortPath(name, length)
+    def processTrailer(self, length, string):
+        return Util.shortPath(string, length)
 
 class ProtocolError(Exception):
     """
@@ -341,26 +338,23 @@ class FakeDirEntry:
             return os.stat(self.path)
         return os.lstat(self.path)
 
-def setEncoder(format):
+def setEncoder(fmt):
     global encoder, encoding, decoder
-    if format == 'base64':
+    if fmt == 'base64':
         encoding = "base64"
         encoder  = base64.b64encode
         decoder  = base64.b64decode
-    elif format == 'bin':
+    elif fmt == 'bin':
         encoding = "bin"
         encoder = lambda x: x
         decoder = lambda x: x
-
-systemencoding      = sys.getfilesystemencoding()
 
 def fs_encode(val):
     """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
     if not isinstance(val, bytes):
         #return val.encode(sys.getfilesystemencoding())
         return val.encode(systemencoding)
-    else:
-        return val
+    return val
 
 def checkMessage(message, expected):
     """ Check that a message is of the expected type.  Throw an exception if not """
@@ -604,18 +598,19 @@ def processDelta(inode, signatures):
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
-                reader = CompressedBuffer.BufferedReader(open(pathname, "rb"), hasher=crypt.getHash(), signature=makeSig)
-                # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
-                reader.seek = lambda x, y: 0
+                with open(pathname, "rb") as input:
+                    reader = CompressedBuffer.BufferedReader(input, hasher=crypt.getHash(), signature=makeSig)
+                    # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
+                    reader.seek = lambda x, y: 0
 
-                # Generate the delta file
-                delta = librsync.delta(reader, sigfile)
-                sigfile.close()
+                    # Generate the delta file
+                    delta = librsync.delta(reader, sigfile)
+                    sigfile.close()
 
                 # get the auxiliary info
-                checksum = reader.checksum()
-                filesize = reader.size()
-                newsig = reader.signatureFile()
+                    checksum = reader.checksum()
+                    filesize = reader.size()
+                    newsig = reader.signatureFile()
 
                 # Figure out the size of the delta file.  Seek to the end, do a tell, and go back to the start
                 # Ugly.
@@ -638,7 +633,7 @@ def processDelta(inode, signatures):
                     "checksum": checksum,
                     "basis": oldchksum,
                     "encoding": encoding,
-                    "encrypted": True if iv else False
+                    "encrypted": bool(iv)
                 }
 
                 sendMessage(message)
@@ -767,9 +762,9 @@ def sendContent(inode, reportType):
                 exceptionLogger.log(e)
                 #raise e
             finally:
-                if data is not None:
+                if not data is None:
                     data.close()
-                if sig is not None:
+                if not sig is None:
                     sig.close()
 
             Util.accumulateStat(stats, 'new')
@@ -798,7 +793,7 @@ def handleAckMeta(message):
         message = {
             "message": "METADATA",
             "checksum": cks,
-            "encrypted": True if iv else False
+            "encrypted": bool(iv)
         }
         setMessageID(message)
 
@@ -965,13 +960,13 @@ def addMeta(meta):
     """
     if meta in metaCache:
         return metaCache[meta]
-    else:
-        m = crypt.getHash()
-        m.update(bytes(meta, 'utf8'))
-        digest = m.hexdigest()
-        metaCache[meta] = digest
-        newmeta.append(digest)
-        return digest
+
+    m = crypt.getHash()
+    m.update(bytes(meta, 'utf8'))
+    digest = m.hexdigest()
+    metaCache[meta] = digest
+    newmeta.append(digest)
+    return digest
 
 def mkFileInfo(f):
     pathname = f.path
@@ -1013,7 +1008,7 @@ def mkFileInfo(f):
                     # Convert to a set of readable string tuples
                     # We base64 encode the data chunk, as it's often binary
                     # Ugly, but unfortunately necessary
-                    attr_string = json.dumps(dict([(str(x[0]), str(base64.b64encode(x[1]), 'utf8')) for x in sorted(attrs.items())]))
+                    attr_string = json.dumps({ str(k):str(base64.b64encode(v), 'utf8') for (k,v) in sorted(attrs.items())})
                     cks = addMeta(attr_string)
                     finfo['xattr'] = cks
             except Exception:
@@ -1042,10 +1037,11 @@ def mkFileInfo(f):
         finfo = None
     return finfo
 
-def getDirContents(dirname, dirstat, excludes=set()):
+def getDirContents(dirname, dirstat, excludes=None):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
         of the files, a list of sub directories, and the new list of excluded patterns """
 
+    excludes = excludes or set()
     #logger.debug("Processing directory : %s", dir)
     Util.accumulateStat(stats, 'dirs')
     device = dirstat.st_dev
@@ -1184,8 +1180,8 @@ def sendBatchMsgs():
         if respSize != batchSize:
             logger.error("Response size does not equal batch size: ID: %d B: %d R: %d", msgId, batchSize, respSize)
             if logger.isEnabledFor(logging.DEBUG):
-                msgs = set([x['msgid'] for x in batchMsgs])
-                resps = set([x['respid'] for x in response['responses']])
+                msgs = { x['msgid'] for x in batchMsgs }
+                resps = { x['respid'] for x in response['responses'] }
                 diffs1 = msgs.difference(resps)
                 logger.debug("Missing Messages: %s", str(list(diffs1)))
         logger.debug("BATCH Ending.")
@@ -1200,13 +1196,16 @@ def flushBatchMsgs():
         return True
     return False
 
-def sendPurge(relative):
+def sendPurge():
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
+    # it's relative if we didn't set the --keep-time argument.
+    relative = args.purgetime is not None
     message =  { 'message': 'PRG' }
     if purgePriority:
         message['priority'] = purgePriority
+
     if purgeTime:
-        message.update( { 'time': purgeTime, 'relative': relative })
+        message.update({ 'time': purgeTime, 'relative': relative })
 
     batchMessage(message, flush=True, batch=False)
 
@@ -1253,11 +1252,11 @@ def makeMetaMessage():
 statusBar = None
 
 def initProgressBar(scheduler):
-    statusBar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats, scheduler=scheduler)
-    statusBar.setValue('mode', '')
-    statusBar.setTrailer('')
-    statusBar.start()
-    return statusBar
+    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats, scheduler=scheduler)
+    sbar.setValue('mode', '')
+    sbar.setTrailer('')
+    sbar.start()
+    return sbar
 
 def setProgress(mode, name=""):
     if statusBar:
@@ -1266,9 +1265,9 @@ def setProgress(mode, name=""):
 
 processedDirs = set()
 
-def processDirectory(dir, top, depth=0, excludes=[]):
+def processDirectory(dir, top, depth=0, excludes=None):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
-    global dirHashes
+    excludes = excludes or []
 
     newdepth = max(depth - 1, 0)
 
@@ -1286,7 +1285,7 @@ def processDirectory(dir, top, depth=0, excludes=[]):
             logger.debug("%s excluded.  Skipping", dir)
             return
 
-        # Return if a skipfile exists.   Realistically this 
+        # Return if a skipfile exists.   Realistically this
         # Should happen because we should have handled it in the filelist for then
         # directory, above, but just in case, check it
         if os.path.lexists(os.path.join(dir, args.skipfile)):
@@ -1296,7 +1295,7 @@ def processDirectory(dir, top, depth=0, excludes=[]):
         if args.skipcaches and os.path.lexists(os.path.join(dir, 'CACHEDIR.TAG')):
             logger.debug("CACHEDIR.TAG file found.  Analyzing")
             try:
-                with open(os.path.join(dir, 'CACHEDIR.TAG'), 'r') as f:
+                with open(os.path.join(dir, 'CACHEDIR.TAG'), 'r', encoding='ascii') as f:
                     line = f.readline()
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
@@ -1363,12 +1362,9 @@ def processDirectory(dir, top, depth=0, excludes=[]):
                 directoryQueue.appendleft(dirJob)
     except OSError as e:
         logger.error("Error handling directory: %s: %s", dir, str(e))
-        raise ExitRecursionException(e)
-        #traceback.print_exc()
-    except IOError as e:
-        logger.error("Error handling directory: %s: %s", dir, str(e))
         exceptionLogger.log(e)
         raise ExitRecursionException(e)
+        #traceback.print_exc()
     except Exception as e:
         # TODO: Clean this up
         exceptionLogger.log(e)
@@ -1398,12 +1394,18 @@ def runBackup():
             dirJob = directoryQueue.popleft()
             processDirectory(dirJob.subdir, dirJob.top, dirJob.newdepth, dirJob.subexcludes)
     except IndexError:
-        logger.info("Done with directory traversal")
-        pass
+        logger.debug("Done with directory traversal")
     except Exception as e:
         logger.error(e)
         exceptionLogger.log(e)
 
+    # Finish any remaning work to complete the backup
+    # If any metadata, clone or batch requests still lying around, send them now
+    if newmeta:
+        batchMessage(makeMetaMessage())
+    flushClones()
+    while flushBatchMsgs():
+        pass
 
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
@@ -1429,7 +1431,7 @@ def splitDir(files, when):
     return newFiles, oldFiles
 
 
-def setPurgeValues(args):
+def setPurgeValues():
     global purgeTime, purgePriority
     if args.purge:
         purgePriority = args.priority
@@ -1468,7 +1470,7 @@ def loadExcludeFile(name):
 
 
 # Load all the excludes we might want
-def loadExcludes(args):
+def loadExcludes():
     global excludeFile, globalExcludes
     if not args.ignoreglobalexcludes:
         globalExcludes = globalExcludes.union(loadExcludeFile(globalExcludeFile))
@@ -1481,8 +1483,7 @@ def loadExcludes(args):
             globalExcludes = globalExcludes.union(loadExcludeFile(f))
     excludeFile         = args.excludefilename
 
-def loadExcludedDirs(args):
-    global excludeDirs
+def loadExcludedDirs():
     if args.excludedirs is not None:
         excludeDirs.extend(list(map(Util.fullPath, args.excludedirs)))
 
@@ -1516,7 +1517,7 @@ def sendAndReceive(message):
     waittime += e - s
     return response
 
-def sendKeys(password, client, includeKeys=True):
+def sendKeys(password, client):
     logger.debug("Sending keys")
     (f, c) = crypt.getKeys()
 
@@ -1538,16 +1539,8 @@ def sendKeys(password, client, includeKeys=True):
 currentBatch = None
 currentResponse = None
 
-def handleResponse(response, doPush=True, pause=0):
+def handleResponse(response, doPush=True):
     global currentResponse, currentBatch
-    # TODO: REMOVE THIS DEBUG CODE and the pause parameter
-    if pause:
-        subs = ""
-        if response.get('message') == 'ACKBTCH':
-            subs = "-- " + " ".join(map(lambda x: x.get('message', 'NONE') + " (" + str(x.get('respid', -1)) + ")" , response['responses']))
-        logger.warning("Sleeping for %d seconds.  Do your thing: %d %s %s", pause, response.get('respid', -1), response.get('message', 'NONE'), subs)
-        time.sleep(pause)
-    # END DEBUG
     try:
         currentResponse = response
         msgtype = response['message']
@@ -1567,7 +1560,7 @@ def handleResponse(response, doPush=True, pause=0):
             case 'ACKBTCH':
                 currentBatch = response
                 for ack in response['responses']:
-                    handleResponse(ack, doPush=False, pause=0)
+                    handleResponse(ack, doPush=False)
                 currentBatch = None
             case _:
                 logger.error("Unexpected response: %s", msgtype)
@@ -1731,7 +1724,7 @@ def doSrpAuthentication(response):
         resp = sendAndReceive(message)
         if resp['status'] == 'AUTHFAIL':
             raise AuthenticationFailed("Authentication Failed")
-        elif resp['status'] != 'OK':
+        if resp['status'] != 'OK':
             raise Exception(resp['error'])
         srpHamk = base64.b64decode(resp['srpValueHAMK'])
         srpUsr.verify_session(srpHamk)
@@ -1740,12 +1733,8 @@ def doSrpAuthentication(response):
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
 
-
 def startBackup(name, priority, client, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
-    global sessionid, clientId, lastTimestamp, backupName, newBackup, filenameKey, contentKey, crypt
-
-    # if no name is specified, let the backend pick it
-    autoname = name is None
+    global lastTimestamp, crypt
 
     # Create a BACKUP message
     message = {
@@ -1782,10 +1771,8 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     lastTimestamp  = float(resp['prevDate'])
     backupName     = resp['name']
     newBackup      = resp['new'] == 'NEW'
-    if 'filenameKey' in resp:
-        filenameKey = resp['filenameKey']
-    if 'contentKey' in resp:
-        contentKey = resp['contentKey']
+    filenameKey    = resp.get('filenameKey')
+    contentKey     = resp.get('contentKey')
     if crypt is None:
         crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
@@ -1819,6 +1806,9 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
             sys.exit(1)
         crypt.setKeys(f, c)
 
+    if verbosity or args.stats or args.report != 'none':
+        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
+
 def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
     setEncoder("bin")
@@ -1833,7 +1823,7 @@ def checkConfig(c, t):
     # Check things in the config file that might be confusing
     # CompressedBuffer will convert True or 1 to zlib, anything else not in the list to none
     comp = c.get(t, 'CompressData').lower()
-    if (comp == 'true') or (comp == '1'):
+    if comp in ['true', '1']:
         c.set(t, 'CompressData', 'zlib')
     elif comp not in CompressedBuffer.getCompressors():
         c.set(t, 'CompressData', 'none')
@@ -2012,7 +2002,7 @@ def processCommandLine():
 
     return (args, c, t)
 
-def parseServerInfo(args):
+def parseServerInfo():
     """ Break up the server info passed in into useable chunks """
     serverStr = args.server
     #logger.debug("Got server string: %s", serverStr)
@@ -2137,25 +2127,25 @@ def printStats(starttime, endtime):
 
 def pickMode():
     if args.local != '' and args.local is not None:
-        if args.local is True or args.local == 'True':
+        if args.local in [True, 'True']:
             if args.server is None:
                 raise Exception("Remote mode specied without a server")
             return True
 
-        if args.local is False or args.local == 'False':
+        if args.local in [False, 'False']:
             if args.database is None:
                 raise Exception("Local mode specied without a database")
             return False
-    else:
-        if args.server is not None and args.database is not None:
-            raise Exception("Both database and server specified.  Unable to determine mode.   Use --local/--remote switches")
 
-        if args.server is not None:
-            return False
-        if args.database is not None:
-            return True
-        raise Exception("Neither database nor remote server is set.   Unable to backup")
+    if args.server is not None and args.database is not None:
+        raise Exception("Both database and server specified.  Unable to determine mode.   Use --local/--remote switches")
 
+    if args.server is not None:
+        return False
+    if args.database is not None:
+        return True
+
+    raise Exception("Neither database nor remote server is set.   Unable to backup")
 
 def printReport(repFormat):
     lastDir = None
@@ -2219,7 +2209,7 @@ def lockRun(server, port, client):
         raise Exception(f"Tardis already running: {e}")
     except Exception as e:
         exceptionLogger.log(e)
-        raise 
+        raise
     return pidfile
 
 def mkBackendConfig(jobname):
@@ -2279,19 +2269,19 @@ def initialize():
         starttime = datetime.datetime.now()
 
         # Get the actual names we're going to use
-        (server, port, client) = parseServerInfo(args)
+        (server, port, client) = parseServerInfo()
 
         if args.exclusive:
             lockRun(server, port, client)
 
         # setup purge times
-        setPurgeValues(args)
+        setPurgeValues()
 
         # Load the excludes
-        loadExcludes(args)
+        loadExcludes()
 
         # Load any excluded directories
-        loadExcludedDirs(args)
+        loadExcludedDirs()
 
         # Error check the purge parameter.  Disable it if need be
         #if args.purge and not (purgeTime is not None or auto):
@@ -2307,23 +2297,12 @@ def initialize():
             exceptionLogger.log(e)
             sys.exit(1)
 
-        # Purge out the original password.  Maybe it might go away.
-        #if args.password:
-            #args.password = '-- removed --'
-
-        if password or (args.create and args.cryptoScheme):
-            if args.create:
-                scheme = args.cryptoScheme if args.cryptoScheme is not None else TardisCrypto.DEF_CRYPTO_SCHEME
-                crypt = TardisCrypto.getCrypto(scheme, password, client)
-        elif args.create:
-            crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
-
         # If no compression types are specified, load the list
         types = []
         for i in args.nocompressfile:
             try:
                 logger.debug("Reading types to ignore from: %s", i)
-                data = list(map(Util.stripComments, open(i, 'r').readlines()))
+                data = list(map(Util.stripComments, open(i, 'r', encoding=systemencoding).readlines()))
                 types = types + [x for x in data if len(x)]
             except Exception as e:
                 logger.error("Could not load nocompress types list from: %s", i)
@@ -2349,7 +2328,7 @@ def initialize():
             for i in directories:
                 x = os.path.split(i)[1]
                 if x in names:
-                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, x, names[name])
+                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, x, names[x])
                     errors = True
                 else:
                     names[x] = i
@@ -2362,7 +2341,17 @@ def initialize():
         exceptionLogger.log(e)
         sys.exit(1)
 
-    return password, directories, rootdir
+    return password, directories, rootdir, server, port
+
+def shutdown():
+    # Send a purge command, if requested.
+    if args.purge:
+        sendPurge()
+    message = {
+        "message": "DONE"
+    }
+    batchMessage(message, batch=False, flush=True)
+
 
 def encryptString(string):
     clHash = crypt.getHash()
@@ -2437,7 +2426,7 @@ def main():
 
     # Get the connection object
     try:
-        password, directories, rootdir = initialize()
+        password, directories, rootdir, server, port = initialize()
 
         if localmode:
             (conn, _, backendThread) = runBackend(jobname)
@@ -2449,14 +2438,13 @@ def main():
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         exceptionLogger.log(e)
         sys.exit(1)
-    if verbosity or args.stats or args.report != 'none':
-        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
 
     # Now, do the actual work here.
     exc = None
     try:
         startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password)
+
 
         sendConfigInfo(directories)
 
@@ -2466,23 +2454,8 @@ def main():
         # Do the actual backup
         runBackup()
 
-        # If any metadata, clone or batch requests still lying around, send them now
-        if newmeta:
-            batchMessage(makeMetaMessage())
-        flushClones()
-        while flushBatchMsgs():
-            pass
-
-        # Send a purge command, if requested.
-        if args.purge:
-            if args.purgetime:
-                sendPurge(False)
-            else:
-                sendPurge(True)
-        message = {
-            "message": "DONE"
-        }
-        batchMessage(message, batch=False, flush=True)
+        # Finish up
+        shutdown()
 
     except KeyboardInterrupt:
         logger.warning("Backup Interupted")
@@ -2501,11 +2474,10 @@ def main():
         setProgress("Finishing backup...")
         if localmode:
             conn.send(Exception("Terminate connection"))
-        conn.close()
-
-    if localmode:
-        logger.info("Waiting for server to complete")
-        backendThread.join()        # Should I do communicate?
+        conn.close(exc)
+        if localmode:
+            logger.info("Waiting for server to complete")
+            backendThread.join()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
 
