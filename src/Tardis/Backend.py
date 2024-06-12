@@ -608,8 +608,6 @@ class Backend:
 
         self.statBytesReceived += bytesReceived
 
-        Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
-
         if output:
             try:
                 if savefull:
@@ -640,6 +638,9 @@ class Backend:
                     self.db.insertChecksum(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
                     self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
+                # record the metadata for this file
+                Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
+
                 # Track that we've added a file of this size.
                 self.sizes.add(size)
 
@@ -651,6 +652,8 @@ class Backend:
                 self.logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
             # TODO: This has gotta be wrong.
+        else:
+            self.db.setChecksum(inode, dev, checksum)
 
         flush = True if size > 1000000 else False
         return (None, flush)
