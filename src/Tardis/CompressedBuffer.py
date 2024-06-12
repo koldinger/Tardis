@@ -34,7 +34,7 @@ import bz2
 import lzma
 import zstandard as zstd
 
-import Tardis.librsync as librsync
+from . import librsync
 
 _defaultChunksize = 1024 * 1024
 

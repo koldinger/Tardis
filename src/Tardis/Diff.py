@@ -113,6 +113,7 @@ def setcolor(line):
 def isBinary(lines, numLines = 128):
     #TODO Fixme.  binaryornot doesn't seem to work for binary strings.
     return False
+    """
     lineNo = 0
     numLines = min(numLines, len(lines))
     while lineNo < numLines:
@@ -120,6 +121,7 @@ def isBinary(lines, numLines = 128):
             return True
         lineNo += 1
     return False
+    """
 
 def runDiff(f1, f2, name, then, now):
     # Read the lines in the files.
@@ -159,7 +161,6 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
     e = crypt.encryptPath(p) if crypt else p
     info = tardis.getFileInfoByPath(e, bset)
     return info, p
-
 
 def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
     logger.info("Diffing directory: %s", path)

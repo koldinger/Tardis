@@ -206,6 +206,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         started = False
         completed = False
         starttime = datetime.now()
+        endtime = starttime         # just to keep pylint happy
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
