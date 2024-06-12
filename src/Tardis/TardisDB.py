@@ -120,8 +120,7 @@ def _fetchEm(cursor):
         batch = cursor.fetchmany(10000)
         if not batch:
             break
-        for row in batch:
-            yield row
+        yield from batch
 
 conversionModules = {}
 
@@ -164,6 +163,8 @@ class TardisDB:
 
         self.backup = backup
         self.numbackups = numbackups
+
+        self.currBackupName = None
 
         try:
             conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
@@ -438,7 +439,7 @@ class TardisDB:
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self._bset(current)
-        self.logger.debug(f"Looking up file by path {path} {backupset}")
+        self.logger.debug("Looking up file by path %s %s", path, backupset)
         parent = (0, 0)         # Root directory value
         info = None
 
@@ -520,8 +521,7 @@ class TardisDB:
             batch = c.fetchmany(self.chunksize)
             if not batch:
                 break
-            for row in batch:
-                yield row
+            yield from batch
 
     @authenticate
     def getFileFromPartialBackup(self, fileInfo):
@@ -766,9 +766,8 @@ class TardisDB:
         row = c.fetchone()
         if row:
             return row
-        else:
-            self.logger.debug("No checksum found for %s", checksum)
-            return None
+        self.logger.debug("No checksum found for %s", checksum)
+        return None
 
     @authenticate
     def getChecksumInfoChain(self, checksum):
@@ -828,12 +827,6 @@ class TardisDB:
                           ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                           {"parent": inode, "parentDev": device, "backup": backupset})
         return _fetchEm(c)
-        #while True:
-        #    batch = c.fetchmany(self.chunksize)
-        #    if not batch:
-        #        break
-        #    for row in batch:
-        #        yield row
 
     @authenticate
     def getNumDeltaFilesInDirectory(self, dirNode, current=False):
@@ -848,8 +841,7 @@ class TardisDB:
                                       {"parent": inode, "parentDev": device, "backup": backupset})
         if row:
             return row[0]
-        else:
-            return 0
+        return 0
 
     @authenticate
     def getDirectorySize(self, dirNode, current=False):
@@ -862,8 +854,7 @@ class TardisDB:
                                       { "parent": inode, "parentDev": device, "backup": backupset })
         if row:
             return row[0]
-        else:
-            return 0
+        return 0
 
     @authenticate
     def readDirectoryForRange(self, dirNode, first, last):
@@ -879,8 +870,7 @@ class TardisDB:
             batch = c.fetchmany(self.chunksize)
             if not batch:
                 break
-            for row in batch:
-                yield row
+            yield from batch
 
     @authenticate
     def listBackupSets(self):
@@ -894,8 +884,7 @@ class TardisDB:
             batch = c.fetchmany(self.chunksize)
             if not batch:
                 break
-            for row in batch:
-                yield row
+            yield from batch
 
     @authenticate
     def getBackupSetInfoById(self, bset):
@@ -1110,8 +1099,7 @@ class TardisDB:
                                 _backupSetInfoJoin +
                                 " WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Locked = 0",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
-        for row in c:
-            yield row
+        yield from c
 
     @authenticate
     def listPurgeIncomplete(self, priority, timestamp, current=False):
@@ -1124,8 +1112,7 @@ class TardisDB:
                                 _backupSetInfoJoin +
                                 "WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Completed = 0",
                                 {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
-        for row in c:
-            yield row
+        yield from c
 
     @authenticate
     def purgeSets(self, priority, timestamp, current=False):
