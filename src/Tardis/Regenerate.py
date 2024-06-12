@@ -37,6 +37,7 @@ import time
 import base64
 import json
 import hmac
+import logging
 
 import parsedatetime
 import xattr
@@ -49,7 +50,7 @@ from . import Util
 from . import Config
 from . import Defaults
 
-logger  = None
+logger: logging.Logger
 crypt = None
 
 OW_NEVER  = 0
@@ -75,27 +76,23 @@ def yesOrNo(x):
     if x:
         x = x.strip().lower()
         return x[0] == 'y'
-    else:
-        return False
+    return False
 
 def checkOverwrite(name, info):
     if os.path.exists(name):
         if owMode == OW_NEVER:
             return False
-        elif owMode == OW_ALWAYS:
+        if owMode == OW_ALWAYS:
             return True
-        elif owMode == OW_PROMPT:
+        if owMode == OW_PROMPT:
             return yesOrNo(input(f"Overwrite {name} [y/N]: "))
-        else:
-            s = os.lstat(name)
-            if s.st_mtime < info['mtime']:
-                # Current version is older
-                return True if owMode == OW_NEWER else False
-            else:
-                # Current version is newer
-                return True if owMode == OW_OLDER else False
-    else:
-        return True
+        s = os.lstat(name)
+        if s.st_mtime < info['mtime']:
+            # Current version is older
+            return owMode == OW_NEWER
+        # Current version is newer
+        return owMode == OW_OLDER
+    return True
 
 def doAuthenticate(outname, checksum, digest):
     """
@@ -128,14 +125,12 @@ def doAuthenticate(outname, checksum, digest):
         logger.error("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
                         outname, checksum, digest, action)
         return target
-    else:
-        return outname
+    return outname
 
 def notSame(a, b, string):
     if a == b:
         return ''
-    else:
-        return string
+    return string
 
 def setAttributes(regenerator, info, outname):
     if outname:
@@ -345,16 +340,16 @@ def setupPermissionChecks():
         if stat.S_ISDIR(mode):
             if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
                 return True
-            elif (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
+            if (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
                 return True
-            elif (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
+            if (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
                 return True
         else:
             if (uid == pUid) and (stat.S_IRUSR & mode):
                 return True
-            elif (pGid in groups) and (stat.S_IRGRP & mode):
+            if (pGid in groups) and (stat.S_IRGRP & mode):
                 return True
-            elif stat.S_IROTH & mode:
+            if stat.S_IROTH & mode:
                 return True
         return False
 
@@ -391,11 +386,11 @@ def recoverName(cksum):
 def mkOutputDir(name):
     if os.path.isdir(name):
         return name
-    elif os.path.exists(name):
+    if os.path.exists(name):
         logger.error("%s is not a directory", name)
-    else:
-        os.mkdir(name)
-        return name
+        raise Exception(f"{name} is not a directory")
+    os.mkdir(name)
+    return name
 
 def parseArgs():
     parser = argparse.ArgumentParser(description='Recover Backed Up Files', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
