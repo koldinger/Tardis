@@ -197,6 +197,7 @@ class BlockEncryptor:
 class HashingBlockEncryptor(HasherMixin, BlockEncryptor):
     def __init__(self, cipher, hasher):
         HasherMixin.__init__(self, cipher, hasher)
+        BlockEncryptor.__init__(self, cipher)
 
 class StreamEncryptor:
     def __init__(self, cipher):
@@ -518,7 +519,7 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
             self._contentKey   = self._decryptSIV(self._keyKey, ckey, "ContentKey")
             self._filenameKey  = self._decryptSIV(self._keyKey, fkey, "FilenameKey")
         except ValueError as e:
-            raise ValueError(f"Keys failed to authenticate: {str(e)}")
+            raise ValueError(f"Keys failed to authenticate: {str(e)}") from e
 
     def getKeys(self):
         if self._filenameKey and self._contentKey:
