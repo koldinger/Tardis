@@ -39,6 +39,7 @@ import urllib.parse
 import functools
 import collections
 import stat
+import logging
 
 import parsedatetime
 import srp
@@ -62,8 +63,8 @@ configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'Max
 # Extra keys that we print when everything is requested
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoScheme']
 
-logger = None
-args = None
+logger: logging.Logger
+args: argparse.Namespace
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
     loc = urllib.parse.urlparse(args.database)
@@ -241,30 +242,20 @@ def moveKeys(db, _):
         return 1
     return 0
 
-_cmdLineHash = {}
-_regenerator = None
-
-def getCommandLine(db, commandLineCksum):
-    global _cmdLineHash, _regenerator
-    if commandLineCksum is None:
-        return None
-    if commandLineCksum in _cmdLineHash:
-        return _cmdLineHash[commandLineCksum]
+@functools.lru_cache()
+def getCommandLine(commandLineCksum, regenerator):
     if commandLineCksum:
-        data = _regenerator.recoverChecksum(commandLineCksum).read().strip()
-        _cmdLineHash[commandLineCksum] = data
+        data = regenerator.recoverChecksum(commandLineCksum).read().strip()
         return data
     return None
 
-
 def listBSets(db, crypt, cache):
-    global _regenerator
     #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
     f = "{:30} {:4} {:6} {:>3}  {:5}  {:24}  {:8} {:>7} {:>6} {:>9} {:1} {:}"
     #f = "{:30s} {:4s} {:6s} {:>3s}  {:5s} {:24s}  {:8} {:>7s} {:>6s} {:>6s}  {:s}"
     try:
         if args.longinfo:
-            _regenerator = Regenerator.Regenerator(cache, db, crypt)
+            regenerator = Regenerator.Regenerator(cache, db, crypt)
 
         last = db.lastBackupSet()
         print(f.format("Name", "Id", "Comp", "Pri", "Full", "Start", "Runtime", "Files", "Delta", "Size", "", ""))
@@ -297,7 +288,7 @@ def listBSets(db, crypt, cache):
 
             print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
             if args.longinfo:
-                commandLine = getCommandLine(db, bset['commandline'])
+                commandLine = getCommandLine(bset['commandline'], regenerator)
                 tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
                 if commandLine:
                     print(f"    Command Line: {commandLine.decode('utf-8')}")
@@ -505,7 +496,7 @@ def purge(db, cache):
     logger.debug("Names: %s", names)
     if len(names) == 0:
         print("No matching sets")
-        return
+        return 1
 
     print("Sets to be deleted:")
     pprint.pprint(names)
@@ -563,7 +554,7 @@ def checkSanity(db, cache, crypt):
     try:
         print("Checking backup sanity.   Scanning for files")
         cachefiles = list(cache.enumerateFiles())
-        cacheNames = set([x.stem for x in cachefiles])
+        cacheNames = { x.stem for x in cachefiles }
         print(f"{len(cacheNames)} files found")
         print("Scanning for checksums")
         checksums = set(db.enumerateChecksums())
@@ -619,7 +610,7 @@ def checkSanity(db, cache, crypt):
                         names = map(crypt.decryptFilename, names)
                         print(i, names)
 
-            # And get rid of it, 
+            # And get rid of it,
             if args.cleanup:
                 if args.confirm():
                     for i in inCache:
@@ -667,7 +658,7 @@ def renameSet(db):
     return result
 
 def parseArgs() -> argparse.Namespace:
-    global args, minPwStrength
+    global args
 
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
 
@@ -795,7 +786,6 @@ def parseArgs() -> argparse.Namespace:
         sys.exit(0)
 
     # And load the required strength for new passwords.  NOT specifiable on the command line.
-    #minPwStrength = c.getfloat(t, 'PwStrMin')
     return args
 
 def getBackupSet(db, backup, date, defaultCurrent=False):
@@ -870,7 +860,7 @@ def main():
         if args.command == 'chpass':
             return changePassword(crypt, password)
 
-        upgrade = (args.command == 'upgrade')
+        upgrade = args.command == 'upgrade'
 
         try:
             (db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
