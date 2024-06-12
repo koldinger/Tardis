@@ -68,6 +68,8 @@ import srp
 import colorlog
 from pathmatch import wildmatch
 
+from icecream import ic
+
 import Tardis
 from . import TardisCrypto
 from . import CompressedBuffer
@@ -79,6 +81,7 @@ from . import MultiFormatter
 from . import StatusBar
 from . import Backend
 from . import ThreadedScheduler
+from . import log
 #from . import Throttler
 
 features = Tardis.check_features()
@@ -202,7 +205,7 @@ newmeta             = []
 
 noCompTypes         = []
 
-crypt               = None
+crypt: TardisCrypto.Crypto_Null = None
 logger: logging.Logger
 exceptionLogger: Util.ExceptionLogger
 
@@ -451,13 +454,13 @@ def logFileInfo(i, c):
         else:
             size = 0
         size = Util.fmtSize(size, suffixes=['','KB','MB','GB', 'TB', 'PB'])
-        logger.log(logging.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
+        logger.log(log.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         cname = crypt.encryptPath(name)
         logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
     checkMessage(response, 'ACKSUM')
-    logfiles = logger.isEnabledFor(logging.FILES)
+    logfiles = logger.isEnabledFor(log.FILES)
 
     done    = response.setdefault('done', {})
     content = response.setdefault('content', {})
@@ -468,7 +471,7 @@ def handleAckSum(response):
         if logfiles:
             (x, name) = inodeDB.get(i)
             if name:
-                logger.log(logging.FILES, "[C]: %s", Util.shortPath(name))
+                logger.log(log.FILES, "[C]: %s", Util.shortPath(name))
         inodeDB.delete(i)
 
     # First, then send content for any files which don't
@@ -532,9 +535,7 @@ def prefetchSigFiles(inodes):
 def fetchSignature(inode):
     (_, pathname) = inodeDB.get(inode)
     logger.debug("Requesting checksum for %s:: %s", str(inode), pathname)
-    path = pathname
-    if crypt.encrypting():
-        path = crypt.encryptPath(path)
+    path = crypt.encryptPath(pathname)
     message = {
         "message" : "SGR",
         "inode" : inode,
@@ -635,6 +636,7 @@ def processDelta(inode, signatures):
                     "encoding": encoding,
                     "encrypted": bool(iv)
                 }
+                setMessageID(message)
 
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
@@ -888,22 +890,24 @@ def pushFiles():
 
     for i in [tuple(x) for x in allContent]:
         try:
-            if logger.isEnabledFor(logging.FILES):
+            if logger.isEnabledFor(log.FILES):
                 logFileInfo(i, 'N')
             sendContent(i, 'New')
             processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
+            exceptionLogger.log(e)
 
 
     for i in [tuple(x) for x in allRefresh]:
-        if logger.isEnabledFor(logging.FILES):
+        if logger.isEnabledFor(log.FILES):
             logFileInfo(i, 'R')
         try:
             sendContent(i, 'Full')
             processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
+            exceptionLogger.log(e)
 
     # If there are any delta files requested, ask for them
     signatures = None
@@ -917,18 +921,19 @@ def pushFiles():
         # If doing a full backup, send the full file, else just a delta.
         try:
             if args.full:
-                if logger.isEnabledFor(logging.FILES):
+                if logger.isEnabledFor(log.FILES):
                     logFileInfo(inode, 'N')
                 sendContent(inode, 'Full')
             else:
-                if logger.isEnabledFor(logging.FILES):
+                if logger.isEnabledFor(log.FILES):
                     (_, name) = inodeDB.get(inode)
                     if name:
-                        logger.log(logging.FILES, "[D]: %s", Util.shortPath(name))
+                        logger.log(log.FILES, "[D]: %s", Util.shortPath(name))
                 processDelta(inode, signatures)
             processed.append(inode)
         except Exception as e:
             logger.error("Unable to backup %s: %s ", str(i), str(e))
+            exceptionLogger.log(e)
 
     # clear it out
     for i in processed:
@@ -1093,7 +1098,7 @@ def handleAckClone(message):
     if verbosity > 2:
         logger.debug("Processing ACKCLN: Up-to-date: %d New Content: %d", len(message['done']), len(message['content']))
 
-    logdirs = logger.isEnabledFor(logging.DIRS)
+    logdirs = logger.isEnabledFor(log.DIRS)
 
     content = message.setdefault('content', {})
     done    = message.setdefault('done', {})
@@ -1118,7 +1123,7 @@ def handleAckClone(message):
         if finfo in cloneContents:
             (path, files) = cloneContents[finfo]
             if logdirs:
-                logger.log(logging.DIRS, "[R]: %s", Util.shortPath(path))
+                logger.log(log.DIRS, "[R]: %s", Util.shortPath(path))
             sendDirChunks(path, finfo, files)
             del cloneContents[finfo]
         else:
@@ -1211,8 +1216,7 @@ def sendPurge():
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
-    if crypt.encrypting():
-        path = crypt.encryptPath(path)
+    path = crypt.encryptPath(path)
     message = {
         'message': 'DIR',
         'path'   : path,
@@ -1227,9 +1231,8 @@ def sendDirChunks(path, inode, files):
         chunk = files[x : x + args.dirslice]
 
         # Encrypt the names before sending them out
-        if crypt.encrypting():
-            for i in chunk:
-                i['name'] = crypt.encryptFilename(i['name'])
+        for i in chunk:
+            i['name'] = crypt.encryptFilename(i['name'])
 
         message["files"] = chunk
         message["last"]  = x + args.dirslice > len(files)
@@ -1337,18 +1340,18 @@ def processDirectory(dir, top, depth=0, excludes=None):
 
             if oldFiles:
                 # There are oldfiles.  Hash them.
-                if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "[A]: %s", Util.shortPath(dir))
+                if logger.isEnabledFor(log.DIRS):
+                    logger.log(log.DIRS, "[A]: %s", Util.shortPath(dir))
                 cloneDir(s.st_ino, s.st_dev, oldFiles, dir)
             else:
-                if logger.isEnabledFor(logging.DIRS):
-                    logger.log(logging.DIRS, "[B]: %s", Util.shortPath(dir))
+                if logger.isEnabledFor(log.DIRS):
+                    logger.log(log.DIRS, "[B]: %s", Util.shortPath(dir))
             sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), newFiles)
 
         else:
             # everything is old
-            if logger.isEnabledFor(logging.DIRS):
-                logger.log(logging.DIRS, "[C]: %s", Util.shortPath(dir))
+            if logger.isEnabledFor(log.DIRS):
+                logger.log(log.DIRS, "[C]: %s", Util.shortPath(dir))
             cloneDir(s.st_ino, s.st_dev, oldFiles, dir, info=h)
 
         # Make sure we're not at maximum depth
@@ -1650,8 +1653,7 @@ def createPrefixPath(root, path):
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(FakeDirEntry(current, d))
-        if crypt.encrypting():
-            f['name'] = crypt.encryptFilename(f['name'])
+        f['name'] = crypt.encryptFilename(f['name'])
         if dirPath not in processedDirs:
             logger.debug("Sending dir entry for: %s", dirPath)
             sendDirEntry(parent, parentDev, [f])
@@ -1807,7 +1809,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
         crypt.setKeys(f, c)
 
     if verbosity or args.stats or args.report != 'none':
-        logger.log(logging.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
+        logger.log(log.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
 def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
@@ -2030,16 +2032,8 @@ def setupLogging(logfiles, verbosity, logExceptions):
     global logger, exceptionLogger
 
     # Define a couple custom logging levels
-    logging.STATS = logging.INFO + 1
-    logging.DIRS  = logging.INFO - 1
-    logging.FILES = logging.INFO - 2
-    logging.MSGS  = logging.INFO - 3
-    logging.addLevelName(logging.STATS, "STAT")
-    logging.addLevelName(logging.FILES, "FILE")
-    logging.addLevelName(logging.DIRS,  "DIR")
-    logging.addLevelName(logging.MSGS,  "MSG")
 
-    levels = [logging.STATS, logging.INFO, logging.DIRS, logging.FILES, logging.MSGS, logging.DEBUG] #, logging.TRACE]
+    levels = [log.STATS, logging.INFO, log.DIRS, log.FILES, log.MSGS, logging.DEBUG] #, logging.TRACE]
 
     # Don't want logging complaining within it's own runs.
     logging.raiseExceptions = False
@@ -2047,22 +2041,22 @@ def setupLogging(logfiles, verbosity, logExceptions):
     # Create some default colors
     colors = colorlog.default_log_colors.copy()
     colors.update({
-                    'STAT': 'cyan',
-                    'DIR':  'cyan,bold',
-                    'FILE': 'cyan',
+                    'STATS': 'cyan',
+                    'DIRS':  'cyan,bold',
+                    'FILES': 'cyan',
                     'DEBUG': 'green'
                   })
 
     msgOnlyFmt = '%(message)s'
     if args.logtime:
-        #formatter = MessageOnlyFormatter(levels=[logging.STATS], fmt='%(asctime)s %(levelname)s: %(message)s')
-        formats = { logging.STATS: msgOnlyFmt }
+        #formatter = MessageOnlyFormatter(levels=[STATS], fmt='%(asctime)s %(levelname)s: %(message)s')
+        formats = { log.STATS: msgOnlyFmt }
         defaultFmt = '%(asctime)s %(levelname)s: %(message)s'
         cDefaultFmt = '%(asctime)s %(log_color)s%(levelname)s%(reset)s: %(message)s'
     else:
-        formats = { logging.INFO: msgOnlyFmt, logging.STATS: msgOnlyFmt }
-        defaultFmt = '%(levelname)s: %(message)s'
-        cDefaultFmt = '%(log_color)s%(levelname)s%(reset)s: %(message)s'
+        formats = { logging.INFO: msgOnlyFmt, log.STATS: msgOnlyFmt }
+        defaultFmt = '%(name)s %(levelname)s: %(message)s'
+        cDefaultFmt = '%(name)s %(log_color)s%(levelname)s%(reset)s: %(message)s'
 
     # If no log file specified, log to stderr
     if len(logfiles) == 0:
@@ -2097,7 +2091,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
 
     # Pick a level.  Lowest specified level if verbosity is too large.
     loglevel = levels[verbosity] if verbosity < len(levels) else levels[-1]
-    logger.setLevel(loglevel)
+    logging.root.setLevel(loglevel)
 
     # Mark if we're logging exceptions
     exceptionLogger = Util.ExceptionLogger(logger, logExceptions)
@@ -2111,19 +2105,19 @@ def printStats(starttime, endtime):
     duration = endtime - starttime
     duration = datetime.timedelta(duration.days, duration.seconds, duration.seconds - (duration.seconds % 100000))          # Truncate the microseconds
 
-    logger.log(logging.STATS, f"Runtime:          {duration}")
-    logger.log(logging.STATS, f"Backed Up:        Dirs: {stats['dirs']:,}  Files: {stats['files']:,}  Links: {stats['links']:,}  Total Size: {Util.fmtSize(stats['backed'])}")
-    logger.log(logging.STATS, f"Files Sent:       Full: {stats['new']:,}  Deltas: {stats['delta']:,}")
-    logger.log(logging.STATS, f"Data Sent:        Sent: {Util.fmtSize(stats['dataSent'])}   Backed: {Util.fmtSize(stats['dataBacked'])}")
-    logger.log(logging.STATS, f"Messages:         Sent: {connstats['messagesSent']:,} ({Util.fmtSize(connstats['bytesSent'])}) Received: {connstats['messagesRecvd']:,} ({Util.fmtSize(connstats['bytesRecvd'])})")
-    logger.log(logging.STATS, f"Data Sent:        {Util.fmtSize(stats['dataSent'])}")
+    logger.log(log.STATS, f"Runtime:          {duration}")
+    logger.log(log.STATS, f"Backed Up:        Dirs: {stats['dirs']:,}  Files: {stats['files']:,}  Links: {stats['links']:,}  Total Size: {Util.fmtSize(stats['backed'])}")
+    logger.log(log.STATS, f"Files Sent:       Full: {stats['new']:,}  Deltas: {stats['delta']:,}")
+    logger.log(log.STATS, f"Data Sent:        Sent: {Util.fmtSize(stats['dataSent'])}   Backed: {Util.fmtSize(stats['dataBacked'])}")
+    logger.log(log.STATS, f"Messages:         Sent: {connstats['messagesSent']:,} ({Util.fmtSize(connstats['bytesSent'])}) Received: {connstats['messagesRecvd']:,} ({Util.fmtSize(connstats['bytesRecvd'])})")
+    logger.log(log.STATS, f"Data Sent:        {Util.fmtSize(stats['dataSent'])}")
 
     if (stats['denied'] or stats['gone']):
-        logger.log(logging.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
+        logger.log(log.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
 
 
-    logger.log(logging.STATS, f"Wait Times:   {str(datetime.timedelta(0, waittime))}")
-    logger.log(logging.STATS, f"Sending Time: {str(datetime.timedelta(0, Util._transmissionTime))}")
+    logger.log(log.STATS, f"Wait Times:   {str(datetime.timedelta(0, waittime))}")
+    logger.log(log.STATS, f"Sending Time: {str(datetime.timedelta(0, Util._transmissionTime))}")
 
 def pickMode():
     if args.local != '' and args.local is not None:
@@ -2153,7 +2147,7 @@ def printReport(repFormat):
     numFiles = 0
     deltas   = 0
     dataSize = 0
-    logger.log(logging.STATS, "")
+    logger.log(log.STATS, "")
     if report:
         length = reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
@@ -2165,19 +2159,19 @@ def printReport(repFormat):
         fmt3 = f'  %-{length}s   %-6s %-10s'
         fmt4 = '  %d files (%d full, %d delta, %s)'
 
-        logger.log(logging.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
-        logger.log(logging.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
+        logger.log(log.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
+        logger.log(log.STATS, fmt, '-' * (length + 4), '-' * 6, '-' * 10, '-' * 10)
         for i in sorted(report):
             r = report[i]
             (d, f) = i
 
             if d != lastDir:
                 if repFormat == 'dirs' and lastDir:
-                    logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
+                    logger.log(log.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
                 numFiles = 0
                 deltas = 0
                 dataSize = 0
-                logger.log(logging.STATS, "%s:", Util.shortPath(d, 80))
+                logger.log(log.STATS, "%s:", Util.shortPath(d, 80))
                 lastDir = d
 
             numFiles += 1
@@ -2187,13 +2181,13 @@ def printReport(repFormat):
 
             if repFormat == 'all' or repFormat is True:
                 if r['sigsize']:
-                    logger.log(logging.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts), Util.fmtSize(r['sigsize'], suffixes=filefmts))
+                    logger.log(log.STATS, fmt2, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts), Util.fmtSize(r['sigsize'], suffixes=filefmts))
                 else:
-                    logger.log(logging.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts))
+                    logger.log(log.STATS, fmt3, f, r['type'], Util.fmtSize(r['size'], suffixes=filefmts))
         if repFormat == 'dirs' and lastDir:
-            logger.log(logging.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
+            logger.log(log.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
     else:
-        logger.log(logging.STATS, "No files backed up")
+        logger.log(log.STATS, "No files backed up")
 
 def lockRun(server, port, client):
     lockName = 'tardis_' + str(server) + '_' + str(port) + '_' + str(client)
@@ -2433,7 +2427,6 @@ def main():
         else:
             conn = getConnection(server, port)
 
-
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         exceptionLogger.log(e)
@@ -2445,7 +2438,7 @@ def main():
     try:
         startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password)
 
-
+        # Send information about this backup.
         sendConfigInfo(directories)
 
         # Now, process top level directories
@@ -2472,10 +2465,9 @@ def main():
         exceptionLogger.log(e)
     finally:
         setProgress("Finishing backup...")
-        if localmode:
-            conn.send(Exception("Terminate connection"))
         conn.close(exc)
         if localmode:
+            conn.send(Exception("Terminate connection"))
             logger.info("Waiting for server to complete")
             backendThread.join()        # Should I do communicate?
 
