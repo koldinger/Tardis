@@ -68,8 +68,6 @@ import srp
 import colorlog
 from pathmatch import wildmatch
 
-from icecream import ic
-
 import Tardis
 from . import TardisCrypto
 from . import CompressedBuffer
