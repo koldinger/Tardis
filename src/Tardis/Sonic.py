@@ -654,7 +654,7 @@ def renameSet(db):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
     result = db.setBackupSetName(args.newname, info['priority'], info['backupset'])
     if not result:
-        logger.error("Unable to rename %s to %s", info['name'], args.newname)
+        logger.error("Unable to rename %s to %s.  Name already exists", info['name'], args.newname)
     return result
 
 def parseArgs() -> argparse.Namespace:
