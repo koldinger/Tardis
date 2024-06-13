@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#td /usr/bin/python3
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
@@ -69,7 +69,8 @@ setup(  name                    = 'Tardis-Backup',
                             'termcolor',      'passwordmeter',  'pathmatch',     'python-snappy',   'zstandard',
                             'srp',            'pid',            'python-magic',  'urllib3',         'binaryornot',     
                             'colorlog',       'progressbar2',   'reportlab',     'qrcode',          'fusepy',
-                            'requests_cache', 'requests',       'flask',         'tornado',      ]
+                            'requests_cache', 'requests',       'flask',         'tornado',         'zstandard',
+                            'lz4',            'lzma',           'bz2']
                             + add_pkgs,
         package_dir = {'': 'src'},
         package_data = {
