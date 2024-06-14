@@ -600,17 +600,17 @@ def checkSanity(db, cache, crypt):
             if args.details:
                 #width, _ = shutil.get_terminal_size((132, 24))
                 if inCache:
-                    print("Unmatched files in store:")
+                    print("Unreferenced data files")
                     for i in inCache:
                         print(f"  {i}  {Util.fmtSize(cache.size(i))}")
                 if inDB:
-                    print('Unmatched checksums in DB')
+                    print("Checksums missing data files")
                     for i in inDB:
                         names = db.getNamesForChecksum(i)
-                        names = map(crypt.decryptFilename, names)
+                        names = sorted(map(crypt.decryptFilename, names))
                         print(i, names)
 
-            # And get rid of it,
+            # And get rid of it, 
             if args.cleanup:
                 if args.confirm():
                     for i in inCache:
