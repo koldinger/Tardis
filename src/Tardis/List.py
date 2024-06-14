@@ -401,8 +401,6 @@ def printVersions(fInfos):
         elif info['inode'] != prevInfo['inode']:
             color = colors['moved']
             new = True
-        else:
-            pass
 
         prevInfo = info
         if new:
@@ -605,23 +603,23 @@ def computeColumnWidth(names):
     longestName = max(list(map(len, names)), default=0)
 
     if args.columns:
-        columns = args.columns
+        cols = args.columns
     else:
         if os.isatty(sys.stdout.fileno()):
             (width, _) = shutil.get_terminal_size((80, 32))  # getTerminalSize()
             logger.debug("Setting width to %d", width)
             width -= 2          # lop a couple characters off the end to avoid annoying wraps in some cases.
-            columns = int(width / (longestName + 4))
-            if columns == 0:
-                columns = 1
+            cols = int(width / (longestName + 4))
+            if cols == 0:
+                cols = 1
         else:
-            columns = 1
+            cols = 1
 
     #fmt = "%%-%ds  " % (longestName + 2)
     fmt = f"%-{longestName + 2}s"
-    logger.debug("Setting columns to %d", columns)
+    logger.debug("Setting columns to %d", cols)
 
-    return (columns, fmt)
+    return (cols, fmt)
 
 def setupDisplay(tardis):
     """

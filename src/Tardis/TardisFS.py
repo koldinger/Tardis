@@ -111,7 +111,7 @@ class TardisFS(LoggingMixIn, Operations):
     """
     # Disable pylint complaints about "could me a function" and "unused argument" as lots of required FUSE functions
     # just return "read-only FS" status
-    # pragma pylint: disable=no-self-use,unused-argument
+    # pragma pylint: disable=nused-argument
     backupsets = {}
     dirInfo = {}
     fsencoding = sys.getfilesystemencoding()
@@ -270,7 +270,7 @@ class TardisFS(LoggingMixIn, Operations):
                 'st_ctime': timestamp,
             }
             return st
-        elif depth == 1:
+        if depth == 1:
             # Root directory contents
             lead = getParts(path)
             if lead[0] == self.current:
@@ -289,24 +289,23 @@ class TardisFS(LoggingMixIn, Operations):
                     'st_ctime': timestamp
                 }
                 return st
-            else:
-                f = self.getBackupSetInfo(lead[0])
-                #self.log.debug("Got backupset info for %s: %s", lead[0], str(f))
-                if f:
-                    timestamp = float(f['starttime'])
-                    st = {
-                        'st_mode': stat.S_IFDIR | 0o555,
-                        'st_ino': int(float(f['starttime'])),
-                        'st_dev': 0,
-                        'st_nlink': 2,
-                        'st_uid': 0,
-                        'st_gid': 0,
-                        'st_size': 4096,
-                        'st_atime': timestamp,
-                        'st_mtime': timestamp,
-                        'st_ctime': timestamp
-                    }
-                    return st
+            f = self.getBackupSetInfo(lead[0])
+            #self.log.debug("Got backupset info for %s: %s", lead[0], str(f))
+            if f:
+                timestamp = float(f['starttime'])
+                st = {
+                    'st_mode': stat.S_IFDIR | 0o555,
+                    'st_ino': int(float(f['starttime'])),
+                    'st_dev': 0,
+                    'st_nlink': 2,
+                    'st_uid': 0,
+                    'st_gid': 0,
+                    'st_size': 4096,
+                    'st_atime': timestamp,
+                    'st_mtime': timestamp,
+                    'st_ctime': timestamp
+                }
+                return st
         else:
             f = self.getFileInfoByPath(path)
             if f:
@@ -340,7 +339,7 @@ class TardisFS(LoggingMixIn, Operations):
         #raise FuseOSError(errno.ENOSYS)
 
     #@tracer
-    def readdir(self, path, offset):
+    def readdir(self, path, fh):
         #self.log.info("CALL readdir %s Offset: %d", path, offset)
         parent = None
 
@@ -403,12 +402,12 @@ class TardisFS(LoggingMixIn, Operations):
         raise FuseOSError(errno.EROFS)
 
     #@tracer
-    def fsync ( self, path, isFsyncFile ):
+    def fsync ( self, path, datasync, fh ):
         #self.log.info( 'CALL fsync {} {}'.format(path, isFsyncFile))
         raise FuseOSError(errno.EROFS)
 
     #@tracer
-    def link ( self, targetPath, linkPath ):
+    def link ( self, target, source ):
         #self.log.info( 'CALL link {} {}'.format(targetPath, linkPath))
         raise FuseOSError(errno.EROFS)
 
@@ -473,13 +472,13 @@ class TardisFS(LoggingMixIn, Operations):
 
 
     #@tracer
-    def read ( self, path, length, offset, fh ):
+    def read ( self, path, size, offset, fh ):
         #self.log.info('CALL read {} {} {}'.format(path, length, offset))
         path = self.fsEncodeName(path)
         f = self.files[path]["file"]
         if f:
             f.seek(offset)
-            data = f.read(length)
+            data = f.read(size)
             logger.debug("Actually read %d bytes of %s", len(data), type(data))
             return data
         logger.warning("No file for path %s", path)
@@ -500,7 +499,8 @@ class TardisFS(LoggingMixIn, Operations):
             link = str(target['name'])
             self.cache.insert(key, link)
             return link
-        elif getDepth(path) > 1:
+
+        if getDepth(path) > 1:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
             if b:
@@ -519,7 +519,7 @@ class TardisFS(LoggingMixIn, Operations):
         raise FuseOSError(errno.ENOENT)
 
     #@tracer
-    def release ( self, path, flags ):
+    def release ( self, path, fh ):
         path = self.fsEncodeName(path)
 
         if self.files[path]:
@@ -531,7 +531,7 @@ class TardisFS(LoggingMixIn, Operations):
         raise FuseOSError(errno.EINVAL)
 
     #@tracer
-    def rename ( self, oldPath, newPath ):
+    def rename ( self, old, new ):
         #self.log.info('CALL rename {} {}'.format(oldPath, newPath))
         raise FuseOSError(errno.EROFS)
 
@@ -551,11 +551,11 @@ class TardisFS(LoggingMixIn, Operations):
                 'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
         raise FuseOSError(errno.EINVAL)
 
-    def symlink ( self, targetPath, linkPath ):
+    def symlink ( self, target, source ):
         #self.log.info('CALL symlink {} {}'.format(path, linkPath))
         raise FuseOSError(errno.EROFS)
 
-    def truncate ( self, path, size ):
+    def truncate ( self, path, length, fh ):
         #self.log.info('CALL truncate {} {}'.format(path, size))
         raise FuseOSError(errno.EROFS)
 
@@ -563,7 +563,7 @@ class TardisFS(LoggingMixIn, Operations):
         #self.log.info('CALL unlink {}'.format(path))
         raise FuseOSError(errno.EROFS)
 
-    def write ( self, path, buf, offset ):
+    def write ( self, path, data, offset, fh ):
         #self.log.info('CALL write {} {} {}'.format(path, offset, len(buf)))
         raise FuseOSError(errno.EROFS)
 
@@ -612,10 +612,10 @@ class TardisFS(LoggingMixIn, Operations):
 
     #@tracer
     #def getxattr (self, path, attr, size, *args):
-    def getxattr(self, path, attr, position=0):
+    def getxattr(self, path, name, position=0):
         path = self.fsEncodeName(path)
         #logger.info('CALL getxattr: %s %s', path, attr)
-        attr = str(attr)
+        attr = str(name)
 
         depth = getDepth(path)
         #logger.info("Got depth of path %s -> %s", path, depth)

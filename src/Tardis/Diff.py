@@ -112,16 +112,14 @@ def setcolor(line):
 
 def isBinary(lines, numLines = 128):
     #TODO Fixme.  binaryornot doesn't seem to work for binary strings.
+    #lineNo = 0
+    #numLines = min(numLines, len(lines))
+    #while lineNo < numLines:
+    #    if binaryornot.check.is_binary_string(lines[lineNo]):
+    #        return True
+    #    lineNo += 1
+    #return False
     return False
-    """
-    lineNo = 0
-    numLines = min(numLines, len(lines))
-    while lineNo < numLines:
-        if binaryornot.check.is_binary_string(lines[lineNo]):
-            return True
-        lineNo += 1
-    return False
-    """
 
 def runDiff(f1, f2, name, then, now):
     # Read the lines in the files.

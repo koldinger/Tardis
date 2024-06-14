@@ -48,7 +48,7 @@ def processDir(path, bset, parent, device):
         parentdev = row[3]
         sub = os.path.join(path, name)
         print("    {} ({}) has different device from parent: {} {}".format(sub, inode, device, parentdev))
-    s = conn.execute("SELECT Name, inode, device FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent = :parent AND dir = 1 AND :bset BETWEEN FirstSet AND LastSet", 
+    s = conn.execute("SELECT Name, inode, device FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent = :parent AND dir = 1 AND :bset BETWEEN FirstSet AND LastSet",
                     {"parent": parent, "bset": bset})
     for row in s.fetchall():
         name  = row[0]

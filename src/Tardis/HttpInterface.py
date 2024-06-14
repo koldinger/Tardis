@@ -204,7 +204,7 @@ def authenticate1():
 def authenticate2():
     db = getDB()
     data = request.form
-    app.logger.debug("Authenticate 2: Got data: " + str(data))
+    app.logger.debug("Authenticate 2: Got data: %s", str(data))
     srpValueM = base64.b64decode(data['srpValueM'])
     srpValueH = db.authenticate2(srpValueM)
     resp = { "srpValueH": str(base64.b64encode(srpValueH), 'utf8') }
@@ -320,7 +320,7 @@ def getFileInfoByChecksum(backupset, checksum):
 def getNewFiles(backupset, other):
     db = getDB()
     files = []
-    other = True if other == 'True' else False
+    other = other == 'True'
     for x in db.getNewFiles(backupset, other):
         files.append(makeDict(x))
     return createResponse(files)
@@ -609,7 +609,7 @@ def setupLogging():
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
     log.setLevel(loglevel)
 
-    format = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
+    fmt = logging.Formatter("%(asctime)s %(levelname)s : %(message)s")
 
     if args.logfile:
         handler = logging.handlers.WatchedFileHandler(args.logfile)
@@ -620,7 +620,7 @@ def setupLogging():
 
     logging.raiseExceptions = False
 
-    handler.setFormatter(format)
+    handler.setFormatter(fmt)
     log.addHandler(handler)
     return log
 
