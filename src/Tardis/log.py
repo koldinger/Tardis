@@ -1,4 +1,5 @@
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
+
+# vi: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -28,39 +29,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from strenum import UppercaseStrEnum
-from enum import auto
+import logging
 
-class Commands(UppercaseStrEnum):
-    DIR = auto()
-    DHSH = auto()
-    SGR = auto()
-    SGS = auto()
-    SIG = auto()
-    DEL = auto()
-    CON = auto()
-    CKS = auto()
-    CLN = auto()
-    BATCH = auto()
-    PRG = auto()
-    CLICONFIG = auto()
-    COMMANDLINE = auto()
-    META = auto()
-    METADATA = auto()
-    SETKEYS = auto()
-    AUTH1 = auto()
-    AUTH2 = auto()
-    DONE = auto()
-
-class Responses(UppercaseStrEnum):
-    ACKDIR = auto()
-    ACKCLN = auto()
-    ACKPRG = auto()
-    ACKSUM = auto()
-    ACKMETA = auto()
-    ACKDHSH = auto()
-    ACKCLICONFIG = auto()
-    ACKCMDLN = auto()
-    ACKDONE = auto()
-    ACKBTCH = auto()
-    INIT = auto()
+STATS = logging.INFO + 1
+DIRS  = logging.INFO - 1
+FILES = logging.INFO - 2
+MSGS  = logging.DEBUG - 1
+logging.addLevelName(STATS, "STAT")
+logging.addLevelName(FILES, "FILE")
+logging.addLevelName(DIRS,  "DIR")
+logging.addLevelName(MSGS,  "MSG")

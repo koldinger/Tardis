@@ -32,9 +32,10 @@ import sys
 import zlib
 import bz2
 import lzma
+import lz4.frame 
 import zstandard as zstd
 
-import Tardis.librsync as librsync
+from . import librsync
 
 _defaultChunksize = 1024 * 1024
 
@@ -53,18 +54,41 @@ class _NullCompressor:
 _zstdCtxC = zstd.ZstdCompressor(level=5)
 _zstdCtxD = zstd.ZstdDecompressor()
 
+class Lz4Compressor:
+    def __init__(self):
+        self.compressor = lz4.frame.LZ4FrameCompressor()
+        self.first = True
+
+    def compress(self, buffer):
+        if self.first:
+            self.first = False
+            return self.compressor.begin() + self.compressor.compress(buffer)
+        else:
+            return self.compressor.compress(buffer)
+
+    def flush(self):
+        return self.compressor.flush()
+
+class Lz4Decompressor:
+    def __init__(self):
+        self.decompressor = lz4.frame.LZ4FrameDecompressor()
+
+    def decompress(self, buffer):
+        return self.decompressor.decompress(buffer)
+
 _compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj, {}),
                  'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
                  'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor, {}),
                  'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
+                 'lz4' : (Lz4Compressor, lz4.frame.LZ4FrameDecompressor, {}),
                  'none': (_NullCompressor, _NullCompressor, {})
                }
 
 # Pick a selected compressor or decompressor
 def _updateAlg(alg):
-    if (alg is None) or (alg == 0) or (alg == 'None'):
+    if alg in [None, 0, 'None', False]:
         alg = 'none'
-    if (alg == 1) or (alg == 'True'):
+    if alg in [1, 'True', True]:
         alg = 'zlib'
     return alg
 
@@ -102,7 +126,7 @@ class BufferedReader:
             self.sig.step(buf)
         return buf
 
-    def read(self, size=0x7fffffff):
+    def read(self, size=0x7fffffffffffffff):
         #avail = 0
         #if self.buffer:
         #    avail = len(self.buffer)

@@ -62,7 +62,7 @@ class CacheDir:
                 if self.chown:
                     os.chown(self.root, self.user, self.group)
                 if skipFile:
-                    with open(os.path.join(self.root, skipFile), 'a'):
+                    with open(os.path.join(self.root, skipFile), 'a', encoding='utf8'):
                         pass
             else:
                 raise CacheDirDoesNotExist("CacheDir does not exist: " + root)

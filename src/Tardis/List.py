@@ -211,7 +211,8 @@ def collectDirContents2(tardis, dirList, crypt):
     ranges = []
     dirRange = []
     prev = {}
-    dirHash = dict([(x['backupset'], y) for (x,y) in dirList])
+    dirHash = { k['backupset']:v for (k,v) in dirList }
+
     # Detect the ranges
     for bset in backupSets:
         d = dirHash.setdefault(bset['backupset'])
@@ -410,7 +411,7 @@ def printVersions(fInfos):
         # Skip out if we're not printing something here
         # Bascially we stay if we're print everything or it's a new file
         # OR if we're printing deletions and we disappered
-        if args.versions in ['last' 'none'] or \
+        if args.versions in ['last', 'none'] or \
             (args.versions == 'change' and not (new or gone or broken)) or \
             (not args.deletions and gone) or (not args.broken and broken):
             continue
@@ -460,7 +461,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             for name in sorted(names, key=lambda x: x.lower().lstrip('.'), reverse=args.reverse):
                 fInfo = getInfoByName(contents, name)
                 col += 1
-                eol = True if ((col % numCols) == 0) else False
+                eol = (col % numCols) == 0
                 processFile(name, fInfo, tardis, crypt, printContents=False, recurse=0, first=False, fmt=fmt, eol=eol)
             flushLine()
 
@@ -616,7 +617,8 @@ def computeColumnWidth(names):
         else:
             columns = 1
 
-    fmt = "%%-%ds  " % (longestName + 2)
+    #fmt = "%%-%ds  " % (longestName + 2)
+    fmt = f"%-{longestName + 2}s"
     logger.debug("Setting columns to %d", columns)
 
     return (columns, fmt)

@@ -193,7 +193,7 @@ def needsAuthentication():
 def authenticate1():
     db = getDB()
     data = request.form
-    app.logger.debug("Authenticate 1: Got data: " + str(data))
+    app.logger.debug("Authenticate 1: Got data: %s", str(data))
     srpUname = base64.b64decode(data['srpUname'])
     srpValueA = base64.b64decode(data['srpValueA'])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
@@ -393,7 +393,7 @@ def getChainLength(checksum):
     db = getDB()
     return createResponse(db.getChainLength(checksum))
 
-_blocksize = (1024 * 1024)
+_blocksize = 1024 * 1024
 def _stream(f):
     try:
         f.seek(0)

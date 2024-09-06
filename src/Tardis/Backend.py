@@ -52,8 +52,9 @@ from . import TardisCrypto
 from . import TardisDB
 from . import Util
 from . import Protocol
+from . import log
 
-class SendDataType(IntEnum):
+class FileResponse(IntEnum):
     DONE    = 0
     CONTENT = 1
     CKSUM   = 2
@@ -78,9 +79,6 @@ else:
 
 pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
-logging.TRACE = logging.DEBUG - 1
-logging.MSGS  = logging.DEBUG - 2
-
 _sessions = {}
 def addSession(sessionId, client):
     _sessions[sessionId] = client
@@ -92,7 +90,7 @@ def rmSession(sessionId):
         pass
 
 def checkSession(sessionId):
-    return (sessionId in _sessions)
+    return sessionId in _sessions
 
 class InitFailedException(Exception):
     pass
@@ -104,6 +102,10 @@ class ProcessingError(Exception):
     pass
 
 class BackendConfig:
+    """
+    Configuration class.   Used by the Client class when an integrated backend is used (ie, 
+    local mode)
+    """
     umask           = 0
     cksContent      = 0
     serverSessionID = None
@@ -141,14 +143,13 @@ class BackendConfig:
 
 
 class Backend:
-
-    def __init__(self, messenger, config, logSession=True, sessionid=None):
+    def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None):
         self.numfiles       = 0
-        self.logger         = None
+        self.logger: logging.Logger     = None
         self.sessionid      = None
+        self.cache: CacheDir.CacheDir   = None
         self.tempdir        = None
-        self.cache          = None
-        self.db             = None
+        self.db: TardisDB.TardisDB      = None
         self.purged         = False
         self.full           = False
         self.done           = False
@@ -179,8 +180,8 @@ class Backend:
 
         self.logger.debug("Created backend: %s", self.sessionid)
         self.messenger = messenger
-        self.config = config
-        self.printMessages = True if self.logger.isEnabledFor(logging.TRACE) else False
+        self.config = conf
+        self.printMessages = self.logger.isEnabledFor(log.MSGS)
         self.tempPrefix = self.sessionid + "-"
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.config.umask)
@@ -202,13 +203,13 @@ class Backend:
         #if not 'message' in message:
         #    self.logger.error("No `message` block in message: %s", message)
         if self.printMessages:
-            self.logger.log(logging.TRACE, "Sending:\n" + pp.pformat(message))
+            self.logger.log(log.MSGS, "Sending:\n" + pp.pformat(message))
         self.messenger.sendMessage(message)
 
-    def recvMessage(self):
+    def recvMessage(self) -> dict[str, str]|bytearray:
         message = self.messenger.recvMessage()
         if self.printMessages:
-            self.logger.log(logging.TRACE, "Received:\n" + pp.pformat(message))
+            self.logger.log(log.MSGS, "Received:\n" + pp.pformat(message))
         return message
 
     sizes = set()
@@ -223,8 +224,8 @@ class Backend:
             self.sizesLoaded = True
 
         if (size > self.config.cksContent) and (size in self.sizes):
-            return SendDataType.CKSUM
-        return SendDataType.CONTENT
+            return FileResponsType.CKSUM
+        return FileResponsType.CONTENT
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -262,7 +263,7 @@ class Backend:
             else:
                 self.db.insertFile(f, parent)
                 self.setXattrAcl(inode, device, xattr, acl)
-            retVal = SendDataType.DONE
+            retVal = FileResponse.DONE
         else:       # Not a directory, it's a file
             # Check to see if there's an updated version.
             if not self.lastCompleted:
@@ -298,22 +299,22 @@ class Backend:
                             self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
                         if self.full and old['chainlength'] != 0:
-                            retVal = SendDataType.REFRESH
+                            retVal = FileResponse.REFRESH
                         else:
-                            retVal = SendDataType.DONE       # we're done either way
+                            retVal = FileResponse.DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
                         #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
                         self.setXattrAcl(inode, device, xattr, acl)
-                        retVal = SendDataType.CONTENT
+                        retVal = FileResponse.CONTENT
                 #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
                 elif (osize == fsize) and (old["checksum"] is not None):
                     #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = SendDataType.CKSUM
+                    retVal = FileResponse.CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
                      ((old["basis"] is not None) and (old["chainlength"]) >= self.maxChain):
@@ -325,7 +326,7 @@ class Backend:
                     # Chain of delta's is too long.
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
-                    retVal = SendDataType.REFRESH
+                    retVal = FileResponse.REFRESH
                 else:
                     # Otherwise, let's just get the delta
                     #self.logger.debug("Fourth case.  Should be a delta: %s", name)
@@ -333,9 +334,9 @@ class Backend:
                     self.setXattrAcl(inode, device, xattr, acl)
                     if self.full:
                         # Full backup, request the full version anyhow.
-                        retVal = SendDataType.CONTENT
+                        retVal = FileResponse.CONTENT
                     else:
-                        retVal = SendDataType.DELTA
+                        retVal = FileResponse.DELTA
                         basis = old['checksum']
             else:           # if old (i.e., if not old)
                 # Create a new record for this file
@@ -352,7 +353,7 @@ class Backend:
                     if checksum:
                         #self.logger.debug('Setting linked inode %d: %s to checksum %s', inode, f['name'], checksum)
                         self.db.setChecksum(inode, device, checksum)
-                        retVal = LINKED             # special value, allowing the caller to determine that this was handled as a link
+                        retVal = FileResponse.LINKED             # special value, allowing the caller to determine that this was handled as a link
                     else:
                         #self.logger.debug('No link data found for inode %d: %s.   Requesting new content', inode, f['name'])
                         retVal = self.checkForSize(f['size'])
@@ -368,12 +369,12 @@ class Backend:
                             #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                             if old["checksum"] is not None:
                                 self.db.setChecksum(inode, device, old['checksum'])
-                                retVal = SendDataType.DONE
+                                retVal = FileResponse.DONE
                             else:
                                 retVal = self.checkForSize(f['size'])
                         else:
                             # otherwise
-                            retVal = SendDataType.CKSUM
+                            retVal = FileResponse.CKSUM
                     else:
                         # TODO: Lookup based on inode.
                         #self.logger.debug("No old file.")
@@ -439,12 +440,12 @@ class Backend:
             #elif res == 1: content.append(inode)
             #elif res == 2: cksum.append(inode)
             #elif res == 3: delta.append(inode)
-            if res == SendDataType.LINKED:
+            if res == FileResponse.LINKED:
                 # Determine if this fileid is already in one of the queues
-                if not filter(lambda x: fileId in x, queues):
-                    queues[SendDataType.DONE].add(fileId)
-            elif res == SendDataType.DELTA:
-                queues[SendDataType.DELTA].add((fileId, basis))
+                if not any(map(lambda x: fileId in x, queues)):
+                    queues[FileResponse.DONE].add(fileId)
+            elif res == FileResponse.DELTA:
+                queues[FileResponse.DELTA].add((fileId, basis))
             else:
                 queues[res].add(fileId)
 
@@ -612,8 +613,6 @@ class Backend:
 
         self.statBytesReceived += bytesReceived
 
-        Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
-
         if output:
             try:
                 if savefull:
@@ -644,6 +643,9 @@ class Backend:
                     self.db.insertChecksum(checksum, encrypted, size=size, deltasize=deltasize, basis=basis, compressed=compressed, disksize=bytesReceived)
                     self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
+                # record the metadata for this file
+                Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, basis=basis, logger=self.logger)
+
                 # Track that we've added a file of this size.
                 self.sizes.add(size)
 
@@ -655,8 +657,10 @@ class Backend:
                 self.logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
             # TODO: This has gotta be wrong.
+        else:
+            self.db.setChecksum(inode, dev, checksum)
 
-        flush = True if size > 1000000 else False
+        flush = size > 1000000
         return (None, flush)
 
     def processSignature(self, message):
@@ -674,7 +678,7 @@ class Backend:
             output = self.cache.open(sigfile, "wb")
 
         # TODO: Record these in stats
-        (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
+        (_, _, _, checksum, _) = Util.receiveData(self.messenger, output)
 
         if output is not None:
             output.close()
@@ -692,9 +696,7 @@ class Backend:
             (inode, dev) = f["inode"]
             cksum = f["checksum"]
             # Check to see if the checksum exists
-            # TODO: Is this faster than checking if the file exists?  Probably, but should test.
             try:
-                self.logger.debug("Try Block")
                 # Check to see if the checksum already exists
                 info = self.db.getChecksumInfo(cksum)
                 if info and info['isfile'] and info['size'] >= 0:
@@ -766,7 +768,7 @@ class Backend:
 
         encrypted = message.get('encrypted', False)
 
-        (bytesReceived, status, size, cks, compressed) = Util.receiveData(self.messenger, output)
+        (bytesReceived, status, size, _, compressed) = Util.receiveData(self.messenger, output)
         self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
         output.close()
@@ -778,8 +780,9 @@ class Backend:
 
         return (None, False)
 
-    def processPurge(self, message = {}):
-        self.logger.debug(f"Processing purge message: {str(message)}")
+    def processPurge(self, message = None):
+        self.logger.debug("Processing purge message: %s", str(message))
+        message = message or {}
         prevTime = None
         if 'time' in message:
             if message['relative']:
@@ -965,7 +968,7 @@ class Backend:
         }
         return (response, False)
 
-    def processDone(self, message):
+    def processDone(self, _):
         self.done = True
         response = {
             'message': Protocol.Responses.ACKDONE
@@ -1075,11 +1078,10 @@ class Backend:
                                      user=self.config.user,
                                      group=self.config.group,
                                      skipFile=self.config.skip)
-        except CacheDir.CacheDirDoesNotExist:
+        except CacheDir.CacheDirDoesNotExist as exc:
             if not self.config.allowNew:
-                raise InitFailedException("Server does not allow new clients")
-            else:
-                raise InitFailedException("Must request new client (--create))")
+                raise InitFailedException("Server does not allow new clients") from exc
+            raise InitFailedException("Must request new client (--create))") from exc
 
     def getDB(self, client, create):
         script = None
@@ -1118,7 +1120,7 @@ class Backend:
         self.regenerator = Regenerator.Regenerator(self.cache, self.db)
         return ret
 
-    def setConfig(self, config):
+    def setConfig(self):
         self.formats        = self.config.formats
         self.priorities     = self.config.priorities
         self.keep           = self.config.keep
@@ -1190,8 +1192,7 @@ class Backend:
             else:
                 if checkSession(prev['session']):
                     raise InitFailedException(f"Previous backup session still running: {prev['name']}.  Run with --force to force starting the new backup")
-                else:
-                    self.logger.warning('Previous session for client %s (%s) did not complete.', self.client, prev['session'])
+                self.logger.warning('Previous session for client %s (%s) did not complete.', self.client, prev['session'])
 
         addSession(self.sessionid, self.client)
 
@@ -1255,7 +1256,7 @@ class Backend:
             return(srpSalt, srpVkey, filenameKey, contentKey)
 
         except KeyError as e:
-            raise InitFailedException(str(e))
+            raise InitFailedException(str(e)) from e
 
     def doSrpAuthentication(self):
         """
@@ -1296,35 +1297,32 @@ class Backend:
                 'srpValueHAMK': base64.b64encode(srpValueHAMK)
             }
             self.logger.debug("Authenticated")
-            return message
         except TardisDB.AuthenticationFailed as e:
             message = {
                 'status': 'AUTHFAIL',
                 'message': str(e)
             }
             self.sendMessage(message)
-            raise e
+            raise
+        return message
 
-    def runBackup(self):
-        started   = False
-        completed = False
-        client = ""
+    def initializeBackup(self):
         try:
-            fields = self.recvMessage()
-            messType    = fields['message']
+            message = self.recvMessage()
+            messType    = message['message']
             if not messType == 'BACKUP':
                 raise InitFailedException(f"Unknown message type: {messType}")
 
-            client      = fields['host']            # TODO: Change at client as well.
-            clienttime  = fields['time']
-            version     = fields['version']
+            client      = message['host']            # TODO: Change at client as well.
+            clienttime  = message['time']
+            version     = message['version']
 
-            autoname    = fields.get('autoname', True)
-            name        = fields.get('name', None)
-            full        = fields.get('full', False)
-            priority    = fields.get('priority', 0)
-            force       = fields.get('force', False)
-            create      = fields.get('create', False)
+            autoname    = message.get('autoname', True)
+            name        = message.get('name', None)
+            full        = message.get('full', False)
+            priority    = message.get('priority', 0)
+            force       = message.get('force', False)
+            create      = message.get('create', False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
         except ValueError:
@@ -1334,135 +1332,147 @@ class Backend:
 
         self.client = client
 
-        serverName = None
-        serverForceFull = False
-        authResp = {}
+        (_, dbfile) = self.genPaths()
+        self.logger.debug("Database File: %s", dbfile)
+
+        if create and os.path.exists(dbfile):
+            raise InitFailedException(f"Client {client} already exists")
+        if not create and not os.path.exists(dbfile):
+            raise InitFailedException(f"Unknown client: {client}")
+
         keys = None
+        if self.config.requirePW and create and self.config.allowNew:
+            keys = self.doGetKeys()
+
+        newBackup = self.getDB(client, create)
+
+        if self.config.requirePW and not self.db.needsAuthentication():
+            raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
+
+        serverForceFull = False
+        authResp = None
+        if create:
+            if keys:
+                self.logger.debug("Setting keys into new client DB")
+                (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
+                self.logger.info("Setting CryptoScheme %d", cryptoScheme)
+                self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
+                self.db.setConfigValue('CryptoScheme', cryptoScheme)
+                keys = None
+            else:
+                self.db.setConfigValue('CryptoScheme', TardisCrypto.NO_CRYPTO_SCHEME)
+
+        self.logger.debug("Ready for authentication")
+        if self.db.needsAuthentication():
+            authResp = self.doSrpAuthentication()
+
+        disabled = self.db.getConfigValue('Disabled')
+        if disabled is not None and int(disabled) != 0:
+            raise InitFailedException(f"Client {client} is currently disabled.")
+
+        self.setConfig()
+        self.startSession(name, force)
+
+        # Create a name
+        if autoname:
+            (serverName, serverPriority, serverKeepDays, serverForceFull) = self.calcAutoInfo(clienttime)
+            self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))
+            if serverName:
+                self.configKeepTime = serverKeepDays * 3600 * 24
+                self.configPriority = serverPriority
+            else:
+                self.configKeepTime = None
+                self.configPriority = None
+        else:
+            serverName = None
+            self.configKeepTime = None
+            self.configPriority = None
+
+        if autoname and serverName:
+            self.name = serverName
+
+        # Either the server or the client can specify a full backup.
+        self.full = full or serverForceFull
+
+        if priority is None:
+            priority = 0
+
+        # Create the actual backup set
+        self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.config.serverSessionID)
+
+        response = {
+            "message": "INIT",
+            "status": "OK",
+            "sessionid": self.sessionid,
+            "prevDate": str(self.db.prevBackupDate),
+            "new": newBackup,
+            "name": serverName if serverName else name,
+            "clientid": str(self.db.clientId)
+            }
+
+        if authResp:
+            response.update(authResp)
+            filenameKey = self.db.getConfigValue('FilenameKey')
+            contentKey  = self.db.getConfigValue('ContentKey')
+
+            if (filenameKey is None) ^ (contentKey is None):
+                self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
+
+            if filenameKey:
+                    response['filenameKey'] = filenameKey
+            if contentKey:
+                response['contentKey'] = contentKey
+
+        self.sendMessage(response)
+
+    def processBackupMessages(self):
+        while True:
+            flush = False
+            message = self.recvMessage()
+            if message is None:
+                raise Exception("No message received")
+
+            if message["message"] == "BYE":
+                if 'error' in message:
+                    raise Exception("Client Error: " + message['error'])
+                break
+
+            (response, flush) = self.processMessage(message)
+            if response:
+                self.sendMessage(response)
+            if flush:
+                self.db.commit()
+
+    def runBackup(self):
+        started   = False
+        completed = False
+
+        serverName = None
 
         try:
             try:
-                (_, dbfile) = self.genPaths()
-                self.logger.debug("Database File: %s", dbfile)
-
-                if create and os.path.exists(dbfile):
-                    raise Exception(f"Client {client} already exists")
-                elif not create and not os.path.exists(dbfile):
-                    raise Exception(f"Unknown client: {client}")
-
-                if self.config.requirePW and create and self.config.allowNew:
-                    keys = self.doGetKeys()
-
-                newBackup = self.getDB(client, create)
-
-                if self.config.requirePW and not self.db.needsAuthentication():
-                    raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
-
-                if create:
-                    if keys:
-                        self.logger.debug("Setting keys into new client DB")
-                        (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
-                        self.logger.info("Setting CryptoScheme %d", cryptoScheme)
-                        self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-                        self.db.setConfigValue('CryptoScheme', cryptoScheme)
-                        keys = None
-                    else:
-                        self.db.setConfigValue('CryptoScheme', TardisCrypto.NO_CRYPTO_SCHEME)
-
-
-                self.logger.debug("Ready for authentication")
-                if self.db.needsAuthentication():
-                    authResp = self.doSrpAuthentication()
-
-                disabled = self.db.getConfigValue('Disabled')
-                if disabled is not None and int(disabled) != 0:
-                    raise InitFailedException(f"Client {client} is currently disabled.")
-
-                self.setConfig(self.config)
-                self.startSession(name, force)
-
-                # Create a name
-                if autoname:
-                    (serverName, serverPriority, serverKeepDays, serverForceFull) = self.calcAutoInfo(clienttime)
-                    self.logger.debug("Setting name, priority, keepdays to %s", (serverName, serverPriority, serverKeepDays))
-                    if serverName:
-                        self.configKeepTime = serverKeepDays * 3600 * 24
-                        self.configPriority = serverPriority
-                    else:
-                        self.configKeepTime = None
-                        self.configPriority = None
-                else:
-                    self.configKeepTime = None
-                    self.configPriority = None
-
-                # Either the server or the client can specify a full backup.
-                self.full = full or serverForceFull
-
-                if priority is None:
-                    priority = 0
-
-                # Create the actual backup set
-                self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.config.serverSessionID)
+                self.initializeBackup()
             except Exception as e:
                 self.logger.error("Caught exception : %s", str(e))
                 message = {"status": "FAIL", "error": str(e)}
                 if self.config.exceptions:
                     self.logger.exception(e)
                 self.sendMessage(message)
-                raise InitFailedException(str(e))
-
-            response = {
-                "message": "INIT",
-                "status": "OK",
-                "sessionid": self.sessionid,
-                "prevDate": str(self.db.prevBackupDate),
-                "new": newBackup,
-                "name": serverName if serverName else name,
-                "clientid": str(self.db.clientId)
-                }
-
-            if authResp:
-                response.update(authResp)
-                filenameKey = self.db.getConfigValue('FilenameKey')
-                contentKey  = self.db.getConfigValue('ContentKey')
-
-                if (filenameKey is None) ^ (contentKey is None):
-                    self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
-
-                if filenameKey:
-                    response['filenameKey'] = filenameKey
-                if contentKey:
-                    response['contentKey'] = contentKey
-
-            self.sendMessage(response)
+                raise InitFailedException(str(e)) from e
 
             started = True
 
             #sock.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
+            self.processBackupMessages()
 
-            while True:
-                flush = False
-                message = self.recvMessage()
-                if message is None:
-                    raise Exception("No message received")
-
-                if message["message"] == "BYE":
-                    if 'error' in message:
-                        raise Exception("Client Error: " + message['error'])
-                    break
-
-                (response, flush) = self.processMessage(message)
-                if response:
-                    self.sendMessage(response)
-                if flush:
-                    self.db.commit()
-
+            # Shutdown the backup
             self.logger.debug("Completing Backup %s", self.idstr)
             if self.done:
                 self.db.completeBackup()
 
-                if autoname and serverName is not None:
-                    self.logger.debug("Changing backupset name from %s to %s.  Priority is %s", name, serverName, serverPriority)
-                    self.db.setBackupSetName(serverName, serverPriority)
+                if self.name:
+                    self.logger.debug("Changing backupset name to %s.  Priority is %s", self.name, self.configPriority)
+                    self.db.setBackupSetName(self.name, self.configPriority)
 
             completed = True
         except Exception as e:
@@ -1496,4 +1506,4 @@ class Backend:
                 self.db.compact()
                 self.db.close(started)
 
-            return started, completed, endtime, count, size
+        return started, completed, endtime, count, size
