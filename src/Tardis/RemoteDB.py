@@ -80,8 +80,7 @@ def fs_encode(val):
     if not isinstance(val, bytes):
         #return val.encode(sys.getfilesystemencoding())
         return val.encode(sys.getfilesystemencoding())
-    else:
-        return val
+    return val
 
 class RemoteDB:
     """ Proxy class to retrieve objects via HTTP queries """
@@ -169,8 +168,10 @@ class RemoteDB:
 
     def close(self):
         self.logger.debug("Closing session")
-        if self.session:
-            r = self.session.get(self.baseURL + "close", headers=self.headers)
+        if not self.session:
+            self.logger.warning("No session connected")
+
+        r = self.session.get(self.baseURL + "close", headers=self.headers)
         r.raise_for_status()
         self.session = None
         return r.json()
@@ -195,13 +196,10 @@ class RemoteDB:
         if isinstance(current, bool):
             if current:
                 return str(None)
-            else:
-                if self.prevBackupSet:
-                    return str(self.prevBackupSet)
-                else:
-                    return str(self._setPrevBackupSet())
-        else:
-            return str(current)
+            if self.prevBackupSet:
+                return str(self.prevBackupSet)
+            return str(self._setPrevBackupSet())
+        return str(current)
 
     @reconnect
     def listBackupSets(self):
@@ -292,8 +290,7 @@ class RemoteDB:
         path = urllib.parse.quote(path, '/')
         r = self.session.get(self.baseURL + "getFileInfoByPathForRange/" + str(first) + '/' + str(last) + path, headers=self.headers)
         r.raise_for_status()
-        for i in r.json():
-            yield i
+        yield from r.json()
 
 
     @reconnect
@@ -384,8 +381,7 @@ class RemoteDB:
         r.raise_for_status()
         if r.json() is None:
             return default
-        else:
-            return r.json()
+        return r.json()
 
     @reconnect
     def setConfigValue(self, name, value):
@@ -523,14 +519,13 @@ class RemoteDB:
 
         if streaming:
             return r.raw
-        else:
-            temp = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
+        temp = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
 
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                temp.write(chunk)
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            temp.write(chunk)
 
-            temp.seek(0)
-            return temp
+        temp.seek(0)
+        return temp
 
     @reconnect
     def removeOrphans(self):

@@ -30,7 +30,6 @@
 
 import os
 import os.path
-import stat
 import sys
 import argparse
 import time
@@ -335,26 +334,7 @@ def setupPermissionChecks():
     if uid == 0:
         return None     # If super-user, return None.  Causes no checking to happen.
 
-    # Otherwise, create a closure function which can be used to do checking for each file.
-    def checkPermission(pUid, pGid, mode):
-        if stat.S_ISDIR(mode):
-            if (uid == pUid) and (stat.S_IRUSR & mode) and (stat.S_IXUSR & mode):
-                return True
-            if (pGid in groups) and (stat.S_IRGRP & mode) and (stat.S_IXGRP & mode):
-                return True
-            if (stat.S_IROTH & mode) and (stat.S_IXOTH & mode):
-                return True
-        else:
-            if (uid == pUid) and (stat.S_IRUSR & mode):
-                return True
-            if (pGid in groups) and (stat.S_IRGRP & mode):
-                return True
-            if stat.S_IROTH & mode:
-                return True
-        return False
-
-    # And return the function.
-    return checkPermission
+    return Util.checkPermission
 
 def findLastPath(path, reduce):
     logger.debug("findLastPath: %s", path)
