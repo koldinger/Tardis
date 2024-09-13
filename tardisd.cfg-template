@@ -3,7 +3,6 @@ Port=7420
 BaseDir=/media/Backup/Tardis
 MaxDeltaChain=4
 MaxChangePercent=80
-AllowCopies=True
 AllowNewHosts=True
 RequirePassword=False
 LogFile=/var/log/tardisd/tardisd.log
