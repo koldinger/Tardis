@@ -130,7 +130,10 @@ class ProtocolConnection(Connection):
         message = {"message": "BYE" }
         if error:
             message["error"] = error
-        self.send(message)
+        try:
+            self.send(message)
+        except Exception:
+            pass
         super().close()
 
     def encode(self, string):
