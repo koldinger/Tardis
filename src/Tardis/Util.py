@@ -57,8 +57,6 @@ import passwordmeter
 import colorlog
 import parsedatetime
 
-from icecream import ic
-
 from . import Connection
 from . import CompressedBuffer
 from . import Defaults
@@ -319,13 +317,10 @@ def _readWithTimeout(prompt, timeout):
     return password.rstrip()
 
 def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, strength=False, timeout=Defaults.getDefault('TARDIS_PWTIMEOUT')):
-    ic("GetPassword")
     methods = 0
     if password: methods += 1
     if pwurl:    methods += 1
     if pwprog:   methods += 1
-
-    ic(methods)
 
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
@@ -333,8 +328,6 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
     if methods == 0 and not allowNone:
         # Nothing specified, and it wants a value.  Set password to True to fetch
         password = True
-
-    ic(password)
 
     if password is True or password == '':
         password = _readWithTimeout(prompt, int(timeout))
@@ -354,8 +347,6 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         a = shlex.split(pwprog)
         output = subprocess.check_output(a)
         password = output.split('\n')[0].rstrip()
-
-    ic(password)
 
     if not allowNone and not password:
         raise Exception("Password required")
