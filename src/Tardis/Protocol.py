@@ -32,6 +32,7 @@ from strenum import UppercaseStrEnum
 from enum import auto
 
 class Commands(UppercaseStrEnum):
+    BACKUP = auto()
     DIR = auto()
     DHSH = auto()
     SGR = auto()
@@ -64,3 +65,4 @@ class Responses(UppercaseStrEnum):
     ACKDONE = auto()
     ACKBTCH = auto()
     INIT = auto()
+    ACKSETKEYS = auto()
