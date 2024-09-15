@@ -36,6 +36,7 @@ import string
 import atexit
 import sched
 
+
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 _hideCursor = '\x1b[?25l'
@@ -125,7 +126,7 @@ class StatusBar():
         Start the status bar updating
         """
         self.thread = threading.Thread(name=name, target=self.scheduler.run)
-        self.thread.setDaemon(True)
+        self.thread.daemon = True
         self.thread.start()
 
     def shutdown(self):
@@ -216,8 +217,12 @@ class StatusBar():
 if __name__ == "__main__":
     import os
     import os.path
-    myargs = {"files": 0}
-    sb = StatusBar("{__elapsed__} :: Files: {files} Delta: {delta}: {amount!B} {mode} --> ", myargs)
+    from termcolor import colored
+
+    myargs = {"files": 0, "delta": 100}
+    fmt = f"{colored("{__elapsed__}", "yellow")} :: {colored("Files", "cyan")}: {{files}} {colored("Delta", "cyan")}: {{delta}}: {{amount!B}} {{mode}} --> "
+    print(fmt)
+    sb = StatusBar(fmt, myargs)
     sb.setValue("mode", "Testing")
     sb.start()
     files = os.listdir(".")
@@ -226,7 +231,7 @@ if __name__ == "__main__":
         myargs["files"] = i
         myargs["delta"] = int(i / 3)
         sb.setTrailer(os.path.realpath(files[i % len(files)]))
-        sb.setValue("mode", "Running" if i % 2 == 0 else "Walking")
+        sb.setValue("mode", colored("Running", "red") if i % 2 == 0 else colored("Walking", "green"))
         sb.setValue("amount", i * 1000000)
     sb.shutdown()
     print("All done")
