@@ -83,9 +83,6 @@ from . import Protocol
 from . import log
 #from . import Throttler
 
-from icecream import ic
-
-
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
 support_acl   = 'pylibacl' in features
@@ -316,6 +313,11 @@ class ProtocolError(Exception):
 class AuthenticationFailed(Exception):
     """
     Authentication failure
+    """
+
+class InitFailedException(Exception):
+    """
+    Initialization error
     """
 
 class ExitRecursionException(Exception):
@@ -1663,7 +1665,7 @@ def createPrefixPath(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
-def setCrypto(confirm, chkStrength=False, version=None):
+def setCrypto(confirm, chkStrength, version):
     global srpUsr, crypt
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, f"Password for {args.client}:",
                                 confirm=confirm, strength=chkStrength, allowNone = False)
@@ -1672,9 +1674,13 @@ def setCrypto(confirm, chkStrength=False, version=None):
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
     return password
 
-def doSendKeys(password):
+def doSendKeys(password, scheme):
+    """ Set up cryptography system, and send the generated keys """
     if srpUsr is None:
-        password = setCrypto(True, True, crypt.getCryptoScheme())
+        if scheme is None:
+            scheme = TardisCrypto.DEF_CRYPTO_SCHEME
+        password = setCrypto(True, True, scheme)
+    assert(crypt)
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1691,6 +1697,7 @@ def doSendKeys(password):
     return resp
 
 def doSrpAuthentication(response):
+    """ Setup cryptography and do authentication """
     try:
         setCrypto(False, args.create, response['cryptoScheme'])
 
@@ -1705,7 +1712,6 @@ def doSrpAuthentication(response):
 
         if resp['status'] == 'AUTHFAIL':
             raise AuthenticationFailed("Authentication Failed")
-
 
         srpValueS = base64.b64decode(resp['srpValueS'])
         srpValueB = base64.b64decode(resp['srpValueB'])
@@ -1736,12 +1742,12 @@ def doSrpAuthentication(response):
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
 
-def startBackup(name, priority, client, force, full=False, create=False, password=None, version=Tardis.__versionstring__):
+def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
     global lastTimestamp, crypt
 
     # Create a BACKUP message
     message = {
-            'message'   : 'BACKUP',
+            'message'   : Protocol.Commands.BACKUP,
             'host'      : client,
             'encoding'  : encoding,
             'priority'  : priority,
@@ -1750,7 +1756,8 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
             'time'      : time.time(),
             'version'   : version,
             'full'      : full,
-            'create'    : create
+            'create'    : create,
+            'encrypted' : bool(password)
     }
     if name:
         message['name'] = name
@@ -1759,8 +1766,10 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     resp = sendAndReceive(message)
 
     if resp['status'] == 'NEEDKEYS':
-        resp = doSendKeys(password)
+        resp = doSendKeys(password, scheme)
     if resp['status'] == 'AUTH':
+        if not password:
+            raise Exception(f"Client {client} requires a password")
         resp = doSrpAuthentication(resp)
 
     if resp['status'] != 'OK':
@@ -1814,7 +1823,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
 
 def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
-    setEncoder("bin")
+    #setEncoder("bin")
     return conn
 
 def splitList(line):
@@ -2074,7 +2083,15 @@ def setupLogging(logfiles, verbosity, logExceptions):
                 handler = Util.ClearingStreamHandler(sys.stdout)
             else:
                 isatty = False
-                handler = logging.handlers.WatchedFileHandler(Util.fullPath(logfile))
+                path = Util.fullPath(logfile)
+                # Check that the file is writable
+                try:
+                    handler = logging.handlers.WatchedFileHandler(path)
+                except:
+                    logging.basicConfig()
+                    logger = logging.getLogger()
+                    logger.critical(f"Unable to log to {path}")
+                    raise
         else:
             isatty = os.isatty(logfile.fileno())
             handler = Util.ClearingStreamHandler(logfile)
@@ -2404,24 +2421,23 @@ def main():
 
     # Set up logging
     verbosity=args.verbose or 0
-    setupLogging(args.logfiles, verbosity, args.exceptions)
+    try:
+        setupLogging(args.logfiles, verbosity, args.exceptions)
 
-    # determine mode:
-    localmode = pickMode()
+        # determine mode:
+        localmode = pickMode()
+    except:
+        sys.exit(1)
 
     # Open the connection
     backendThread = None
 
-    # Create a scheduler thread, if need be
-    scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
-
     # Initialize the progress bar, if requested
     if args.progress:
+        # Create a scheduler thread, if need be
+        scheduler = ThreadedScheduler.ThreadedScheduler() if args.progress else None
         statusBar = initProgressBar(scheduler)
-
-    if scheduler:
         scheduler.start()
-
 
     # Get the connection object
     try:
@@ -2437,11 +2453,10 @@ def main():
         exceptionLogger.log(e)
         sys.exit(1)
 
-
     # Now, do the actual work here.
     exc = None
     try:
-        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password)
+        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password, args.cryptoScheme)
 
         # Send information about this backup.
         sendConfigInfo(directories)
@@ -2451,6 +2466,8 @@ def main():
 
         # Do the actual backup
         runBackup()
+
+        setProgress("Finishing backup...")
 
         # Finish up
         shutdown()
@@ -2469,7 +2486,6 @@ def main():
         exc = str(e)
         exceptionLogger.log(e)
     finally:
-        setProgress("Finishing backup...")
         conn.close(exc)
         if localmode:
             conn.send(Exception("Terminate connection"))

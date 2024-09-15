@@ -224,8 +224,8 @@ class Backend:
             self.sizesLoaded = True
 
         if (size > self.config.cksContent) and (size in self.sizes):
-            return FileResponsType.CKSUM
-        return FileResponsType.CONTENT
+            return FileResponse.CKSUM
+        return FileResponse.CONTENT
 
     def checkFile(self, parent, f, dirhash):
         """
@@ -1252,8 +1252,9 @@ class Backend:
             contentKey  = resp['contentKey']
             srpSalt     = resp['srpSalt']
             srpVkey     = resp['srpVkey']
+            cryptoScheme = resp['cryptoScheme']
             # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-            return(srpSalt, srpVkey, filenameKey, contentKey)
+            return(srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme)
 
         except KeyError as e:
             raise InitFailedException(str(e)) from e
@@ -1308,9 +1309,9 @@ class Backend:
 
     def initializeBackup(self):
         try:
-            message = self.recvMessage()
+            message:dict = self.recvMessage()
             messType    = message['message']
-            if not messType == 'BACKUP':
+            if messType != Protocol.Commands.BACKUP:
                 raise InitFailedException(f"Unknown message type: {messType}")
 
             client      = message['host']            # TODO: Change at client as well.
@@ -1323,6 +1324,7 @@ class Backend:
             priority    = message.get('priority', 0)
             force       = message.get('force', False)
             create      = message.get('create', False)
+            encrypted   = message.get('encrypted', False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
         except ValueError:
@@ -1335,32 +1337,36 @@ class Backend:
         (_, dbfile) = self.genPaths()
         self.logger.debug("Database File: %s", dbfile)
 
+        if create and not self.config.allowNew:
+            raise InitFailedException("New databases not allowed")
+        if create and not encrypted:
+            raise InitFailedException("Server requires backups to be encrypted, ie, have a password")
         if create and os.path.exists(dbfile):
             raise InitFailedException(f"Client {client} already exists")
         if not create and not os.path.exists(dbfile):
             raise InitFailedException(f"Unknown client: {client}")
 
         keys = None
-        if self.config.requirePW and create and self.config.allowNew:
+        if (self.config.requirePW or encrypted) and create:
             keys = self.doGetKeys()
 
         newBackup = self.getDB(client, create)
-
-        if self.config.requirePW and not self.db.needsAuthentication():
-            raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
 
         serverForceFull = False
         authResp = None
         if create:
             if keys:
+                srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme = keys
                 self.logger.debug("Setting keys into new client DB")
-                (srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme) = keys
                 self.logger.info("Setting CryptoScheme %d", cryptoScheme)
                 self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
                 self.db.setConfigValue('CryptoScheme', cryptoScheme)
                 keys = None
             else:
                 self.db.setConfigValue('CryptoScheme', TardisCrypto.NO_CRYPTO_SCHEME)
+
+        if self.config.requirePW and not self.db.needsAuthentication():
+            raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
 
         self.logger.debug("Ready for authentication")
         if self.db.needsAuthentication():
@@ -1447,8 +1453,6 @@ class Backend:
         started   = False
         completed = False
 
-        serverName = None
-
         try:
             try:
                 self.initializeBackup()
@@ -1477,9 +1481,10 @@ class Backend:
             completed = True
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
-            self.db.setFailure(e)
             if self.config.exceptions:
                 self.logger.exception(e)
+            if self.db:
+                self.db.setFailure(e)
 
         finally:
             endtime = datetime.now()
