@@ -82,7 +82,7 @@ def processDir(db, dirEntry, backupset=False, depth=0):
     return data
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
+    parser = argparse.ArgumentParser(description='Generate a tree of file information', add_help = False)
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
@@ -109,7 +109,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=True)
 
-    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    db, _, _ = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     bsetInfo = Util.getBackupSet(db, args.backup)
     if bsetInfo:
