@@ -37,6 +37,7 @@ import base64
 import json
 import hmac
 import logging
+import enum
 
 import parsedatetime
 import xattr
@@ -52,19 +53,18 @@ from . import Defaults
 logger: logging.Logger
 crypt = None
 
-OW_NEVER  = 0
-OW_ALWAYS = 1
-OW_NEWER  = 2
-OW_OLDER  = 3
-OW_PROMPT = 4
+class OwMode(enum.StrEnum):
+    OW_NEVER  = 'never'
+    OW_ALWAYS = 'always'
+    OW_NEWER  = 'newer'
+    OW_OLDER  = 'older'
+    OW_PROMPT = 'ask'
 
-overwriteNames = { 'never': OW_NEVER, 'always': OW_ALWAYS, 'newer': OW_NEWER, 'older': OW_OLDER, 'ask': OW_PROMPT }
 if sys.stdout.isatty():
-    owMode = OW_PROMPT
-    owModeDefault = 'ask'
+    owMode = OwMode.OW_PROMPT
 else:
-    owMode = OW_NEVER
-    owModeDefault = 'never'
+    owMode = OwMode.OW_NEVER
+owModeDefault = str(owMode)
 
 errors = 0
 
@@ -79,21 +79,23 @@ def yesOrNo(x):
 
 def checkOverwrite(name, info):
     if os.path.exists(name):
-        if owMode == OW_NEVER:
-            return False
-        if owMode == OW_ALWAYS:
-            return True
-        if owMode == OW_PROMPT:
-            return yesOrNo(input(f"Overwrite {name} [y/N]: "))
-        s = os.lstat(name)
-        if s.st_mtime < info['mtime']:
-            # Current version is older
-            return owMode == OW_NEWER
-        # Current version is newer
-        return owMode == OW_OLDER
+        match (owMode):
+            case OwMode.OW_NEVER:
+                return False
+            case OwMode.OW_ALWAYS:
+                return True
+            case OwMode.OW_PROMPT:
+                return yesOrNo(input(f"Overwrite {name} [y/N]: "))
+            case OwMode.OW_NEWER | OwMode.OW_OLDER:
+                s = os.lstat(name)
+                if s.st_mtime < info['mtime']:
+                    # Current version is older
+                    return owMode == OwMode.OW_NEWER
+                # Current version is newer
+                return owMode == OwMode.OW_OLDER
     return True
 
-def doAuthenticate(outname, checksum, digest):
+def doVerifyContents(outname, checksum, digest):
     """
     Check that the recorded checksum of the file, and the digest of the generated file match.
     Perform the expected action if they don't.  Return the name of the file that's being generated.
@@ -102,27 +104,31 @@ def doAuthenticate(outname, checksum, digest):
     # should use hmac.compare_digest() here, but it's not working for some reason.  Probably different types
     if not hmac.compare_digest(checksum, digest):
         if outname:
-            if args.authfailaction == 'keep':
+            if args.verifyaction == 'keep':
                 action = ''
                 target = outname
-            elif args.authfailaction == 'rename':
+            elif args.verifyaction == 'rename':
                 target = outname + '-CORRUPT-' + str(digest)
                 action = 'Renaming to ' + target + '.'
                 try:
                     os.rename(outname, target)
                 except os.error:
                     action = "Unable to rename to " + target + ".  File saved as " + outname + "."
-            elif args.authfailaction == 'delete':
+            elif args.verifyaction == 'delete':
                 action = 'Deleting.'
                 os.unlink(outname)
                 target = None
+            else:
+                logger.critical(f"Unknown verify failure action: {args.verifyaction}")
+                action = ''
+                target = outname
         else:
             target = None
             action = ''
         if outname is None:
             outname = ''
-        logger.error("File %s did not authenticate.  Expected: %s.  Got: %s.  %s",
-                        outname, checksum, digest, action)
+        logger.error("File %s did no.  Expected: %s.  Got: %s.  %s",
+                     outname, checksum, digest, action)
         return target
     return outname
 
@@ -175,27 +181,27 @@ def setAttributes(regenerator, info, outname):
             except Exception:
                 logger.warning("Unable to process extended attributes for %s", outname)
 
+CHUNKSIZE = (64 * 1024)
+
 def doRecovery(regenerator, info, authenticate, path, outname):
     myname = outname if outname else "stdout"
     logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
 
     checksum = info['checksum']
-    i = regenerator.recoverChecksum(checksum, authenticate)
+    instream = regenerator.recoverChecksum(checksum, authenticate=False)
 
-    if i:
-        if authenticate:
-            hasher = crypt.getHash()
+    if instream:
+        hasher = crypt.getHash()
 
         if info['link']:
             # read and make a link
-            i.seek(0)
-            x = i.read(16 * 1024)
+            instream.seek(0)
+            x = instream.read(16 * 1024)
+            hasher.update(x)
             if outname:
                 os.symlink(x, outname)
             else:
                 logger.warning("No name specified for link: %s", x)
-            if hasher:
-                hasher.update(x)
         else:
             if outname:
                 # Generate an output name
@@ -204,22 +210,18 @@ def doRecovery(regenerator, info, authenticate, path, outname):
             else:
                 output = sys.stdout.buffer
             try:
-                x = i.read(16 * 1024)
-                while x:
+                while x := instream.read(CHUNKSIZE):
                     output.write(x)
-                    if hasher:
-                        hasher.update(x)
-                    x = i.read(16 * 1024)
+                    hasher.update(x)
             except Exception as e:
-                logger.error(f"Unable to read file: {i}: {repr(e)}")
+                logger.error(f"Unable to read file: {checksum}: {repr(e)}")
                 raise
             finally:
-                i.close()
+                instream.close()
                 if output is not sys.stdout.buffer:
                     output.close()
 
-            if authenticate:
-                outname = doAuthenticate(outname, checksum, hasher.hexdigest())
+            outname = doVerifyContents(outname, checksum, hasher.hexdigest())
 
             setAttributes(regenerator, info, outname)
 
@@ -232,92 +234,91 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     skip = False
 
     try:
-        if info:
-            realname = crypt.decryptFilename(info['name'])
+        realname = crypt.decryptFilename(info['name'])
 
-            if name:
-                # This should only happen only one file specified.
-                outname = name
-            elif outputdir:
-                outname = os.path.abspath(os.path.join(outputdir, realname))
+        if name:
+            # This should only happen only one file specified.
+            outname = name
+        elif outputdir:
+            outname = os.path.abspath(os.path.join(outputdir, realname))
 
-            if outname and not checkOverwrite(outname, info):
+        if outname and not checkOverwrite(outname, info):
+            skip = True
+            try:
+                logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
+            except Exception:
+                pass
+
+        # First, determine if we're in a linking situation
+        if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
+            key = (info['inode'], info['device'])
+            if key in linkDB:
+                logger.info("Linking %s to %s", outname, linkDB[key])
+                os.link(linkDB[key], outname)
                 skip = True
-                try:
-                    logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
-                except Exception:
-                    pass
+            else:
+                linkDB[key] = outname
 
-            # First, determine if we're in a linking situation
-            if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
-                key = (info['inode'], info['device'])
-                if key in linkDB:
-                    logger.info("Linking %s to %s", outname, linkDB[key])
-                    os.link(linkDB[key], outname)
-                    skip = True
-                else:
-                    linkDB[key] = outname
+        # If it's a directory, create the directory, and recursively process it
+        if info['dir']:
+            if not outname:
+                #logger.error("Cannot regenerate directory %s without outputdir specified", path)
+                raise Exception(f"Cannot regenerate directory {path} without outputdir specified")
 
-            # If it's a directory, create the directory, and recursively process it
-            if info['dir']:
-                if not outname:
-                    #logger.error("Cannot regenerate directory %s without outputdir specified", path)
-                    raise Exception(f"Cannot regenerate directory {path} without outputdir specified")
+            try:
+                logger.info("Processing directory %s", Util.shortPath(path))
+            except Exception:
+                pass
 
-                try:
-                    logger.info("Processing directory %s", Util.shortPath(path))
-                except Exception:
-                    pass
+            contents = list(tardis.readDirectory((info['inode'], info['device']), bset))
 
-                contents = list(tardis.readDirectory((info['inode'], info['device']), bset))
+            # Make sure an output directory is specified (really only useful at the top level)
+            if not os.path.exists(outname):
+                os.mkdir(outname)
 
-                # Make sure an output directory is specified (really only useful at the top level)
-                if not os.path.exists(outname):
-                    os.mkdir(outname)
+            setAttributes(regenerator, info, outname)
 
-                setAttributes(regenerator, info, outname)
-
-                dirInode = (info['inode'], info['device'])
-                files = []
-                dirs = []
-                # Get info on each child object
-                for i in contents:
-                    name = crypt.decryptFilename(i['name'])
-                    logger.debug("Processing file %s", name)
-                    # Get the Info
-                    childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
-                    logger.debug("Info on %s: %s", name, childInfo)
-                    if childInfo:
-                        if childInfo['dir']:
-                            dirs.append((name, childInfo))
-                        else:
-                            files.append((name, childInfo))
+            dirInode = (info['inode'], info['device'])
+            files = []
+            dirs = []
+            # Get info on each child object
+            for i in contents:
+                name = crypt.decryptFilename(i['name'])
+                logger.debug("Processing file %s", name)
+                # Get the Info
+                childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
+                logger.debug("Info on %s: %s", name, childInfo)
+                if childInfo:
+                    if childInfo['dir']:
+                        dirs.append((name, childInfo))
                     else:
-                        logger.warning("No info on %s", name)
-                        retCode += 1
+                        files.append((name, childInfo))
+                else:
+                    logger.warning("No info on %s", name)
+                    retCode += 1
 
 
-                # Process the files
-                for (name, childInfo) in files:
-                    # Recurse into the child, if it exists.
+            # Process the files
+            for (name, childInfo) in files:
+                # Recurse into the child, if it exists.
+                try:
+                    recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
+                except Exception as e:
+                    logger.error("Could not recover file %s in %s", name, path)
+                    if args.exceptions:
+                        logger.exception(e)
+
+            # And descend into the directories
+            if args.recurse:
+                for (name, childInfo) in dirs:
                     try:
                         recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     except Exception as e:
-                        logger.error("Could not recover file %s in %s", name, path)
+                        logger.error("Could not recover directory %s in %s", name, path)
                         if args.exceptions:
                             logger.exception(e)
-
-                # And descend into the directories
-                if args.recurse:
-                    for (name, childInfo) in dirs:
-                        try:
-                            recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
-                        except Exception as e:
-                            logger.error("Could not recover directory %s in %s", name, path)
-                            if args.exceptions:
-                                logger.exception(e)
-            elif not skip:
-                doRecovery(regenerator, info, authenticate, path, outname)
+        elif not skip:
+            doRecovery(regenerator, info, authenticate, path, outname)
 
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
@@ -390,8 +391,8 @@ def parseArgs():
     parser.add_argument('--recurse',        dest='recurse', default=True, action=Util.StoreBoolean, help='Recurse directory trees.  Default: %(default)s')
     parser.add_argument('--recovername',    dest='recovername', default=False, action=Util.StoreBoolean,    help='Recover the name when recovering a checksum.  Default: %(default)s')
 
-    parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Authenticate files while regenerating them.  Default: %(default)s')
-    parser.add_argument('--authfail-action', dest='authfailaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not authenticate.  Default: %(default)s')
+    parser.add_argument('--authenticate',    dest='auth', default=True, action=Util.StoreBoolean,    help='Cryptographically authenticate files while regenerating them.  Only for encrypted backups. Default: %(default)s')
+    parser.add_argument('--verify-action', dest='verifyaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not verify their checksum.  Default: %(default)s')
 
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
@@ -400,7 +401,7 @@ def parseArgs():
     parser.add_argument('--set-attrs', dest='setattrs', default=True, action=Util.StoreBoolean,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
     parser.add_argument('--set-acl',   dest='setacl', default=True, action=Util.StoreBoolean,       help='Set file access control lists to match the original file. Default: %(default)s')
     parser.add_argument('--overwrite', '-O', dest='overwrite', default=owModeDefault, const='always', nargs='?',
-                        choices=['always', 'newer', 'older', 'never', 'ask'],
+                        choices=list(map(str, OwMode)),
                         help='Mode for handling existing files. Default: %(default)s')
 
     parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
@@ -415,6 +416,136 @@ def parseArgs():
     Util.addGenCompletions(parser)
 
     return parser.parse_args(remaining)
+
+def processFiles(files: list[str], r: Regenerator.Regenerator, bset: bool|int, outputdir: str, outname: str):
+    retcode = 0
+    linkDB    = None
+    if args.hardlinks:
+        linkDB = {}
+
+    for i in files:
+        try:
+            i = os.path.abspath(i)
+            logger.info("Processing %s", Util.shortPath(i))
+            path = None
+            if args.last:
+                (bset, path, name) = findLastPath(i, args.reduce)
+                if bset is None:
+                    logger.error("Unable to find a latest version of %s", i)
+                    raise Exception("Unable to find a latest version of " + i)
+                logger.info("Found %s in backup set %s", i, name)
+            elif args.reduce:
+                path = Util.reducePath(tardis, bset, i, args.reduce, crypt)
+                logger.debug("Reduced path %s to %s", path, i)
+                if not path:
+                    logger.error("Unable to find a compute path for %s", i)
+                    raise Exception("Unable to compute path for " + i)
+            else:
+                path = i
+
+            actualPath = crypt.encryptPath(path)
+
+            logger.debug("Actual path is %s -- %s", actualPath, bset)
+            info = tardis.getFileInfoByPath(actualPath, bset)
+            if info:
+                retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
+            else:
+                logger.error("Could not recover info for %s (File not found)", i)
+                retcode += 1
+        except TardisDB.AuthenticationException:
+            logger.error("Authentication failed.  Bad password")
+            #if args.exceptions:
+                #logger.exception(e)
+            sys.exit(1)
+        except Exception as e:
+            logger.error("Could not recover: %s: %s", i, e)
+            if args.exceptions:
+                logger.exception(e)
+    return retcode
+
+def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir: str, outname: str):
+    retcode = 0
+    for i in checksums:
+        try:
+            hasher = crypt.getHash()
+            output = None
+            ckname = i
+            if args.recovername:
+                ckname = recoverName(i)
+            # Recover the checksum, but don't attempt to authenticate it.   We'll do that ourselves later
+            f = r.recoverChecksum(i, args.authenticate)
+
+            if f:
+                logger.info("Recovering checksum %s", ckname)
+            # Generate an output name
+                if not outname:
+                    if outputdir:
+                        outname = os.path.join(outputdir, ckname)
+                    else:
+                        outname = ckname
+                        # Note, this should ONLY be true if only one file
+                    if os.path.exists(outname) and owMode == OwMode.OW_NEVER:
+                        logger.warning("File %s exists.  Skipping", outname)
+                        continue
+                    logger.debug("Writing output to %s", outname)
+                try:
+                    output = open(outname,  "wb")
+                    while x := f.read(CHUNKSIZE):
+                        hasher.update(x)
+                        output.write(x)
+                except Exception as e:
+                    logger.error(f"Unable to read file: {i}: {repr(e)}")
+                    raise
+                finally:
+                    f.close()
+                    outname = None
+                    if output is not sys.stdout.buffer:
+                        output.close()
+                if args.auth:
+                    logger.debug("Checking authentication")
+                    outname = doVerifyContents(outname, i, hasher.hexdigest())
+
+        except TardisDB.AuthenticationException:
+            logger.error("Authentication failed.  Bad password")
+            #if args.exceptions:
+                #logger.exception(e)
+            sys.exit(1)
+        except Exception as e:
+            logger.error("Could not recover: %s: %s", i, e)
+            if args.exceptions:
+                logger.exception(e)
+            retcode += 1
+    return retcode
+
+def calculateBackupSet():
+    bset = False
+
+    if args.date:
+        cal = parsedatetime.Calendar()
+        (then, success) = cal.parse(args.date)
+        if success:
+            timestamp = time.mktime(then)
+            logger.info("Using time: %s", time.asctime(then))
+            bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
+            if bsetInfo and bsetInfo['backupset'] != 1:
+                bset = bsetInfo['backupset']
+                logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
+            else:
+                logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
+                raise ValueError(time.asctime(then))
+        else:
+            logger.critical("Could not parse date string: %s", args.date)
+            raise ValueError(args.date)
+    elif args.backup:
+        #bsetInfo = tardis.getBackupSetInfo(args.backup)
+        bsetInfo = Util.getBackupSet(tardis, args.backup)
+        if bsetInfo:
+            bset = bsetInfo['backupset']
+        else:
+            logger.critical("No backupset at for name: %s", args.backup)
+            raise ValueError(args.backup)
+    return bset
+
 
 def main():
     global logger, crypt, tardis, args, owMode
@@ -438,40 +569,14 @@ def main():
             logger.exception(e)
         sys.exit(1)
 
+    retcode = 0
     try:
-        bset = False
-
-        if args.date:
-            cal = parsedatetime.Calendar()
-            (then, success) = cal.parse(args.date)
-            if success:
-                timestamp = time.mktime(then)
-                logger.info("Using time: %s", time.asctime(then))
-                bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
-                if bsetInfo and bsetInfo['backupset'] != 1:
-                    bset = bsetInfo['backupset']
-                    logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
-                else:
-                    logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
-                    sys.exit(1)
-            else:
-                logger.critical("Could not parse date string: %s", args.date)
-                sys.exit(1)
-        elif args.backup:
-            #bsetInfo = tardis.getBackupSetInfo(args.backup)
-            bsetInfo = Util.getBackupSet(tardis, args.backup)
-            if bsetInfo:
-                bset = bsetInfo['backupset']
-            else:
-                logger.critical("No backupset at for name: %s", args.backup)
-                sys.exit(1)
+        bset = calculateBackupSet()
 
         outputdir = None
-        output    = sys.stdout.buffer
         outname   = None
-        linkDB    = None
 
-        owMode    = overwriteNames[args.overwrite]
+        owMode    = OwMode(args.overwrite)
 
         if args.output:
             if len(args.files) > 1:
@@ -482,115 +587,14 @@ def main():
                 outname = args.output
         logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
 
-        if args.hardlinks:
-            linkDB = {}
 
-        #if args.cksum and (args.settime or args.setperm):
-            #logger.warning("Unable to set time or permissions on files specified by checksum.")
-
-        permChecker = setupPermissionChecks()
-
-        retcode = 0
-        hasher = None
+        #permChecker = setupPermissionChecks()
 
         # do the work here
         if args.cksum:
-            for i in args.files:
-                try:
-                    if args.auth:
-                        hasher = crypt.getHash()
-                    ckname = i
-                    if args.recovername:
-                        ckname = recoverName(i)
-                    f = r.recoverChecksum(i, args.auth)
-                    if f:
-                        logger.info("Recovering checksum %s", ckname)
-                    # Generate an output name
-                        if outname:
-                            # Note, this should ONLY be true if only one file
-                            output = open(outname,  "wb")
-                        elif outputdir:
-                            outname = os.path.join(outputdir, ckname)
-                            if os.path.exists(outname) and owMode == OW_NEVER:
-                                logger.warning("File %s exists.  Skipping", outname)
-                                continue
-                            logger.debug("Writing output to %s", outname)
-                            output = open(outname,  "wb")
-                        elif outname:
-                            # Note, this should ONLY be true if only one file
-                            if os.path.exists(outname) and owMode == OW_NEVER:
-                                logger.warning("File %s exists.  Skipping", outname)
-                                continue
-                            output = open(outname,  "wb")
-                        try:
-                            x = f.read(64 * 1024)
-                            while x:
-                                output.write(x)
-                                if hasher:
-                                    hasher.update(x)
-                                x = f.read(64 * 1024)
-                        except Exception as e:
-                            logger.error(f"Unable to read file: {i}: {repr(e)}")
-                            raise
-                        finally:
-                            f.close()
-                            if output is not sys.stdout.buffer:
-                                output.close()
-                        if args.auth:
-                            logger.debug("Checking authentication")
-                            outname = doAuthenticate(outname, i, hasher.hexdigest())
-
-                except TardisDB.AuthenticationException:
-                    logger.error("Authentication failed.  Bad password")
-                    #if args.exceptions:
-                        #logger.exception(e)
-                    sys.exit(1)
-                except Exception as e:
-                    logger.error("Could not recover: %s: %s", i, e)
-                    if args.exceptions:
-                        logger.exception(e)
-                    retcode += 1
-
+            retcode = processChecksums(args.files, r, outputdir, outname)
         else: # Not checksum, but acutal pathnames
-            for i in args.files:
-                try:
-                    i = os.path.abspath(i)
-                    logger.info("Processing %s", Util.shortPath(i))
-                    path = None
-                    f = None
-                    if args.last:
-                        (bset, path, name) = findLastPath(i, args.reduce)
-                        if bset is None:
-                            logger.error("Unable to find a latest version of %s", i)
-                            raise Exception("Unable to find a latest version of " + i)
-                        logger.info("Found %s in backup set %s", i, name)
-                    elif args.reduce:
-                        path = Util.reducePath(tardis, bset, i, args.reduce, crypt)
-                        logger.debug("Reduced path %s to %s", path, i)
-                        if not path:
-                            logger.error("Unable to find a compute path for %s", i)
-                            raise Exception("Unable to compute path for " + i)
-                    else:
-                        path = i
-
-                    actualPath = crypt.encryptPath(path)
-
-                    logger.debug("Actual path is %s -- %s", actualPath, bset)
-                    info = tardis.getFileInfoByPath(actualPath, bset)
-                    if info:
-                        retcode += recoverObject(r, info, bset, outputdir, path, linkDB, name=outname, authenticate=args.auth)
-                    else:
-                        logger.error("Could not recover info for %s (File not found)", i)
-                        retcode += 1
-                except TardisDB.AuthenticationException:
-                    logger.error("Authentication failed.  Bad password")
-                    #if args.exceptions:
-                        #logger.exception(e)
-                    sys.exit(1)
-                except Exception as e:
-                    logger.error("Could not recover: %s: %s", i, e)
-                    if args.exceptions:
-                        logger.exception(e)
+            retcode = processFiles(args.files, r, bset, outputdir, outname)
     except KeyboardInterrupt:
         logger.error("Recovery interupted")
     except TardisDB.AuthenticationException as e:

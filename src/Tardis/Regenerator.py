@@ -147,7 +147,7 @@ class Regenerator:
                     raise RegenerateException(f"Checksum: {cksum}: Error: {e}") from e
             else:
                 if cksInfo['encrypted']:
-                    output =  self.decryptFile(cksum, cksInfo['disksize'])
+                    output =  self.decryptFile(cksum, cksInfo['disksize'], authenticate)
                 else:
                     output =  self.cacheDir.open(cksum, "rb")
 
