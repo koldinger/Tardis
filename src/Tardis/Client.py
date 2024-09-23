@@ -204,7 +204,7 @@ newmeta             = []
 
 noCompTypes         = []
 
-crypt: TardisCrypto.Crypto_Null = None
+crypt: TardisCrypto.Crypto_Null
 logger: logging.Logger
 exceptionLogger: Util.ExceptionLogger
 
@@ -576,7 +576,40 @@ def getInodeDBName(inode):
         return name
     return "Unknown"
 
+
 def processDelta(inode, signatures):
+    """ Generate a delta and send it """
+    if verbosity > 3:
+        logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
+    if args.loginodes:
+        args.loginodes.write(f"ProcessDelta {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
+
+    try:
+        (_, pathname) = inodeDB.get(inode)
+        setProgress("File [D]:", pathname)
+        logger.debug("Processing delta: %s :: %s", str(inode), pathname)
+
+        if signatures and inode in signatures:
+            (sigfile, oldchksum) = signatures[inode]
+        else:
+            (sigfile, oldchksum) = fetchSignature(inode)
+        if sigfile is not None:
+            processSig(inode, sigfile, oldchksum)
+        else:
+            sendContent(inode, 'Full')
+    except KeyError as e:
+        logger.error("ProcessDelta: No inode entry for %s", str(inode))
+        exceptionLogger.log(e)
+
+def handleSig(response, data):
+    if data:
+        processSig(tuple(response['inode']), data, response['checksum'])
+    else:
+        inode = tuple(response['inode'])
+        logger.error("No signature file for %s", inode)
+        sendContent(inode, 'full')
+
+def processSig(inode, sigfile, oldchksum):
     """ Generate a delta and send it """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
@@ -1256,7 +1289,7 @@ def makeMetaMessage():
     newmeta = []
     return message
 
-statusBar = None
+statusBar: StatusBar.StatusBar | None = None
 
 def initProgressBar(scheduler):
     sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats, scheduler=scheduler)
