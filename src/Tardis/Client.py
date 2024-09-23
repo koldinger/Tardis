@@ -187,9 +187,8 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        ".svn", ".git", ".hg", ".bzr"]
 verbosity           = 0
 
-conn                = None
+conn: Connection.ProtocolConnection 
 args: argparse.Namespace
-config              = None
 
 directoryQueue = deque()
 
@@ -578,7 +577,7 @@ def getInodeDBName(inode):
 
 
 def processDelta(inode, signatures):
-    """ Generate a delta and send it """
+    """ Generate a delta and send it.   Requests a signature if it's not available already. """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
     if args.loginodes:
@@ -593,6 +592,7 @@ def processDelta(inode, signatures):
             (sigfile, oldchksum) = signatures[inode]
         else:
             (sigfile, oldchksum) = fetchSignature(inode)
+
         if sigfile is not None:
             processSig(inode, sigfile, oldchksum)
         else:
@@ -612,19 +612,13 @@ def handleSig(response, data):
 def processSig(inode, sigfile, oldchksum):
     """ Generate a delta and send it """
     if verbosity > 3:
-        logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
+        logger.debug("processSig: %s %s", inode, getInodeDBName(inode))
     if args.loginodes:
-        args.loginodes.write(f"ProcessDelta {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
+        args.loginodes.write(f"ProcessSig {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
 
     try:
         (_, pathname) = inodeDB.get(inode)
         setProgress("File [D]:", pathname)
-        logger.debug("Processing delta: %s :: %s", str(inode), pathname)
-
-        if signatures and inode in signatures:
-            (sigfile, oldchksum) = signatures[inode]
-        else:
-            (sigfile, oldchksum) = fetchSignature(inode)
 
         logger.debug("Ready to send Delta: %s -- %s", inode, sigfile)
         if sigfile is not None:
