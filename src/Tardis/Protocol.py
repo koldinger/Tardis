@@ -64,5 +64,5 @@ class Responses(UppercaseStrEnum):
     ACKCMDLN = auto()
     ACKDONE = auto()
     ACKBTCH = auto()
-    INIT = auto()
+    ACKBACKUP = "INIT"
     ACKSETKEYS = auto()

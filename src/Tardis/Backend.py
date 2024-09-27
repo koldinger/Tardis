@@ -1407,7 +1407,7 @@ class Backend:
         self.db.newBackupSet(name, self.sessionid, priority, clienttime, version, self.address, self.full, self.config.serverSessionID)
 
         response = {
-            "message": "INIT",
+            "message": Protocol.Responses.ACKBACKUP,
             "status": "OK",
             "sessionid": self.sessionid,
             "prevDate": str(self.db.prevBackupDate),
