@@ -1339,7 +1339,7 @@ class Backend:
 
         if create and not self.config.allowNew:
             raise InitFailedException("New databases not allowed")
-        if create and not encrypted:
+        if create and self.config.requirePW and not encrypted:
             raise InitFailedException("Server requires backups to be encrypted, ie, have a password")
         if create and os.path.exists(dbfile):
             raise InitFailedException(f"Client {client} already exists")
