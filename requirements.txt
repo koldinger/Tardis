@@ -36,7 +36,7 @@ python-utils==3.8.1
 qrcode==7.4.2
 reportlab==4.0.7
 requests==2.32.2
-requests-cache==1.1.1
+requests-cache==1.2.1
 six==1.16.0
 srp==1.0.20
 StrEnum==0.4.15
