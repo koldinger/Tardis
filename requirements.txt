@@ -14,7 +14,7 @@ daemonize==2.5.0
 Flask==3.0.0
 fusepy==3.0.1
 globre==0.1.5
-idna==3.6
+idna==3.7
 itsdangerous==2.1.2
 Jinja2==3.1.4
 MarkupSafe==2.1.3
