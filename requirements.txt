@@ -4,7 +4,7 @@ attrs==23.1.0
 binaryornot==0.4.4
 blinker==1.7.0
 cattrs==23.2.2
-certifi==2023.11.17
+certifi==2024.7.4
 cffi==1.16.0
 chardet==5.2.0
 charset-normalizer==3.3.2
