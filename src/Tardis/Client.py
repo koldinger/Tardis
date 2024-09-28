@@ -1,4 +1,4 @@
-# vi: set et sw=4 sts=4 fileencoding=utf-8:
+# vi: set et sw=4 sts=4 fileencoding=utf-
 #
 # Tardis: A Backup System
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -80,8 +80,11 @@ from . import StatusBar
 from . import Backend
 from . import ThreadedScheduler
 from . import Protocol
+from . import Messenger
 from . import log
 #from . import Throttler
+
+from icecream import ic
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -187,8 +190,9 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        ".svn", ".git", ".hg", ".bzr"]
 verbosity           = 0
 
-conn: Connection.ProtocolConnection 
-args: argparse.Namespace
+conn:       Connection.ProtocolConnection 
+messenger:  Messenger.Messenger
+args:       argparse.Namespace
 
 directoryQueue = deque()
 
@@ -203,7 +207,7 @@ newmeta             = []
 
 noCompTypes         = []
 
-crypt: TardisCrypto.Crypto_Null
+crypt: TardisCrypto.Crypto_Null | None = None
 logger: logging.Logger
 exceptionLogger: Util.ExceptionLogger
 
@@ -509,7 +513,6 @@ def prefetchSigFiles(inodes):
         "message": Protocol.Commands.SGS,
         "inodes": inodes
     }
-    setMessageID(message)
 
     sigmessage = sendAndReceive(message)
     checkMessage(sigmessage, "SIG")
@@ -523,7 +526,7 @@ def prefetchSigFiles(inodes):
 
             sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
             #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-            Util.receiveData(conn.sender, sigfile, log=args.logmessages)
+            Util.receiveData(messenger, sigfile, log=args.logmessages)
             logger.debug("Received sig file: %d", sigfile.tell())
             sigfile.seek(0)
             signatures[inode] = (sigfile, sigmessage['checksum'])
@@ -545,7 +548,6 @@ def fetchSignature(inode):
         "inode" : inode,
         "path"  : path
     }
-    setMessageID(message)
 
     ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
     ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
@@ -558,7 +560,7 @@ def fetchSignature(inode):
         logger.debug("Receiving sig file: %s:: %s", inode, pathname)
         sigfile = io.StringIO()
         #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-        Util.receiveData(conn.sender, sigfile, log=args.logmessages)
+        Util.receiveData(messenger, sigfile, log=args.logmessages)
         logger.debug("Received sig file: %d", sigfile.tell())
         sigfile.seek(0)
         checksum = sigmessage['checksum']
@@ -668,12 +670,11 @@ def processSig(inode, sigfile, oldchksum):
                     "encoding": encoding,
                     "encrypted": bool(iv)
                 }
-                setMessageID(message)
 
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
-                (sent, _, _) = Util.sendData(conn.sender, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
+                (sent, _, _) = Util.sendData(messenger, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
                 delta.close()
 
                 # If we have a signature, send it.
@@ -686,7 +687,7 @@ def processSig(inode, sigfile, oldchksum):
                     sendMessage(message)
                     #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
-                    (sigsize, _, _) = Util.sendData(conn.sender, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, log=args.logmessages) # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(messenger, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, log=args.logmessages) # Don't bother to encrypt the signature
                     newsig.close()
 
                 if args.report != 'none':
@@ -773,7 +774,7 @@ def sendContent(inode, reportType):
                 makeSig = crypt.encrypting() or args.signature
                 sendMessage(message)
                 #batchMessage(message, batch=False, flush=True, response=False)
-                (size, checksum, sig) = Util.sendData(conn.sender, data,
+                (size, checksum, sig) = Util.sendData(messenger, data,
                                                       encrypt,
                                                       hasher=crypt.getHash(),
                                                       chunksize=args.chunksize,
@@ -790,7 +791,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(messenger, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -829,11 +830,10 @@ def handleAckMeta(message):
             "checksum": cks,
             "encrypted": bool(iv)
         }
-        setMessageID(message)
 
         sendMessage(message)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
-        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
+        Util.sendData(messenger, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -1173,7 +1173,6 @@ def makeCloneMessage():
 
 def sendClones():
     message = makeCloneMessage()
-    setMessageID(message)
     response = sendAndReceive(message)
     checkMessage(response, Protocol.Responses.ACKCLN)
     handleAckClone(response)
@@ -1201,7 +1200,6 @@ def sendBatchMsgs():
             'batchsize': batchSize,
             'batch'    : batchMsgs
         }
-        msgId = setMessageID(message)
         logger.debug("BATCH Starting. %s commands", len(batchMsgs))
 
         # Clear out the batch messages before sending, or you can get into an awkward loop.
@@ -1433,6 +1431,8 @@ def runBackup():
         logger.error(e)
         exceptionLogger.log(e)
 
+    print(f"Outstanding Message list: {outstandingMessages}")
+
     # Finish any remaning work to complete the backup
     # If any metadata, clone or batch requests still lying around, send them now
     if newmeta:
@@ -1528,11 +1528,19 @@ def sendMessage(message):
         args.logmessages.write(f"\nSending message {message.get('msgid', 'Unknown')} {'-' * 40}\n")
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + '\n')
     #setProgress("Sending...", "")
-    conn.send(message)
+    messenger.sendMessage(message)
 
-def receiveMessage():
+def receiveMessage(wait = True):
     setProgress("Receiving...")
-    response = conn.receive()
+    response = messenger.recvMessage(wait)
+    try:
+        respId = response['respid']
+        outstandingMessages.remove(respId)
+    except KeyError:
+        logger.warning("respid field not in message: %s", str(response))
+    except ValueError:
+        logger.warning("Unknown response ID: %s", respId)
+
     if verbosity > 4:
         logger.debug("Receive: %s", str(response))
     if args.logmessages:
@@ -1607,12 +1615,14 @@ def handleResponse(response, doPush=True):
         exceptionLogger.log(e)
 
 _nextMsgId = 0
+outstandingMessages = set()
 def setMessageID(message):
     global _nextMsgId
     #message['sessionid'] = str(sessionid)
-    message['msgid'] = _nextMsgId
     _nextMsgId += 1
-    return message['msgid']
+    message['msgid'] = _nextMsgId
+    outstandingMessages.add(_nextMsgId)
+    return _nextMsgId
 
 _batchStartTime = None
 
@@ -1632,6 +1642,7 @@ def batchMessage(message, batch=True, flush=False, response=True):
         flushClones()
         flushBatchMsgs()
     if not batch:
+        ic(message)
         if response:
             respmessage = sendAndReceive(message)
             handleResponse(respmessage)
@@ -1848,15 +1859,16 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     if verbosity or args.stats or args.report != 'none':
         logger.log(log.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
+def needsData(mesg: dict|bytes):
+    if isinstance(mesg, dict):
+        if mesg.get('message') == Protocol.Commands.SIG and mesg.get('status') == 'OK':
+            return True
+    return False
+
 def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
     #setEncoder("bin")
     return conn
-
-def splitList(line):
-    if not line:
-        return []
-    return shlex.split(line.strip())
 
 def checkConfig(c, t):
     # Check things in the config file that might be confusing
@@ -1872,6 +1884,11 @@ def processCommandLine():
     def _d(helpstr):
         """ Only print the help message if --debug is specified """
         return helpstr if args.debug else argparse.SUPPRESS
+
+    def splitList(line):
+        if not line:
+            return []
+        return shlex.split(line.strip())
 
     _def = 'Default: %(default)s'
 
@@ -2139,7 +2156,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
     logging.root.setLevel(loglevel)
 
     # Mark if we're logging exceptions
-    exceptionLogger = Util.ExceptionLogger(logger, logExceptions)
+    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
 
     # Create a special logger just for messages
     return logger
@@ -2435,7 +2452,7 @@ def sendConfigInfo(directories):
         batchMessage(message)
 
 def main():
-    global args, config, conn, verbosity, crypt, noCompTypes, srpUsr, statusBar
+    global args, config, conn, messenger, verbosity, crypt, noCompTypes, srpUsr, statusBar
 
     # Read the command line arguments.
     (args, config, jobname) = processCommandLine()
@@ -2474,6 +2491,8 @@ def main():
             (conn, _, backendThread) = runBackend(jobname)
         else:
             conn = getConnection(server, port)
+        messenger = Messenger.Messenger(conn.sender, timeout=args.timeout)
+        messenger.run()
 
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
@@ -2515,7 +2534,6 @@ def main():
     finally:
         conn.close(exc)
         if localmode:
-            conn.send(Exception("Terminate connection"))
             logger.info("Waiting for server to complete")
             backendThread.join()        # Should I do communicate?
 

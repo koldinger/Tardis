@@ -868,16 +868,21 @@ class ClearingStreamHandler(logging.StreamHandler):
         super().emit(record)
 
 # AN exception logging mechanism
+import rich.console
+
 class ExceptionLogger:
-    def __init__(self, logger, logExceptions):
+    _con = rich.console.Console()
+    def __init__(self, logger, logExceptions, rich):
         self.logger = logger
         self.logExceptions = logExceptions
+        self.rich = rich
 
     def log(self, exception):
         if self.logExceptions:
-            self.logger.exception(exception)
-
-
+            if rich:
+                self._con.print_exception()
+            else:
+                self.logger.exception(exception)
 
 # Class to have a two directional dictionary.
 
