@@ -70,7 +70,7 @@ setup(  name                    = 'Tardis-Backup',
                             'srp',            'pid',            'python-magic',  'urllib3',         'binaryornot',     
                             'colorlog',       'progressbar2',   'reportlab',     'qrcode',          'fusepy',
                             'requests_cache', 'requests',       'flask',         'tornado',         'zstandard',
-                            'lz4']
+                            'lz4',            'StrEnum']
                             + add_pkgs,
         package_dir = {'': 'src'},
         package_data = {
