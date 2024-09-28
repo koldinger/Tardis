@@ -189,6 +189,7 @@ class DirectConnection:
         if error:
             message["error"] = error
         self.send(message)
+        self.send(Exception("Terminate connection"))
 
     def encode(self, string):
         return self.sender.encode(string)
