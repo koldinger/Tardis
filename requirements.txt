@@ -46,6 +46,6 @@ typing==3.7.4.3
 typing_extensions==4.8.0
 url-normalize==1.4.3
 urllib3==2.1.0
-Werkzeug==3.0.1
+Werkzeug==3.0.3
 xattr==1.0.0
 zstandard==0.22.0
