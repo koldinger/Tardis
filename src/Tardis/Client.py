@@ -127,6 +127,7 @@ configDefaults = {
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
     'NoCompress':           '',
     'CompressMsgs':         'none',
+    'BatchSize':            100,
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
     'SkipCaches':           str(False),
@@ -509,8 +510,6 @@ def prefetchSigFiles(inodes):
         "message": Protocol.Commands.SGS,
         "inodes": inodes
     }
-    setMessageID(message)
-
     sigmessage = sendAndReceive(message)
     checkMessage(sigmessage, "SIG")
 
@@ -545,7 +544,6 @@ def fetchSignature(inode):
         "inode" : inode,
         "path"  : path
     }
-    setMessageID(message)
 
     ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
     ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
@@ -668,8 +666,6 @@ def processSig(inode, sigfile, oldchksum):
                     "encoding": encoding,
                     "encrypted": bool(iv)
                 }
-                setMessageID(message)
-
                 sendMessage(message)
                 #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
@@ -829,8 +825,6 @@ def handleAckMeta(message):
             "checksum": cks,
             "encrypted": bool(iv)
         }
-        setMessageID(message)
-
         sendMessage(message)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
         Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
@@ -1173,7 +1167,6 @@ def makeCloneMessage():
 
 def sendClones():
     message = makeCloneMessage()
-    setMessageID(message)
     response = sendAndReceive(message)
     checkMessage(response, Protocol.Responses.ACKCLN)
     handleAckClone(response)
@@ -1201,7 +1194,6 @@ def sendBatchMsgs():
             'batchsize': batchSize,
             'batch'    : batchMsgs
         }
-        msgId = setMessageID(message)
         logger.debug("BATCH Starting. %s commands", len(batchMsgs))
 
         # Clear out the batch messages before sending, or you can get into an awkward loop.
@@ -1215,7 +1207,7 @@ def sendBatchMsgs():
         respSize = len(response['responses'])
         logger.debug("Got response.  %d responses", respSize)
         if respSize != batchSize:
-            logger.error("Response size does not equal batch size: ID: %d B: %d R: %d", msgId, batchSize, respSize)
+            logger.error("Response size does not equal batch size: ID: %d B: %d R: %d", response.get('respid', -1), batchSize, respSize)
             if logger.isEnabledFor(logging.DEBUG):
                 msgs = { x['msgid'] for x in batchMsgs }
                 resps = { x['respid'] for x in response['responses'] }
@@ -1522,6 +1514,7 @@ def loadExcludedDirs():
         excludeDirs.extend(list(map(Util.fullPath, args.excludedirs)))
 
 def sendMessage(message):
+    setMessageID(message)
     if verbosity > 4:
         logger.debug("Send: %s", str(message))
     if args.logmessages:
@@ -1618,11 +1611,10 @@ _batchStartTime = None
 
 def batchMessage(message, batch=True, flush=False, response=True):
     global _batchStartTime
-    setMessageID(message)
-
     batch = batch and (args.batchsize > 0)
 
     if batch:
+        setMessageID(message)
         batchMsgs.append(message)
     now = time.time()
     if _batchStartTime is None:
@@ -1990,7 +1982,8 @@ def processCommandLine():
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  ' + _def))
     comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: ' + _def))
     comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  ' + _def))
-    comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=100,            help=_d('Maximum number of small dirs to batch together.  ' + _def))
+    comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=c.getint(t, 'BatchSize'),
+                                                                                                        help=_d('Maximum number of small dirs to batch together.  ' + _def))
     comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  ' + _def))
     comgrp.add_argument('--ckbatchsize',            dest='cksumbatch', type=int, default=100,           help=_d('Maximum number of checksums to handle in a single message.  ' + _def))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  ' + _def))
