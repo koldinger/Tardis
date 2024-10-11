@@ -473,7 +473,7 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
             if args.recovername:
                 ckname = recoverName(i)
             # Recover the checksum, but don't attempt to authenticate it.   We'll do that ourselves later
-            f = r.recoverChecksum(i, args.authenticate)
+            f = r.recoverChecksum(i, args.auth)
 
             if f:
                 logger.info("Recovering checksum %s", ckname)

@@ -54,6 +54,8 @@ from . import Util
 from . import Protocol
 from . import log
 
+
+
 class FileResponse(IntEnum):
     DONE    = 0
     CONTENT = 1
@@ -67,7 +69,7 @@ args   = None
 
 schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
 
-if  os.path.isabs(schemaName):
+if os.path.isabs(schemaName):
     schemaFile = schemaName
 else:
     parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -456,7 +458,6 @@ class Backend:
                 if (not info) or (info['size'] == -1):
                     attrs.add(xattr)
 
-
         response = {
             "message"   : Protocol.Responses.ACKDIR,
             "status"    : "OK",
@@ -726,7 +727,6 @@ class Backend:
             }
         return (message, False)
 
-
     def processMeta(self, message):
         """ Check metadata messages """
         metadata = message['metadata']
@@ -757,30 +757,31 @@ class Backend:
         return (message, False)
 
     def processMetaData(self, message):
-        """ Process a content message, including all the data content chunks """
+        """ Process a metadata content message, including all the data content chunks """
         self.logger.debug("Processing metadata message: %s", message)
-        checksum = message['checksum']
-        if self.cache.exists(checksum):
-            self.logger.debug("Checksum file %s already exists", checksum)
-            output = io.BytesIO()        # Accumulate into a throwaway string
-        else:
-            output = self.cache.open(checksum, "wb")
 
-        encrypted = message.get('encrypted', False)
+        data = message["data"]
+        for chunk in data:
+            checksum = chunk["checksum"]
+            size = chunk["size"]
+            encrypted = chunk.get("encrypted", False)
+            compressed = chunk.get("compressed", False)
 
-        (bytesReceived, status, size, _, compressed) = Util.receiveData(self.messenger, output)
-        self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
+            if self.cache.exists(checksum):
+                self.logger.debug("Checksum file %s already exists", checksum)
+            else:
+                d = chunk["data"]
+                with self.cache.open(checksum, "wb") as output:
+                    output.write(bytes(d))
+                self.db.updateChecksumFile(
+                    checksum, encrypted, size, compressed=compressed, disksize=len(d)
+                )
+                self.statNewFiles += 1
+                self.statBytesReceived += len(d)
 
-        output.close()
+        return ({"message": Protocol.Responses.ACKMETADATA, "status": "OK"}, False)
 
-        self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
-        self.statNewFiles += 1
-
-        self.statBytesReceived += bytesReceived
-
-        return (None, False)
-
-    def processPurge(self, message = None):
+    def processPurge(self, message=None):
         self.logger.debug("Processing purge message: %s", str(message))
         message = message or {}
         prevTime = None
@@ -852,7 +853,6 @@ class Backend:
                 #self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append(inoDev)
         return ({"message" : Protocol.Responses.ACKCLN, "done" : done, 'content' : content }, True)
-
 
     _sequenceNumber = 0
 
@@ -1207,7 +1207,7 @@ class Backend:
             pass
             #if (self.tempdir):
                 # Clean out the temp dir
-                #`shutil.rmtree(self.tempdir)
+                #shutil.rmtree(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
@@ -1425,7 +1425,7 @@ class Backend:
                 self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
 
             if filenameKey:
-                    response['filenameKey'] = filenameKey
+                response['filenameKey'] = filenameKey
             if contentKey:
                 response['contentKey'] = contentKey
 
