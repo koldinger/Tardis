@@ -56,7 +56,6 @@ import threading
 import socket
 import concurrent.futures
 
-from functools import reduce
 from collections import defaultdict, deque
 from binascii import hexlify
 from dataclasses import dataclass
@@ -98,11 +97,14 @@ local_config = Defaults.getDefault('TARDIS_LOCAL_CONFIG')
 if not os.path.exists(local_config):
     local_config = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 
+basePathChoices = ["none", "common", "full"]
+msgCompressionChoices = ["none", "zlib", "zlib-stream", "snappy"]
+reportChoices = ["all", "dirs", "none"]
+
 configDefaults = {
     # Remote Socket connectionk params
     'Server':               Defaults.getDefault('TARDIS_SERVER'),
     'Port':                 Defaults.getDefault('TARDIS_PORT'),
-
     # Local Direct connect params
     'BaseDir':              Defaults.getDefault('TARDIS_DB'),
     'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
@@ -144,27 +146,26 @@ configDefaults = {
     'Stats':                str(False),
     'Report':               'none',
     'Directories':          '.',
-
     # Backend parameters
-    'Formats'               : 'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
-    'Priorities'            : '40, 30, 20',
-    'KeepDays'              : '0, 180, 30',
-    'ForceFull'             : '0, 0, 0',
-    'Umask'                 : '027',
-    'User'                  : '',
-    'Group'                 : '',
-    'CksContent'            : '65536',
-    'AutoPurge'             : str(False),
-    'SaveConfig'            : str(True),
-    'AllowClientOverrides'  : str(True),
-    'AllowSchemaUpgrades'   : str(False),
-    'JournalFile'           : Defaults.getDefault('TARDIS_JOURNAL'),
-    'SaveFull'              : str(False),
-    'MaxDeltaChain'         : '5',
-    'MaxChangePercent'      : '50',
-    'DBBackups'             : '0',
-    'LinkBasis'             : str(False),
-    'RequirePassword'       : str(False),
+    'Formats':              'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
+    'Priorities':           '40, 30, 20',
+    'KeepDays':             '0, 180, 30',
+    'ForceFull':            '0, 0, 0',
+    'Umask':                '027',
+    'User':                 '',
+    'Group':                '',
+    'CksContent':           '65536',
+    'AutoPurge':            str(False),
+    'SaveConfig':           str(True),
+    'AllowClientOverrides': str(True),
+    'AllowSchemaUpgrades':  str(False),
+    'JournalFile':          Defaults.getDefault('TARDIS_JOURNAL'),
+    'SaveFull':             str(False),
+    'MaxDeltaChain':        '5',
+    'MaxChangePercent':     '50',
+    'DBBackups':            '0',
+    'LinkBasis':            str(False),
+    'RequirePassword':      str(False)
 }
 
 excludeDirs         = []
@@ -188,10 +189,10 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        ".svn", ".git", ".hg", ".bzr"]
 verbosity           = 0
 
-conn: Connection.ProtocolConnection 
+conn: Connection.ProtocolConnection
 args: argparse.Namespace
 
-directoryQueue = deque()
+directoryQueue      = deque()
 
 cloneDirs           = []
 cloneContents       = {}
@@ -204,7 +205,7 @@ newmeta             = []
 
 noCompTypes         = []
 
-crypt: TardisCrypto.Crypto_Null
+crypt: TardisCrypto.Crypto_Null | None = None
 logger: logging.Logger
 exceptionLogger: Util.ExceptionLogger
 
@@ -221,7 +222,7 @@ lastTimestamp       = None
 # Example: If you have 100 files, and 99 of them are already backed up (ie, one new), backed would be 100, but new would be 1.
 # dataSent is the compressed and encrypted size of the files (or deltas) sent in this run, but dataBacked is the total size of
 # the files.
-stats = { 'dirs' : 0, 'files' : 0, 'links' : 0, 'backed' : 0, 'dataSent': 0, 'dataBacked': 0 , 'new': 0, 'delta': 0, 'gone': 0, 'denied': 0 }
+stats = { 'dirs': 0, 'files': 0, 'links': 0, 'backed': 0, 'dataSent': 0, 'dataBacked': 0, 'new': 0, 'delta': 0, 'gone': 0, 'denied': 0 }
 
 report = {}
 
@@ -238,6 +239,7 @@ class InodeDB:
     """
     Database of inodes that we currently care about.
     """
+
     def __init__(self):
         self.db = defaultdict(InodeEntry)
 
@@ -274,7 +276,7 @@ class MessageOnlyFormatter(logging.Formatter):
     Logging Formatter that allows us to specify formats that won't have a levelname header, ie, those that
     will only have a message
     """
-    def __init__(self, fmt = '%(levelname)s: %(message)s', levels=[logging.INFO]):
+    def __init__(self, fmt='%(levelname)s: %(message)s', levels=[logging.INFO]):
         logging.Formatter.__init__(self, fmt)
         self.levels = levels
 
@@ -380,8 +382,6 @@ def filelist(dirname, excludes, skipfile):
         if all(not p.match(f.path) for p in excludes):
             yield f
 
-#_deletedInodes = {}
-
 def msgInfo(resp=None, batch=None):
     if resp is None:
         resp = currentResponse
@@ -394,7 +394,6 @@ def msgInfo(resp=None, batch=None):
     else:
         batchId = None
     return (respId, respType, batchId)
-
 
 pool = concurrent.futures.ThreadPoolExecutor()
 
@@ -457,7 +456,7 @@ def logFileInfo(i, c):
             size = x["size"]
         else:
             size = 0
-        size = Util.fmtSize(size, suffixes=['','KB','MB','GB', 'TB', 'PB'])
+        size = Util.fmtSize(size, suffixes=['', 'KB', 'MB', 'GB', 'TB', 'PB'])
         logger.log(log.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         cname = crypt.encryptPath(name)
         logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
@@ -474,7 +473,7 @@ def handleAckSum(response):
     # First, delete all the files which are "done", ie, matched
     for i in [tuple(x) for x in done]:
         if logfiles:
-            (x, name) = inodeDB.get(i)
+            (_, name) = inodeDB.get(i)
             if name:
                 logger.log(log.FILES, "[C]: %s", Util.shortPath(name))
         inodeDB.delete(i)
@@ -573,7 +572,6 @@ def getInodeDBName(inode):
         return name
     return "Unknown"
 
-
 def processDelta(inode, signatures):
     """ Generate a delta and send it.   Requests a signature if it's not available already. """
     if verbosity > 3:
@@ -605,7 +603,7 @@ def handleSig(response, data):
     else:
         inode = tuple(response['inode'])
         logger.error("No signature file for %s", inode)
-        sendContent(inode, 'full')
+        sendContent(inode, 'Full')
 
 def processSig(inode, sigfile, oldchksum):
     """ Generate a delta and send it """
@@ -638,7 +636,7 @@ def processSig(inode, sigfile, oldchksum):
                     delta = librsync.delta(reader, sigfile)
                     sigfile.close()
 
-                # get the auxiliary info
+                    # get the auxiliary info
                     checksum = reader.checksum()
                     filesize = reader.size()
                     newsig = reader.signatureFile()
@@ -655,7 +653,7 @@ def processSig(inode, sigfile, oldchksum):
                 return
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
-                encrypt, iv, = makeEncryptor()
+                encrypt, iv = makeEncryptor()
                 Util.accumulateStat(stats, 'delta')
                 message = {
                     "message": Protocol.Commands.DEL,
@@ -726,7 +724,7 @@ def sendContent(inode, reportType):
 
             if stat.S_ISDIR(mode):
                 return
-            encrypt, iv, = makeEncryptor()
+            encrypt, iv = makeEncryptor()
             message = {
                 "message":      Protocol.Commands.CON,
                 "inode":        inode,
@@ -786,7 +784,7 @@ def sendContent(inode, reportType):
                     }
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
+                    (sigsize, _, _) = Util.sendData(conn.sender, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)        # Don't bother to encrypt the signature
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -809,25 +807,39 @@ def sendContent(inode, reportType):
             args.loginodes.write(f"SendContent: No inode entry for {inode}\n".encode('utf8'))
         exceptionLogger.log(e)
 
-def handleAckMeta(message):
-    checkMessage(message, Protocol.Responses.ACKMETA)
-    content = message.setdefault('content', {})
+def handleAckMeta(response):
+    checkMessage(response, Protocol.Responses.ACKMETA)
+    content = response.setdefault('content', {})
     # Ignore the done field.
     #done    = message.setdefault('done', {})
 
-    for cks in content:
-        data = metaCache.inverse[cks][0]
-        logger.debug("Sending meta data chunk: %s -- %s", cks, data)
+    message = {"message": Protocol.Commands.METADATA, "data": []}
 
-        encrypt, iv = makeEncryptor()
-        message = {
-            "message": Protocol.Commands.METADATA,
-            "checksum": cks,
-            "encrypted": bool(iv)
-        }
-        sendMessage(message)
+    for cks in content:
+        data = fs_encode(metaCache.inverse[cks][0])
+        sz = len(data)
+        logger.debug("Sending meta data chunk: %s -- %s", cks, data)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
-        Util.sendData(conn.sender, io.BytesIO(bytes(data, 'utf8')), encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
+        compressor = CompressedBuffer.getCompressor(compress)
+        encrypt, iv = makeEncryptor()
+
+        data = compressor.compress(data)
+        x = compressor.flush()
+        if x:
+            data = data + x
+        if iv:
+            data = iv + encrypt.encrypt(data) + encrypt.finish()
+        chunk = {
+            "checksum": cks,
+            "encrypted": bool(iv),
+            "compressed": compress,
+            "size": sz,
+            "data": data
+        }
+        message["data"].append(chunk)
+
+    resp = sendAndReceive(message)
+    checkMessage(resp, Protocol.Responses.ACKMETADATA)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -840,7 +852,7 @@ def sendDirHash(inode):
     #    (h,s) = dirHashes[i]
     #except KeyError:
     #    logger.error("%s, No directory hash available for inode %d on device %d", i, i[0], i[1])
-    (h,s) = dirHashes.setdefault(i, (_defaultHash, 0))
+    (h, s) = dirHashes.setdefault(i, (_defaultHash, 0))
 
     message = {
         'message': Protocol.Commands.DHSH,
@@ -923,7 +935,6 @@ def pushFiles():
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
             exceptionLogger.log(e)
-
 
     for i in [tuple(x) for x in allRefresh]:
         if logger.isEnabledFor(log.FILES):
@@ -1022,7 +1033,7 @@ def mkFileInfo(f):
             'link':   stat.S_ISLNK(mode),
             'nlinks': s.st_nlink,
             'size':   s.st_size,
-            'mtime':  int(s.st_mtime),              # We strip these down to the integer value beacuse FP conversions on the back side can get confused.
+            'mtime':  int(s.st_mtime),          # We strip these down to the integer value beacuse FP conversions on the back side can get confused.
             'ctime':  int(s.st_ctime),
             'atime':  int(s.st_atime),
             'mode':   s.st_mode,
@@ -1039,7 +1050,7 @@ def mkFileInfo(f):
                     # Convert to a set of readable string tuples
                     # We base64 encode the data chunk, as it's often binary
                     # Ugly, but unfortunately necessary
-                    attr_string = json.dumps({ str(k):str(base64.b64encode(v), 'utf8') for (k,v) in sorted(attrs.items())})
+                    attr_string = json.dumps({ str(k):str(base64.b64encode(v), 'utf8') for (k, v) in sorted(attrs.items())})
                     cks = addMeta(attr_string)
                     finfo['xattr'] = cks
             except Exception:
@@ -1115,7 +1126,7 @@ def getDirContents(dirname, dirstat, excludes=None):
                 logger.error("Error processing %s: %s", os.path.join(dirname, f), str(e))
                 exceptionLogger.log(e)
     except (IOError, OSError) as e:
-        logger.error("Error reading directory %s: %s" ,dir, str(e))
+        logger.error("Error reading directory %s: %s", dir, str(e))
 
     return (files, subdirs, excludes)
 
@@ -1154,7 +1165,6 @@ def handleAckClone(message):
             del cloneContents[finfo]
         else:
             logger.error("Unable to locate info for %s", str(finfo))
-
 
 def makeCloneMessage():
     global cloneDirs
@@ -1227,7 +1237,7 @@ def flushBatchMsgs():
 
 def sendPurge():
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
-    message =  { 'message': Protocol.Commands.PRG }
+    message = { 'message': Protocol.Commands.PRG }
     relative = args.purgetime is not None
     if purgePriority:
         message['priority'] = purgePriority
@@ -1243,7 +1253,7 @@ def sendDirChunks(path, inode, files):
     message = {
         'message': Protocol.Commands.DIR,
         'path'   : path,
-        'inode'  : list(inode),
+        'inode'  : list(inode)
     }
 
     chunkNum = 0
@@ -1327,7 +1337,7 @@ def processDirectory(dir, top, depth=0, excludes=None):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
                         return
             except Exception as e:
-                logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, 'CACHEDIR.TAG'), dir)
+                logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, "CACHEDIR.TAG"), dir)
                 exceptionLogger.log(e)
 
         (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
@@ -1440,7 +1450,7 @@ def cloneDir(inode, device, files, path, info=None):
     else:
         (h, s) = Util.hashDir(crypt, files)
 
-    message = {'inode':  inode, 'dev': device, 'numfiles': s, 'cksum': h}
+    message = {'inode': inode, 'dev': device, 'numfiles': s, 'cksum': h}
     cloneDirs.append(message)
     cloneContents[(inode, device)] = (path, files)
     if len(cloneDirs) >= args.clones:
@@ -1455,7 +1465,6 @@ def splitDir(files, when):
         else:
             newFiles.append(f)
     return newFiles, oldFiles
-
 
 def setPurgeValues():
     global purgeTime, purgePriority
@@ -1544,6 +1553,7 @@ def sendAndReceive(message):
     waittime += e - s
     return response
 
+
 def sendKeys(password, client):
     logger.debug("Sending keys")
     (f, c) = crypt.getKeys()
@@ -1555,7 +1565,7 @@ def sendKeys(password, client):
                 "filenameKey": f,
                 "contentKey": c,
                 "srpSalt": salt,
-                "srpVkey":  vkey,
+                "srpVkey": vkey,
                 "cryptoScheme": crypt.getCryptoScheme()
               }
     response = sendAndReceive(message)
@@ -1600,6 +1610,7 @@ def handleResponse(response, doPush=True):
         exceptionLogger.log(e)
 
 _nextMsgId = 0
+
 def setMessageID(message):
     global _nextMsgId
     #message['sessionid'] = str(sessionid)
@@ -1804,6 +1815,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     newBackup      = resp['new'] == 'NEW'
     filenameKey    = resp.get('filenameKey')
     contentKey     = resp.get('contentKey')
+    # FIXME: TODO: Should this be in the initialization?
     if crypt is None:
         crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
@@ -1858,6 +1870,13 @@ def checkConfig(c, t):
         c.set(t, 'CompressData', 'zlib')
     elif comp not in CompressedBuffer.getCompressors():
         c.set(t, 'CompressData', 'none')
+
+    if not c.get(t, 'BasePath') in basePathChoices:
+        c.set(t, 'BasePath', basePathChoices[0])
+    if not c.get(t, 'CompressMsgs') in msgCompressionChoices:
+        c.set(t, 'CompressMsgs', msgCompressionChoices[0])
+    if not c.get(t, 'Report') in reportChoices:
+        c.set(t, 'Report', reportChoices[0])
 
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
@@ -2153,7 +2172,6 @@ def printStats(starttime, endtime):
     if (stats['denied'] or stats['gone']):
         logger.log(log.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
 
-
     logger.log(log.STATS, f"Wait Times:   {str(datetime.timedelta(0, waittime))}")
     logger.log(log.STATS, f"Sending Time: {str(datetime.timedelta(0, Util._transmissionTime))}")
 
@@ -2187,7 +2205,7 @@ def printReport(repFormat):
     dataSize = 0
     logger.log(log.STATS, "")
     if report:
-        length = reduce(max, list(map(len, [x[1] for x in report])))
+        length = functools.reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
 
         filefmts = ['','KB','MB','GB', 'TB', 'PB']
@@ -2315,7 +2333,6 @@ def initialize():
         # Load any excluded directories
         loadExcludedDirs()
 
-
         # Error check the purge parameter.  Disable it if need be
         #if args.purge and not (purgeTime is not None or auto):
         #   logger.error("Must specify purge days with this option set")
@@ -2329,7 +2346,6 @@ def initialize():
             logger.critical("Could not retrieve password.: %s", str(e))
             exceptionLogger.log(e)
             sys.exit(1)
-
 
         # If no compression types are specified, load the list
         types = []
@@ -2432,7 +2448,6 @@ def main():
 
     # Read the command line arguments.
     (args, config, jobname) = processCommandLine()
-    
 
     # Memory debugging.
     # Enable only if you really need it.

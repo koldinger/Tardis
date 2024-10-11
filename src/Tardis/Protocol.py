@@ -59,6 +59,7 @@ class Responses(UppercaseStrEnum):
     ACKPRG = auto()
     ACKSUM = auto()
     ACKMETA = auto()
+    ACKMETADATA = auto()
     ACKDHSH = auto()
     ACKCLICONFIG = auto()
     ACKCMDLN = auto()
