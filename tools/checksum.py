@@ -33,8 +33,6 @@ from Tardis import Util, Config
 import argparse
 import logging
 
-from icecream import ic
-
 def computeChecksum(name, crypto):
     with open(name, "rb") as file:
         data = file.read()
