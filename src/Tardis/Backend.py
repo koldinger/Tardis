@@ -684,8 +684,8 @@ class Backend:
         if output is not None:
             output.close()
 
-        #self.db.setChecksum(inode, device, checksum)
-        return (None, False)
+        response = { 'message': Protocol.Responses.ACKSIG, 'status': 'OK' }
+        return (response, False)
 
     def processChecksum(self, message):
         """ Process a list of checksums """
@@ -915,6 +915,8 @@ class Backend:
             # Record the metadata.  Do it here after we've inserted the file because on a full backup we could overwrite
             # a version which had a basis without updating the base file.
             Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
+
+
         except Exception as e:
             self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
             if self.config.exceptions:
@@ -922,9 +924,8 @@ class Backend:
 
         self.statBytesReceived += bytesReceived
 
-        #return {"message" : "OK", "inode": message["inode"]}
-        #flush = True if bytesReceived > 1000000 else False
-        return (None, False)
+        response = { 'message': Protocol.Responses.ACKCON, 'status': 'OK' }
+        return (response, False)
 
     def processBatch(self, message):
         batch = message['batch']

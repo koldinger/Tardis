@@ -84,6 +84,7 @@ from . import log
 #from . import Throttler
 
 from icecream import ic
+from termcolor import cprint, colored
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -789,6 +790,13 @@ def sendContent(inode, reportType):
                     sendMessage(message)
                     #batchMessage(message, batch=False, flush=True, response=False)
                     (sigsize, _, _) = Util.sendData(messenger, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
+
+                # TODO: FIXME Remove these, or do something with the resoponses.
+                # Should be a ACKCON and an ACKSIG if neede
+                receiveMessage()
+                if makeSig:
+                    receiveMessage()
+
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -1439,7 +1447,7 @@ def runBackup():
         logger.error(e)
         exceptionLogger.log(e)
 
-    print(f"Outstanding Message list: {outstandingMessages}")
+    cprint(f"Outstanding Message list: {outstandingMessages}", 'red')
 
     # Finish any remaning work to complete the backup
     # If any metadata, clone or batch requests still lying around, send them now
@@ -1605,7 +1613,9 @@ def handleResponse(response, doPush=True):
             case Protocol.Responses.ACKMETA:
                 handleAckMeta(response)
             case Protocol.Responses.ACKPRG | Protocol.Responses.ACKDHSH | Protocol.Responses.ACKCLICONFIG | \
-                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKDONE:
+                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKDONE | Protocol.Responses.ACKCON | \
+                 Protocol.Responses.ACKSIG: 
+                logger.debug("Ignoring message %d - %s", response.get('respid', -1), msgtype)
                 pass
             case Protocol.Responses.ACKBTCH:
                 currentBatch = response
