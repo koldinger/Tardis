@@ -149,6 +149,7 @@ configDefaults = {
     'Verbosity':            str(0),
     'Stats':                str(False),
     'Report':               'none',
+    'BasePath':             '',
     'Directories':          '.',
     # Backend parameters
     'Formats':              'Monthly-%Y-%m, Weekly-%Y-%U, Daily-%Y-%m-%d',
