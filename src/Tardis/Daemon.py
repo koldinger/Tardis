@@ -186,22 +186,6 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
     def finish(self):
         self.logger.info("Ending session %s from %s", self.sessionid, self.address)
 
-    def mkMessenger(self, sock, encoding, compress):
-        """
-        Create the messenger object to handle communications with the client
-        """
-        match encoding:
-            case "JSON":
-                return Messages.JsonMessages(sock, compress=compress)
-            case 'MSGP':
-                return Messages.MsgPackMessages(sock, compress=compress)
-            #case "BSON":
-            #     return Messages.BsonMessages(sock, compress=compress)
-            case _:
-                message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
-                sock.sendall(bytes(json.dumps(message), 'utf-8'))
-                raise InitFailedException("Unknown encoding: ", encoding)
-
     def handle(self):
         started = False
         completed = False
@@ -237,7 +221,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             # Create the messenger object.  From this point on, ALL communications should
             # go through messenger, not director to the socket
-            messenger = self.mkMessenger(sock, fields['encoding'], fields['compress'])
+            #messenger = self.mkMessenger(sock, fields['encoding'], fields['compress'])
+            messenger =  Messages.MsgPackMessages(sock, compress=compress)
 
             # Create a backend, and run it.
             backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid)

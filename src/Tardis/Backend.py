@@ -1226,21 +1226,6 @@ class Backend:
         name = starttime.strftime("Backup_%Y-%m-%d_%H:%M:%S")
         return (name, 0, 0, False)
 
-    def mkMessenger(self, sock, encoding, compress):
-        """
-        Create the messenger object to handle communications with the client
-        """
-        if encoding == "JSON":
-            self.messenger = Messages.JsonMessages(sock, compress=compress)
-        elif encoding == 'MSGP':
-            self.messenger = Messages.MsgPackMessages(sock, compress=compress)
-        #elif encoding == "BSON":
-            #self.messenger = Messages.BsonMessages(sock, compress=compress)
-        else:
-            message = {"status": "FAIL", "error": f"Unknown encoding: {encoding}"}
-            sock.sendall(bytes(json.dumps(message), 'utf-8'))
-            raise InitFailedException("Unknown encoding: ", encoding)
-
     def doGetKeys(self):
         try:
             message = {"status": "NEEDKEYS"}
