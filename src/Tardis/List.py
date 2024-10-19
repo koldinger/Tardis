@@ -61,7 +61,7 @@ colors = {
     'moved'     :  'blue',
     'full'      :  'cyan,,bold',
     'header'    :  'green',
-    'name'      :  None,
+    'name'      :  'yellow',
     'error'     :  'red,,bold',
     'default'   :  None
 }
