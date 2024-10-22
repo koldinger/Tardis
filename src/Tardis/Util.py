@@ -70,6 +70,8 @@ try:
 except ImportError:
     genzshcomp = None
 
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 logger = logging.getLogger('UTIL')
 
@@ -572,7 +574,7 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
 
     try:
         if encrypt.iv:
-            sender.sendMessage(encrypt.iv, raw=True)
+            sender.sendMessage(encrypt.iv)
             accumulateStat(stats, 'dataSent', len(encrypt.iv))
         for chunk, eof in _chunks(stream, chunksize):
             #print len(chunk), eof
@@ -584,7 +586,7 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
                 data += encrypt.finish()
             #chunkMessage = { "chunk" : num, "data": data }
             if data:
-                sender.sendMessage(data, raw=True)
+                sender.sendMessage(data)
                 accumulateStat(stats, 'dataSent', len(data))
                 size += len(data)
                 if progress:
@@ -594,7 +596,7 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
             #num += 1
         digest = encrypt.digest()
         if digest:
-            sender.sendMessage(digest, raw=True)
+            sender.sendMessage(digest)
             accumulateStat(stats, 'dataSent', len(digest))
 
     except Exception as e:
@@ -603,7 +605,8 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
         #logger.exception(e)
         raise e
     finally:
-        sender.sendMessage(b'', raw=True)
+        sender.sendMessage(b'')     # 0 length chunk, indicate end of data
+
         compressed = compress if stream.isCompressed() else "None"
         size = stream.size()
 
@@ -615,7 +618,6 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
             message["checksum"] = ck
         if signature:
             sig = stream.signatureFile()
-        #print message
         sender.sendMessage(message)
         stream = None
         end = time.time()
@@ -633,27 +635,23 @@ def receiveData(receiver, output, log=None):
     if isinstance(receiver, Connection.Connection):
         receiver = receiver.sender
     bytesReceived = 0
-    checksum = None
-    compressed = False
     while True:
-        chunk = receiver.recvMessage(raw=True)
+        chunk = receiver.recvMessage()
         #print chunk
         # logger.debug("Chunk: %s", str(chunk))
         if len(chunk) == 0:
             break
         data = receiver.decode(chunk)
+        bytesReceived += len(data)
         if output:
             output.write(data)
             output.flush()
-        bytesReceived += len(data)
 
     chunk = receiver.recvMessage()
     status = chunk['status']
     size   = chunk['size']
-    if 'checksum' in chunk:
-        checksum = chunk['checksum']
-    if 'compressed' in chunk:
-        compressed = chunk['compressed']
+    checksum = chunk.get('checksum', None)
+    compressed = chunk.get('compressed', False)
     if log:
         log.write("Received %d bytes\n" % size)
     return (bytesReceived, status, size, checksum, compressed)
