@@ -62,6 +62,7 @@ colors = {
     'full'      :  'cyan,,bold',
     'header'    :  'green',
     'name'      :  'yellow',
+    'details'   : None,
     'error'     :  'red,,bold',
     'default'   :  None
 }
@@ -330,7 +331,7 @@ def printit(info, name, color, gone):
             else:
                 size = ''
             #doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
-            doprint(f"  {mode:9} {nlinks:3} {owner:8} {group:8} {size:8} {mtime:12} ", color=colors['name'])
+            doprint(f"  {mode:9} {nlinks:3} {owner:8} {group:8} {size:8} {mtime:12} ", color=colors['details'])
             if args.size:
                 doprint(f' {fsize:8} ')
             if args.inode:
@@ -343,13 +344,13 @@ def printit(info, name, color, gone):
     elif args.cksums or args.chnlen or args.inode or args.size:
         doprint(columnfmt % name, color)
         if args.size:
-            doprint(f' {fsize}', color=colors['name'])
+            doprint(f' {fsize}', color=colors['details'])
         if args.inode:
-            doprint(f' {inode}', color=colors['name'])
+            doprint(f' {inode}', color=colors['details'])
         if args.cksums:
-            doprint(f' {cksum}', color=colors['name'])
+            doprint(f' {cksum}', color=colors['details'])
         if args.chnlen:
-            doprint(f' {chnlen}', color=colors['name'])
+            doprint(f' {chnlen}', color=colors['details'])
         doprint(' ', eol=True)
     else:
         column += 1
