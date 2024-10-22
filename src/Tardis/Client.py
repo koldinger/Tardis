@@ -1,5 +1,5 @@
 # vi: set et sw=4 sts=4 fileencoding=utf-
-#
+#)
 # Tardis: A Backup System
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
@@ -84,7 +84,7 @@ from . import log
 #from . import Throttler
 
 from icecream import ic
-from termcolor import cprint, colored
+from termcolor import cprint
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -133,7 +133,6 @@ configDefaults = {
     'NoCompressFile':       Defaults.getDefault('TARDIS_NOCOMPRESS'),
     'NoCompress':           '',
     'CompressMsgs':         'none',
-    'BatchSize':            100,
     'Purge':                str(False),
     'IgnoreCVS':            str(False),
     'SkipCaches':           str(False),
@@ -202,7 +201,6 @@ directoryQueue      = deque()
 
 cloneDirs           = []
 cloneContents       = {}
-batchMsgs           = []
 # A cache of metadata.  Since many files can have the same metadata, we check that
 # that we haven't sent it yet.
 metaCache           = Util.bidict()
@@ -388,18 +386,12 @@ def filelist(dirname, excludes, skipfile):
         if all(not p.match(f.path) for p in excludes):
             yield f
 
-def msgInfo(resp=None, batch=None):
+def msgInfo(resp=None):
     if resp is None:
         resp = currentResponse
-    if batch is None:
-        batch = currentBatch
     respId = resp['respid']
     respType = resp['message']
-    if batch:
-        batchId = batch['respid']
-    else:
-        batchId = None
-    return (respId, respType, batchId)
+    return (respId, respType)
 
 pool = concurrent.futures.ThreadPoolExecutor()
 
@@ -429,7 +421,7 @@ def genChecksum(inode):
                 exceptionLogger.log(e)
                 # TODO: Add an error response?
     except KeyError as e:
-        (rId, rType, bId) = msgInfo()
+        (rId, rType) = msgInfo()
         logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s -- %s)", str(inode), rId, rType, bId)
         exceptionLogger.log(e)
     except FileNotFoundError as e:
@@ -451,9 +443,7 @@ def processChecksums(inodes):
         "files": files
     }
 
-    #response = sendAndReceive(message)
-    #handleAckSum(response)
-    batchMessage(message)
+    sendMessage(message)
 
 def logFileInfo(i, c):
     (x, name) = inodeDB.get(i)
@@ -469,7 +459,6 @@ def logFileInfo(i, c):
 
 def handleAckSum(response):
     checkMessage(response, Protocol.Responses.ACKSUM)
-    checkMessage(response, 'ACKSUM')
     logfiles = logger.isEnabledFor(log.FILES)
 
     done    = response.setdefault('done', {})
@@ -671,7 +660,6 @@ def processSig(inode, sigfile, oldchksum):
                     "encrypted": bool(iv)
                 }
                 sendMessage(message)
-                #batchMessage(message, flush=True, batch=False, response=False)
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 (sent, _, _) = Util.sendData(messenger, delta, encrypt, chunksize=args.chunksize, compress=compress, stats=stats, log=args.logmessages)
                 delta.close()
@@ -684,7 +672,6 @@ def processSig(inode, sigfile, oldchksum):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    #batchMessage(message, flush=True, batch=False, response=False)
                     # Send the signature, generated above
                     (sigsize, _, _) = Util.sendData(messenger, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, log=args.logmessages) # Don't bother to encrypt the signature
                     newsig.close()
@@ -772,7 +759,6 @@ def sendContent(inode, reportType):
                         compress = False
                 makeSig = crypt.encrypting() or args.signature
                 sendMessage(message)
-                #batchMessage(message, batch=False, flush=True, response=False)
                 (size, checksum, sig) = Util.sendData(messenger, data,
                                                       encrypt,
                                                       hasher=crypt.getHash(),
@@ -789,15 +775,13 @@ def sendContent(inode, reportType):
                         "checksum": checksum
                     }
                     sendMessage(message)
-                    #batchMessage(message, batch=False, flush=True, response=False)
-                    (sigsize, _, _) = Util.sendData(messenger, sig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, stats=stats, log=args.logmessages)            # Don't bother to encrypt the signature
-
-                # TODO: FIXME Remove these, or do something with the resoponses.
-                # Should be a ACKCON and an ACKSIG if neede
-                receiveMessage()
-                if makeSig:
-                    receiveMessage()
-
+                    # Don't bother to encrypt the signature data.   It's not hugely useful
+                    # Don't compress.   Signature's don't compress at all.   They're basically random
+                    (sigsize, _, _) = Util.sendData(messenger, sig,
+                                                    TardisCrypto.NullEncryptor(),
+                                                    chunksize=args.chunksize,
+                                                    stats=stats,
+                                                    log=args.logmessages)
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
                 exceptionLogger.log(e)
@@ -851,8 +835,7 @@ def handleAckMeta(response):
         }
         message["data"].append(chunk)
 
-    resp = sendAndReceive(message)
-    checkMessage(resp, Protocol.Responses.ACKMETADATA)
+    sendMessage(message)
 
 _defaultHash = None
 def sendDirHash(inode):
@@ -874,7 +857,7 @@ def sendDirHash(inode):
         'size'   : s
         }
 
-    batchMessage(message)
+    sendMessage(message)
     try:
         del dirHashes[i]
     except KeyError:
@@ -1190,63 +1173,12 @@ def makeCloneMessage():
 
 def sendClones():
     message = makeCloneMessage()
-    response = sendAndReceive(message)
-    checkMessage(response, Protocol.Responses.ACKCLN)
-    handleAckClone(response)
+    sendMessage(message)
 
 def flushClones():
     if cloneDirs:
         logger.debug("Flushing %d clones", len(cloneDirs))
-        if args.batchdirs:
-            batchMessage(makeCloneMessage())
-        else:
-            sendClones()
-
-def sendBatchMsgs():
-    global batchMsgs, _batchStartTime
-    batchSize = len(batchMsgs)
-    if batchSize <= 1:
-        # If there's only one, don't batch it up, just send it.
-        msg = batchMsgs[0]
-        batchMsgs = []
-        response = sendAndReceive(msg)
-    else:
-        logger.debug("Sending %d batch messages", len(batchMsgs))
-        message = {
-            'message'  : Protocol.Commands.BATCH,
-            'batchsize': batchSize,
-            'batch'    : batchMsgs
-        }
-        logger.debug("BATCH Starting. %s commands", len(batchMsgs))
-
-        # Clear out the batch messages before sending, or you can get into an awkward loop.
-        # if it's not cleared out, the sendAndReceive can make a set of calls that will
-        # cause another message to be added to the batch (in pushFiles) which will cause the batch to
-        # be reprocessed.
-        batchMsgs = []
-
-        response = sendAndReceive(message)
-        checkMessage(response, Protocol.Responses.ACKBTCH)
-        respSize = len(response['responses'])
-        logger.debug("Got response.  %d responses", respSize)
-        if respSize != batchSize:
-            logger.error("Response size does not equal batch size: ID: %d B: %d R: %d", response.get('respid', -1), batchSize, respSize)
-            if logger.isEnabledFor(logging.DEBUG):
-                msgs = { x['msgid'] for x in batchMsgs }
-                resps = { x['respid'] for x in response['responses'] }
-                diffs1 = msgs.difference(resps)
-                logger.debug("Missing Messages: %s", str(list(diffs1)))
-        logger.debug("BATCH Ending.")
-
-    _batchStartTime = None
-    # Process the response messages
-    handleResponse(response)
-
-def flushBatchMsgs():
-    if batchMsgs:
-        sendBatchMsgs()
-        return True
-    return False
+        sendClones()
 
 def sendPurge():
     """ Send a purge message.  Indicate if this time is relative (ie, days before now), or absolute. """
@@ -1258,7 +1190,7 @@ def sendPurge():
     if purgeTime:
         message.update({ 'time': purgeTime, 'relative': relative })
 
-    batchMessage(message, flush=True, batch=False)
+    sendMessage(message)
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
@@ -1284,8 +1216,7 @@ def sendDirChunks(path, inode, files):
         message["last"]  = x + args.dirslice > len(files)
         if verbosity > 3:
             logger.debug("---- Sending chunk at %d ----", x)
-        batch = len(chunk) < args.dirslice
-        batchMessage(message, batch=batch)
+        sendMessage(message)
 
     sendDirHash(inode)
 
@@ -1301,8 +1232,9 @@ def makeMetaMessage():
 statusBar: StatusBar.StatusBar | None = None
 
 def initProgressBar(scheduler):
-    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {mode} ", stats, scheduler=scheduler)
+    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} | {mode} ", stats, scheduler=scheduler)
     sbar.setValue('mode', '')
+    sbar.setValue('waiting', 0)
     sbar.setTrailer('')
     sbar.start()
     return sbar
@@ -1311,6 +1243,10 @@ def setProgress(mode, name=""):
     if statusBar:
         statusBar.setValue('mode', mode)
         statusBar.setTrailer(name)
+
+def setOutstanding(number):
+    if statusBar:
+        statusBar.setValue('waiting', number)
 
 processedDirs = set()
 
@@ -1382,7 +1318,7 @@ def processDirectory(dir, top, depth=0, excludes=None):
 
             # Purge out any meta data that's been accumulated
             if newmeta:
-                batchMessage(makeMetaMessage())
+                sendMessage(makeMetaMessage())
 
             if oldFiles:
                 # There are oldfiles.  Hash them.
@@ -1439,24 +1375,41 @@ def processTopLevelDirs(rootdir, directories):
 
 def runBackup():
     try:
-        while True:
+        while directoryQueue:
+            while response := receiveMessage(wait=False):
+                handleResponse(response)
+
             dirJob = directoryQueue.popleft()
             processDirectory(dirJob.subdir, dirJob.top, dirJob.newdepth, dirJob.subexcludes)
-    except IndexError:
+
+        while outstandingMessages:
+            response = receiveMessage(wait = True)
+            handleResponse(response)
+        logger.debug("Done with directory traversal")
+        if newmeta:
+            sendMessage(makeMetaMessage())
+        flushClones()
+
+        while outstandingMessages:
+            response = receiveMessage(wait = True)
+            handleResponse(response)
         logger.debug("Done with directory traversal")
     except Exception as e:
         logger.error(e)
         exceptionLogger.log(e)
 
-    cprint(f"Outstanding Message list: {outstandingMessages}", 'red')
-
     # Finish any remaning work to complete the backup
     # If any metadata, clone or batch requests still lying around, send them now
-    if newmeta:
-        batchMessage(makeMetaMessage())
-    flushClones()
-    while flushBatchMsgs():
-        pass
+
+
+    except Exception as e:
+        logger.error(e)
+        exceptionLogger.log(e)
+
+    #if outstandingMessages:
+    #cprint(f"Outstanding Message list: {outstandingMessages}", 'red')
+    #cprint(f"{_nextMsgId}", "yellow")
+
 
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
@@ -1537,6 +1490,22 @@ def loadExcludedDirs():
     if args.excludedirs is not None:
         excludeDirs.extend(list(map(Util.fullPath, args.excludedirs)))
 
+
+_nextMsgId = 0
+outstandingMessages = {}
+waittime = 0
+trackOutstanding = False
+
+def setMessageID(message):
+    global _nextMsgId
+    #message['sessionid'] = str(sessionid)
+    _nextMsgId += 1
+    message['msgid'] = _nextMsgId
+    if trackOutstanding:
+        outstandingMessages[_nextMsgId] = message['message']
+        setOutstanding(len(outstandingMessages))
+    return _nextMsgId
+
 def sendMessage(message):
     setMessageID(message)
     if verbosity > 4:
@@ -1547,33 +1516,28 @@ def sendMessage(message):
     #setProgress("Sending...", "")
     messenger.sendMessage(message)
 
-def receiveMessage(wait = True):
-    setProgress("Receiving...")
-    response = messenger.recvMessage(wait)
-    try:
-        respId = response['respid']
-        outstandingMessages.remove(respId)
-    except KeyError:
-        logger.warning("respid field not in message: %s", str(response))
-    except ValueError:
-        logger.warning("Unknown response ID: %s", respId)
 
-    if verbosity > 4:
-        logger.debug("Receive: %s", str(response))
-    if args.logmessages:
-        args.logmessages.write(f"\nReceived message {response.get('respid', 'Unknown')} {'-' * 40}\n")
-        args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n')
+def receiveMessage(wait = True):
+    global waittime
+    setProgress("Receiving...")
+    if wait:
+        s = time.time()
+    response = messenger.recvMessage(wait)
+    if wait:
+        e = time.time()
+        waittime += e - s
+    if response:
+        if verbosity > 4:
+            logger.debug("Receive: %s", str(response))
+        if args.logmessages:
+            args.logmessages.write(f"\nReceived message {response.get('respid', 'Unknown')} {'-' * 40}\n")
+            args.logmessages.write(pprint.pformat(response, width=250, compact=True) + '\n')
     return response
 
-waittime = 0
 
 def sendAndReceive(message):
-    global waittime
-    s = time.time()
     sendMessage(message)
     response = receiveMessage()
-    e = time.time()
-    waittime += e - s
     return response
 
 
@@ -1596,11 +1560,10 @@ def sendKeys(password, client):
     if response['response'] != 'OK':
         logger.error("Could not set keys")
 
-currentBatch = None
 currentResponse = None
 
 def handleResponse(response, doPush=True):
-    global currentResponse, currentBatch
+    global currentResponse
     try:
         currentResponse = response
         msgtype = response['message']
@@ -1614,15 +1577,13 @@ def handleResponse(response, doPush=True):
             case Protocol.Responses.ACKMETA:
                 handleAckMeta(response)
             case Protocol.Responses.ACKPRG | Protocol.Responses.ACKDHSH | Protocol.Responses.ACKCLICONFIG | \
-                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKDONE | Protocol.Responses.ACKCON | \
-                 Protocol.Responses.ACKSIG: 
+                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKCON | \
+                 Protocol.Responses.ACKSIG | Protocol.Responses.ACKMETADATA: 
                 logger.debug("Ignoring message %d - %s", response.get('respid', -1), msgtype)
                 pass
-            case Protocol.Responses.ACKBTCH:
-                currentBatch = response
-                for ack in response['responses']:
-                    handleResponse(ack, doPush=False)
-                currentBatch = None
+            case Protocol.Responses.ACKDONE: 
+                logger.warning("Got ACKDONE before processing complete")
+                cprint(outstandingMessages, "red")
             case _:
                 logger.error("Unexpected response: %s", msgtype)
 
@@ -1634,40 +1595,14 @@ def handleResponse(response, doPush=True):
         logger.error(pprint.pformat(response, width=150, depth=5, compact=True))
         exceptionLogger.log(e)
 
-_nextMsgId = 0
-outstandingMessages = set()
-
-def setMessageID(message):
-    global _nextMsgId
-    #message['sessionid'] = str(sessionid)
-    _nextMsgId += 1
-    message['msgid'] = _nextMsgId
-    outstandingMessages.add(_nextMsgId)
-    return _nextMsgId
-
-_batchStartTime = None
-
-def batchMessage(message, batch=True, flush=False, response=True):
-    global _batchStartTime
-    batch = batch and (args.batchsize > 0)
-
-    if batch:
-        setMessageID(message)
-        batchMsgs.append(message)
-    now = time.time()
-    if _batchStartTime is None:
-        _batchStartTime = now
-
-    if flush or not batch or len(batchMsgs) >= args.batchsize or (now - _batchStartTime) > args.batchduration:
-        flushClones()
-        flushBatchMsgs()
-    if not batch:
-        ic(message)
-        if response:
-            respmessage = sendAndReceive(message)
-            handleResponse(respmessage)
-        else:
-            sendMessage(message)
+    # Clear the "outstandingMessage" marker for this job
+    try:
+        respid = response.get('respid', -1)
+        outstandingMessages.pop(respid)
+        setOutstanding(len(outstandingMessages))
+    except Exception as e:
+        logger.error("Exception processing message: %s", response)
+        exceptionLogger.log(e)
 
 def sendDirEntry(parent, device, files):
     # send a fake root directory
@@ -1686,7 +1621,7 @@ def sendDirEntry(parent, device, files):
             #files.append(file)
     #
     # and send it.
-    batchMessage(message)
+    sendMessage(message)
 
 def splitDirs(x):
     root, rest = os.path.split(x)
@@ -1801,7 +1736,7 @@ def doSrpAuthentication(response):
         raise AuthenticationFailed("response incomplete")
 
 def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
-    global lastTimestamp, crypt
+    global lastTimestamp, crypt, trackOutstanding
 
     # Create a BACKUP message
     message = {
@@ -1880,6 +1815,8 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     if verbosity or args.stats or args.report != 'none':
         logger.log(log.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
 
+    trackOutstanding = True
+
 def needsData(mesg: dict|bytes):
     if isinstance(mesg, dict):
         if mesg.get('message') == Protocol.Commands.SIG and mesg.get('status') == 'OK':
@@ -1888,6 +1825,8 @@ def needsData(mesg: dict|bytes):
 
 def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
+    #conn.sender.setStreams(open("sendstream", "wb"), open("recvstream", "wb"))
+
     #setEncoder("bin")
     return conn
 
@@ -2034,16 +1973,10 @@ def processCommandLine():
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  ' + _def))
     comgrp.add_argument('--minclones',              dest='clonethreshold', type=int, default=64,        help=_d('Minimum number of files to do a partial clone.  If less, will send directory as normal: ' + _def))
-    comgrp.add_argument('--batchdir', '-B',         dest='batchdirs', type=int, default=16,             help=_d('Maximum size of small dirs to send.  0 to disable batching.  ' + _def))
-    comgrp.add_argument('--batchsize',              dest='batchsize', type=int, default=c.getint(t, 'BatchSize'),
-                                                                                                        help=_d('Maximum number of small dirs to batch together.  ' + _def))
-    comgrp.add_argument('--batchduration',          dest='batchduration', type=float, default=30.0,     help=_d('Maximum time to hold a batch open.  ' + _def))
     comgrp.add_argument('--ckbatchsize',            dest='cksumbatch', type=int, default=100,           help=_d('Maximum number of checksums to handle in a single message.  ' + _def))
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  ' + _def))
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  ' + _def))
     comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
-    #comgrp.add_argument('--protocol',               dest='protocol', default="msgp", choices=['json', 'bson', 'msgp'],
-    #                    help=_d('Protocol for data transfer.  ' + _def))
     comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
                         help=_d('Always send a signature.  ' + _def))
     comgrp.add_argument('--timeout',                dest='timeout', default=c.getfloat(t, 'Timeout'), type=float, const=None,              help='Set the timeout to N seconds.  ' + _def)
@@ -2434,8 +2367,8 @@ def shutdown():
     message = {
         "message": Protocol.Commands.DONE
     }
-    batchMessage(message, batch=False, flush=True)
-
+    response = sendAndReceive(message)
+    checkMessage(response, Protocol.Responses.ACKDONE)
 
 def encryptString(string):
     clHash = crypt.getHash()
@@ -2461,7 +2394,7 @@ def sendConfigInfo(directories):
         'size': len(commandLine),
         'encrypted': bool(iv)
     }
-    batchMessage(message)
+    sendMessage(message)
 
     # Send the full configuration, if so desired.
     # Note, this should probably be encrypted too.  It contains more information than the above.
@@ -2475,7 +2408,7 @@ def sendConfigInfo(directories):
             "message": Protocol.Commands.CLICONFIG,
             "args":    jsonArgs
         }
-        batchMessage(message)
+        sendMessage(message)
 
 def main():
     global args, config, conn, messenger, verbosity, crypt, noCompTypes, srpUsr, statusBar
@@ -2516,8 +2449,10 @@ def main():
             (conn, _, backendThread) = runBackend(jobname)
         else:
             conn = getConnection(server, port)
+
         messenger = Messenger.Messenger(conn.sender, timeout=args.timeout)
         messenger.run()
+        #messenger = conn.sender
 
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
@@ -2528,6 +2463,7 @@ def main():
     exc = None
     try:
         startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password, args.cryptoScheme)
+
 
         # Send information about this backup.
         sendConfigInfo(directories)
@@ -2546,6 +2482,7 @@ def main():
     except KeyboardInterrupt:
         logger.warning("Backup Interupted")
         exc = "Backup Interrupted"
+        #cprint(f"Outstanding Message list: {outstandingMessages}", 'red')
         #exceptionLogger.log(e)
     except ExitRecursionException as e:
         root = e.rootException
