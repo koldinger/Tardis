@@ -36,13 +36,10 @@ import tempfile
 from . import log
 from . import Util
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
-
 class Messenger:
     def __init__(self, messages, needsData=lambda _: False, maxsize=1024 * 1024, timeout=None):
         self.messages = messages
-        self.sendQ = queue.Queue(2)
+        self.sendQ = queue.Queue()
         self.recvQ = queue.Queue()
         self.sendlogger = logging.getLogger("Sender")
         self.recvlogger = logging.getLogger("Receiver")
@@ -51,12 +48,14 @@ class Messenger:
         self.timeout = timeout
         self.stopped = False
 
-        self.senderThread = threading.Thread(daemon=True, target=self._sender)
-        self.receiverThread = threading.Thread(daemon=True, target=self._receiver)
+        self.senderThread = threading.Thread(daemon=True, target=self._sender, name="Sender")
+        self.receiverThread = threading.Thread(daemon=True, target=self._receiver, name="Receiver")
 
         self.exception = None
 
         self.encode = messages.encode
+
+        self.sendEnqueued = 0
 
     def run(self):
         self.senderThread.start()
@@ -65,31 +64,32 @@ class Messenger:
     def stop(self):
         self.stopped = True
 
+    def status(self):
+        return (self.stopped, self.senderThread.is_alive(), self.receiverThread.is_alive())
+
     def _msgid(self, msg, t='msgid'):
         if isinstance(msg, dict):
-            ic(msg)
             return msg.get(t, -1)
         return 'data'
 
     def _sender(self):
-        self.sendlogger.info("Sender starting")
+        self.sendlogger.debug("Sender starting")
         try:
             while not self.stopped:
-                (mesg, compress, raw) = self.sendQ.get()
+                (mesg, compress, _) = self.sendQ.get()
                 #self.sendlogger.info("Dequeued Sending Message: Queue size %d", self.sendQ.qsize())
                 if mesg is None:
                     return
                 #if not raw:
                 #    self.sendlogger.info("Sending message: %s %s %s", mesg, compress, raw)
-                ic(self._msgid(mesg, 'msgid'), self.sendQ.qsize())
-                self.messages.sendMessage(mesg, compress, raw)
+                self.messages.sendMessage(mesg, compress)
         except BaseException as e:
             self.sendlogger.exception("Caught an exception sending message %s", mesg)
             self.exception = e
             raise e
 
     def _receiver(self):
-        self.recvlogger.info("Receiver starting")
+        self.recvlogger.debug("Receiver starting")
         try:
             while not self.stopped:
                 data = None
@@ -97,8 +97,7 @@ class Messenger:
                 #self.recvlogger.info("Received message: %s", mesg)
                 if isinstance(mesg, dict) and self.needsData(mesg):
                     data = tempfile.SpooledTemporaryFile(max_size=self.maxsize)
-                    Util.receiveData(self.messages, data)
-                    #self.recvlogger.info("Received data: %s", data)
+                    bytesReceived, status, size, checksum, compressed = Util.receiveData(self.messages, data)
                 self.recvQ.put((mesg, data))
                 #self.recvlogger.info("Inserted Received Message.  Queue Size: %d", self.recvQ.qsize())
         except RuntimeError as e:
@@ -112,24 +111,24 @@ class Messenger:
             self.exception = e
             raise e
 
-    def sendMessage(self, message, compress=False, raw=False):
-        mid = self._msgid(message,'msgid')
-        ic(mid, self.sendQ.qsize())
-        #if not raw:
-        #    self.sendlogger.debug("Sending message: %s %s %s", message, compress, raw)
-        #self.messages.sendMessage(message, compress, raw)
+    def sendMessage(self, message, compress=True):
         if self.exception:
             raise self.exception
 
         #self.sendlogger.info("Enqueuing message: %s %s %s", str(message)[:64], compress, raw)
-        self.sendQ.put((message, compress, raw))
+        self.sendQ.put((message, compress, self.sendEnqueued))
+
+        self.sendEnqueued += 1
         #self.sendlogger.info("Inserted Sending Message.  Queue Size: %d", self.sendQ.qsize())
 
     def recvMessage(self, wait=False, timeout=None):
         if self.exception:
             raise self.exception
         timeout = timeout or self.timeout
-        ret = self.recvQ.get(block=wait, timeout=timeout)
+        try:
+            ret = self.recvQ.get(block=wait, timeout=timeout)
+        except queue.Empty:
+            return None
         #self.recvlogger.info("Dequeued Received Message: Queue size %d", self.recvQ.qsize())
         if isinstance(ret, BaseException):
             raise ret
@@ -150,7 +149,7 @@ if __name__ == "__main__":
         encode = None
         q = queue.SimpleQueue()
 
-        def sendMessage(self, message, compress=True, raw=False):
+        def sendMessage(self, message, compress=True):
             self.q.put(message)
 
         def recvMessage(self):
