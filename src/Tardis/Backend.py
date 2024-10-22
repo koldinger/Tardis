@@ -54,8 +54,6 @@ from . import Util
 from . import Protocol
 from . import log
 
-
-
 class FileResponse(IntEnum):
     DONE    = 0
     CONTENT = 1
@@ -187,6 +185,9 @@ class Backend:
         self.tempPrefix = self.sessionid + "-"
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.config.umask)
+
+        self.exceptionLogger = Util.ExceptionLogger(self.logger, self.config.exceptions, True)
+
 
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
@@ -559,8 +560,7 @@ class Backend:
                 return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
-                if self.config.exceptions:
-                    self.logger.exception(e)
+                self.exceptionLogger.log(e)
                 errmsg = str(e)
 
         if response is None:
@@ -715,8 +715,7 @@ class Backend:
                         content.append(f['inode'])
             except Exception as e:
                 self.logger.error("Could not check checksum for %s: %s", cksum, str(e))
-                if self.config.exceptions:
-                    self.logger.exception(e)
+                self.exceptionLogger.log(e)
                 content.append(f['inode'])
         message = {
             "message": Protocol.Responses.ACKSUM,
@@ -746,8 +745,7 @@ class Backend:
                     content.append(cksum)
             except Exception as e:
                 self.logger.error("Could process metadata for %s: %s", cksum, str(e))
-                if self.config.exceptions:
-                    self.logger.exception(e)
+                self.exceptionLogger.log(e)
                 content.append(cksum)
         message = {
             'message': Protocol.Responses.ACKMETA,
@@ -811,6 +809,7 @@ class Backend:
             return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
 
     def processClone(self, message):
+        self.logger.info("Clone message: %s", message)
         """ Clone an entire directory """
         done = []
         content = []
@@ -852,6 +851,7 @@ class Backend:
             else:
                 #self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append(inoDev)
+        self.logger.info("Clone done")
         return ({"message" : Protocol.Responses.ACKCLN, "done" : done, 'content' : content }, True)
 
     _sequenceNumber = 0
@@ -919,8 +919,7 @@ class Backend:
 
         except Exception as e:
             self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
-            if self.config.exceptions:
-                self.logger.exception(e)
+            self.exceptionLogger.log(e)
 
         self.statBytesReceived += bytesReceived
 
@@ -1059,8 +1058,7 @@ class Backend:
             raise ProtocolError(str(e)) from e
         except Exception as e:
             self.logger.error("Caught exception processing message: %s", json.dumps(message))
-            if self.config.exceptions:
-                self.logger.exception(e)
+            self.exceptionLogger.log(e)
             raise ProcessingError(str(e)) from e
 
     def genPaths(self):
@@ -1255,10 +1253,10 @@ class Backend:
             cryptoScheme = self.db._getConfigValue('CryptoScheme', '1')
             message = {"message": "AUTH", "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
-            autha = self.recvMessage()
-            self.checkMessage(autha, "AUTH1")
-            name = base64.b64decode(autha['srpUname'])
-            srpValueA = base64.b64decode(autha['srpValueA'])
+            auth1 = self.recvMessage()
+            self.checkMessage(auth1, "AUTH1")
+            name = base64.b64decode(auth1['srpUname'])
+            srpValueA = base64.b64decode(auth1['srpValueA'])
 
             srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
             if srpValueS is None or srpValueB is None:
@@ -1266,28 +1264,30 @@ class Backend:
 
             self.logger.debug("Sending Challenge values")
             message = {
-                'message': 'AUTH1',
-                'status': 'OK',
-                'srpValueS': base64.b64encode(srpValueS),
-                'srpValueB': base64.b64encode(srpValueB)
+                'message'   : 'AUTH1',
+                'status'    : 'OK',
+                'srpValueS' : base64.b64encode(srpValueS),
+                'srpValueB' : base64.b64encode(srpValueB),
+                'respid'    : auth1.get('msgid', 0)
             }
             self.sendMessage(message)
 
-            resp = self.recvMessage()
+            auth2 = self.recvMessage()
             self.logger.debug("Received challenge response")
-            self.checkMessage(resp, "AUTH2")
-            srpValueM = base64.b64decode(resp['srpValueM'])
+            self.checkMessage(auth2, "AUTH2")
+            srpValueM = base64.b64decode(auth2['srpValueM'])
             srpValueHAMK = self.db.authenticate2(srpValueM)
             message = {
-                'message': 'AUTH2',
-                'status': 'OK',
-                'srpValueHAMK': base64.b64encode(srpValueHAMK)
+                'message'       : 'AUTH2',
+                'status'        : 'OK',
+                'srpValueHAMK'  : base64.b64encode(srpValueHAMK),
+                'respid'        : auth2.get('msgid', 0)
             }
             self.logger.debug("Authenticated")
         except TardisDB.AuthenticationFailed as e:
             message = {
-                'status': 'AUTHFAIL',
-                'message': str(e)
+                'status'    : 'AUTHFAIL',
+                'error'   : str(e)
             }
             self.sendMessage(message)
             raise
@@ -1445,8 +1445,7 @@ class Backend:
             except Exception as e:
                 self.logger.error("Caught exception : %s", str(e))
                 message = {"status": "FAIL", "error": str(e)}
-                if self.config.exceptions:
-                    self.logger.exception(e)
+                self.exceptionLogger.log(e)
                 self.sendMessage(message)
                 raise InitFailedException(str(e)) from e
 
@@ -1467,8 +1466,7 @@ class Backend:
             completed = True
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
-            if self.config.exceptions:
-                self.logger.exception(e)
+            self.exceptionLogger.log(e)
             if self.db:
                 self.db.setFailure(e)
 
@@ -1477,7 +1475,7 @@ class Backend:
             count = 0
             size = 0
             #sock.close()
-            self.messenger.closeSocket()
+            #self.messenger.closeSocket()
 
             rmSession(self.sessionid)
 
