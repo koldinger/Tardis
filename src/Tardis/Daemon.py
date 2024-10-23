@@ -222,7 +222,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             # Create the messenger object.  From this point on, ALL communications should
             # go through messenger, not director to the socket
             #messenger = self.mkMessenger(sock, fields['encoding'], fields['compress'])
-            messenger =  Messages.MsgPackMessages(sock, compress=compress)
+            messenger =  Messages.MsgPackMessages(sock, compress=fields['compress'])
 
             # Create a backend, and run it.
             backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid)

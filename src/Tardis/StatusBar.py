@@ -220,7 +220,7 @@ if __name__ == "__main__":
     from termcolor import colored
 
     myargs = {"files": 0, "delta": 100}
-    fmt = f"{colored("{__elapsed__}", "yellow")} :: {colored("Files", "cyan")}: {{files}} {colored("Delta", "cyan")}: {{delta}}: {{amount!B}} {{mode}} --> "
+    fmt = f"{colored('{__elapsed__}', 'yellow')} :: {colored('Files', 'cyan')}: {{files}} {colored('Delta', 'cyan')}: {{delta}}: {{amount!B}} {{mode}} --> "
     print(fmt)
     sb = StatusBar(fmt, myargs)
     sb.setValue("mode", "Testing")

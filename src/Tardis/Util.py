@@ -606,7 +606,6 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
         raise e
     finally:
         sender.sendMessage(b'')     # 0 length chunk, indicate end of data
-
         compressed = compress if stream.isCompressed() else "None"
         size = stream.size()
 
@@ -655,7 +654,6 @@ def receiveData(receiver, output, log=None):
     if log:
         log.write("Received %d bytes\n" % size)
     return (bytesReceived, status, size, checksum, compressed)
-
 
 # Function to determine whether we can execute a function
 _uidForPerm = os.getuid()
