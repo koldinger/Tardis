@@ -70,8 +70,8 @@ try:
 except ImportError:
     genzshcomp = None
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 logger = logging.getLogger('UTIL')
 
@@ -634,16 +634,11 @@ def receiveData(receiver, output, log=None):
     if isinstance(receiver, Connection.Connection):
         receiver = receiver.sender
     bytesReceived = 0
-    while True:
-        chunk = receiver.recvMessage()
-        #print chunk
-        # logger.debug("Chunk: %s", str(chunk))
-        if len(chunk) == 0:
-            break
-        data = receiver.decode(chunk)
-        bytesReceived += len(data)
+
+    while chunk := receiver.recvMessage():
+        bytesReceived += len(chunk)
         if output:
-            output.write(data)
+            output.write(chunk)
             output.flush()
 
     chunk = receiver.recvMessage()
