@@ -68,4 +68,6 @@ class Responses(UppercaseStrEnum):
     ACKBACKUP = "INIT"
     ACKSETKEYS = auto()
     ACKCON = auto()
+    ACKDEL = auto()
     ACKSIG = auto()
+    ACKSGR = "SIG"

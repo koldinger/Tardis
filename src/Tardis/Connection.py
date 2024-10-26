@@ -35,6 +35,7 @@ import queue
 
 import Tardis
 from . import Messages
+from . import Messenger
 
 protocolVersion = "1.6"
 headerString    = "TARDIS " + protocolVersion
@@ -121,7 +122,7 @@ class ProtocolConnection(Connection):
         self.sender.sendMessage(message, compress)
         self.stats['messagesSent'] += 1
 
-    def receive(self):
+    def receive(self, wait):
         message = self.sender.recvMessage()
         self.stats['messagesRecvd'] += 1
         return message
@@ -162,6 +163,12 @@ class MsgPackConnection(ProtocolConnection):
         ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout, validate)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
+
+class QueuedMsgPackConnection(MsgPackConnection):
+    def __init__(self, host, posrt, compress, timeout, validate):
+        MsgPackConnection().__init__(self, host, port, compress, timeout, validate)
+        self.sender = Messenger.Messenger(self.sender)
+        self.sender.run()
 
 class DirectConnection:
     stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }

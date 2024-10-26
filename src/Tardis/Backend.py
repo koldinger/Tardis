@@ -54,6 +54,9 @@ from . import Util
 from . import Protocol
 from . import log
 
+#from icecream import ic 
+#ic.configureOutput(includeContext=True)
+
 class FileResponse(IntEnum):
     DONE    = 0
     CONTENT = 1
@@ -496,7 +499,7 @@ class Backend:
         for i in inodes:
             ((inode, dev), checksum) = i
             self.logger.debug("ProcessManySigRequests: %s %s %s", inode, dev, checksum)
-            self.sendSignature(inode, dev, checksum)
+            self.sendSignature(inode, dev, checksum, message.get('msgid', 0))
         response = {
             'message': Protocol.Commands.SIG,
             'status' : "DONE"
@@ -507,9 +510,9 @@ class Backend:
         """ Generate and send a signature for a file """
         self.logger.debug("Processing signature request message: %s", str(message))
         ((inode, dev), checksum) = message["inode"]
-        return self.sendSignature(inode, dev, checksum)
+        return self.sendSignature(inode, dev, checksum, message.get('msgid', 0))
 
-    def sendSignature(self, inode, dev, chksum):
+    def sendSignature(self, inode, dev, chksum, msgid):
         response = None
         errmsg = None
         sig = b''
@@ -549,6 +552,7 @@ class Backend:
                 # TODO: Break the signature out of here.
                 response = {
                     "message": Protocol.Commands.SIG,
+                    "respid" : msgid,
                     "inode": (inode, dev),
                     "status": "OK",
                     "encoding": self.messenger.getEncoding(),
@@ -566,6 +570,7 @@ class Backend:
         if response is None:
             response = {
                 "message": Protocol.Commands.SIG,
+                "respid" : msgid,
                 "inode": inode,
                 "status": "FAIL"
             }
@@ -662,7 +667,11 @@ class Backend:
             self.db.setChecksum(inode, dev, checksum)
 
         flush = size > 1000000
-        return (None, flush)
+        message = {
+            "message": Protocol.Responses.ACKDEL,
+            "status" : "OK"
+        }
+        return (message, flush)
 
     def processSignature(self, message):
         """ Receive a signature message. """
@@ -809,7 +818,6 @@ class Backend:
             return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
 
     def processClone(self, message):
-        self.logger.info("Clone message: %s", message)
         """ Clone an entire directory """
         done = []
         content = []
@@ -851,7 +859,7 @@ class Backend:
             else:
                 #self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append(inoDev)
-        self.logger.info("Clone done")
+        self.logger.debug("Clone done")
         return ({"message" : Protocol.Responses.ACKCLN, "done" : done, 'content' : content }, True)
 
     _sequenceNumber = 0
@@ -1344,7 +1352,7 @@ class Backend:
             if keys:
                 srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme = keys
                 self.logger.debug("Setting keys into new client DB")
-                self.logger.info("Setting CryptoScheme %d", cryptoScheme)
+                self.logger.debug("Setting CryptoScheme %d", cryptoScheme)
                 self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
                 self.db.setConfigValue('CryptoScheme', cryptoScheme)
                 keys = None

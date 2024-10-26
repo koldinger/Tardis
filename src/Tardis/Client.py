@@ -83,7 +83,8 @@ from . import Messenger
 from . import log
 #from . import Throttler
 
-from icecream import ic
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 from termcolor import cprint
 
 features = Tardis.check_features()
@@ -274,6 +275,13 @@ class InodeDB:
 
 inodeDB             = InodeDB()
 dirHashes           = {}
+
+def getInodeDBName(inode):
+    (_, name) = inodeDB.get(inode)
+    if name:
+        return name
+    return "Unknown"
+
 
 class MessageOnlyFormatter(logging.Formatter):
     """
@@ -480,15 +488,11 @@ def handleAckSum(response):
         sendContent(i, 'Full')
         inodeDB.delete(i)
 
-    signatures = None
-    if not args.full and len(delta) != 0:
-        signatures = prefetchSigFiles(delta)
-
-    for i, _ in delta:
+    for i, cksum in delta:
         inode = tuple(i)
         if logfiles:
             logFileInfo(inode, 'd')
-        processDelta(inode, signatures)
+        processDelta(inode, cksum)
         inodeDB.delete(inode)
 
 def makeEncryptor():
@@ -496,78 +500,7 @@ def makeEncryptor():
     encryptor = crypt.getContentEncryptor(iv)
     return (encryptor, iv)
 
-def prefetchSigFiles(inodes):
-    logger.debug("Requesting signature files: %s", str(inodes))
-    signatures = {}
-
-    message = {
-        "message": Protocol.Commands.SGS,
-        "inodes": inodes
-    }
-    sigmessage = sendAndReceive(message)
-    checkMessage(sigmessage, "SIG")
-
-    while sigmessage['status'] != 'DONE':
-        logger.debug("Signature Message: %s", sigmessage)
-        inode = tuple(sigmessage['inode'])
-        (_, pathname) = inodeDB.get(inode)
-        if sigmessage['status'] == 'OK':
-            logger.debug("Receiving signature for %s: Chksum: %s", str(inode), sigmessage['checksum'])
-
-            sigfile = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
-            #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-            Util.receiveData(messenger, sigfile, log=args.logmessages)
-            logger.debug("Received sig file: %d", sigfile.tell())
-            sigfile.seek(0)
-            signatures[inode] = (sigfile, sigmessage['checksum'])
-        else:
-            logger.warning("No signature file received for %s: %s", inode, pathname)
-            signatures[inode] = (None, sigmessage['checksum'])
-
-        # Get the next file in the stream
-        sigmessage = receiveMessage()
-        checkMessage(sigmessage, "SIG")
-    return signatures
-
-def fetchSignature(inode):
-    (_, pathname) = inodeDB.get(inode)
-    logger.debug("Requesting checksum for %s:: %s", str(inode), pathname)
-    path = crypt.encryptPath(pathname)
-    message = {
-        "message" : "SGR",
-        "inode" : inode,
-        "path"  : path
-    }
-
-    ## TODO: Comparmentalize this better.  Should be able to handle the SIG response
-    ## Separately from the SGR.  Just needs some thinking.  SIG implies immediate
-    ## Follow on by more data, which is unique
-    sigmessage = sendAndReceive(message)
-    logger.debug("Got Response: %s", sigmessage)
-    checkMessage(sigmessage, "SIG")
-
-    if sigmessage['status'] == 'OK':
-        logger.debug("Receiving sig file: %s:: %s", inode, pathname)
-        sigfile = io.StringIO()
-        #sigfile = cStringIO.StringIO(conn.decode(sigmessage['signature']))
-        Util.receiveData(messenger, sigfile, log=args.logmessages)
-        logger.debug("Received sig file: %d", sigfile.tell())
-        sigfile.seek(0)
-        checksum = sigmessage['checksum']
-    else:
-        logger.warning("No signature file received for %s: %s", inode, pathname)
-        sigfile = None
-        checksum = None
-
-    return (sigfile, checksum)
-
-def getInodeDBName(inode):
-    (_, name) = inodeDB.get(inode)
-    if name:
-        return name
-    return "Unknown"
-
-def processDelta(inode, signatures):
+def processDelta(inode, cksum):
     """ Generate a delta and send it.   Requests a signature if it's not available already. """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
@@ -576,28 +509,34 @@ def processDelta(inode, signatures):
 
     try:
         (_, pathname) = inodeDB.get(inode)
-        setProgress("File [D]:", pathname)
-        logger.debug("Processing delta: %s :: %s", str(inode), pathname)
+        #setProgress("File [D]:", pathname)
+        #ogger.debug("Processing delta: %s :: %s", str(inode), pathname)
 
-        if signatures and inode in signatures:
-            (sigfile, oldchksum) = signatures[inode]
-        else:
-            (sigfile, oldchksum) = fetchSignature(inode)
-
-        if sigfile is not None:
-            processSig(inode, sigfile, oldchksum)
-        else:
-            sendContent(inode, 'Full')
+        logger.debug("Requesting checksum for %s:: %s", str(inode), pathname)
+        path = crypt.encryptPath(pathname)
+        message = {
+            "message" : "SGR",
+            "inode" : tuple([inode, cksum]),        # FIXME: TODO: Break out checksum into it's own field.
+            "path"  : path
+        }
+        sendMessage(message)
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", str(inode))
         exceptionLogger.log(e)
 
-def handleSig(response, data):
-    if data:
-        processSig(tuple(response['inode']), data, response['checksum'])
+def handleSig(response):
+    inode = tuple(response['inode'])
+    (_, pathname) = inodeDB.get(inode)
+    cksum = response['checksum']
+
+    if response['status'] == 'OK':
+        logger.debug("Receiving sig file %s: %s", inode, pathname)
+        sigfile = io.BytesIO()
+        Util.receiveData(messenger, sigfile, log=args.logmessages)
+        sigfile.seek(0)
+        processSig(inode, sigfile, cksum)
     else:
-        inode = tuple(response['inode'])
-        logger.error("No signature file for %s", inode)
+        logger.warn("No signature file for %s", inode)
         sendContent(inode, 'Full')
 
 def processSig(inode, sigfile, oldchksum):
@@ -942,11 +881,6 @@ def pushFiles():
             logger.error("Unable to backup %s: %s", str(i), str(e))
             exceptionLogger.log(e)
 
-    # If there are any delta files requested, ask for them
-    signatures = None
-    if not args.full and len(allDelta) != 0:
-        signatures = prefetchSigFiles(allDelta)
-
     logger.debug("Ready to send delta's for %d files: %s", len(allDelta), str(allDelta))
     for i, basis in [tuple(x) for x in allDelta]:
         inode = tuple(i)
@@ -962,8 +896,8 @@ def pushFiles():
                     (_, name) = inodeDB.get(inode)
                     if name:
                         logger.log(log.FILES, "[D]: %s", Util.shortPath(name))
-                processDelta(inode, signatures)
-            processed.append(inode)
+                processDelta(inode, basis)
+            #processed.append(inode)
         except Exception as e:
             logger.error("Unable to backup %s: %s ", str(i), str(e))
             exceptionLogger.log(e)
@@ -1398,19 +1332,6 @@ def runBackup():
         logger.error(e)
         exceptionLogger.log(e)
 
-    # Finish any remaning work to complete the backup
-    # If any metadata, clone or batch requests still lying around, send them now
-
-
-    except Exception as e:
-        logger.error(e)
-        exceptionLogger.log(e)
-
-    #if outstandingMessages:
-    #cprint(f"Outstanding Message list: {outstandingMessages}", 'red')
-    #cprint(f"{_nextMsgId}", "yellow")
-
-
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
     if info:
@@ -1576,8 +1497,10 @@ def handleResponse(response, doPush=True):
                 handleAckSum(response)
             case Protocol.Responses.ACKMETA:
                 handleAckMeta(response)
+            case Protocol.Responses.ACKSGR:
+                handleSig(response)
             case Protocol.Responses.ACKPRG | Protocol.Responses.ACKDHSH | Protocol.Responses.ACKCLICONFIG | \
-                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKCON | \
+                 Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKCON | Protocol.Responses.ACKDEL | \
                  Protocol.Responses.ACKSIG | Protocol.Responses.ACKMETADATA: 
                 logger.debug("Ignoring message %d - %s", response.get('respid', -1), msgtype)
                 pass
@@ -1601,8 +1524,9 @@ def handleResponse(response, doPush=True):
         outstandingMessages.pop(respid)
         setOutstanding(len(outstandingMessages))
     except Exception as e:
-        logger.error("Exception processing message: %s", response)
+        logger.error("Exception processing message (%s, %s): %s", response.get('respid', 'Unknown'), response.get('message', 'None'), str(e))
         exceptionLogger.log(e)
+        pass
 
 def sendDirEntry(parent, device, files):
     # send a fake root directory
@@ -1827,7 +1751,6 @@ def getConnection(server, port):
     conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
     #conn.sender.setStreams(open("sendstream", "wb"), open("recvstream", "wb"))
 
-    #setEncoder("bin")
     return conn
 
 def checkConfig(c, t):
