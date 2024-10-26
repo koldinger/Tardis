@@ -107,10 +107,8 @@ class BinMessages(Messages):
 
     def closeSocket(self):
         if self.sendstream:
-            self.sendstream.flush()
             self.sendstream.close()
         if self.recvstream:
-            self.recvstream.flush()
             self.recvstream.close()
         super().closeSocket()
 
@@ -133,7 +131,6 @@ class BinMessages(Messages):
         if self.sendstream:
             self.sendstream.write(lBytes)
             self.sendstream.write(message)
-            #self.sendstream.flush()
 
     def recvMessage(self):
         comp = False
