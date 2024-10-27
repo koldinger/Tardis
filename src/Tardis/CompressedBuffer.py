@@ -76,10 +76,11 @@ class Lz4Decompressor:
     def decompress(self, buffer):
         return self.decompressor.decompress(buffer)
 
-_compressors = { 'zlib': (zlib.compressobj, zlib.decompressobj, {}),
+_compressors = {
+                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
+                 'zlib': (zlib.compressobj, zlib.decompressobj, {}),
                  'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
                  'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor, {}),
-                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
                  'lz4' : (Lz4Compressor, lz4.frame.LZ4FrameDecompressor, {}),
                  'none': (_NullCompressor, _NullCompressor, {})
                }
