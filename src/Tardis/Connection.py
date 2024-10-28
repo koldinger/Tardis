@@ -177,7 +177,7 @@ class DirectConnection:
     def __init__(self, timeout):
         self.timeout = timeout
         self.toClientQueue = queue.SimpleQueue()
-        self.toServerQueue = queue.Queue(1024)
+        self.toServerQueue = queue.SimpleQueue()
         self.clientMessages = Messages.ObjectMessages(self.toClientQueue, self.toServerQueue, self.stats, timeout)
         self.serverMessages = Messages.ObjectMessages(self.toServerQueue, self.toClientQueue)
         self.sender = self.clientMessages
