@@ -493,7 +493,7 @@ def handleAckSum(response):
         if logfiles:
             logFileInfo(inode, 'd')
         processDelta(inode, cksum)
-        inodeDB.delete(inode)
+        #inodeDB.delete(inode)
 
 def makeEncryptor():
     iv = crypt.getIV()
@@ -548,6 +548,7 @@ def processSig(inode, sigfile, oldchksum):
 
     try:
         (_, pathname) = inodeDB.get(inode)
+        #ic(inode, pathname)
         setProgress("File [D]:", pathname)
 
         logger.debug("Ready to send Delta: %s -- %s", inode, sigfile)
@@ -1124,7 +1125,8 @@ def sendPurge():
     if purgeTime:
         message.update({ 'time': purgeTime, 'relative': relative })
 
-    sendMessage(message)
+    response = sendAndReceive(message)
+    checkMessage(response, Protocol.Responses.ACKPRG)
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
@@ -1413,18 +1415,18 @@ def loadExcludedDirs():
 
 
 _nextMsgId = 0
-outstandingMessages = {}
+outstandingMessages = 0
 waittime = 0
 trackOutstanding = False
 
 def setMessageID(message):
-    global _nextMsgId
+    global _nextMsgId, outstandingMessages
     #message['sessionid'] = str(sessionid)
     _nextMsgId += 1
     message['msgid'] = _nextMsgId
     if trackOutstanding:
-        outstandingMessages[_nextMsgId] = message['message']
-        setOutstanding(len(outstandingMessages))
+        outstandingMessages += 1
+        setOutstanding(outstandingMessages)
     return _nextMsgId
 
 def sendMessage(message):
@@ -1484,7 +1486,7 @@ def sendKeys(password, client):
 currentResponse = None
 
 def handleResponse(response, doPush=True):
-    global currentResponse
+    global currentResponse, outstandingMessages
     try:
         currentResponse = response
         msgtype = response['message']
@@ -1521,8 +1523,8 @@ def handleResponse(response, doPush=True):
     # Clear the "outstandingMessage" marker for this job
     try:
         respid = response.get('respid', -1)
-        outstandingMessages.pop(respid)
-        setOutstanding(len(outstandingMessages))
+        outstandingMessages -= 1
+        setOutstanding(outstandingMessages)
     except Exception as e:
         logger.error("Exception processing message (%s, %s): %s", response.get('respid', 'Unknown'), response.get('message', 'None'), str(e))
         exceptionLogger.log(e)
