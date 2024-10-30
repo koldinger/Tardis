@@ -1,5 +1,5 @@
-# vi: set et sw=4 sts=4 fileencoding=utf-
-#)
+# vi: set et sw=4 sts=4 fileencoding=utf-8
+#
 # Tardis: A Backup System
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
@@ -83,8 +83,8 @@ from . import Messenger
 from . import log
 #from . import Throttler
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 from termcolor import cprint
 
 features = Tardis.check_features()
@@ -194,7 +194,7 @@ cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "t
                        ".svn", ".git", ".hg", ".bzr"]
 verbosity           = 0
 
-conn:       Connection.ProtocolConnection 
+conn:       Connection.ProtocolConnection
 messenger:  Messenger.Messenger
 args:       argparse.Namespace
 
@@ -1168,9 +1168,9 @@ def makeMetaMessage():
 statusBar: StatusBar.StatusBar | None = None
 
 def initProgressBar(scheduler):
-    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} | {mode} ", stats, scheduler=scheduler)
+    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | {mode} ", stats, scheduler=scheduler)
     sbar.setValue('mode', '')
-    sbar.setValue('waiting', 0)
+    sbar.createValues(['waiting', 'sendQ', 'recvQ'], 0)
     sbar.setTrailer('')
     sbar.start()
     return sbar
@@ -1503,10 +1503,10 @@ def handleResponse(response, doPush=True):
                 handleSig(response)
             case Protocol.Responses.ACKPRG | Protocol.Responses.ACKDHSH | Protocol.Responses.ACKCLICONFIG | \
                  Protocol.Responses.ACKCMDLN | Protocol.Responses.ACKCON | Protocol.Responses.ACKDEL | \
-                 Protocol.Responses.ACKSIG | Protocol.Responses.ACKMETADATA: 
+                 Protocol.Responses.ACKSIG | Protocol.Responses.ACKMETADATA:
                 logger.debug("Ignoring message %d - %s", response.get('respid', -1), msgtype)
                 pass
-            case Protocol.Responses.ACKDONE: 
+            case Protocol.Responses.ACKDONE:
                 logger.warning("Got ACKDONE before processing complete")
                 cprint(outstandingMessages, "red")
             case _:
@@ -2377,6 +2377,7 @@ def main():
 
         messenger = Messenger.Messenger(conn.sender, timeout=args.timeout)
         messenger.run()
+        messenger.setProgressBar(statusBar)
         #messenger = conn.sender
 
     except Exception as e:

@@ -180,6 +180,10 @@ class StatusBar():
         """
         self.values.update(values)
 
+    def createValues(self, names, initial=None):
+        for i in names:
+            self.values[i] = initial
+
     def processTrailer(self, length, string):
         """
         Process (shorten) the trailer to length, so things can fit.

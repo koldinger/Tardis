@@ -34,6 +34,7 @@ import logging
 import tempfile
 
 from . import log
+from . import StatusBar
 from . import Util
 
 class Messenger:
@@ -56,6 +57,7 @@ class Messenger:
         self.encode = messages.encode
 
         self.sendEnqueued = 0
+        self.pbar = None
 
     def run(self):
         self.senderThread.start()
@@ -94,12 +96,7 @@ class Messenger:
             while not self.stopped:
                 data = None
                 mesg = self.messages.recvMessage()
-                #self.recvlogger.info("Received message: %s", mesg)
-                if isinstance(mesg, dict) and self.needsData(mesg):
-                    data = tempfile.SpooledTemporaryFile(max_size=self.maxsize)
-                    bytesReceived, status, size, checksum, compressed = Util.receiveData(self.messages, data)
                 self.recvQ.put((mesg, data))
-                #self.recvlogger.info("Inserted Received Message.  Queue Size: %d", self.recvQ.qsize())
         except RuntimeError as e:
             self.recvlogger.info("Caught Runtime error: %s", e)
             self.recvQ.put((None, None))
@@ -119,6 +116,7 @@ class Messenger:
         self.sendQ.put((message, compress, self.sendEnqueued))
 
         self.sendEnqueued += 1
+        self.reportQueueSizes()
         #self.sendlogger.info("Inserted Sending Message.  Queue Size: %d", self.sendQ.qsize())
 
     def recvMessage(self, wait=False, timeout=None):
@@ -132,7 +130,19 @@ class Messenger:
         #self.recvlogger.info("Dequeued Received Message: Queue size %d", self.recvQ.qsize())
         if isinstance(ret, BaseException):
             raise ret
+        if ret is None:
+            raise OSError("Socket closed")
+        self.reportQueueSizes()
         return ret[0]
+
+    def reportQueueSizes(self):
+        if self.pbar:
+            s = self.sendQ.qsize()
+            r = self.recvQ.qsize()
+            self.pbar.setValues({ "sendQ": s, "recvQ": r})
+
+    def setProgressBar(self, pbar: StatusBar.StatusBar):
+        self.pbar = pbar
 
     def encode(self, data):
         return self.messages.encode(data)
