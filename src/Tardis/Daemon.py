@@ -68,8 +68,9 @@ DELTA   = 3
 REFRESH = 4                     # Perform a full content update
 LINKED  = 5                     # Check if it's already linked
 
-config = None
-args   = None
+config: configparser.ConfigParser
+args: argparse.Namespace
+
 configSection = 'Daemon'
 
 databaseName    = Defaults.getDefault('TARDIS_DBNAME')
@@ -138,7 +139,7 @@ configDefaults = {
 }
 
 server = None
-logger = None
+logger: logging.Logger
 
 logging.TRACE = logging.DEBUG - 1
 logging.MSGS  = logging.DEBUG - 2
@@ -433,6 +434,7 @@ def runServer():
         logger.info("Server Session: %s", server.serverSessionID)
 
         if args.single:
+            logger.info("Single backup session only")
             server.handle_request()
         else:
             try:
