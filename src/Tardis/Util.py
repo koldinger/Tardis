@@ -47,6 +47,7 @@ import time
 import struct
 import io
 import signal
+import pprint
 
 import urllib.request
 import urllib.parse
@@ -577,14 +578,12 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
             sender.sendMessage(encrypt.iv)
             accumulateStat(stats, 'dataSent', len(encrypt.iv))
         for chunk, eof in _chunks(stream, chunksize):
-            #print len(chunk), eof
             if chunk:
                 data = encrypt.encrypt(chunk)
             else:
                 data = b''
             if eof:
                 data += encrypt.finish()
-            #chunkMessage = { "chunk" : num, "data": data }
             if data:
                 sender.sendMessage(data)
                 accumulateStat(stats, 'dataSent', len(data))
@@ -592,8 +591,6 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
                 if progress:
                     if (size % progressPeriod) == 0:
                         progress()
-
-            #num += 1
         digest = encrypt.digest()
         if digest:
             sender.sendMessage(digest)
@@ -635,19 +632,35 @@ def receiveData(receiver, output, log=None):
         receiver = receiver.sender
     bytesReceived = 0
 
+    chunk = None
+    numchunks = 0
+    checksum = None
+    compressed = None
     while chunk := receiver.recvMessage():
+        if log:
+            if isinstance(chunk, bytearray):
+                log.write(f"{str(chunk[0:64])}\n")
+            else:
+                log.write(pprint.pformat(chunk, width=250, compact=True) + '\n')
+        if chunk is None:
+            logger.error("Received NONE when data expected")
         bytesReceived += len(chunk)
         if output:
             output.write(chunk)
-            output.flush()
+        numchunks += 1
+    if output:
+        output.flush()
 
     chunk = receiver.recvMessage()
+    if chunk is None:
+        logger.error("Received NONE when message expected")
     status = chunk['status']
     size   = chunk['size']
     checksum = chunk.get('checksum', None)
     compressed = chunk.get('compressed', False)
+
     if log:
-        log.write("Received %d bytes\n" % size)
+        log.write(f"Received {size} bytes in {numchunks} chunks\n")
     return (bytesReceived, status, size, checksum, compressed)
 
 # Function to determine whether we can execute a function
@@ -934,7 +947,6 @@ def asString(a, policy='ignore'):
 
 
 # 'Test' code
-
 if __name__ == "__main__":
     p = argparse.ArgumentParser(formatter_class=HelpFormatter)
 
