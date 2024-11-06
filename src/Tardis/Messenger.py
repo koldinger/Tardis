@@ -31,16 +31,13 @@
 import queue
 import threading
 import logging
-import tempfile
 
-from . import log
 from . import StatusBar
-from . import Util
 
 class Messenger:
     def __init__(self, messages, needsData=lambda _: False, maxsize=1024 * 1024, timeout=None):
         self.messages = messages
-        self.sendQ = queue.Queue()
+        self.sendQ = queue.Queue(2048)
         self.recvQ = queue.Queue()
         self.sendlogger = logging.getLogger("Sender")
         self.recvlogger = logging.getLogger("Receiver")
@@ -94,23 +91,31 @@ class Messenger:
         self.recvlogger.debug("Receiver starting")
         try:
             while not self.stopped:
-                data = None
-                mesg = self.messages.recvMessage()
-                self.recvQ.put((mesg, data))
+                try:
+                    mesg = self.messages.recvMessage()
+                    if mesg is None:
+                        self.recvlogger.critical("'None' Message")
+                    self.recvQ.put(mesg)
+                except TimeoutError:
+                    # Just swallow the timeout error.   We could just be stuck waiting to the server to respond to a large file.
+                    self.recvlogger.error("Timeout encountered in recv loop")
+                    pass
         except RuntimeError as e:
-            self.recvlogger.info("Caught Runtime error: %s", e)
-            self.recvQ.put((None, None))
+            self.recvlogger.error("Caught Runtime error: %s", e)
+            self.recvQ.put(e)
         except BaseException as e:
             # Catch EVERYTHING and forward it on
             self.recvlogger.error("Caught exception: %s -- %s", e.__class__.__name__, e)
             if not self.stopped:
-                self.recvQ.put((e, None))
+                self.recvQ.put(e)
             self.exception = e
             raise e
 
     def sendMessage(self, message, compress=True):
         if self.exception:
             raise self.exception
+        if message is None:
+            self.sendlogger.error("Sending None Message")
 
         #self.sendlogger.info("Enqueuing message: %s %s %s", str(message)[:64], compress, raw)
         self.sendQ.put((message, compress, self.sendEnqueued))
@@ -119,21 +124,25 @@ class Messenger:
         self.reportQueueSizes()
         #self.sendlogger.info("Inserted Sending Message.  Queue Size: %d", self.sendQ.qsize())
 
-    def recvMessage(self, wait=False, timeout=None):
+    def recvMessage(self, wait=True, timeout=None):
         if self.exception:
             raise self.exception
         timeout = timeout or self.timeout
         try:
             ret = self.recvQ.get(block=wait, timeout=timeout)
         except queue.Empty:
+            #self.recvlogger.error("Empty encountered")
             return None
         #self.recvlogger.info("Dequeued Received Message: Queue size %d", self.recvQ.qsize())
         if isinstance(ret, BaseException):
             raise ret
-        if ret is None:
-            raise OSError("Socket closed")
+        #if ret is None:
+        #    raise OSError("Socket closed")
         self.reportQueueSizes()
-        return ret[0]
+        if ret is None:
+            self.recvlogger.critical("None value returned")
+
+        return ret
 
     def reportQueueSizes(self):
         if self.pbar:
