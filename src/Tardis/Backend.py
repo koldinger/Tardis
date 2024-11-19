@@ -262,7 +262,8 @@ class Backend:
             #self.logger.debug("Is a directory: %s", name)
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
-                    self.db.extendFileInode(parent, (inode, device))
+                    #self.db.extendFileInode(parent, (inode, device))
+                    self.db.extendFileRowID(old['rowid'])
                 else:
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
@@ -298,7 +299,8 @@ class Backend:
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
                             #self.logger.debug("Extending %s", name)
-                            self.db.extendFileInode(parent, (inode, device), old=fromPartial)
+                            #self.db.extendFileInode(parent, (inode, device), old=fromPartial)
+                            self.db.extendFileRowID(old['rowid'])
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             #self.logger.debug("Inserting new version %s", name)
