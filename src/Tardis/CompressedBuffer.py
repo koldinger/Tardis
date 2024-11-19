@@ -110,6 +110,7 @@ class BufferedReader:
         self.stream = stream
         self.chunksize = chunksize
         self.numbytes = 0
+        self.position = 0
         self.buffer = ""
         self.hasher = hasher
         self.sig = librsync.SignatureJob() if signature else None
@@ -151,7 +152,11 @@ class BufferedReader:
             left -= amount
 
         #print "leaving read: {}".format(len(out))
+        self.position += len(out)
         return out
+
+    def tell(self):
+        return self.position
 
     def checksum(self):
         return self.hasher.hexdigest() if self.hasher else None
