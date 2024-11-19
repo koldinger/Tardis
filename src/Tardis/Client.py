@@ -83,9 +83,9 @@ from . import Messenger
 from . import log
 #from . import Throttler
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
-from termcolor import cprint
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
+#from termcolor import cprint
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -540,6 +540,9 @@ def handleSig(response):
         sendContent(inode, 'Full')
 
 def processSig(inode, sigfile, oldchksum):
+    def fakeseek(x, y=0):
+        return 0
+
     """ Generate a delta and send it """
     if verbosity > 3:
         logger.debug("processSig: %s %s", inode, getInodeDBName(inode))
@@ -548,7 +551,6 @@ def processSig(inode, sigfile, oldchksum):
 
     try:
         (_, pathname) = inodeDB.get(inode)
-        #ic(inode, pathname)
         setProgress("File [D]:", pathname)
 
         logger.debug("Ready to send Delta: %s -- %s", inode, sigfile)
@@ -565,11 +567,10 @@ def processSig(inode, sigfile, oldchksum):
                 with open(pathname, "rb") as input:
                     reader = CompressedBuffer.BufferedReader(input, hasher=crypt.getHash(), signature=makeSig)
                     # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
-                    reader.seek = lambda x, y: 0
+                    reader.seek = fakeseek
 
                     # Generate the delta file
                     delta = librsync.delta(reader, sigfile)
-                    sigfile.close()
 
                     # get the auxiliary info
                     checksum = reader.checksum()
@@ -581,11 +582,19 @@ def processSig(inode, sigfile, oldchksum):
                 delta.seek(0, 2)
                 deltasize = delta.tell()
                 delta.seek(0)
+            except librsync.LibrsyncError as e:
+                logger.error("Unable able to generate delta stuffs for %s: %s", pathname, str(e))
+                logger.error("Cksum: %s -- size %s", oldchksum, sigfile.tell())
+                exceptionLogger.log(e)
+                sendContent(inode, 'Full')
+                return
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
                 exceptionLogger.log(e)
                 sendContent(inode, 'Full')
                 return
+            finally:
+                sigfile.close()
 
             if deltasize < (filesize * float(args.deltathreshold) / 100.0):
                 encrypt, iv = makeEncryptor()
@@ -2043,7 +2052,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
     logging.root.setLevel(loglevel)
 
     # Mark if we're logging exceptions
-    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
+    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, False)
 
     # Create a special logger just for messages
     return logger
