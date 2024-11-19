@@ -292,7 +292,8 @@ class Backend:
                 if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     #self.logger.debug("Main info matches: %s", name)
                     #if ("checksum" in old.keys()) and not (old["checksum"] is None):
-                    if old["checksum"] is not None:
+                    # Just request full content if the old version was a link or dir
+                    if old["checksum"] is not None and not (old['dir'] or old['link']):
                         #self.db.setChecksum(inode, device, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
