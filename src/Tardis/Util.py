@@ -876,14 +876,14 @@ import rich.console
 
 class ExceptionLogger:
     _con = rich.console.Console()
-    def __init__(self, logger, logExceptions, rich):
+    def __init__(self, logger, logExceptions, rich=False):
         self.logger = logger
         self.logExceptions = logExceptions
         self.rich = rich
 
     def log(self, exception):
         if self.logExceptions:
-            if rich:
+            if self.rich:
                 self._con.print_exception()
             else:
                 self.logger.exception(exception)
