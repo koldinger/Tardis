@@ -82,7 +82,7 @@ def authenticate(func):
 # Be sure to end all these lists with a space.
 
 _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
-                   "Parent AS parent, ParentDev AS parentdev, C1.Size AS size, " \
+                   "Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, " \
                    "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
                    "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, " \
                    "C2.Checksum AS xattrs, C3.Checksum AS acl "
@@ -680,6 +680,14 @@ class TardisDB:
                                ":old BETWEEN FirstSet AND LastSet",
                                { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
         return cursor.rowcount
+
+    @authenticate 
+    def extendFileRowID(self, rowid, current=True):
+        current = self._bset(current)
+        cursor = self._execute("UPDATE Files "
+                               "SET LastSet = :new "
+                               "WHERE RowID = :rowid",
+                               {"new": current, "rowid": rowid})
 
     @authenticate
     def extendFileInode(self, parent, inode, old=False, current=True):
