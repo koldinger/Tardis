@@ -681,7 +681,7 @@ class TardisDB:
                                { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
         return cursor.rowcount
 
-    @authenticate 
+    @authenticate
     def extendFileRowID(self, rowid, current=True):
         current = self._bset(current)
         cursor = self._execute("UPDATE Files "
