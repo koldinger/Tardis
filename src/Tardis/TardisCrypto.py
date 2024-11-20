@@ -35,6 +35,7 @@ import os.path
 import sys
 import base64
 import binascii
+from abc import ABC, abstractmethod
 from functools import reduce
 
 from Cryptodome.Cipher import AES, ChaCha20_Poly1305
@@ -79,9 +80,9 @@ def getCryptoNames(scheme=None):
         schemes = [scheme]
 
     names = []
-    for scheme in schemes:
-        crypto = getCrypto(scheme, 'password')
-        names.append(f"{scheme}: {crypto.getName()}")
+    for s in schemes:
+        crypto = getCrypto(s, 'password')
+        names.append(f"{s}: {crypto.getName()}")
     return '\n'.join(names)
 
 class HasherMixin:
@@ -228,10 +229,6 @@ class StreamEncryptor:
         # these all seem to be 128 hashers
         return 16
 
-def HashingStreamEncryptor(HasherMixin, StreamEncryptor):
-    pass
-
-
 class NullEncryptor:
     def __init__(self):
         self.iv = b''
@@ -250,8 +247,83 @@ class NullEncryptor:
 class NullCipher():
     def encrypt(self, data):
         return data
+    def decrypt(self, data):
+        return data
 
-class Crypto_Null:
+class CryptoScheme(ABC):
+    @abstractmethod
+    def getName(self):
+        return ""
+
+    @abstractmethod
+    def getCryptoScheme(self):
+        return None
+
+    @abstractmethod
+    def encrypting(self):
+        return False
+
+    @abstractmethod
+    def getContentCipher(self, iv):
+        return None
+
+    @abstractmethod
+    def getContentEncryptor(self, iv):
+        return None
+
+    @abstractmethod
+    def encryptFilename(self, name):
+        return name
+
+    @abstractmethod
+    def decryptFilename(self, name):
+        return name
+
+    @abstractmethod
+    def getHash(self):
+        return None
+
+    @abstractmethod
+    def getIV(self):
+        return None
+
+    @abstractmethod
+    def pad(self, data, length=None):
+        return data
+
+    @abstractmethod
+    def unpad(self, data, length=None):
+        return data
+
+    @abstractmethod
+    def checkpad(self, data):
+        pass
+
+    @abstractmethod
+    def padzero(self, data, length=None):
+        return
+
+    @abstractmethod
+    def encryptPath(self, path):
+        return path
+
+    @abstractmethod
+    def decryptPath(self, path):
+        return path
+
+    @abstractmethod
+    def genKeys(self):
+        pass
+
+    @abstractmethod
+    def setKeys(self, filenameKey, contentKey):
+        pass
+
+    @abstractmethod
+    def getKeys(self):
+        return (None, None)
+
+class Crypto_Null(CryptoScheme):
     """
     An encryption scheme which does nothing, always returns the given text when asked to encrypt or decrypt
     Works as the basis for other encryption schemes.
@@ -269,7 +341,6 @@ class Crypto_Null:
     _altchars    = b'#@'
 
     ivLength    = 0
-
 
     def __init__(self, password=None, client=None, fsencoding=sys.getfilesystemencoding()):
         pass
@@ -295,8 +366,7 @@ class Crypto_Null:
     def decryptFilename(self, name):
         if isinstance(name, bytes):
             return name.decode('utf8')
-        else:
-            return name
+        return name
 
     def getHash(self, func=hashlib.md5):
         return func()
@@ -307,7 +377,7 @@ class Crypto_Null:
     def pad(self, data, length=None):
         return data
 
-    def unpad(self, data):
+    def unpad(self, data, length=None):
         return data
 
     def checkpad(self, data):
@@ -333,7 +403,7 @@ class Crypto_Null:
 
 
 
-class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
+class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     """
     Original Crypto Scheme.
     AES-256 CBC encyrption for files, with HMAC/SHA-512 for authentication.
@@ -360,7 +430,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
         if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
         if client is None:
-            raise Exception("No client set for encryption")
+            raise ValueError("No client set for encryption")
 
         self.client = bytes(client, 'utf8')
         self.salt = hashlib.sha256(self.client).digest()
@@ -392,8 +462,8 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     def pad(self, data, length=None):
         if length is None:
             length = len(data)
-        pad = self._blocksize - (length % self._blocksize)
-        data += bytes(chr(pad) * pad, 'utf8')
+        padVal = self._blocksize - (length % self._blocksize)
+        data += bytes(chr(padVal) * padVal, 'utf8')
         return data
 
     def unpad(self, data):
@@ -405,9 +475,9 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
     def checkpad(self, data):
         length = data[-1]
         # Make sure last L bytes are all set to L
-        pad = chr(length) * length
-        if data[-length:] != pad:
-            raise Exception("Invalid padding: %s (%d)", binascii.hexlify(data[-length:]), length)
+        padBytes = chr(length) * length
+        if data[-length:] != padBytes:
+            raise ValueError("Invalid padding: %s (%d)", binascii.hexlify(data[-length:]), length)
 
     def padzero(self, x):
         remainder = len(x) % self._blocksize
@@ -463,8 +533,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(Crypto_Null):
             _contentKey  = str(base64.b64encode(cipher.encrypt(self._contentKey)), 'utf8')
             _filenameKey = str(base64.b64encode(cipher.encrypt(self._filenameKey)), 'utf8')
             return (_filenameKey, _contentKey)
-        else:
-            return (None, None)
+        return (None, None)
 
 
 class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
