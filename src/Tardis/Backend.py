@@ -464,6 +464,8 @@ class Backend:
                 info = self.db.getChecksumInfo(xattr)
                 if (not info) or (info['size'] == -1):
                     attrs.add(xattr)
+        # And commit them to the DB
+        self.db.commit()
 
         response = {
             "message"   : Protocol.Responses.ACKDIR,
@@ -1127,7 +1129,7 @@ class Backend:
                                     journal=journal,
                                     allow_upgrade = self.config.allowUpgrades)
 
-        self.regenerator = Regenerator.Regenerator(self.cache, self.db)
+        self.regenerator = Regenerator.Regenerator(self.cache, self.db, TardisCrypto.Crypto_Null())
         return ret
 
     def setConfig(self):

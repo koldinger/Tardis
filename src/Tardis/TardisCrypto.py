@@ -439,6 +439,12 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
 
         self._fsEncoding = fsencoding
 
+    def getName(self):
+        return self._cryptoName
+
+    def getCryptoScheme(self):
+        return self._cryptoScheme
+
     def encrypting(self):
         return True
 

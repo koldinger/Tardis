@@ -33,8 +33,8 @@ import logging
 import tempfile
 import shutil
 
+from . import TardisCrypto
 from . import CompressedBuffer
-
 from . import librsync
 
 
@@ -44,7 +44,7 @@ class RegenerateException(Exception):
 class Regenerator:
     errors = 0
 
-    def __init__(self, cache, db, crypt=None, tempdir="/tmp"):
+    def __init__(self, cache, db, crypt: TardisCrypto.CryptoScheme, tempdir="/tmp"):
         self.logger = logging.getLogger("Regenerator")
         self.cacheDir = cache
         self.db = db

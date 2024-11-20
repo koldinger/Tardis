@@ -181,7 +181,7 @@ def setAttributes(regenerator, info, outname):
             except Exception:
                 logger.warning("Unable to process extended attributes for %s", outname)
 
-CHUNKSIZE = (64 * 1024)
+CHUNKSIZE = 256 * 1024
 
 def doRecovery(regenerator, info, authenticate, path, outname):
     myname = outname if outname else "stdout"

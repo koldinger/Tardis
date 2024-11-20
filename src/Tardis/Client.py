@@ -210,7 +210,7 @@ newmeta             = []
 
 noCompTypes         = []
 
-crypt: TardisCrypto.Crypto_Null | None = None
+crypt: TardisCrypto.CryptoScheme
 logger: logging.Logger
 exceptionLogger: Util.ExceptionLogger
 
