@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
-import sqlite3
-import argparse, logging
+import argparse
+import logging
 import sys
 import json
 
-import zstandard
-import msgpack
+from Tardis import Defaults, Util, Config
 
 logger = None
 MAXDEPTH=16
@@ -93,7 +91,7 @@ def processArgs():
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', default=sys.maxsize, type=int, help='Maximum depth to go')
     #parser.add_argument('--compress', '-Z', type=bool, dest='compress', default=False, const=True, nargs="?", help='Compress output using zstd')
 
-    parser.add_argument('--help', '-h',     action='help');
+    parser.add_argument('--help', '-h',     action='help')
 
     Util.addGenCompletions(parser)
 

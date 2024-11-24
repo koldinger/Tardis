@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,21 +29,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, RemoteDB
-import sqlite3
-import argparse, logging
+import argparse
+import logging
 import os.path
 import os
 import sys
-import base64
-import hashlib
-import progressbar
-import urllib.parse
+
+from Tardis import Util, Config
 
 logger = None
 
 def reader(quiet):
-    import readline
     prompt = '' if quiet else '--> '
     try:
         while True:
@@ -62,7 +58,7 @@ def processArgs():
     parser.add_argument('--backup', '-b', dest='backup', default=None, help='Look in specific backupset')
     parser.add_argument('--chain', '-c', dest='chain', default=False, action='store_true', help="Print file info on all stages in the chain")
 
-    parser.add_argument('--help', '-h',     action='help');
+    parser.add_argument('--help', '-h',     action='help')
     parser.add_argument('checksums',          nargs='*', help="List of checksums to extract")
 
     Util.addGenCompletions(parser)
@@ -80,18 +76,17 @@ def _path(db, crypt, bset, inode):
     global _paths
     if inode in _paths:
         return _paths[inode]
-    else:
-        fInfo = db.getFileInfoByInode(inode, bset)
-        if fInfo:
-            parent = (fInfo['parent'], fInfo['parentdev'])
-            prefix = _path(db, crypt, bset, parent)
 
-            name = _decryptFilename(fInfo['name'], crypt)
-            path = os.path.join(prefix, name)
-            _paths[inode] = path
-            return path
-        else:
-            return ''
+    fInfo = db.getFileInfoByInode(inode, bset)
+    if fInfo:
+        parent = (fInfo['parent'], fInfo['parentdev'])
+        prefix = _path(db, crypt, bset, parent)
+
+        name = _decryptFilename(fInfo['name'], crypt)
+        path = os.path.join(prefix, name)
+        _paths[inode] = path
+        return path
+    return ''
 
 def main():
     global logger
@@ -100,7 +95,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    (tardis, _, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    tardis, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     if args.backup is not None:
         bsetInfo = Util.getBackupSet(tardis, args.backup)
@@ -126,7 +121,7 @@ def main():
             for finfo in tardis.getFileInfoByChecksum(i, bset):
                 inode = (finfo['inode'], finfo['device'])
                 if inode == prevInode:
-                    next
+                    continue
                 prevInode = inode
                 if args.quiet:
                     print(_path(tardis, crypto, bset, inode))

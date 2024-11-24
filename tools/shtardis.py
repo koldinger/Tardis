@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, Config
+from Tardis import Util, TardisDB, Config
 import argparse, logging
 import os.path
 import os

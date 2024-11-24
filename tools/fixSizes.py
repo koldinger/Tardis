@@ -29,20 +29,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import time
 import sys
 import argparse
-import magic
-import os
-import io
 import json
 
 import Tardis
 from Tardis import Util
-from Tardis import TardisCrypto
 from Tardis import Config
-from Tardis import CacheDir
-from Tardis import CompressedBuffer
 
 args = None
 

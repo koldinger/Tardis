@@ -29,10 +29,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import CacheDir, Util
 import argparse
-import sys
 import logging
+
+from Tardis import CacheDir, Util
 
 logging.basicConfig()
 

@@ -29,27 +29,23 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, RemoteDB
-import sqlite3
-import argparse, logging
+import argparse
+import logging
 import os.path
 import os
 import sys
-import base64
-import hashlib
-import progressbar
-import urllib.parse
+
+from Tardis import Util, Config
 
 logger = None
 
 def reader(quiet):
-    import readline
     prompt = '' if quiet else '--> '
     try:
         while True:
             yield input(prompt)
     except EOFError:
-        return
+        pass
 
 def processArgs():
     parser = argparse.ArgumentParser(description='encrypt or decrypt filenames', fromfile_prefix_chars='@', add_help=False)
@@ -61,7 +57,7 @@ def processArgs():
     parser.add_argument('--encrypt', '-e', dest='encrypt', default=False, action='store_true', help='Encrypt names instead of decrypting')
     parser.add_argument('--quiet', '-q', dest='quiet', default=False, action='store_true', help="Only print the translation, not the input strings")
 
-    parser.add_argument('--help', '-h',     action='help');
+    parser.add_argument('--help', '-h',     action='help')
     parser.add_argument('names',          nargs='*', help="List of pathnames to decrypt")
 
     Util.addGenCompletions(parser)
@@ -77,7 +73,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    (_, _, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     data = args.names
     if not data:
@@ -92,7 +88,7 @@ def main():
             if not args.quiet:
                 print(i, " \t => \t", end=' ')
             try:
-                if (args.encrypt):
+                if args.encrypt:
                     print(crypto.encryptPath(i))
                 else:
                     print(crypto.decryptPath(i))

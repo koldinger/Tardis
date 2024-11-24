@@ -32,11 +32,9 @@
 import os, os.path
 import sys
 import sqlite3
-import gettext
 import glob
 
 from Tardis import CacheDir
-from Tardis import Util
 
 def hexcount(lower, upper, digits):
     fmt = "%0" + str(digits) + "x"

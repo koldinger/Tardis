@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,9 @@
 import time
 import sys
 import argparse
+import tempfile
+
+import qrcode
 
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
@@ -39,26 +42,19 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 
-import qrcode
-import tempfile
-
 import Tardis
 from Tardis import Util
-from Tardis import TardisCrypto
 from Tardis import Config
 
-args = None
- 
-def makePdf(output, qrcode, data, client):
+def makePdf(output, qrCode, data, client):
     doc = SimpleDocTemplate(output, pagesize=letter,
                             rightMargin=72,leftMargin=72,
                             topMargin=72,bottomMargin=18)
     Story=[]
-    logo = qrcode
 
-    im = Image(qrcode, 2*inch, 2*inch)
+    im = Image(qrCode, 2*inch, 2*inch)
     Story.append(im)
-     
+
     Story.append(Spacer(1, 12))
 
 
@@ -69,10 +65,10 @@ def makePdf(output, qrcode, data, client):
 
     Story.append(Paragraph(title, styles["Normal"]))
     Story.append(Spacer(1, 12))
-     
+
     for line in data.split('\n'):
         Story.append(Paragraph(line, styles["Normal"]))
-     
+
     doc.build(Story)
 
 def mkQrFile(data):
@@ -101,11 +97,10 @@ def processArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global args
     args = processArgs()
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
-    (tardis, _, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client} ")
+    tardis, _, crypt = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     (f, c) = crypt.getKeys()
     client = tardis.getConfigValue('ClientID')
@@ -114,7 +109,6 @@ def main():
 
     qrfile = mkQrFile(data)
     makePdf(args.output, qrfile.name, data, args.client)
-    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
