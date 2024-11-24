@@ -41,11 +41,11 @@ six==1.16.0
 srp==1.0.20
 StrEnum==0.4.15
 termcolor==2.3.0
-tornado==6.4.1
+tornado==6.4.2
 typing==3.7.4.3
 typing_extensions==4.8.0
 url-normalize==1.4.3
 urllib3==2.2.2
-Werkzeug==3.0.3
+Werkzeug==3.0.6
 xattr==1.0.0
 zstandard==0.22.0
