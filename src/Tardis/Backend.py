@@ -1240,7 +1240,7 @@ class Backend:
 
     def doGetKeys(self):
         try:
-            message = {"status": "NEEDKEYS"}
+            message = {"status": Protocol.Responses.NEEDKEYS }
             self.sendMessage(message)
             resp = self.recvMessage()
             self.checkMessage(resp, "SETKEYS")
@@ -1252,7 +1252,6 @@ class Backend:
             cryptoScheme = resp['cryptoScheme']
             # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
             return(srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme)
-
         except KeyError as e:
             raise InitFailedException(str(e)) from e
 
@@ -1264,10 +1263,10 @@ class Backend:
         self.logger.debug("Beginning Authentication")
         try:
             cryptoScheme = self.db._getConfigValue('CryptoScheme', '1')
-            message = {"message": "AUTH", "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
+            message = {"message": Protocol.Responses.AUTH, "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             auth1 = self.recvMessage()
-            self.checkMessage(auth1, "AUTH1")
+            self.checkMessage(auth1, Protocol.Commands.AUTH1)
             name = base64.b64decode(auth1['srpUname'])
             srpValueA = base64.b64decode(auth1['srpValueA'])
 
@@ -1277,7 +1276,7 @@ class Backend:
 
             self.logger.debug("Sending Challenge values")
             message = {
-                'message'   : 'AUTH1',
+                'message'   : Protocol.Commands.AUTH1,
                 'status'    : 'OK',
                 'srpValueS' : base64.b64encode(srpValueS),
                 'srpValueB' : base64.b64encode(srpValueB),
@@ -1287,11 +1286,11 @@ class Backend:
 
             auth2 = self.recvMessage()
             self.logger.debug("Received challenge response")
-            self.checkMessage(auth2, "AUTH2")
+            self.checkMessage(auth2, Protocol.Commands.AUTH2)
             srpValueM = base64.b64decode(auth2['srpValueM'])
             srpValueHAMK = self.db.authenticate2(srpValueM)
             message = {
-                'message'       : 'AUTH2',
+                'message'       : Protocol.Commands.AUTH2,
                 'status'        : 'OK',
                 'srpValueHAMK'  : base64.b64encode(srpValueHAMK),
                 'respid'        : auth2.get('msgid', 0)
@@ -1300,7 +1299,7 @@ class Backend:
         except TardisDB.AuthenticationFailed as e:
             message = {
                 'status'    : 'AUTHFAIL',
-                'error'   : str(e)
+                'error'     : str(e)
             }
             self.sendMessage(message)
             raise

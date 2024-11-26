@@ -36,7 +36,6 @@ import string
 import atexit
 import sched
 
-
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
 _hideCursor = '\x1b[?25l'
@@ -118,13 +117,13 @@ class StatusBar():
         signal.signal(signal.SIGWINCH, _handle_resize)
         signal.siginterrupt(signal.SIGWINCH, False)
 
-        self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
         atexit.register(resetCursor)
 
     def start(self, name="StatusBar"):
         """
         Start the status bar updating
         """
+        self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
         self.thread = threading.Thread(name=name, target=self.scheduler.run)
         self.thread.daemon = True
         self.thread.start()

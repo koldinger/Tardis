@@ -71,3 +71,6 @@ class Responses(UppercaseStrEnum):
     ACKDEL = auto()
     ACKSIG = auto()
     ACKSGR = "SIG"
+    NEEDKEYS = auto()
+    AUTH = auto()
+

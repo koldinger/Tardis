@@ -1181,7 +1181,6 @@ def initProgressBar(scheduler):
     sbar.setValue('mode', '')
     sbar.createValues(['waiting', 'sendQ', 'recvQ'], 0)
     sbar.setTrailer('')
-    sbar.start()
     return sbar
 
 def setProgress(mode, name=""):
@@ -1593,10 +1592,8 @@ def createPrefixPath(root, path):
         parentDev = st.st_dev
         current   = dirPath
 
-def setCrypto(confirm, chkStrength, version):
+def setCrypto(password, version):
     global srpUsr, crypt
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, f"Password for {args.client}:",
-                                confirm=confirm, strength=chkStrength, allowNone = False)
     srpUsr = srp.User(args.client, password)
     crypt = TardisCrypto.getCrypto(version, password, args.client)
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
@@ -1607,8 +1604,8 @@ def doSendKeys(password, scheme):
     if srpUsr is None:
         if scheme is None:
             scheme = TardisCrypto.DEF_CRYPTO_SCHEME
-        password = setCrypto(True, True, scheme)
     assert(crypt)
+    assert(srpUsr)
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1624,10 +1621,10 @@ def doSendKeys(password, scheme):
     resp = sendAndReceive(message)
     return resp
 
-def doSrpAuthentication(response):
+def doSrpAuthentication(password, response):
     """ Setup cryptography and do authentication """
     try:
-        setCrypto(False, args.create, response['cryptoScheme'])
+        setCrypto(password, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
@@ -1693,12 +1690,19 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     # BACKUP { json message }
     resp = sendAndReceive(message)
 
-    if resp['status'] == 'NEEDKEYS':
+    if resp['status'] in [ Protocol.Responses.NEEDKEYS, Protocol.Responses.AUTH ]:
+        if password is None:
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ",
+                                        confirm=args.create, strength=args.create)
+        if create:
+            setCrypto(password, args.cryptoScheme or 0)
+
+    if resp['status'] == Protocol.Responses.NEEDKEYS:
         resp = doSendKeys(password, scheme)
-    if resp['status'] == 'AUTH':
+    if resp['status'] == Protocol.Responses.AUTH:
         if not password:
-            raise Exception(f"Client {client} requires a password")
-        resp = doSrpAuthentication(resp)
+            raise InitFailedException(f"Client {client} requires a password")
+        resp = doSrpAuthentication(password, resp)
 
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
@@ -2359,10 +2363,10 @@ def main():
     verbosity=args.verbose or 0
     try:
         setupLogging(args.logfiles, verbosity, args.exceptions)
-
         # determine mode:
         localmode = pickMode()
-    except:
+    except Exception as e:
+        logger.critical(e)
         sys.exit(1)
 
     # Open the connection
@@ -2388,7 +2392,6 @@ def main():
         messenger.run()
         messenger.setProgressBar(statusBar)
         #messenger = conn.sender
-
     except Exception as e:
         logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
         exceptionLogger.log(e)
@@ -2397,8 +2400,10 @@ def main():
     # Now, do the actual work here.
     exc = None
     try:
-        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password, args.cryptoScheme)
+        if args.progress:
+            statusBar.start()
 
+        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password, args.cryptoScheme)
 
         # Send information about this backup.
         sendConfigInfo(directories)
