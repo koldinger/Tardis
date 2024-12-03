@@ -35,10 +35,6 @@ import argparse, logging
 import os.path
 import os
 import sys
-import base64
-import hashlib
-import progressbar
-import urllib.parse
 
 logger = None
 
