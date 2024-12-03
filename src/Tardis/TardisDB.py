@@ -972,16 +972,16 @@ class TardisDB:
 
 
     @authenticate
-    def getNewFiles(self, bSet, other):
+    def getNewFiles(self, bset, other):
         if other:
             row = self._executeWithResult("SELECT max(BackupSet) FROM Backups WHERE BackupSet < :bset", {'bset': bSet})
-            pSet = row[0]
+            pset = row[0]
         else:
-            pSet = bSet
-        self.logger.debug("Getting new files for changesets %s -> %s", pSet, bSet)
+            pset = bset
+        self.logger.debug("Getting new files for changesets %s -> %s", pset, bset)
         cursor = self._execute("SELECT " + _fileInfoFields + _fileInfoJoin +
-                               "WHERE Files.FirstSet >= :pSet AND Files.LastSet <= :bSet",
-                               {'bSet': bSet, 'pSet': pSet})
+                               "WHERE Files.FirstSet BETWEEN :pset AND :bset",
+                               {'bset': bset, 'pset': pset})
         return _fetchEm(cursor)
 
     @authenticate
