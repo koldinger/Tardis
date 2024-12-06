@@ -54,6 +54,8 @@ import pprint
 import traceback
 import threading
 import socket
+import pwd
+import grp
 import concurrent.futures
 
 from collections import defaultdict, deque
@@ -979,6 +981,8 @@ def mkFileInfo(f):
             'mode':   s.st_mode,
             'uid':    s.st_uid,
             'gid':    s.st_gid,
+            'user':   getUserName(s.st_uid),
+            'group':  getGroupName(s.st_gid),
             'dev':    s.st_dev
             }
 
@@ -1018,6 +1022,16 @@ def mkFileInfo(f):
             logger.info("Skipping special file: %s", pathname)
         finfo = None
     return finfo
+
+@functools.cache 
+def getUserName(uid):
+    info = pwd.getpwuid(uid)
+    return crypt.encryptFilename(info.pw_name)
+
+@functools.cache 
+def getGroupName(gid):
+    info = grp.getgrgid(gid)
+    return crypt.encryptFilename(info.gr_name)
 
 def getDirContents(dirname, dirstat, excludes=None):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
@@ -1667,6 +1681,8 @@ def doSrpAuthentication(password, response):
 def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
     global lastTimestamp, crypt, trackOutstanding
     triedAuthentication = False
+    crypt = None
+
     crypt = None
 
     # Create a BACKUP message

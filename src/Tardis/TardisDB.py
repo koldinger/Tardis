@@ -48,6 +48,9 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
+from icecream import ic 
+ic.configureOutput(includeContext=True)
+
 # Exception classes
 class AuthenticationException(Exception):
     pass
@@ -104,7 +107,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 21
+_schemaVersion = 22
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -647,17 +650,44 @@ class TardisDB:
         # General purpose failure
         return None
 
+    @functools.cache
+    def _getUserAndGroup(self, user, group):
+        ic(user, group)
+        row = self._executeWithResult("SELECT UserID FROM Users WHERE Name = :user", {"user": user})
+        if not row:
+            self.logger.debug("Inserting username %s into Users Table", user)
+            c = self._execute("INSERT INTO Users (Name) VALUES (:user)", {"user": user})
+            userid = c.lastrowid
+        else:
+            userid = row[0]
+        self.logger.debug("User ID %s -> %d", user, userid)
+
+        row = self._executeWithResult("SELECT GroupID FROM Groups WHERE Name = :group", {"group": group})
+        if not row:
+            self.logger.debug("Inserting groupname %s into Groups Table", user)
+            c = self._execute("INSERT INTO Groups (Name) VALUES (:group)", {"group": group})
+            groupid = c.lastrowid
+        else:
+            groupid = row[0]
+        self.logger.debug("Group ID %s -> %d", group, groupid)
+
+        return userid, groupid
+
+
+
     @authenticate
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
-        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev}.items())
+        user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
+        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev, "userid": user, "groupid": group}.items())
+        ic(user, group)
         temp = _addFields(fields, fileInfo)
         self.setNameID([temp])
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
-                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
                       temp)
 
     @authenticate
@@ -722,8 +752,8 @@ class TardisDB:
         if row:
             return row[0]
         if insert:
-            self.cursor.execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
-            return self.cursor.lastrowid
+            c = self._execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
+            return c.lastrowid
         return None
 
     @authenticate
