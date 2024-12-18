@@ -88,8 +88,8 @@ _fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, 
                    "C2.Checksum AS xattrs, C3.Checksum AS acl "
 
 _fileInfoJoin =    "FROM Files " \
-                   "JOIN Names ON Files.NameId = Names.NameId " \
-                   "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
+                   "JOIN Names USING(NameID) "\
+                   "LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) " \
                    "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
                    "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
 
@@ -582,7 +582,7 @@ class TardisDB:
         backupset = self._bset(current)
         c = self.cursor.execute("SELECT "
                                 "CheckSums.Checksum AS checksum "
-                                "FROM Files JOIN CheckSums ON Files.ChecksumId = Checksums.ChecksumId "
+                                "FROM Files JOIN CheckSums USING (ChecksumID) "
                                 "WHERE Files.INode = :inode AND Device = :device AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 { "backup" : backupset, "inode" : inode, "device": device })
@@ -597,8 +597,8 @@ class TardisDB:
         self.logger.debug("Looking up checksum for file %s (%d %d) in %d", name, inode, device, backupset)
         c = self._execute("SELECT CheckSums.CheckSum AS checksum "
                           "FROM Files "
-                          "JOIN Names ON Files.NameID = Names.NameId "
-                          "JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId "
+                          "JOIN Names USING (NameId) "
+                          "JOIN CheckSums USING (ChecksumId) "
                           "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDev = :parentDev AND "
                           ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                           { "name": name, "parent": inode, "parentDev": device, "backup": backupset })
@@ -796,7 +796,7 @@ class TardisDB:
     def getNamesForChecksum(self, checksum):
         """ Recover a list of names that represent a checksum """
         self.logger.debug("Recovering name(s) for checksum %s", checksum)
-        c = self._execute('SELECT Name FROM Names JOIN Files ON Names.NameID = Files.NameID JOIN Checksums ON Checksums.ChecksumID = Files.ChecksumID '
+        c = self._execute('SELECT Name FROM Names JOIN Files USING (NameId) JOIN Checksums USING (ChecksumID) '
                           'WHERE Checksums.Checksum = :checksum',
                           {'checksum': checksum})
         names = []
@@ -840,9 +840,9 @@ class TardisDB:
     def getNumDeltaFilesInDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
-        row = self._executeWithResult("SELECT COUNT(*) FROM Files " \
-                                      "JOIN Names ON Files.NameId = Names.NameId " \
-                                      "LEFT OUTER JOIN Checksums AS C1 ON Files.ChecksumId = C1.ChecksumId " \
+        row = self._executeWithResult("SELECT COUNT(*) FROM Files "
+                                      "JOIN Names USING (NameID) "
+                                      "LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) "
                                       "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                                       ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
                                       "C1.ChainLength != 0",
@@ -906,7 +906,7 @@ class TardisDB:
 
     @authenticate
     def getBackupSetInfoByTag(self, tag):
-        bset = self._executeWithResult("SELECT BackupSet FROM Tags JOIN Names on Tags.NameId = Names.NameId WHERE Names.name = :tag", {"tag": tag})
+        bset = self._executeWithResult("SELECT BackupSet FROM Tags JOIN Names USING (NameId) WHERE Names.name = :tag", {"tag": tag})
         if bset is None:
             # No such backup set.
             return None
@@ -936,7 +936,7 @@ class TardisDB:
 
     @authenticate
     def getBackupSetDetails(self, bset):
-        row = self._executeWithResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
+        row = self._executeWithResult("SELECT COUNT(*), SUM(Size) FROM Files JOIN Checksums USING (ChecksumID) WHERE Dir = 0 AND :bset BETWEEN FirstSet AND LastSet", {'bset': bset})
         files = row[0]
         size = row[1] if row[1] else 0
 
@@ -952,7 +952,7 @@ class TardisDB:
 
         self.logger.debug("PrevSet: %s, NextSet: %s", prevSet, nextSet)
         # Count of files that first appeared in this version.  May be delta's
-        row = self._executeWithResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+        row = self._executeWithResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums USING (ChecksumID) "
                                       "WHERE Dir = 0 AND FirstSet > :prevSet",
                                       {'prevSet': prevSet})
         newFiles = row[0] if row[0] else 0
@@ -960,7 +960,7 @@ class TardisDB:
         newSpace = row[2] if row[2] else 0
 
         # Count of files that are last seen in this set, and are not part of somebody else's basis
-        row = self._executeWithResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums ON Files.ChecksumID = Checksums.ChecksumID "
+        row = self._executeWithResult("SELECT COUNT(*), SUM(Size), SUM(DiskSize) FROM Files JOIN Checksums USING (ChecksumID) "
                                       "WHERE Dir = 0 AND LastSet < :nextSet "
                                       "AND Checksum NOT IN (SELECT Basis FROM Checksums WHERE Basis IS NOT NULL)",
                                       {'nextSet': nextSet})
@@ -1257,7 +1257,7 @@ class TardisDB:
 
     @authenticate
     def getTags(self, bset):
-        c = self._execute("SELECT Name FROM Names JOIN Tags ON Tags.NameId = Names.NameId WHERE Tags.Backupset = :bset", {"bset": bset})
+        c = self._execute("SELECT Name FROM Names JOIN Tags USING (NameId) WHERE Tags.Backupset = :bset", {"bset": bset})
         tags = []
         row = c.fetchone()
         while row:

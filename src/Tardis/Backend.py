@@ -1299,6 +1299,8 @@ class Backend:
                 'error'     : str(e)
             }
             self.sendMessage(message)
+            self.db.close(False)
+            self.db = None
             raise
         return message
 

@@ -204,7 +204,7 @@ cloneDirs           = []
 cloneContents       = {}
 # A cache of metadata.  Since many files can have the same metadata, we check that
 # that we haven't sent it yet.
-metaCache           = Util.bidict()
+metaCache           = {}
 # When we encounter new metadata, keep it here until we flush it to the server.
 newmeta             = []
 
@@ -536,7 +536,7 @@ def handleSig(response):
         sigfile.seek(0)
         processSig(inode, sigfile, cksum)
     else:
-        logger.warn("No signature file for %s", inode)
+        logger.warning("No signature file for %s", inode)
         sendContent(inode, 'Full')
 
 def processSig(inode, sigfile, oldchksum):
@@ -755,14 +755,15 @@ def sendContent(inode, reportType):
 
 def handleAckMeta(response):
     checkMessage(response, Protocol.Responses.ACKMETA)
-    content = response.setdefault('content', {})
+    content = response.get('content', {})
+    done    = response.get('done', {})
     # Ignore the done field.
     #done    = message.setdefault('done', {})
 
     message = {"message": Protocol.Commands.METADATA, "data": []}
 
     for cks in content:
-        data = fs_encode(metaCache.inverse[cks][0])
+        data = fs_encode(metaCache[cks])
         sz = len(data)
         logger.debug("Sending meta data chunk: %s -- %s", cks, data)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
@@ -783,6 +784,12 @@ def handleAckMeta(response):
             "data": data
         }
         message["data"].append(chunk)
+
+    for cks in done:
+        try:
+            metaCache.pop(cks)
+        except KeyError:
+            logger.warning("Metadata value for hash %s not found", cks)
 
     sendMessage(message)
 
@@ -936,17 +943,15 @@ def pushFiles():
     #if message['last']:
     #    sendDirHash(message['inode'])
 
+@functools.cache
 def addMeta(meta):
     """
     Add data to the metadata cache
     """
-    if meta in metaCache:
-        return metaCache[meta]
-
     m = crypt.getHash()
     m.update(bytes(meta, 'utf8'))
     digest = m.hexdigest()
-    metaCache[meta] = digest
+    metaCache[digest] = meta
     newmeta.append(digest)
     return digest
 
@@ -1599,11 +1604,8 @@ def setCrypto(password, version):
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
     return password
 
-def doSendKeys(password, scheme):
+def doSendKeys(password):
     """ Set up cryptography system, and send the generated keys """
-    if srpUsr is None:
-        if scheme is None:
-            scheme = TardisCrypto.DEF_CRYPTO_SCHEME
     assert(crypt)
     assert(srpUsr)
     logger.debug("Sending keys")
@@ -1669,6 +1671,8 @@ def doSrpAuthentication(password, response):
 
 def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
     global lastTimestamp, crypt, trackOutstanding
+    triedAuthentication = False
+    crypt = None
 
     # Create a BACKUP message
     message = {
@@ -1693,13 +1697,14 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     if resp['status'] in [ Protocol.Responses.NEEDKEYS, Protocol.Responses.AUTH ]:
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ",
-                                        confirm=args.create, strength=args.create)
+                                        confirm=create, strength=create)
         if create:
-            setCrypto(password, args.cryptoScheme or 0)
+            setCrypto(password, args.cryptoScheme or TardisCrypto.DEF_CRYPTO_SCHEME)
 
     if resp['status'] == Protocol.Responses.NEEDKEYS:
-        resp = doSendKeys(password, scheme)
+        resp = doSendKeys(password)
     if resp['status'] == Protocol.Responses.AUTH:
+        triedAuthentication = True
         if not password:
             raise InitFailedException(f"Client {client} requires a password")
         resp = doSrpAuthentication(password, resp)
@@ -1710,6 +1715,10 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
             errmesg = errmesg + ": " + resp['error']
         raise Exception(errmesg)
 
+    if triedAuthentication and not (args.password or args.passwordfile or args.passwordprog):
+        # Password specified, but not needed
+        raise AuthenticationFailed("Authentication Failed")
+
     sessionid      = uuid.UUID(resp['sessionid'])
     clientId       = uuid.UUID(resp['clientid'])
     lastTimestamp  = float(resp['prevDate'])
@@ -1718,8 +1727,8 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     filenameKey    = resp.get('filenameKey')
     contentKey     = resp.get('contentKey')
     # FIXME: TODO: Should this be in the initialization?
-    if crypt is None:
-        crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
+    if not crypt:
+        crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, args.client)
 
     # Set up the encryption, if needed.
     ### TODO
@@ -1871,7 +1880,6 @@ def processCommandLine():
         parser.add_argument('--xattr',              dest='xattr', default=support_xattr, action=Util.StoreBoolean,               help='Backup file extended attributes')
     if support_acl:
         parser.add_argument('--acl',                dest='acl', default=support_acl, action=Util.StoreBoolean,                 help='Backup file access control lists')
-
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
@@ -2237,11 +2245,6 @@ def initialize():
 
         # Load any excluded directories
         loadExcludedDirs()
-
-        # Error check the purge parameter.  Disable it if need be
-        #if args.purge and not (purgeTime is not None or auto):
-        #   logger.error("Must specify purge days with this option set")
-        #   args.purge=False
 
         # Load any password info
         try:
