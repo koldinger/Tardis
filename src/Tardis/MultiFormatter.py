@@ -29,9 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
-"""
-A class to allow different logging levels to have different logging formats
-"""
 
 class MultiFormatter(logging.Formatter):
     """

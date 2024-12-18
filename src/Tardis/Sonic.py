@@ -608,7 +608,7 @@ def checkSanity(db, cache, crypt):
                         names = sorted(map(crypt.decryptFilename, names))
                         print(i, names)
 
-            # And get rid of it, 
+            # And get rid of it,
             if args.cleanup:
                 if args.confirm():
                     for i in inCache:

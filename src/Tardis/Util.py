@@ -211,9 +211,9 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout):
 
     logging.raiseExceptions = False
 
-    logger = logging.getLogger("")
-    logger.setLevel(loglevel)
-    return logger
+    log = logging.getLogger("")
+    log.setLevel(loglevel)
+    return log
 
 # Functions for reducing a path.
 
@@ -349,7 +349,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
     if pwprog:
         a = shlex.split(pwprog)
         output = subprocess.check_output(a)
-        password = output.split('\n')[0].rstrip()
+        password = output.split('\n', maxsplit=1)[0].rstrip()
 
     if not allowNone and not password:
         raise Exception("Password required")
@@ -620,7 +620,7 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
         global _transmissionTime
         _transmissionTime += end - start
         if log:
-            log.write("Sent %d bytes\n" % size)
+            log.write(f"Sent {size} bytes\n")
     return size, ck, sig
 
 def receiveData(receiver, output, log=None):
