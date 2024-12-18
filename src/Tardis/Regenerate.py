@@ -49,9 +49,10 @@ from . import Regenerator
 from . import Util
 from . import Config
 from . import Defaults
+from . import TardisCrypto
 
 logger: logging.Logger
-crypt = None
+crypt: TardisCrypto.CryptoScheme
 
 class OwMode(enum.StrEnum):
     OW_NEVER  = 'never'
@@ -69,7 +70,7 @@ owModeDefault = str(owMode)
 errors = 0
 
 tardis = None
-args = None
+args:argparse.Namespace
 
 def yesOrNo(x):
     if x:
@@ -148,8 +149,8 @@ def setAttributes(regenerator, info, outname):
             try:
                 # Change the group, then the owner.
                 # Change the group first, as only root can change owner, and that might fail.
-                os.chown(outname, -1, info['gid'])
-                os.chown(outname, info['uid'], -1)
+                os.chown(outname, -1, Util.getGroupId(crypt.decryptFilename(info['groupname'])))
+                os.chown(outname, Util.getUserId(crypt.decryptFilename(info['username'])), -1)
             except Exception:
                 logger.warning("Unable to set owner and group of %s", outname)
         if args.settime:

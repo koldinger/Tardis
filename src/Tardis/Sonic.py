@@ -371,8 +371,8 @@ def listFiles(db, crypt):
 
         if args.long:
             mode  = stat.filemode(fInfo['mode'])
-            group = Util.getGroupName(fInfo['gid'])
-            owner = Util.getUserId(fInfo['uid'])
+            group = crypt.decryptFilename(fInfo['groupname'])
+            owner = crypt.decryptFilename(fInfo['username'])
             mtime = Util.formatTime(fInfo['mtime'])
             size = humanify(fInfo['size'])
             inode = fInfo['inode']

@@ -106,11 +106,26 @@ def getGroupName(gid):
     return None
 
 @functools.cache
-def getUserId(uid):
+def getUserName(uid):
     user = pwd.getpwuid(uid)
     if user:
         return user.pw_name
     return None
+
+@functools.cache
+def getGroupId(name):
+    group = grp.getgrnam(name)
+    if group:
+        return group.gr_gid
+    return None
+
+@functools.cache
+def getUserId(name):
+    user = pwd.getpwnam(name)
+    if user:
+        return user.pw_uid
+    return None
+
 
 # Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
 # then Jan 12, 2014.  Same as ls.
@@ -871,11 +886,16 @@ class ClearingStreamHandler(logging.StreamHandler):
 
         super().emit(record)
 
-# AN exception logging mechanism
-import rich.console
+# An exception logging mechanism
+try:
+    import rich.console
+    _useRich = True
+except ImportError:
+    _useRich = False
 
 class ExceptionLogger:
-    _con = rich.console.Console()
+    if _useRich:
+        _con = rich.console.Console()
     def __init__(self, logger, logExceptions, rich=False):
         self.logger = logger
         self.logExceptions = logExceptions
@@ -883,7 +903,7 @@ class ExceptionLogger:
 
     def log(self, exception):
         if self.logExceptions:
-            if self.rich:
+            if self.rich and _useRich:
                 self._con.print_exception()
             else:
                 self.logger.exception(exception)

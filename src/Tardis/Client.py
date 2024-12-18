@@ -984,8 +984,8 @@ def mkFileInfo(f):
             'ctime':  int(s.st_ctime),
             'atime':  int(s.st_atime),
             'mode':   s.st_mode,
-            'uid':    s.st_uid,
-            'gid':    s.st_gid,
+            'uid':    s.st_uid,                 # TODO: Remove
+            'gid':    s.st_gid,                 # TODO: Remove
             'user':   getUserName(s.st_uid),
             'group':  getGroupName(s.st_gid),
             'dev':    s.st_dev

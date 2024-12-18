@@ -48,8 +48,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-from icecream import ic 
-ic.configureOutput(includeContext=True)
+#from icecream import ic 
+#ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -84,17 +84,19 @@ def authenticate(func):
 
 # Be sure to end all these lists with a space.
 
-_fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
+_fileInfoFields =  "Names.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
                    "Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, " \
-                   "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
+                   "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, " \
                    "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, " \
-                   "C2.Checksum AS xattrs, C3.Checksum AS acl "
+                   "C2.Checksum AS xattrs, C3.Checksum AS acl, Groups.Name AS groupname, Users.Name AS username "
 
 _fileInfoJoin =    "FROM Files " \
                    "JOIN Names USING(NameID) "\
                    "LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) " \
                    "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
-                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
+                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId " \
+                   "JOIN Users USING (UserID) JOIN Groups USING (GroupID) "
+                    
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, Locked AS locked, " \
@@ -427,12 +429,8 @@ class TardisDB:
         self.logger.debug(f"Looking up file by name {name} {parent} {backupset}")
         c = self.cursor
         c.execute("SELECT " +
-                  _fileInfoFields +
-                  #"FROM Files "
-                  #"JOIN Names ON Files.NameId = Names.NameId "
-                  #"LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  _fileInfoJoin +
-                  "WHERE Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
+                  _fileInfoFields + _fileInfoJoin +
+                  "WHERE Names.Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return c.fetchone()
@@ -455,7 +453,7 @@ class TardisDB:
             if info:
                 parent = (info["inode"], info["device"])
                 if permchecker:
-                    if not permchecker(info['uid'], info['gid'], info['mode']):
+                    if not permchecker(info['user'], info['group'], info['mode']):
                         raise Exception("File permission denied: " + name)
             else:
                 break
@@ -650,9 +648,8 @@ class TardisDB:
         # General purpose failure
         return None
 
-    @functools.cache
-    def _getUserAndGroup(self, user, group):
-        ic(user, group)
+    @functools.cache 
+    def _getUserId(self, user):
         row = self._executeWithResult("SELECT UserID FROM Users WHERE Name = :user", {"user": user})
         if not row:
             self.logger.debug("Inserting username %s into Users Table", user)
@@ -661,19 +658,23 @@ class TardisDB:
         else:
             userid = row[0]
         self.logger.debug("User ID %s -> %d", user, userid)
+        return userid
 
+    @functools.cache 
+    def _getGroupId(self, group):
         row = self._executeWithResult("SELECT GroupID FROM Groups WHERE Name = :group", {"group": group})
         if not row:
-            self.logger.debug("Inserting groupname %s into Groups Table", user)
+            self.logger.debug("Inserting groupname %s into Groups Table", group)
             c = self._execute("INSERT INTO Groups (Name) VALUES (:group)", {"group": group})
             groupid = c.lastrowid
         else:
             groupid = row[0]
         self.logger.debug("Group ID %s -> %d", group, groupid)
+        return groupid
 
-        return userid, groupid
-
-
+    @functools.cache
+    def _getUserAndGroup(self, user, group):
+        return self._getUserId(user), self._getGroupId(group)
 
     @authenticate
     def insertFile(self, fileInfo, parent):
@@ -681,7 +682,6 @@ class TardisDB:
         (parIno, parDev) = parent
         user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
         fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev, "userid": user, "groupid": group}.items())
-        ic(user, group)
         temp = _addFields(fields, fileInfo)
         self.setNameID([temp])
         self._execute("INSERT INTO Files "
@@ -746,6 +746,7 @@ class TardisDB:
                                { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
         return cursor.rowcount
 
+    @functools.lru_cache(1024)
     def _getNameId(self, name, insert=True):
         c = self.cursor.execute("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
         row = c.fetchone()

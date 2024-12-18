@@ -1,7 +1,7 @@
 -- vim: set et sw=4 sts=4 fileencoding=utf-8:
 --
 -- Tardis: A Backup System
--- Copyright 2013-2022, Eric Koldinger, All Rights Reserved.
+-- Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 -- kolding@washington.edu
 --
 -- Redistribution and use in source and binary forms, with or without
@@ -164,6 +164,6 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "21");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "22");
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

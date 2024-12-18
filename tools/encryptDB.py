@@ -29,12 +29,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse, logging
+import argparse
+import logging
 import progressbar
 
 from Tardis import Util, librsync, Regenerator, Config
 
-logger = None
+logger: logging.Logger
 
 def encryptFilenames(db, crypto):
     conn = db.conn
@@ -62,6 +63,34 @@ def encryptFilenames(db, crypto):
             logger.exception(e)
             conn.rollback()
     logger.info("Encrypted %d names", names)
+
+def encryptNames(db, crypto, table, keyField):
+    conn = db.conn
+    c = conn.cursor()
+    c2 = conn.cursor()
+    names = 0
+    r = c.execute(f"SELECT COUNT(*) FROM {table}")
+    z = r.fetchone()[0]
+    logger.info("Encrypting %d name from %s", z, table)
+    with progressbar.ProgressBar(max_value=z) as bar:
+        try:
+            r = c.execute(f"SELECT Name, {keyField} FROM {table}")
+            while True:
+                row = r.fetchone()
+                if row is None:
+                    break
+                (name, nameid) = row
+                newname = crypto.encryptFilename(name)
+                c2.execute(f'UPDATE {table} SET Name = "{newname}" WHERE {keyField} = {nameid}')
+                names = names + 1
+                bar.update(names)
+            conn.commit()
+        except Exception as e:
+            logger.error("Caught exception encrypting name %s: %s", name, str(e))
+            logger.exception(e)
+            conn.rollback()
+    logger.info("Encrypted %d names", names)
+
 
 def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     f = cacheDir.open(checksum, 'rb')
@@ -171,7 +200,7 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength, pbar):
     for row in r.fetchall():
         try:
             checksum = row[0]
-            #logger.info("Encrypting Parent %s", checksum)
+            logger.info("Encrypting File %s : %d", checksum, chainlength)
             chain = db.getChecksumInfoChain(checksum)
             bFile = None
             while chain:
@@ -302,6 +331,7 @@ def processArgs():
     Config.addPasswordOptions(parser)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
+    parser.add_argument('--usergroup',      dest='usergroup',action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
     parser.add_argument('--sigs',           dest='sigs',     action='store_true', default=False,       help='Generate signature files.  Default=%(default)s')
     parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
@@ -314,7 +344,7 @@ def processArgs():
 
     args = parser.parse_args(remaining)
 
-    if not (args.names or args.files or args.dirs or args.meta or args.all or args.sigs):
+    if (not (args.names or args.usergroup or args.files or args.dirs or args.meta or args.all or args.sigs)):
         parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
 
@@ -343,6 +373,9 @@ def main():
 
     if args.names or args.all:
         encryptFilenames(db, crypto)
+    if args.usergroup or args.all:
+        encryptNames(db, crypto, 'Users', 'UserID')
+        encryptNames(db, crypto, 'Groups', 'GroupID')
     if args.dirs or args.all:
         generateDirHashes(db, crypto)
     if args.sigs or args.all:
