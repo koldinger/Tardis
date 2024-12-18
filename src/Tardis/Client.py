@@ -204,7 +204,7 @@ cloneDirs           = []
 cloneContents       = {}
 # A cache of metadata.  Since many files can have the same metadata, we check that
 # that we haven't sent it yet.
-metaCache           = Util.bidict()
+metaCache           = {}
 # When we encounter new metadata, keep it here until we flush it to the server.
 newmeta             = []
 
@@ -536,7 +536,7 @@ def handleSig(response):
         sigfile.seek(0)
         processSig(inode, sigfile, cksum)
     else:
-        logger.warn("No signature file for %s", inode)
+        logger.warning("No signature file for %s", inode)
         sendContent(inode, 'Full')
 
 def processSig(inode, sigfile, oldchksum):
@@ -755,14 +755,15 @@ def sendContent(inode, reportType):
 
 def handleAckMeta(response):
     checkMessage(response, Protocol.Responses.ACKMETA)
-    content = response.setdefault('content', {})
+    content = response.get('content', {})
+    done    = response.get('done', {})
     # Ignore the done field.
     #done    = message.setdefault('done', {})
 
     message = {"message": Protocol.Commands.METADATA, "data": []}
 
     for cks in content:
-        data = fs_encode(metaCache.inverse[cks][0])
+        data = fs_encode(metaCache[cks])
         sz = len(data)
         logger.debug("Sending meta data chunk: %s -- %s", cks, data)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
@@ -783,6 +784,12 @@ def handleAckMeta(response):
             "data": data
         }
         message["data"].append(chunk)
+
+    for cks in done:
+        try:
+            metaCache.pop(cks)
+        except KeyError:
+            logger.warning("Metadata value for hash %s not found", cks)
 
     sendMessage(message)
 
@@ -936,17 +943,15 @@ def pushFiles():
     #if message['last']:
     #    sendDirHash(message['inode'])
 
+@functools.cache
 def addMeta(meta):
     """
     Add data to the metadata cache
     """
-    if meta in metaCache:
-        return metaCache[meta]
-
     m = crypt.getHash()
     m.update(bytes(meta, 'utf8'))
     digest = m.hexdigest()
-    metaCache[meta] = digest
+    metaCache[digest] = meta
     newmeta.append(digest)
     return digest
 
