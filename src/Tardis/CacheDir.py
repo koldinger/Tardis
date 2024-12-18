@@ -88,7 +88,7 @@ class CacheDir:
         config.set(section, PARTSIZE, str(self.partsize))
         if create:
             try:
-                with open(configFile, "w") as f:
+                with open(configFile, "w", encoding="utf8") as f:
                     config.write(f)
             except Exception as e:
                 logger.warning("Could not write configpration file: %s: %s", configFile, str(e))

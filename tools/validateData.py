@@ -1,8 +1,8 @@
-2023 /usr/bin/env python3
+#! /usr/bin/env python3
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -32,21 +32,17 @@
 
 import hashlib
 import os, os.path
-import sys
-import xattr
 import hashlib
 import sqlite3
 import time
 import logging
 
-from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Util, Defaults
-
-import progressbar as pb
+from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Defaults
 
 checked = {}
 
 try:
-    for x in file("valid", "r"):
+    for x in open("valid", "r"):
         x = x.rstrip()
         checked[x] = 1
 except:
@@ -54,8 +50,8 @@ except:
 
 print("Loaded %d checksums." % (len(checked)))
 
-output = file('output', 'a')
-valid = file('valid', 'a')
+output = open('output', 'a')
+valid = open('valid', 'a')
 
 def validate(root, client, dbname, password):
     crypto = None
@@ -76,13 +72,13 @@ def validate(root, client, dbname, password):
     print("Checksums: %d" % (num))
 
     cur = conn.execute("SELECT Checksum FROM CheckSums WHERE IsFile = 1 ORDER BY Checksum ASC");
-    pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
-    pbar.start()
+    #pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
+    #pbar.start()
 
     row = cur.fetchone()
     i = 1
     while row is not None:
-        pbar.update(i)
+        #pbar.update(i)
         i += 1
         try:
             checksum = row['Checksum']
@@ -113,7 +109,7 @@ def validate(root, client, dbname, password):
         except sqlite3.OperationalError as e:
             print("Caught operational error.  DB is probably locked.  Sleeping for a bit")
             time.sleep(90)
-    pbar.finish()
+    #pbar.finish()
 
 if __name__ == "__main__":
     root   = Defaults.getDefault('TARDIS_DB')

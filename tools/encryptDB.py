@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,16 +29,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
-import sqlite3
 import argparse, logging
-import os.path
-import os
-import sys
-import base64
-import hashlib
-import sys
 import progressbar
+
+from Tardis import Util, librsync, Regenerator, Config
 
 logger = None
 
@@ -50,7 +44,7 @@ def encryptFilenames(db, crypto):
     r = c.execute("SELECT COUNT(*) FROM Names")
     z = r.fetchone()[0]
     logger.info("Encrypting %d filenames", z)
-    with progressbar.ProgressBar(max_value=z) as bar:
+    with progressbar.ProgressBar(max_value=z) as pbar:
         try:
             r = c.execute("SELECT Name, NameID FROM Names")
             while True:
@@ -61,7 +55,7 @@ def encryptFilenames(db, crypto):
                 newname = crypto.encryptFilename(name)
                 c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
                 names = names + 1
-                bar.update(names)
+                pbar.update(names)
             conn.commit()
         except Exception as e:
             logger.error("Caught exception encrypting filename %s: %s", name, str(e))
@@ -71,14 +65,14 @@ def encryptFilenames(db, crypto):
 
 def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     f = cacheDir.open(checksum, 'rb')
-    if output == None:
+    if output is None:
         output = checksum + '.enc'
     o = cacheDir.open(output, 'wb')
     o.write(iv)
     nb = len(iv)
     cipher.update(iv)
     # Encrypt the chunks
-    for chunk, eof in Util._chunks(f, 64 * 1024):
+    for chunk, _ in Util._chunks(f, 64 * 1024):
         ochunk = cipher.encrypt(chunk)
         o.write(ochunk)
         nb = nb + len(ochunk)
@@ -130,18 +124,18 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
 
         #logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
         signature = not cacheDir.exists(checksum + ".sig")
-        
+
         nameHmac = crypto.getHash()
         retFile = generateFullFileInfo(checksum, regenerator, cacheDir, nameHmac, signature, basis)
         if basis:
             basis.close()
         newCks = nameHmac.hexdigest()
-        
+
         #logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
-        
+
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
-        hmac = crypto.getHash(func=hashlib.sha512)
+        #hmac = crypto.getHash(func=hashlib.sha512)
         fSize = encryptFile(checksum, cacheDir, cipher, iv, output=newCks)
         #logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
 
@@ -195,22 +189,22 @@ def encryptFiles(db, crypto, cacheDir):
     r = conn.execute("SELECT COUNT(*) FROM CheckSums WHERE Encrypted=0 AND IsFile = 1")
     files = r.fetchone()[0]
     logger.info("Encrypting %d files", files)
-    bar = progressbar.ProgressBar(max_value=int(files))
+    pbar = progressbar.ProgressBar(max_value=int(files))
 
     for level in range(mLevel, -1, -1):
-        encryptFilesAtLevel(db, crypto, cacheDir, level, bar)
+        encryptFilesAtLevel(db, crypto, cacheDir, level, pbar)
 
-    bar.finish()
+    pbar.finish()
 
 
-def generateDirHashes(db, crypto, cacheDir):
+def generateDirHashes(db, crypto):
     conn = db.conn
     r = conn.execute("SELECT COUNT(*) FROM Files WHERE Dir = 1")
     nDirs = r.fetchone()[0]
     logger.info("Hashing %d directories", nDirs)
     hashes = 0
     unique = 0
-    with progressbar.ProgressBar(max_value=nDirs) as bar:
+    with progressbar.ProgressBar(max_value=nDirs) as pbar:
         z = conn.cursor()
         r = conn.execute("SELECT Inode, Device, LastSet, Names.name, Checksums.ChecksumId, Checksum "
                          "FROM Files "
@@ -236,9 +230,9 @@ def generateDirHashes(db, crypto, cacheDir):
 
                 #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
                 #logger.debug("    Directory contents: %s", str(files))
-                (newHash, newSize) = Util.hashDir(crypto, files, True)
+                (newHash, _) = Util.hashDir(crypto, files, True)
                 #logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
-                bar.update(hashes)
+                pbar.update(hashes)
                 try:
                     if newHash != oldHash:
                         z.execute("UPDATE Checksums SET Checksum = :newHash WHERE ChecksumId = :id", {"newHash": newHash, "id": cksId})
@@ -253,7 +247,7 @@ def makeSig(checksum, regenerator, cacheDir):
     output = cacheDir.open(fname, "wb")
     librsync.signature(data, output)
     output.close()
-    
+
 
 def generateSignatures(db, crypto, cacheDir):
     c = db.conn.cursor()
@@ -268,7 +262,7 @@ def generateSignatures(db, crypto, cacheDir):
     sigs = 0
     sigsGenned = 0
 
-    with progressbar.ProgressBar(max_value=int(n)) as bar:
+    with progressbar.ProgressBar(max_value=int(n)) as pbar:
         batch = r.fetchmany(4096)
         while batch:
             for row in batch:
@@ -279,7 +273,7 @@ def generateSignatures(db, crypto, cacheDir):
                     makeSig(checksum, regenerator, cacheDir)
                     sigsGenned += 1
                 sigs += 1
-                bar.update(sigs)
+                pbar.update(sigs)
             batch = r.fetchmany(4096)
 
 def generateMetadata(db, cacheDir):
@@ -290,16 +284,15 @@ def generateMetadata(db, cacheDir):
     r = c.execute("SELECT Checksum, Size, Compressed, Encrypted, DiskSize, Basis FROM Checksums WHERE IsFile = 1 ORDER BY CheckSum")
     metas = 0
     logger.info("Generating metadata/recovery info for %d files", n)
-    with progressbar.ProgressBar(max_value=int(n)) as bar:
+    with progressbar.ProgressBar(max_value=int(n)) as pbar:
         batch = r.fetchmany(4096)
         while batch:
             for row in batch:
                 # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
                 Util.recordMetaData(cacheDir, row[0], row[1], row[2], row[3], row[4], basis=row[5], logger=logger)
                 metas += 1
-                bar.update(metas)
+                pbar.update(metas)
             batch = r.fetchmany(4096)
-
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
@@ -315,13 +308,13 @@ def processArgs():
     parser.add_argument('--meta',           dest='meta',     action='store_true', default=False,       help='Generate metadata files.  Default=%(default)s')
     parser.add_argument('--all',            dest='all',      action='store_true', default=False,       help='Perform all encyrption steps. Default=%(default)s')
 
-    parser.add_argument('--help', '-h',     action='help');
+    parser.add_argument('--help', '-h',     action='help')
 
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
 
-    if (not (args.names or args.files or args.dirs or args.meta or args.all or args.sigs)):
+    if not (args.names or args.files or args.dirs or args.meta or args.all or args.sigs):
         parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
 
@@ -351,7 +344,7 @@ def main():
     if args.names or args.all:
         encryptFilenames(db, crypto)
     if args.dirs or args.all:
-        generateDirHashes(db, crypto, cacheDir)
+        generateDirHashes(db, crypto)
     if args.sigs or args.all:
         generateSignatures(db, crypto, cacheDir)
     if args.files or args.all:

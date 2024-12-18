@@ -99,6 +99,7 @@ setup(  name                    = 'Tardis-Backup',
             'Operating System :: MacOS :: MacOS X',
             'Operating System :: POSIX',
             'Operating System :: POSIX :: Linux',
+             'System::Archiving::Backup',
         ]
      )
 

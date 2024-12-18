@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config
-import sqlite3
-import argparse, logging
+import argparse
+import logging
 import sys
 import json
 
-import zstandard
 import msgpack
+
+from Tardis import Defaults, Util, Config
 
 logger = None
 MAXDEPTH=16
@@ -91,9 +91,10 @@ def processArgs():
     parser.add_argument("--backup", "-b", help="Backup set to use.  Default: %(default)s", dest='backup', default=Defaults.getDefault('TARDIS_RECENT_SET'))
     parser.add_argument('--output', '-o', dest='output', type=argparse.FileType('w'), default=sys.stdout, help='Output file')
     parser.add_argument('--maxdepth', '-d', dest='maxdepth', default=sys.maxsize, type=int, help='Maximum depth to go')
+    parser.add_argument('--json', '-j', dest='json', default=False, type=bool, const='True', nargs='?', help='Output in JSON format')
     #parser.add_argument('--compress', '-Z', type=bool, dest='compress', default=False, const=True, nargs="?", help='Compress output using zstd')
 
-    parser.add_argument('--help', '-h',     action='help');
+    parser.add_argument('--help', '-h',     action='help')
 
     Util.addGenCompletions(parser)
 
@@ -132,8 +133,10 @@ def main():
         data.append(processDir(db, entry, bset))
     info['files'] = data
 
-    json.dump(info, args.output, indent=0)
-    #msgpack.dump(info, args.output)
+    if args.json:
+        json.dump(info, args.output, indent=0)
+    else:
+        msgpack.dump(info, args.output)
 
 if __name__ == "__main__":
     main()

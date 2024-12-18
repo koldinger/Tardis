@@ -99,7 +99,6 @@ class Messenger:
                 except TimeoutError:
                     # Just swallow the timeout error.   We could just be stuck waiting to the server to respond to a large file.
                     self.recvlogger.error("Timeout encountered in recv loop")
-                    pass
         except RuntimeError as e:
             self.recvlogger.error("Caught Runtime error: %s", e)
             self.recvQ.put(e)

@@ -36,7 +36,6 @@ import argparse
 import time
 
 import termcolor
-import binaryornot.check
 
 import Tardis
 from . import Util
@@ -52,7 +51,6 @@ current = Defaults.getDefault('TARDIS_RECENT_SET')
 
 def parseArgs():
     isatty = os.isatty(sys.stdout.fileno())
-    global args
 
     parser = argparse.ArgumentParser(description='Diff files between current and a Tardis backup, or multiple Tardis versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
     (args, remaining) = Config.parseConfigOptions(parser)
@@ -266,10 +264,10 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
         logger.exception(e)
 
 def main():
-    global logger
+    global logger, args
     tardis = None
     try:
-        parseArgs()
+        args = parseArgs()
         logger = Util.setupLogging(args.verbose)
 
         if len(args.backup) > 2:

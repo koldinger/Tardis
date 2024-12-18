@@ -188,7 +188,7 @@ def doRecovery(regenerator, info, authenticate, path, outname):
     logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
 
     checksum = info['checksum']
-    instream = regenerator.recoverChecksum(checksum, authenticate=False)
+    instream = regenerator.recoverChecksum(checksum, authenticate=authenticate)
 
     if instream:
         hasher = crypt.getHash()
@@ -472,11 +472,11 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
             ckname = i
             if args.recovername:
                 ckname = recoverName(i)
+            logger.info("Recovering checksum %s -> %s", i, ckname)
             # Recover the checksum, but don't attempt to authenticate it.   We'll do that ourselves later
             f = r.recoverChecksum(i, args.auth)
 
             if f:
-                logger.info("Recovering checksum %s", ckname)
             # Generate an output name
                 if not outname:
                     if outputdir:

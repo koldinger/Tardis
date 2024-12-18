@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import time
 import sys
 import argparse
 import magic
@@ -39,21 +38,11 @@ import json
 
 import Tardis
 from Tardis import Util
-from Tardis import TardisCrypto
 from Tardis import Config
-from Tardis import CacheDir
 from Tardis import CompressedBuffer
 
 args = None
 
-#tardis.log:      text/plain
-#tardis.log.br:   application/octet-stream
-#tardis.log.bz2:  application/x-bzip2
-#tardis.log.gz:   application/gzip
-#tardis.log.lzma: application/x-lzma
-#tardis.log.xz:   application/x-xz
-#tardis.log.zst:  application/x-zstd
- 
 def processArgs():
     parser = argparse.ArgumentParser(description='Check contents of the DB against the file system', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
 

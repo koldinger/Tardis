@@ -115,8 +115,6 @@ class Connection:
 
 class ProtocolConnection(Connection):
     sender = None
-    def __init__(self, host, port, protocol, compress, timeout, validate):
-        super().__init__(host, port, protocol, compress, timeout, validate)
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
@@ -165,7 +163,7 @@ class MsgPackConnection(ProtocolConnection):
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
 class QueuedMsgPackConnection(MsgPackConnection):
-    def __init__(self, host, posrt, compress, timeout, validate):
+    def __init__(self, host, port, compress, timeout, validate):
         MsgPackConnection().__init__(self, host, port, compress, timeout, validate)
         self.sender = Messenger.Messenger(self.sender)
         self.sender.run()

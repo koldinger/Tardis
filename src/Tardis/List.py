@@ -48,9 +48,9 @@ from . import TardisDB
 
 columns = None
 columnfmt = None
-args = None
+args: argparse.Namespace
 curcolor = None
-logger = None
+logger: logging.logger
 backupSets = []
 
 line = ''
@@ -626,8 +626,7 @@ def setupDisplay(tardis):
     """
     Calculate display parameters, including creating the list of backupsets that we want to process
     """
-    global columns, columnfmt
-    global backupSets
+    global columns, columnfmt, backupSets
 
     backupSets = list(tardis.listBackupSets())
     if args.range:
