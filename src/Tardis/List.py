@@ -36,6 +36,7 @@ import argparse
 import fnmatch
 import time
 import shutil
+import logging
 
 import parsedatetime
 import termcolor
@@ -50,7 +51,7 @@ columns = None
 columnfmt = None
 args: argparse.Namespace
 curcolor = None
-logger: logging.logger
+logger: logging.Logger
 backupSets = []
 
 line = ''
