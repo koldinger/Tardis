@@ -36,13 +36,13 @@ import argparse
 import fnmatch
 import time
 import shutil
-import functools
+import logging
 
 import parsedatetime
 import termcolor
 
 import Tardis
-from Tardis import TardisCrypto
+from . import TardisCrypto
 from . import Util
 from . import Defaults
 from . import Config
@@ -52,7 +52,7 @@ columns = None
 columnfmt = None
 args: argparse.Namespace
 curcolor = None
-logger: logging.logger
+logger: logging.Logger
 backupSets = []
 
 line = ''
