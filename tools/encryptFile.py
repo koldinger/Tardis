@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,31 +29,28 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, CompressedBuffer
-import sqlite3
 import argparse, logging
 import os.path
 import os
-import sys
-import base64
-import hashlib
-import sys
-import progressbar
 import uuid
 import json
 import shutil
 import traceback
+
+import progressbar
+
+from Tardis import Util, Config, CompressedBuffer
 
 logger = None
 
 class FileSender:
     def __init__(self, output):
         if isinstance(output, str):
-            self.output = file(output, "rw")
+            self.output = open(output, "wb")
         else:
             self.output = output
 
-    def sendMessage(self, message, raw=True):
+    def sendMessage(self, message):
         if not isinstance(message, dict):
             self.output.write(message)
 
@@ -70,7 +67,7 @@ def processArgs():
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=None, nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files')
     parser.add_argument('names',          nargs='*', help="List of pathnames to decrypt")
-    parser.add_argument('--help', '-h',   action='help');
+    parser.add_argument('--help', '-h',   action='help')
 
     Util.addGenCompletions(parser)
 
@@ -81,12 +78,10 @@ def processArgs():
 def processFile(outdir, crypto, name, compress='none', signature=False):
     outname = str(uuid.uuid1())
     outpath = os.path.join(outdir, outname)
-    outfile = open(outpath, "wb")
-    s = FileSender(outfile)
-    infile = open(name, "rb")
-    size, ck, sig = Util.sendData(s, infile, crypto.getContentEncryptor(), hasher=crypto.getHash(), signature=True, compress=compress)
-    infile.close()
-    outfile.close()
+    with open(outpath, "wb") as outfile:
+        s = FileSender(outfile)
+        with open(name, "rb") as infile:
+            size, ck, sig = Util.sendData(s, infile, crypto.getContentEncryptor(), hasher=crypto.getHash(), signature=True, compress=compress)
     newpath = os.path.join(outdir, ck)
     print(name, size, ck, outpath)
     os.rename(outpath, newpath)
@@ -104,10 +99,10 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=False)
 
-    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     if args.input:
-        files = json.load(open(args.input, "r"))
+        files = json.load(open(args.input, 'r', encoding='utf8'))
         for x in files:
             try:
                 processFile(args.output, crypto, x, args.compress, args.signature)

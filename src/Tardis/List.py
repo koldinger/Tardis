@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@ import argparse
 import fnmatch
 import time
 import shutil
+import logging
 
 import parsedatetime
 import termcolor
@@ -48,9 +49,9 @@ from . import TardisDB
 
 columns = None
 columnfmt = None
-args = None
+args: argparse.Namespace
 curcolor = None
-logger = None
+logger: logging.Logger
 backupSets = []
 
 line = ''
@@ -626,8 +627,7 @@ def setupDisplay(tardis):
     """
     Calculate display parameters, including creating the list of backupsets that we want to process
     """
-    global columns, columnfmt
-    global backupSets
+    global columns, columnfmt, backupSets
 
     backupSets = list(tardis.listBackupSets())
     if args.range:

@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -99,7 +99,6 @@ class Messenger:
                 except TimeoutError:
                     # Just swallow the timeout error.   We could just be stuck waiting to the server to respond to a large file.
                     self.recvlogger.error("Timeout encountered in recv loop")
-                    pass
         except RuntimeError as e:
             self.recvlogger.error("Caught Runtime error: %s", e)
             self.recvQ.put(e)

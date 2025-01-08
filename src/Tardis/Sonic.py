@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -608,7 +608,7 @@ def checkSanity(db, cache, crypt):
                         names = sorted(map(crypt.decryptFilename, names))
                         print(i, names)
 
-            # And get rid of it, 
+            # And get rid of it,
             if args.cleanup:
                 if args.confirm():
                     for i in inCache:

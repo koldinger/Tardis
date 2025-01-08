@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,10 +29,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-sys.path.insert(0, '.')
-
-from Tardis import Defaults, Util, TardisDB, TardisCrypto
 import os.path
 import logging
 import argparse
@@ -40,8 +36,9 @@ import hashlib
 import base64
 
 import srp
-
 from Cryptodome.Cipher import AES
+
+from Tardis import Defaults, Util, TardisDB, TardisCrypto
 
 def getToken(db):
     return db._getConfigValue('Token')
@@ -54,7 +51,7 @@ def checkToken(db, token):
     s = hashlib.sha1()
     s.update(token)
     tokenhash = s.hexdigest()
-    return (dbToken == tokenhash)
+    return dbToken == tokenhash
 
 def createToken(crypto, client):
     cipher = AES.new(crypto._tokenKey, AES.MODE_ECB)
@@ -92,7 +89,7 @@ def main():
     token = createToken(crypto, args.client)
     if not checkToken(db, token):
         logger.error("Password does not match")
-        sys.exit(1)
+        raise Exception()
 
     salt, vkey = srp.create_salted_verification_key(args.client, password)
     db.setSrpValues(salt, vkey)

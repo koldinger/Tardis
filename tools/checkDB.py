@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -32,11 +32,9 @@
 import os, os.path
 import sys
 import sqlite3
-import gettext
 import glob
 
 from Tardis import CacheDir
-from Tardis import Util
 
 def hexcount(lower, upper, digits):
     fmt = "%0" + str(digits) + "x"

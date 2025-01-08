@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2023, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,28 +29,24 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Defaults, Util, TardisDB, TardisCrypto, CacheDir, librsync, Regenerator, Config, RemoteDB
-import sqlite3
-import argparse, logging
+import argparse
+import logging
 import os.path
 import os
 import sys
-import base64
-import hashlib
-import progressbar
-import urllib.parse
 import binascii
+
+from Tardis import Util, Config
 
 logger = None
 
 def reader(quiet):
-    import readline
     prompt = '' if quiet else '--> '
     try:
         while True:
             yield input(prompt)
     except EOFError:
-        return
+        pass
 
 def decryptFile(infile, outfile, size, crypt, authenticate=True):
     # Get the IV, if it's not specified.
@@ -82,9 +78,9 @@ def decryptFile(infile, outfile, size, crypt, authenticate=True):
             if authenticate:
                 try:
                     encryptor.verify(digest)
-                except:
+                except Exception:
                     logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), binascii.hexlify(encryptor.digest()))
-                    raise RegenerateException("HMAC did not authenticate.")
+                    raise Exception("HMAC did not authenticate.")
         outfile.write(pt)
         rem -= readsize
 
@@ -98,7 +94,7 @@ def processArgs():
     parser.add_argument('--output', '-o',       type=argparse.FileType('wb'), default=sys.stdout.buffer, help='output file (default: stdout)')
     parser.add_argument('--from_cache', '-c',   default=False, action='store_true', help='Read a cached file')
     parser.add_argument('--noauth', '-n',       default=False, action='store_true', help='Do not authenticate file info')
-    parser.add_argument('--help', '-h',   action='help');
+    parser.add_argument('--help', '-h',   action='help')
     parser.add_argument('name',           nargs=1, help="Pathnames to decrypt")
 
     Util.addGenCompletions(parser)
@@ -114,7 +110,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    (tardis, cache, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, cache, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     name = args.name[0]
 

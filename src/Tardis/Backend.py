@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ from . import Util
 from . import Protocol
 from . import log
 
-#from icecream import ic 
+#from icecream import ic
 #ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
@@ -256,7 +256,6 @@ class Backend:
             old = dirhash[name]
         else:
             old = None
-        fromPartial = False
 
         if f["dir"] == 1:
             #self.logger.debug("Is a directory: %s", name)
@@ -279,7 +278,6 @@ class Backend:
                 tmp = self.db.getFileFromPartialBackup(f)
                 if tmp:
                     old = tmp
-                    fromPartial = old['lastset']
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
 
             if old:
@@ -819,8 +817,7 @@ class Backend:
             if files:
                 self.purged = True
             return ({"message": Protocol.Responses.ACKPRG, "status": "OK"}, True)
-        else:
-            return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
+        return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
 
     def processClone(self, message):
         """ Clone an entire directory """

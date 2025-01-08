@@ -2,7 +2,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,16 +29,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from Tardis import Util, Config 
 import argparse
 import logging
+
+from Tardis import Util, Config
 
 def computeChecksum(name, crypto):
     with open(name, "rb") as file:
         data = file.read()
-        hash = crypto.getHash()
-        hash.update(data)
-        return hash.hexdigest()
+        hsh = crypto.getHash()
+        hsh.update(data)
+        return hsh.hexdigest()
 
 def process_args():
     parser = argparse.ArgumentParser(description="Generate checksums from files for a specific job", add_help=True)
@@ -58,13 +59,13 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, f"Password for {args.client}")
     logging.basicConfig()
 
-    (_, _, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     maxlen = max(map(len, args.files))
 
     for i in args.files:
-        hash = computeChecksum(i, crypto)
-        print(f"{i:{maxlen}} :\t{hash}")
+        hsh = computeChecksum(i, crypto)
+        print(f"{i:{maxlen}} :\t{hsh}")
 
 if __name__ == "__main__":
     main()
