@@ -2288,7 +2288,7 @@ def initialize():
         # Calculate the base directories
         directories = list(itertools.chain.from_iterable(list(map(glob.glob, list(map(Util.fullPath, args.directories))))))
         if args.basepath == 'common':
-            rootdir = os.path.commonprefix(directories)
+            rootdir = os.path.commonpath(directories)
             # If the rootdir is actually one of the directories, back off one directory
             if rootdir in directories:
                 rootdir  = os.path.split(rootdir)[0]
