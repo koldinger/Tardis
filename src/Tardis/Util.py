@@ -508,6 +508,7 @@ def _removeOrphans(db, cache):
     # Get a list of orphan'd files
     orphans = db.listOrphanChecksums(isFile=True)
     for cksum in orphans:
+        #cksum = row[0]
         logger.debug("Removing %s", cksum)
         # And remove them each....
         try:

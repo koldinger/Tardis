@@ -40,30 +40,36 @@ def upgrade(conn, logger):
 
     conn.execute(
         """
-            CREATE TABLE IF NOT EXISTS Users (
-            UserId      INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name        TEXT UNIQUE NOT NULL
-            );
-        """
+        CREATE TABLE IF NOT EXISTS Users (
+        UserId      INTEGER PRIMARY KEY AUTOINCREMENT,
+        NameId      INTEGER REFERENCES Names(NameId)
         )
-
-    conn.execute(
-        """
-            CREATE TABLE IF NOT EXISTS Groups (
-            GroupId     INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name        TEXT UNIQUE NOT NULL
-            );
         """
     )
 
-    conn.execute("ALTER TABLE Files ADD COLUMN UserID INTEGER;")
-    conn.execute("ALTER TABLE Files ADD COLUMN GroupID INTEGER;")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS Groups (
+        GroupId     INTEGER PRIMARY KEY AUTOINCREMENT,
+        NameId      INTEGER REFERENCES Names(NameId)
+        )
+        """
+    )
 
-    conn.execute("INSERT INTO Users (Name) SELECT DISTINCT Uid FROM Files;")
-    conn.execute("INSERT INTO Groups (Name) SELECT DISTINCT Gid FROM Files;")
+    try:
+        conn.execute("ALTER TABLE Files ADD COLUMN UserID INTEGER;")
+        conn.execute("ALTER TABLE Files ADD COLUMN GroupID INTEGER;")
+    except Exception as e:
+        print("Caught exception", e)
 
-    conn.execute("UPDATE Files SET UserID = (SELECT UserID FROM Users WHERE Users.Name = Files.UID);")
-    conn.execute("UPDATE Files SET GroupID = (SELECT GroupID FROM Groups WHERE Groups.Name = Files.GID);")
+    # Here we put the name insertion but it really doesn't work, because we really want to insert
+    # encrypted names.
+
+    conn.execute("INSERT INTO Users (NameId) SELECT DISTINCT Uid FROM Files;")
+    conn.execute("INSERT INTO Groups (NameId) SELECT DISTINCT Gid FROM Files;")
+
+    conn.execute("UPDATE Files SET UserID = (SELECT UserID FROM Users WHERE Users.NameId = Files.UID);")
+    conn.execute("UPDATE Files SET GroupID = (SELECT GroupID FROM Groups WHERE Groups.NameId = Files.GID);")
 
     convertutils.updateVersion(conn, version, logger)
     conn.commit()
