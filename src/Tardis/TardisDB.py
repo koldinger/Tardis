@@ -90,7 +90,7 @@ _fileInfoFields =  dedent("""
     Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
     MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
     FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, 
-    C2.Checksum AS xattrs, C3.Checksum AS acl, N2.NameId AS username, N3.Name AS groupname
+    C2.Checksum AS xattrs, C3.Checksum AS acl, N2.Name AS username, N3.Name AS groupname
     """)
 
 _fileInfoJoin = dedent("""
@@ -99,7 +99,8 @@ _fileInfoJoin = dedent("""
     LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) 
     LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId 
     LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId 
-    JOIN Users USING (UserID) JOIN Groups USING (GroupID) 
+    JOIN Users USING (UserID)
+    JOIN Groups USING (GroupID) 
     JOIN Names N2 ON Users.NameID = N2.NameID
     JOIN Names N3 ON Groups.NameID = N3.NameID
     """)
