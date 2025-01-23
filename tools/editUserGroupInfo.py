@@ -31,8 +31,6 @@
 
 import argparse
 import logging
-import sys
-import yaml
 import re
 
 import pwd
@@ -116,14 +114,13 @@ def editUserNames(tardis, crypt):
     users = list(tardis.getUsers())
     data = {}
     for i in users:
-        proposed = None
         try:
             pwdEntry = pwd.getpwuid(i['NameId'])
             proposed = pwdEntry[0]
         except: 
             proposed = None
         curname = crypt.decryptFilename(i['Name'])
-        userId = i['UserID']
+        userId = i['UserId']
         #print(f"{userId} {curname} {proposed}")
         data[userId] = Entry(curname, proposed, userId, i['NameId'], curname)
 
@@ -136,12 +133,13 @@ def editGroupNames(tardis, crypt):
     groups = list(tardis.getGroups())
     data = {}
     for i in groups:
-        proposed = None
-        grpEntry = grp.getgrgid(i['NameId'])
-        if grpEntry:
+        try:
+            grpEntry = grp.getgrgid(i['NameId'])
             proposed = grpEntry[0]
+        except: 
+            proposed = None
         curname = crypt.decryptFilename(i['Name'])
-        grpId = i['GroupID']
+        grpId = i['GroupId']
         #print(f"{grpId} {curname} {proposed}")
         data[grpId] = Entry(curname, proposed, grpId, i['NameId'], curname)
 

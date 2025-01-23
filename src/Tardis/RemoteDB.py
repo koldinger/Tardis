@@ -84,7 +84,6 @@ def fs_encode(val):
 
 class RemoteDB:
     """ Proxy class to retrieve objects via HTTP queries """
-    session = None
     headers = {}
     prevBackupSet = None
 
@@ -119,6 +118,9 @@ class RemoteDB:
     #    except Exception as e:
     #        self.logger.warning("Caught exception closing: " + str(e))
     #        self.logger.exception(e)
+
+    def buildURL(self, function, *args):
+        return self.baseURL + '/'.join([function] + list(map(str, args)))
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
@@ -499,12 +501,36 @@ class RemoteDB:
         bset = self._bset(current)
         r = self.session.get(self.baseURL + 'getTags/' + bset, headers=self.headers)
         r.raise_for_status()
+        return r.json() 
+
+    @reconnect
+    def getUsers(self):
+        r = self.session.get(self.baseURL + 'getUsers', headers=self.headers)
+        r.raise_for_status()
+        yield from r.json()
+
+    @reconnect
+    def setUserInfo(self, userId, name):
+        r = self.session.get(self.buildURL('setUserInfo', userId, name), headers=self.headers)
+        r.raise_for_status()
         return r.json()
 
     @reconnect
+    def getGroups(self):
+        r = self.session.get(self.baseURL + 'getGroups', headers=self.headers)
+        r.raise_for_status()
+        yield from r.json()
+
+    @reconnect
+    def setGroupInfo(self, groupId, name):
+        r = self.session.get(self.buildURL('setGroupInfo', groupId, name), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+        ...
+
+    @reconnect
     def setLock(self, locked, current=False):
-        bset = self._bset(current)
-        r = self.session.get(self.baseURL + 'setLock/' + bset + '/' + str(int(locked)), headers=self.headers)
+        r = self.session.get(self.baseURL + 'setLock')
         r.raise_for_status()
         return r.json()
 
