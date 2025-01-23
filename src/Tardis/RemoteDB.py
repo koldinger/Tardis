@@ -46,8 +46,10 @@ import requests_cache
 import Tardis
 from . import TardisDB
 
-
 requests_cache.install_cache(backend='memory', expire_after=30.0)
+
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 # Define a decorator that will wrap our functions in a retry mechanism
 # so that if the connection to the server fails, we can automatically
@@ -120,7 +122,7 @@ class RemoteDB:
     #        self.logger.exception(e)
 
     def buildURL(self, function, *args):
-        return self.baseURL + '/'.join([function] + list(map(str, args)))
+        return ic(self.baseURL + '/'.join([function] + list(map(str, args))))
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
@@ -446,6 +448,7 @@ class RemoteDB:
     @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
+        timestamp = float(timestamp | 0)
         r = self.session.get(self.buildURL('listPurgeSets', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -453,6 +456,7 @@ class RemoteDB:
     @reconnect
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
+        timestamp = float(timestamp | 0)
         r = self.session.get(self.buildURL('listPurgeIncomplete', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -460,6 +464,7 @@ class RemoteDB:
     @reconnect
     def purgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
+        timestamp = float(timestamp | 0)
         r = self.session.get(self.buildURL('purgeSets', bset, priority, timestamp), verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -467,6 +472,7 @@ class RemoteDB:
     @reconnect
     def purgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
+        timestamp = float(timestamp | 0)
         r = self.session.get(self.buildURL('purgeIncomplete', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
