@@ -37,7 +37,7 @@ from Tardis import Util, librsync, Regenerator, Config
 
 logger: logging.Logger
 
-def encryptFilenames(db, crypto):
+def encryptNames(db, crypto):
     conn = db.conn
     c = conn.cursor()
     c2 = conn.cursor()
@@ -53,7 +53,7 @@ def encryptFilenames(db, crypto):
                 if row is None:
                     break
                 (name, nameid) = row
-                newname = crypto.encryptFilename(name)
+                newname = crypto.encryptName(name)
                 c2.execute('UPDATE Names SET Name = ? WHERE NameID = ?', (newname, nameid))
                 names = names + 1
                 pbar.update(names)
@@ -80,7 +80,7 @@ def encryptNames(db, crypto, table, keyField):
                 if row is None:
                     break
                 (name, nameid) = row
-                newname = crypto.encryptFilename(name)
+                newname = crypto.encryptName(name)
                 c2.execute(f'UPDATE {table} SET Name = "{newname}" WHERE {keyField} = {nameid}')
                 names = names + 1
                 bar.update(names)
@@ -257,7 +257,7 @@ def generateDirHashes(db, crypto):
                 lastHash = oldHash
                 unique += 1
 
-                #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptFilename(row['Name']),inode, device, last, oldHash, cksId)
+                #logger.debug("Rehashing directory %s (%d, %d)@%d: %s(%d)", crypto.decryptName(row['Name']),inode, device, last, oldHash, cksId)
                 #logger.debug("    Directory contents: %s", str(files))
                 (newHash, _) = Util.hashDir(crypto, files, True)
                 #logger.info("Rehashed %s => %s.  %d files", oldHash, newHash, newSize)
@@ -372,7 +372,7 @@ def main():
     #cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
 
     if args.names or args.all:
-        encryptFilenames(db, crypto)
+        encryptNames(db, crypto)
     if args.usergroup or args.all:
         encryptNames(db, crypto, 'Users', 'UserID')
         encryptNames(db, crypto, 'Groups', 'GroupID')

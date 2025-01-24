@@ -245,7 +245,7 @@ def findDirInRoot(tardis, bset, path, crypt=None):
         name = comps[i]
         #logger.debug("Looking for root directory %s (%d)", name, i)
         if crypt:
-            name = crypt.encryptFilename(name)
+            name = crypt.encryptName(name)
         info = tardis.getFileInfoByName(name, (0, 0), bset)
         if info and info['dir'] == 1:
             return i
@@ -936,8 +936,8 @@ def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
         f = list(files)
-        #print map(crypt.decryptFilename, [x['name'] for x in f])
-        filenames = sorted([crypt.decryptFilename(n) for n in [x['name'] for x in f]])
+        #print map(crypt.decryptName, [x['name'] for x in f])
+        filenames = sorted([crypt.decryptName(n) for n in [x['name'] for x in f]])
     else:
         filenames = sorted([x["name"] for x in files])
 

@@ -119,7 +119,7 @@ def editUserNames(tardis, crypt):
             proposed = pwdEntry[0]
         except: 
             proposed = None
-        curname = crypt.decryptFilename(i['Name'])
+        curname = crypt.decryptName(i['Name'])
         userId = i['UserId']
         #print(f"{userId} {curname} {proposed}")
         data[userId] = Entry(curname, proposed, userId, i['NameId'], curname)
@@ -127,7 +127,7 @@ def editUserNames(tardis, crypt):
     data = editData(data)
     if data:
         for key, value in data.items():
-            tardis.setUserInfo(key, crypt.encryptFilename(value.current))
+            tardis.setUserInfo(key, crypt.encryptName(value.current))
 
 def editGroupNames(tardis, crypt):
     groups = list(tardis.getGroups())
@@ -138,7 +138,7 @@ def editGroupNames(tardis, crypt):
             proposed = grpEntry[0]
         except: 
             proposed = None
-        curname = crypt.decryptFilename(i['Name'])
+        curname = crypt.decryptName(i['Name'])
         grpId = i['GroupId']
         #print(f"{grpId} {curname} {proposed}")
         data[grpId] = Entry(curname, proposed, grpId, i['NameId'], curname)
@@ -146,7 +146,7 @@ def editGroupNames(tardis, crypt):
     data = editData(data)
     if data:
         for key, value in data.items():
-            tardis.setGroupInfo(key, crypt.encryptFilename(value.current))
+            tardis.setGroupInfo(key, crypt.encryptName(value.current))
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Decrypt a File', fromfile_prefix_chars='@', add_help=False)

@@ -272,11 +272,11 @@ class CryptoScheme(ABC):
         return None
 
     @abstractmethod
-    def encryptFilename(self, name):
+    def encryptName(self, name):
         return name
 
     @abstractmethod
-    def decryptFilename(self, name):
+    def decryptName(self, name):
         return name
 
     @abstractmethod
@@ -360,10 +360,10 @@ class Crypto_Null(CryptoScheme):
     def getContentEncryptor(self, iv=None):
         return NullEncryptor()
 
-    def encryptFilename(self, name):
+    def encryptName(self, name):
         return name
 
-    def decryptFilename(self, name):
+    def decryptName(self, name):
         if isinstance(name, bytes):
             return name.decode('utf8')
         return name
@@ -497,7 +497,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [self.encryptFilename(x) for x in comps]
+        enccomps = [self.encryptName(x) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
@@ -509,17 +509,17 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         if comps[0] == '':
             rooted = True
             comps.pop(0)
-        enccomps = [self.decryptFilename(x) for x in comps]
+        enccomps = [self.decryptName(x) for x in comps]
         encpath = reduce(os.path.join, enccomps)
         if rooted:
             encpath = os.path.join(os.sep, encpath)
         return encpath
 
-    def encryptFilename(self, name):
+    def encryptName(self, name):
         n = self.padzero(bytes(name, 'utf8'))
         return str(base64.b64encode(self._filenameEnc.encrypt(n), self._altchars), 'utf8')
 
-    def decryptFilename(self, name):
+    def decryptName(self, name):
         return str(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)), 'utf8').rstrip('\0')
 
     def genKeys(self):
@@ -575,11 +575,11 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
         tag   = value[-cipher.block_size:]
         return cipher.decrypt_and_verify(ctext, tag)
 
-    def encryptFilename(self, name):
+    def encryptName(self, name):
         encrypted = self._encryptSIV(self._filenameKey, name.encode('utf8'))
         return base64.b64encode(encrypted, self._altchars).decode('utf8')
 
-    def decryptFilename(self, name):
+    def decryptName(self, name):
         return self._decryptSIV(self._filenameKey, base64.b64decode(name, self._altchars)).decode('utf8')
 
     def genKeys(self):
@@ -681,9 +681,9 @@ if __name__ == '__main__':
             d.verify(e.digest())
 
             print("--- Testing Filename Encryptor ---")
-            cname = c.encryptFilename(fname)
+            cname = c.encryptName(fname)
             #print(cf)
-            plainname = c.decryptFilename(cname)
+            plainname = c.decryptName(cname)
 
             assert plainname == fname
 

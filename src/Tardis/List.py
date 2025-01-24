@@ -42,7 +42,6 @@ import parsedatetime
 import termcolor
 
 import Tardis
-from . import TardisCrypto
 from . import Util
 from . import Defaults
 from . import Config
@@ -191,7 +190,7 @@ def collectDirContents(tardis, dirlist, crypt):
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
         dirInfo = {}
         for y in x:
-            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'])
+            name = str(crypt.decryptName(y['name']) if crypt else y['name'])
             dirInfo[name] = y
             names.add(name)
         contents[bset['backupset']] = dirInfo
@@ -240,7 +239,7 @@ def collectDirContents2(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             logger.debug("Processing %s", y['name'])
-            name = Util.asString(crypt.decryptFilename(y['name'])) if crypt else Util.asString(y['name'])
+            name = Util.asString(crypt.decryptName(y['name'])) if crypt else Util.asString(y['name'])
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:
@@ -316,8 +315,8 @@ def printit(info, name, color, gone, crypt):
                 fsize = f"{int(info['size']):8}"
 
         mode = stat.filemode(info['mode'])
-        group = crypt.decryptFilename(info['groupname'])
-        owner = crypt.decryptFilename(info['username'])
+        group = crypt.decryptName(info['groupname'])
+        owner = crypt.decryptName(info['username'])
         mtime = Util.formatTime(info['mtime'])
         nlinks = info['nlinks']
 

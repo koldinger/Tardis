@@ -169,7 +169,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
     names1 = ([x['name'] for x in entries1])
     if crypt:
-        names1 = list(map(crypt.decryptFilename, names1))
+        names1 = list(map(crypt.decryptName, names1))
     #names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
@@ -178,7 +178,7 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
         entries2 = tardis.readDirectory((info2['inode'], info2['device']), bsets[1]['backupset'])
         names2 = [x['name'] for x in entries2]
         if crypt:
-            names2 = list(map(crypt.decryptFilename, names2))
+            names2 = list(map(crypt.decryptName, names2))
         names2 = [x.encode('utf-8') for x in names2]
         names2 = sorted(names2)
         otherName = bsets[1]['name']
