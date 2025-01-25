@@ -51,9 +51,9 @@ class Entry:
     old: str|None
 
 def printData(data):
-    print(f"{'Key':4}: {'System Name':20} {'Current Name':20}")
+    print(f"{'Key':4}: {'ID':5}: {'System Name':20} {'Current Name':20}")
     for k, v in sorted(data.items()):
-        print(f"{k:4}: {(v.proposed or ''):20} {(v.current or ''):20}")
+        print(f"{k:4}: {v.nameid:5}: {(v.proposed or ''):20} {(v.current or ''):20}")
 
 def editEntry(data, key):
     entry = data.get(key, None)
@@ -89,6 +89,7 @@ def asint(x):
 def editData(data):
     while True:
         printData(data)
+        print("Note: ID May be the User/Group ID, especially if the current ID is blank or not appopriate")
         key = input("Line to edit (S to use all system names, C to use all current names, Q to quit, W to write and quit): ").strip()
         
         match key.lower():
