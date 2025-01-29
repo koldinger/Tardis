@@ -34,6 +34,7 @@ import os.path
 import logging
 import logging.handlers
 import glob
+import re
 import itertools
 import json
 import argparse
@@ -387,14 +388,13 @@ def checkMessage(message, expected):
 
 def filelist(dirname, excludes, skipfile):
     """ List the files in a directory, except those that match something in a set of patterns """
-    files = os.scandir(dirname)
+    excludeObj = compileExcludes(excludes)
+    files = itertools.filterfalse(lambda x: excludeObj.match(x.path), os.scandir(dirname))
     for f in files:
         # if it's a directory, and there's a skipfile in it, then just skip the directory
         if f.is_dir() and os.path.lexists(os.path.join(f, skipfile)):
             continue
-        # If the file name is not in the excludes list, yield it.
-        if all(not p.match(f.path) for p in excludes):
-            yield f
+        yield f
 
 def msgInfo(resp=None):
     if resp is None:
@@ -458,10 +458,7 @@ def processChecksums(inodes):
 def logFileInfo(i, c):
     (x, name) = inodeDB.get(i)
     if name:
-        if "size" in x:
-            size = x["size"]
-        else:
-            size = 0
+        size = x.get('size', 0)
         size = Util.fmtSize(size, suffixes=['', 'KB', 'MB', 'GB', 'TB', 'PB'])
         logger.log(log.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
         cname = crypt.encryptPath(name)
@@ -653,7 +650,6 @@ def sendContent(inode, reportType):
         logger.debug("SendContent: %s %s %s", inode, reportType, getInodeDBName(inode))
     if args.loginodes:
         args.loginodes.write(f"SendContent: {inode} {reportType} {getInodeDBName(inode)}\n".encode('utf8'))
-    #if inode in inodeDB:
     try:
         checksum = None
         (fileInfo, pathname) = inodeDB.get(inode)
@@ -870,7 +866,6 @@ def handleAckDir(message):
 def pushFiles():
     global allContent, allDelta, allCkSum, allRefresh, allDone
     logger.debug("Pushing files")
-    # If checksum content in NOT specified, send the data for each file
     if args.loginodes:
         args.loginodes.write("Pushing Files\n".encode('utf8'))
         args.loginodes.write(f"AllContent: {len(allContent)}: {str(allContent)}\n".encode('utf8'))
@@ -1213,46 +1208,46 @@ def setOutstanding(number):
 
 processedDirs = set()
 
-def processDirectory(dir, top, depth=0, excludes=None):
+def processDirectory(path, top, depth=0, excludes=None):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
     excludes = excludes or []
 
     newdepth = max(depth - 1, 0)
 
-    setProgress("Dir:", dir)
+    setProgress("Dir:", path)
 
     try:
-        s = os.lstat(dir)
+        s = os.lstat(path)
         if not stat.S_ISDIR(s.st_mode):
             return
 
         # Mark that we've processed it before attempting to determine if we actually should
-        processedDirs.add(dir)
+        processedDirs.add(path)
 
-        if dir in excludeDirs:
-            logger.debug("%s excluded.  Skipping", dir)
+        if path in excludeDirs:
+            logger.debug("%s excluded.  Skipping", path)
             return
 
         # Return if a skipfile exists.   Realistically this
         # Should happen because we should have handled it in the filelist for then
         # directory, above, but just in case, check it
-        if os.path.lexists(os.path.join(dir, args.skipfile)):
-            logger.debug("Skip file found.  Skipping %s", dir)
+        if os.path.lexists(os.path.join(path, args.skipfile)):
+            logger.debug("Skip file found.  Skipping %s", path)
             return
 
-        if args.skipcaches and os.path.lexists(os.path.join(dir, 'CACHEDIR.TAG')):
+        if args.skipcaches and os.path.lexists(os.path.join(path, 'CACHEDIR.TAG')):
             logger.debug("CACHEDIR.TAG file found.  Analyzing")
             try:
-                with open(os.path.join(dir, 'CACHEDIR.TAG'), 'r', encoding='ascii') as f:
+                with open(os.path.join(path, 'CACHEDIR.TAG'), 'r', encoding='ascii') as f:
                     line = f.readline()
                     if line.startswith('Signature: 8a477f597d28d172789f06886806bc55'):
                         logger.debug("Valid CACHEDIR.TAG file found.  Skipping %s", dir)
                         return
             except Exception as e:
-                logger.warning("Could not read %s.  Backing up directory %s", os.path.join(dir, "CACHEDIR.TAG"), dir)
+                logger.warning("Could not read %s.  Backing up directory %s", os.path.join(path, "CACHEDIR.TAG"), path)
                 exceptionLogger.log(e)
 
-        (files, subdirs, subexcludes) = getDirContents(dir, s, excludes)
+        (files, subdirs, subexcludes) = getDirContents(path, s, excludes)
 
         h = Util.hashDir(crypt, files)
         #logger.debug("Dir: %s (%d, %d): Hash: %s Size: %d.", Util.shortPath(dir), s.st_ino, s.st_dev, h[0], h[1])
@@ -1286,18 +1281,18 @@ def processDirectory(dir, top, depth=0, excludes=None):
             if oldFiles:
                 # There are oldfiles.  Hash them.
                 if logger.isEnabledFor(log.DIRS):
-                    logger.log(log.DIRS, "[A]: %s", Util.shortPath(dir))
-                cloneDir(s.st_ino, s.st_dev, oldFiles, dir)
+                    logger.log(log.DIRS, "[A]: %s", Util.shortPath(path))
+                cloneDir(s.st_ino, s.st_dev, oldFiles, path)
             else:
                 if logger.isEnabledFor(log.DIRS):
-                    logger.log(log.DIRS, "[B]: %s", Util.shortPath(dir))
-            sendDirChunks(os.path.relpath(dir, top), (s.st_ino, s.st_dev), newFiles)
+                    logger.log(log.DIRS, "[B]: %s", Util.shortPath(path))
+            sendDirChunks(os.path.relpath(path, top), (s.st_ino, s.st_dev), newFiles)
 
         else:
             # everything is old
             if logger.isEnabledFor(log.DIRS):
-                logger.log(log.DIRS, "[C]: %s", Util.shortPath(dir))
-            cloneDir(s.st_ino, s.st_dev, oldFiles, dir, info=h)
+                logger.log(log.DIRS, "[C]: %s", Util.shortPath(path))
+            cloneDir(s.st_ino, s.st_dev, oldFiles, path, info=h)
 
         # Make sure we're not at maximum depth
         if depth != 1:
@@ -1309,7 +1304,7 @@ def processDirectory(dir, top, depth=0, excludes=None):
                 dirJob = DirectoryJob(subdir, top, newdepth, subexcludes)
                 directoryQueue.appendleft(dirJob)
     except OSError as e:
-        logger.error("Error handling directory: %s: %s", dir, str(e))
+        logger.error("Error handling directory: %s: %s", path, str(e))
         exceptionLogger.log(e)
         raise ExitRecursionException(e)
         #traceback.print_exc()
@@ -1404,12 +1399,19 @@ def setPurgeValues():
                 raise Exception(f"Could not parse --keep-time argument: {args.purgetime} ")
 
 
-@functools.lru_cache(maxsize=128)
 def mkExcludePattern(pattern):
     logger.debug("Excluding %s", pattern)
     if not pattern.startswith('/'):
         pattern = '/**/' + pattern
-    return wildmatch.translate(pattern)
+    return pattern
+
+@functools.lru_cache(maxsize=512)
+def _doCompile(string):
+    return wildmatch.translate(string)
+
+def compileExcludes(patterns):
+    pattern = "|".join(patterns)
+    return _doCompile(pattern)
 
 def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
