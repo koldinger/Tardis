@@ -48,8 +48,8 @@ from . import TardisDB
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 # Define a decorator that will wrap our functions in a retry mechanism
 # so that if the connection to the server fails, we can automatically
@@ -122,7 +122,7 @@ class RemoteDB:
     #        self.logger.exception(e)
 
     def buildURL(self, function, *args):
-        return ic(self.baseURL + '/'.join([function] + list(map(str, args))))
+        return self.baseURL + '/'.join([function] + list(map(str, args)))
 
     def connect(self):
         self.logger.debug("Creating new connection to %s for %s", self.baseURL, self.host)
