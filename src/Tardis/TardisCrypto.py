@@ -86,8 +86,6 @@ def getCryptoNames(scheme=None):
     return '\n'.join(names)
 
 class HasherMixin:
-    hasher = None
-
     def __init__(self, cipher, hasher):
         self.hasher = hasher
         super().__init__(cipher)
@@ -124,7 +122,6 @@ class HasherMixin:
 
 class EncryptionCompletedException(Exception):
     pass
-
 
 class BlockEncryptor:
     def __init__(self, cipher):
@@ -257,43 +254,43 @@ class CryptoScheme(ABC):
 
     @abstractmethod
     def getCryptoScheme(self):
-        return None
+        pass
 
     @abstractmethod
     def encrypting(self):
-        return False
+        pass
 
     @abstractmethod
     def getContentCipher(self, iv):
-        return None
+        pass
 
     @abstractmethod
     def getContentEncryptor(self, iv):
-        return None
+        pass
 
     @abstractmethod
     def encryptName(self, name):
-        return name
+        pass
 
     @abstractmethod
     def decryptName(self, name):
-        return name
+        pass
 
     @abstractmethod
     def getHash(self):
-        return None
+        pass
 
     @abstractmethod
     def getIV(self):
-        return None
+        pass
 
     @abstractmethod
     def pad(self, data, length=None):
-        return data
+        pass
 
     @abstractmethod
     def unpad(self, data, length=None):
-        return data
+        pass
 
     @abstractmethod
     def checkpad(self, data):
@@ -301,15 +298,15 @@ class CryptoScheme(ABC):
 
     @abstractmethod
     def padzero(self, data, length=None):
-        return
+        pass
 
     @abstractmethod
     def encryptPath(self, path):
-        return path
+        pass
 
     @abstractmethod
     def decryptPath(self, path):
-        return path
+        pass
 
     @abstractmethod
     def genKeys(self):
@@ -321,7 +318,7 @@ class CryptoScheme(ABC):
 
     @abstractmethod
     def getKeys(self):
-        return (None, None)
+        pass
 
 class Crypto_Null(CryptoScheme):
     """
