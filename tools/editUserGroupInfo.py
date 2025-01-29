@@ -50,10 +50,22 @@ class Entry:
     recordId: int
     old: str|None
 
+def myinput(prompt="", default=None, validate=lambda _: True, errmesg="Invalid input"):
+    while True:
+        x = input(prompt)
+        if not x:
+            x = default
+        if validate(x):
+            return x
+        print(errmesg)
+
+def checkName(name):
+    return re.match(r"^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$", name)
+
 def printData(data):
     print(f"{'Key':4}: {'ID':5}: {'System Name':20} {'Current Name':20}")
     for k, v in sorted(data.items()):
-        print(f"{k:4}: {v.nameid:5}: {(v.proposed or ''):20} {(v.current or ''):20}")
+        print(f"{k:4}: {v.recordId:5}: {(v.proposed or ''):20} {(v.current or ''):20}")
 
 def editEntry(data, key):
     entry = data.get(key, None)
@@ -72,11 +84,8 @@ def editEntry(data, key):
                     entry.current = entry.old
                     break
                 case 'e':
-                    value = input("Enter new name: ").strip()
-                    if re.match(r"^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$", value):
-                        entry.current = value
-                        break
-                    print(f"Invalid username: {value}")
+                    value = myinput("Enter new name: ", default=entry.current, validate=checkName, errmesg="").strip()
+                    entry.current = value
                 case 'q':
                     break
 
@@ -90,7 +99,7 @@ def editData(data):
     while True:
         printData(data)
         print("Note: ID May be the User/Group ID, especially if the current ID is blank or not appopriate")
-        key = input("Line to edit (S to use all system names, C to use all current names, Q to quit, W to write and quit): ").strip()
+        key = input("Line to edit (S to use all system names, C to use all current names, U to set unknown names, Q to quit, W to write and quit): ").strip()
         
         match key.lower():
             case 'q':
@@ -105,6 +114,11 @@ def editData(data):
             case 'c':
                 for entry in data.values():
                     entry.current = entry.old
+            case 'u':
+                value = myinput("Name for unknown values: ", default='unknown', validate=checkName)
+                for entry in data.values():
+                    if not entry.current:
+                        entry.current = value
             case value if asint(value) in data.keys():
                 editEntry(data, int(value))
             case value:
@@ -120,7 +134,9 @@ def editUserNames(tardis, crypt):
             proposed = pwdEntry[0]
         except: 
             proposed = None
-        curname = crypt.decryptName(i['Name'])
+        curname = i['Name']
+        if curname:
+            curname = crypt.decryptName(curname)
         userId = i['UserId']
         #print(f"{userId} {curname} {proposed}")
         data[userId] = Entry(curname, proposed, userId, i['NameId'], curname)
@@ -139,7 +155,9 @@ def editGroupNames(tardis, crypt):
             proposed = grpEntry[0]
         except: 
             proposed = None
-        curname = crypt.decryptName(i['Name'])
+        curname = i['Name']
+        if curname:
+            curname = crypt.decryptName(curname)
         grpId = i['GroupId']
         #print(f"{grpId} {curname} {proposed}")
         data[grpId] = Entry(curname, proposed, grpId, i['NameId'], curname)
