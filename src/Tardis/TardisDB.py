@@ -41,6 +41,7 @@ import gzip
 import base64
 from binascii import hexlify, unhexlify
 import importlib.resources
+from textwrap import dedent
 
 import srp
 
@@ -85,17 +86,27 @@ def authenticate(func):
 
 # Be sure to end all these lists with a space.
 
-_fileInfoFields =  "Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, " \
-                   "Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, " \
-                   "MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, UID AS uid, GID AS gid, NLinks AS nlinks, " \
-                   "FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, " \
-                   "C2.Checksum AS xattrs, C3.Checksum AS acl "
+_fileInfoFields =  dedent("""
+    N1.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, 
+    Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
+    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
+    FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, 
+    C2.Checksum AS xattrs, C3.Checksum AS acl, N2.Name AS username, N3.Name AS groupname
+    """)
 
-_fileInfoJoin =    "FROM Files " \
-                   "JOIN Names USING(NameID) "\
-                   "LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) " \
-                   "LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId " \
-                   "LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId "
+_fileInfoJoin = dedent("""
+    FROM Files 
+    JOIN Names N1 USING(NameID) 
+    LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) 
+    LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId 
+    LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId 
+    JOIN Users USING (UserID)
+    JOIN Groups USING (GroupID) 
+    JOIN Names N2 ON Users.NameID = N2.NameID
+    JOIN Names N3 ON Groups.NameID = N3.NameID
+    """)
+
+
 
 _backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
                        "Priority AS priority, Completed AS completed, Session AS session, Name AS name, Locked AS locked, " \
@@ -108,7 +119,7 @@ _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.Checks
 _checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
                       "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
 
-_schemaVersion = 21
+_schemaVersion = 22
 
 def _addFields(x, y):
     """ Add fields to the end of a dict """
@@ -120,10 +131,7 @@ def _splitpath(path):
     return _splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
 
 def _fetchEm(cursor):
-    while True:
-        batch = cursor.fetchmany(10000)
-        if not batch:
-            break
+    while batch := cursor.fetchmany(10000):
         yield from batch
 
 conversionModules = {}
@@ -132,17 +140,11 @@ conversionModules = {}
 
 class TardisDB:
     """ Main source for all interaction with the Tardis DB """
-    dbName          = None
     db              = None
     currBackupSet   = None
     prevBackupSet   = None
-    dirinodes       = {}
-    backup          = False
     clientId        = None
-    chunksize       = 1000
     journal         = None
-    srpSrv          = None
-    authenticated   = False
 
     def __init__(self, dbname, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False, check_threads=True):
         """ Initialize the connection to a per-machine Tardis Database"""
@@ -153,6 +155,7 @@ class TardisDB:
         self.prevSet = prevSet
         self.journalName = journal
         self.allow_upgrade = allow_upgrade
+        self.authenticated = False
 
         if user  is None: user = -1
         if group is None: group = -1
@@ -328,6 +331,7 @@ class TardisDB:
         try:
             if data is None:
                 data = {}
+            #ic(query)
             ret = self.conn.execute(query, data)
             return ret
         except sqlite3.IntegrityError as e:
@@ -412,8 +416,7 @@ class TardisDB:
     @authenticate
     def checkBackupSetName(self, name):
         """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
-        row = self._executeWithResult("SELECT COUNT(*) FROM Backups WHERE Name = :name",
-                              { "name": name })
+        row = self._executeWithResult("SELECT COUNT(*) FROM Backups WHERE Name = :name", { "name": name })
         return (row[0] == 0)
 
     @authenticate
@@ -422,13 +425,10 @@ class TardisDB:
         backupset = self._bset(current)
         (inode, device) = parent
         self.logger.debug(f"Looking up file by name {name} {parent} {backupset}")
-        row = self._executeWithResult("SELECT " +
-                  _fileInfoFields +
-                  #"FROM Files "
-                  #"JOIN Names ON Files.NameId = Names.NameId "
-                  #"LEFT OUTER JOIN Checksums ON Files.ChecksumId = Checksums.ChecksumId "
-                  _fileInfoJoin +
-                  "WHERE Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
+        row = self._executeWithResult(
+                  "SELECT " +
+                  _fileInfoFields + _fileInfoJoin +
+                  "WHERE N1.Name = :name AND Parent = :parent AND ParentDev = :parentDev AND "
                   ":backup BETWEEN FirstSet AND LastSet",
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return row
@@ -451,7 +451,7 @@ class TardisDB:
             if info:
                 parent = (info["inode"], info["device"])
                 if permchecker:
-                    if not permchecker(info['uid'], info['gid'], info['mode']):
+                    if not permchecker(info['user'], info['group'], info['mode']):
                         raise Exception("File permission denied: " + name)
             else:
                 break
@@ -644,17 +644,48 @@ class TardisDB:
         # General purpose failure
         return None
 
+    @functools.cache
+    def _getUserId(self, user):
+        nameid = self._getNameId(user)
+        row = self._executeWithResult("SELECT UserID FROM Users WHERE UserID = :nameid", {"nameid": nameid})
+        if not row:
+            self.logger.debug("Inserting username %s into Users Table", user)
+            c = self._execute("INSERT INTO Users (NameID) VALUES (:nameid)", {"nameid": nameid})
+            userid = c.lastrowid
+        else:
+            userid = row[0]
+        self.logger.debug("User ID %s -> %d", user, userid)
+        return userid
+
+    @functools.cache
+    def _getGroupId(self, group):
+        nameid = self._getNameId(group)
+        row = self._executeWithResult("SELECT GroupID FROM Groups WHERE NameId = :nameid", {"nameid": nameid})
+        if not row:
+            self.logger.debug("Inserting groupname %s into Groups Table", group)
+            c = self._execute("INSERT INTO Groups (NameID) VALUES (:nameid)", {"nameid": nameid})
+            groupid = c.lastrowid
+        else:
+            groupid = row[0]
+        self.logger.debug("Group ID %s -> %d", group, groupid)
+        return groupid
+
+    @functools.cache
+    def _getUserAndGroup(self, user, group):
+        return self._getUserId(user), self._getGroupId(group)
+
     @authenticate
     def insertFile(self, fileInfo, parent):
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
-        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev}.items())
+        user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
+        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev, "userid": user, "groupid": group}.items())
         temp = _addFields(fields, fileInfo)
         self.setNameID([temp])
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
-                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :nlinks)",
+                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
                       temp)
 
     @authenticate
@@ -713,6 +744,7 @@ class TardisDB:
                                { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
         return cursor.rowcount
 
+    @functools.lru_cache(16 * 1024)
     def _getNameId(self, name, insert=True):
         row = self._executeWithResult("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
         if row:
@@ -869,11 +901,7 @@ class TardisDB:
                           "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                           "Files.LastSet >= :first AND Files.FirstSet <= :last",
                           {"parent": inode, "parentDev": device, "first": first, "last": last})
-        while True:
-            batch = c.fetchmany(self.chunksize)
-            if not batch:
-                break
-            yield from batch
+        return _fetchEm(c)
 
     @authenticate
     def listBackupSets(self):
@@ -883,11 +911,7 @@ class TardisDB:
                           _backupSetInfoFields +
                           _backupSetInfoJoin +
                           "ORDER BY backupset ASC", {})
-        while True:
-            batch = c.fetchmany(self.chunksize)
-            if not batch:
-                break
-            yield from batch
+        return _fetchEm(c)
 
     @authenticate
     def getBackupSetInfoById(self, bset):
@@ -1158,19 +1182,14 @@ class TardisDB:
     @authenticate
     def listOrphanChecksums(self, isFile):
         c = self._execute("SELECT Checksum FROM Checksums "
-                          "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
-                          "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
-                          "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
-                          "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
-                          "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
-                          "AND IsFile = :isfile",
-                          { 'isfile': int(isFile)} )
-        while True:
-            batch = c.fetchmany(self.chunksize)
-            if not batch:
-                break
-            for row in batch:
-                yield row[0]
+                              "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
+                              "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
+                              "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                              "AND IsFile = :isfile",
+                              { 'isfile': int(isFile)} )
+        return map(lambda row: row[0], _fetchEm(c))
 
     @authenticate
     def deleteOrphanChecksums(self, isFile):
@@ -1188,7 +1207,8 @@ class TardisDB:
     def compact(self):
         self.logger.debug("Removing unused names")
         # Purge out any unused names
-        self._execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files) AND NameID NOT IN (SELECT NameID FROM Tags)")
+        c = self._execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files UNION SELECT NameID FROM Tags UNION SELECT NameID FROM Users UNION SELECT NameID FROM Groups")
+        rows = c.rowcount
         vacuumed = False
 
         # Check if we've hit an interval where we want to do a vacuum
@@ -1202,10 +1222,12 @@ class TardisDB:
             vacuumed = True
         self._execute("UPDATE Backups SET Vacuumed = :vacuumed WHERE BackupSet = :backup", {"backup": self.currBackupSet, "vacuumed": vacuumed})
 
+        return rows
+
     @authenticate
     def enumerateChecksums(self, isFile=True):
         c = self._execute("SELECT Checksum FROM Checksums WHERE IsFile = :isfile", {"isfile": int(isFile)})
-        return _fetchEm(c)
+        return map(lambda row: row[0], _fetchEm(c))
 
     @authenticate
     def getChecksumCount(self, isFile=True):
@@ -1251,6 +1273,26 @@ class TardisDB:
             tags.append(row['Name'])
             row = c.fetchone()
         return tags
+
+    @authenticate
+    def getUsers(self):
+        c = self._execute("SELECT UserID, Name, Users.NameId FROM Users LEFT OUTER JOIN Names USING(NameId)", {})
+        return _fetchEm(c)
+
+    @authenticate
+    def setUserInfo(self, userId, name):
+        nameId = self._getNameId(name)
+        self._execute("UPDATE Users SET NameId = :nameid WHERE UserID = :userId", {"nameid": nameId, "userId": userId})
+
+    @authenticate
+    def getGroups(self):
+        c = self._execute("SELECT GroupId, Name, Groups.NameId FROM Groups LEFT OUTER JOIN Names USING(NameId)", {})
+        return _fetchEm(c)
+
+    @authenticate
+    def setGroupInfo(self, groupId, name):
+        nameId = self._getNameId(name)
+        self._execute("UPDATE Groups SET NameId = :nameid WHERE GroupID = :groupId", {"nameid": nameId, "groupId": groupId})
 
     @authenticate
     def setLock(self, locked, current=False):

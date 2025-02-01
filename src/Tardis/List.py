@@ -190,7 +190,7 @@ def collectDirContents(tardis, dirlist, crypt):
         x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
         dirInfo = {}
         for y in x:
-            name = str(crypt.decryptFilename(y['name']) if crypt else y['name'])
+            name = str(crypt.decryptName(y['name']) if crypt else y['name'])
             dirInfo[name] = y
             names.add(name)
         contents[bset['backupset']] = dirInfo
@@ -239,7 +239,7 @@ def collectDirContents2(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             logger.debug("Processing %s", y['name'])
-            name = Util.asString(crypt.decryptFilename(y['name'])) if crypt else Util.asString(y['name'])
+            name = Util.asString(crypt.decryptName(y['name'])) if crypt else Util.asString(y['name'])
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:
@@ -282,7 +282,7 @@ column = 0
 """
 The actual work of printing the data.
 """
-def printit(info, name, color, gone):
+def printit(info, name, color, gone, crypt):
     global column
     fsize = chnlen = inode = cksum = annotation = ''
     mode = group = owner = mtime = nlinks = ''
@@ -315,8 +315,8 @@ def printit(info, name, color, gone):
                 fsize = f"{int(info['size']):8}"
 
         mode = stat.filemode(info['mode'])
-        group = Util.getGroupName(info['gid'])
-        owner = Util.getUserId(info['uid'])
+        group = crypt.decryptName(info['groupname'])
+        owner = crypt.decryptName(info['username'])
         mtime = Util.formatTime(info['mtime'])
         nlinks = info['nlinks']
 
@@ -362,7 +362,7 @@ def printit(info, name, color, gone):
             eol = False
         doprint(columnfmt % name, color, eol=eol)
 
-def printVersions(fInfos):
+def printVersions(fInfos, crypt):
     """
     Print info about each version of the file that exists
     Doesn't actually do the printing, but calls printit to do it.
@@ -417,10 +417,10 @@ def printVersions(fInfos):
             continue
 
         logger.debug("Bset: %s", bset)
-        printit(info, bset['name'], color, gone)
+        printit(info, bset['name'], color, gone, crypt)
 
     if args.versions == 'last':
-        printit(fInfos[lSet['backupset']], lSet['name'], colors['changed'], False)
+        printit(fInfos[lSet['backupset']], lSet['name'], colors['changed'], False, crypt)
 
     flushLine()
 
@@ -444,7 +444,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             flushLine()
 
     if args.versions != 'none':
-        printVersions(fInfos)
+        printVersions(fInfos, crypt)
 
     # Figure out which versions of the file are directories
 
@@ -674,7 +674,7 @@ def globPath(path, tardis, crypt, first=0):
             for j in globbed:
                 results += globPath(j, tardis, crypt, i + 1)
             break
-    return  results
+    return results
 
 def processArgs():
     isatty = os.isatty(sys.stdout.fileno())

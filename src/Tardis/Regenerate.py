@@ -49,9 +49,10 @@ from . import Regenerator
 from . import Util
 from . import Config
 from . import Defaults
+from . import TardisCrypto
 
 logger: logging.Logger
-crypt = None
+crypt: TardisCrypto.CryptoScheme
 
 class OwMode(enum.StrEnum):
     OW_NEVER  = 'never'
@@ -69,7 +70,7 @@ owModeDefault = str(owMode)
 errors = 0
 
 tardis = None
-args = None
+args:argparse.Namespace
 
 def yesOrNo(x):
     if x:
@@ -148,8 +149,8 @@ def setAttributes(regenerator, info, outname):
             try:
                 # Change the group, then the owner.
                 # Change the group first, as only root can change owner, and that might fail.
-                os.chown(outname, -1, info['gid'])
-                os.chown(outname, info['uid'], -1)
+                os.chown(outname, -1, Util.getGroupId(crypt.decryptName(info['groupname'])))
+                os.chown(outname, Util.getUserId(crypt.decryptName(info['username'])), -1)
             except Exception:
                 logger.warning("Unable to set owner and group of %s", outname)
         if args.settime:
@@ -234,7 +235,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     skip = False
 
     try:
-        realname = crypt.decryptFilename(info['name'])
+        realname = crypt.decryptName(info['name'])
 
         if name:
             # This should only happen only one file specified.
@@ -283,7 +284,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             dirs = []
             # Get info on each child object
             for i in contents:
-                name = crypt.decryptFilename(i['name'])
+                name = crypt.decryptName(i['name'])
                 logger.debug("Processing file %s", name)
                 # Get the Info
                 childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
@@ -355,7 +356,7 @@ def recoverName(cksum):
     names = tardis.getNamesForChecksum(cksum)
     #print names
     if names:
-        names = list(map(crypt.decryptFilename, names))
+        names = list(map(crypt.decryptName, names))
         name = names[0]
         if len(names) > 1:
             logger.warning("Multiple (%d) names for checksum %s %s.  Choosing '%s'.", len(names), cksum, map(str, list(names)), name)

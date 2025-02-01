@@ -286,7 +286,7 @@ def listBSets(db, crypt, cache):
             print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
             if args.longinfo:
                 commandLine = getCommandLine(bset['commandline'], regenerator)
-                tags = [_decryptFilename(tag, crypt) for tag in db.getTags(bset['backupset'])]
+                tags = [_decryptName(tag, crypt) for tag in db.getTags(bset['backupset'])]
                 if commandLine:
                     print(f"    Command Line: {commandLine.decode('utf-8')}")
                 if tags:
@@ -308,12 +308,12 @@ def listBSets(db, crypt, cache):
 # the root (0, 0,) is always prepopulated
 _paths = {(0, 0): '/'}
 
-def _encryptFilename(name, crypt):
-    return crypt.encryptFilename(name) if crypt else name
+def _encryptName(name, crypt):
+    return crypt.encryptName(name) if crypt else name
 
 @functools.lru_cache(maxsize=1024)
-def _decryptFilename(name, crypt):
-    return crypt.decryptFilename(name) if crypt else name
+def _decryptName(name, crypt):
+    return crypt.decryptName(name) if crypt else name
 
 @functools.lru_cache(maxsize=1024)
 def _path(db, crypt, bset, inode):
@@ -325,7 +325,7 @@ def _path(db, crypt, bset, inode):
         parent = (fInfo['parent'], fInfo['parentdev'])
         prefix = _path(db, crypt, bset, parent)
 
-        name = _decryptFilename(fInfo['name'], crypt)
+        name = _decryptName(fInfo['name'], crypt)
         path = os.path.join(prefix, name)
         _paths[inode] = path
         return path
@@ -347,8 +347,8 @@ def listFiles(db, crypt):
 
     files = db.getNewFiles(bset, args.previous)
 
-    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x['parent'], x['parentdev'])),  _decryptFilename(x['name'], crypt))):
-        name = _decryptFilename(fInfo['name'], crypt)
+    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x['parent'], x['parentdev'])),  _decryptName(x['name'], crypt))):
+        name = _decryptName(fInfo['name'], crypt)
 
         if not args.dirs and fInfo['dir']:
             continue
@@ -370,8 +370,8 @@ def listFiles(db, crypt):
 
         if args.long:
             mode  = stat.filemode(fInfo['mode'])
-            group = Util.getGroupName(fInfo['gid'])
-            owner = Util.getUserId(fInfo['uid'])
+            group = crypt.decryptName(fInfo['groupname'])
+            owner = crypt.decryptName(fInfo['username'])
             mtime = Util.formatTime(fInfo['mtime'])
             size = humanify(fInfo['size'])
             inode = fInfo['inode']
@@ -414,7 +414,7 @@ def _bsetInfo(db, crypt, info):
         duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
         print(f"EndTime         : {t}")
         print(f"Duration        : {duration}")
-    tags = [_decryptFilename(tag, crypt) for tag in db.getTags(info['backupset'])]
+    tags = [_decryptName(tag, crypt) for tag in db.getTags(info['backupset'])]
     print(f"Tags:           : {','.join(tags)}")
     print(f"SW Versions     : C:{info['clientversion']} S:{info['serverversion']}")
     print(f"Client IP       : {info['clientip']}")
@@ -460,7 +460,7 @@ def confirm(message='Proceed (y/n): '):
     return yesno in ['YES', 'Y']
 
 def doTagging(db, crypt):
-    tag = _encryptFilename(args.tag, crypt)
+    tag = _encryptName(args.tag, crypt)
     if args.remove or args.move:
         db.removeTag(tag)
     if not args.remove:
@@ -605,7 +605,7 @@ def checkSanity(db, cache, crypt):
                     print("Checksums missing data files")
                     for i in inDB:
                         names = db.getNamesForChecksum(i)
-                        names = sorted(map(crypt.decryptFilename, names))
+                        names = sorted(map(crypt.decryptName, names))
                         print(i, names)
 
             # And get rid of it,

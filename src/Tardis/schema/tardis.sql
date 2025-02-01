@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS Names (
     NameId      INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
+CREATE TABLE IF NOT EXISTS Users (
+    UserId      INTEGER PRIMARY KEY AUTOINCREMENT,
+    NameId      INTEGER REFERENCES Names(NameId)
+);
+
+CREATE TABLE IF NOT EXISTS Groups (
+    GroupId     INTEGER PRIMARY KEY AUTOINCREMENT,
+    NameId      INTEGER REFERENCES Names(NameId)
+);
+
 CREATE TABLE IF NOT EXISTS Files (
     NameId      INTEGER  NOT NULL,
     FirstSet    INTEGER  NOT NULL,
@@ -112,6 +122,8 @@ CREATE TABLE IF NOT EXISTS Files (
     Mode        INTEGER,
     UID         INTEGER,
     GID         INTEGER, 
+    UserId      INTEGER,
+    GroupId     INTEGER,
     NLinks      INTEGER,
     XattrID     INTEGER,
     AclID       INTEGER,
@@ -121,6 +133,8 @@ CREATE TABLE IF NOT EXISTS Files (
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumId)
     FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumId)
     FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(UserID)      REFERENCES Users(UserId)
+    FOREIGN KEY(GroupID)     REFERENCES Groups(GroupID)
 );
 
 CREATE TABLE IF NOT EXISTS Tags (
@@ -150,6 +164,6 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "21");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "22");
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

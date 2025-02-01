@@ -417,6 +417,31 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
+Release Notes -- Version 1.6
+============================
+Version 1.6 introduces User and Group tables.  These store the User and Group info by name, rather than just UID/GID.   The reason for this is that when you
+rebuild a system, you may recreate the users and groups with different ID's.   Most likely you will create users and groups with the same names.  This makes
+the User and Group information persist across the reconfiguration.  If you do recreate the users/groups with the same ID's, this won't really change anything.
+
+When upgrading to version 1.6 it recommended that you upgrade the database schema manually, via:
+    sonic upgrade
+When this completes, run the tool "editUserGroup.":
+    tools/editUpserGroupInfo.py -u -g
+This will present you with a screen like:
+    --------------------------
+    --- Editing User Names ---
+    --------------------------
+    Key : System Name          Current Name
+       1: root
+       2: kolding              27a91ab627fde9160594059010b28af47913a2
+       3: squeezeboxserver     bde976eaca2a4965395f6df720a9e1469fd553
+       4: tardis               50c6a3306126e87c2b8eebcc9bc39a7b1dd7a2
+    Line to edit (S to use all system names, C to use all current names, Q to quit, W to write and quit):
+Selecting S will usually upgrade all the names, although if ID's have changed, you may edit individual entries.
+
+If you don't do this, ongoing backups will still work.   Previous backups will still exist, but may have trouble either recovering the user/group
+info, or setting it.
+
 Release Notes -- Version 1.1.5
 ==============================
 1.1.5 changes the way directory hashes are generated.   Prior to this, hashes were based on the encrypted file names.   This caused a significant performance hit, as the filenames all had to be encrytped,

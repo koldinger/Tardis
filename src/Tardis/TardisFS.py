@@ -371,7 +371,7 @@ class TardisFS(LoggingMixIn, Operations):
                 for e in entries:
                     name  = e['name']
                     if self.crypt:
-                        name = self.crypt.decryptFilename(name)
+                        name = self.crypt.decryptName(name)
                     name = self.fsEncodeName(name)
                     p = os.path.join(path, name)
                     self.fileCache.insert(p, e, now=now)

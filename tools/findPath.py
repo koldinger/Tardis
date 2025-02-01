@@ -74,8 +74,8 @@ def processArgs():
 
     return args
 
-def _decryptFilename(name, crypt):
-    return crypt.decryptFilename(name) if crypt else name
+def _decryptName(name, crypt):
+    return crypt.decryptName(name) if crypt else name
 
 functools.cache
 def _path(db, crypt, bset, inode):
@@ -88,7 +88,7 @@ def _path(db, crypt, bset, inode):
         parent = (fInfo['parent'], fInfo['parentdev'])
         prefix = _path(db, crypt, bset, parent)
 
-        name = _decryptFilename(fInfo['name'], crypt)
+        name = _decryptName(fInfo['name'], crypt)
         path = os.path.join(prefix, name)
         #_paths[inode] = path
         return path

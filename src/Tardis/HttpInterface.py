@@ -486,9 +486,7 @@ def listPurgeSets(backupset, priority, timestamp):
 @app.route('/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
 def listPurgeIncomplete(backupset, priority, timestamp):
     db = getDB()
-    sets = []
-    for x in db.listPurgeIncomplete(priority, timestamp, backupset):
-        sets.append(makeDict(x))
+    sets = list(map(makeDict, db.listPurgeIncomplete(priority, timestamp, backupset)))
     return createResponse(sets)
 
 @app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
@@ -531,6 +529,26 @@ def removeTag(tag):
 def getTags(backupset):
     db = getDB()
     return createResponse(db.getTags(backupset))
+
+@app.route('/getUsers')
+def getUsers():
+    db = getDB()
+    return createResponse(list(map(makeDict, db.getUsers())))
+
+@app.route('/setUserInfo/<int:userId>/<name>')
+def setUserInfo(userId, name):
+    db = getDB()
+    return createResponse(db.setUserInfo(userId, name))
+
+@app.route('/getGroups')
+def getGroups():
+    db = getDB()
+    return createResponse(list(map(makeDict, db.getGroups())))
+
+@app.route('/setGroupInfo/<int:groupId>/<name>')
+def setGroupInfo(groupId, name):
+    db = getDB()
+    return createResponse(db.setGroupInfo(groupId, name))
 
 @app.route('/setLock/<int:backupset>/<int:lock>')
 def setLock(lock, backupset):

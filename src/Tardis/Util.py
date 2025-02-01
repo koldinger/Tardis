@@ -105,11 +105,26 @@ def getGroupName(gid):
     return None
 
 @functools.cache
-def getUserId(uid):
+def getUserName(uid):
     user = pwd.getpwuid(uid)
     if user:
         return user.pw_name
     return None
+
+@functools.cache
+def getGroupId(name):
+    group = grp.getgrnam(name)
+    if group:
+        return group.gr_gid
+    return None
+
+@functools.cache
+def getUserId(name):
+    user = pwd.getpwnam(name)
+    if user:
+        return user.pw_uid
+    return None
+
 
 # Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
 # then Jan 12, 2014.  Same as ls.
@@ -229,7 +244,7 @@ def findDirInRoot(tardis, bset, path, crypt=None):
         name = comps[i]
         #logger.debug("Looking for root directory %s (%d)", name, i)
         if crypt:
-            name = crypt.encryptFilename(name)
+            name = crypt.encryptName(name)
         info = tardis.getFileInfoByName(name, (0, 0), bset)
         if info and info['dir'] == 1:
             return i
@@ -477,6 +492,7 @@ def _removeOrphans(db, cache):
     # Get a list of orphan'd files
     orphans = db.listOrphanChecksums(isFile=True)
     for cksum in orphans:
+        #cksum = row[0]
         logger.debug("Removing %s", cksum)
         # And remove them each....
         try:
@@ -855,11 +871,16 @@ class ClearingStreamHandler(logging.StreamHandler):
 
         super().emit(record)
 
-# AN exception logging mechanism
-import rich.console
+# An exception logging mechanism
+try:
+    import rich.console
+    _useRich = True
+except ImportError:
+    _useRich = False
 
 class ExceptionLogger:
-    _con = rich.console.Console()
+    if _useRich:
+        _con = rich.console.Console()
     def __init__(self, logger, logExceptions, rich=False):
         self.logger = logger
         self.logExceptions = logExceptions
@@ -867,7 +888,7 @@ class ExceptionLogger:
 
     def log(self, exception):
         if self.logExceptions:
-            if self.rich:
+            if self.rich and _useRich:
                 self._con.print_exception()
             else:
                 self.logger.exception(exception)
@@ -899,8 +920,8 @@ def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
         f = list(files)
-        #print map(crypt.decryptFilename, [x['name'] for x in f])
-        filenames = sorted([crypt.decryptFilename(n) for n in [x['name'] for x in f]])
+        #print map(crypt.decryptName, [x['name'] for x in f])
+        filenames = sorted([crypt.decryptName(n) for n in [x['name'] for x in f]])
     else:
         filenames = sorted([x["name"] for x in files])
 
