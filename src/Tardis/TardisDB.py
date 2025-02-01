@@ -1207,7 +1207,7 @@ class TardisDB:
     def compact(self):
         self.logger.debug("Removing unused names")
         # Purge out any unused names
-        c = self._execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files UNION SELECT NameID FROM Tags UNION SELECT NameID FROM Users UNION SELECT NameID FROM Groups")
+        c = self._execute("DELETE FROM Names WHERE NameID NOT IN (SELECT NameID FROM Files UNION SELECT NameID FROM Tags UNION SELECT NameID FROM Users UNION SELECT NameID FROM Groups)")
         rows = c.rowcount
         vacuumed = False
 
