@@ -966,7 +966,7 @@ def mkFileInfo(f):
         return None
 
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
-        #name = crypt.encryptFilename(name)
+        #name = crypt.encryptName(name)
         finfo =  {
             'name':   name,
             'inode':  s.st_ino,
@@ -1025,12 +1025,12 @@ def mkFileInfo(f):
 @functools.cache 
 def getUserName(uid):
     info = pwd.getpwuid(uid)
-    return crypt.encryptFilename(info.pw_name)
+    return crypt.encryptName(info.pw_name)
 
 @functools.cache 
 def getGroupName(gid):
     info = grp.getgrgid(gid)
-    return crypt.encryptFilename(info.gr_name)
+    return crypt.encryptName(info.gr_name)
 
 def getDirContents(dirname, dirstat, excludes=None):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
@@ -1168,7 +1168,7 @@ def sendDirChunks(path, inode, files):
 
         # Encrypt the names before sending them out
         for i in chunk:
-            i['name'] = crypt.encryptFilename(i['name'])
+            i['name'] = crypt.encryptName(i['name'])
 
         message["files"] = chunk
         message["last"]  = x + args.dirslice > len(files)
@@ -1603,7 +1603,7 @@ def createPrefixPath(root, path):
         dirPath = os.path.join(current, d)
         st = os.lstat(dirPath)
         f = mkFileInfo(FakeDirEntry(current, d))
-        f['name'] = crypt.encryptFilename(f['name'])
+        f['name'] = crypt.encryptName(f['name'])
         if dirPath not in processedDirs:
             logger.debug("Sending dir entry for: %s", dirPath)
             sendDirEntry(parent, parentDev, [f])
