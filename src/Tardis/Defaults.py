@@ -63,7 +63,6 @@ _defaults = {
     'TARDIS_LS_COLORS'      : "gone=yellow:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=yellow:details=white:error=red,,bold:default=white",
     'TARDIS_NOCOMPRESS'     : '',
     'TARDIS_RECENT_SET'     : 'Current',
-    'TARDIS_PW_STRENGTH'    : '0.75',
     'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults',
     'TARDIS_PWFILE'         : '',
     'TARDIS_KEYFILE'        : '',

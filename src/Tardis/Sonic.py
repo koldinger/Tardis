@@ -161,7 +161,7 @@ def changePassword(crypt, oldpw) :
         # Get the new password
         try:
             newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"New Password for {args.client}: ",
-                                     allowNone=False, confirm=True, strength=True)
+                                     allowNone=False, confirm=True)
         except Exception as e:
             logger.critical(str(e))
             if args.exceptions:

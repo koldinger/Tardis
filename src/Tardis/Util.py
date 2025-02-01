@@ -54,7 +54,6 @@ import urllib.parse
 import urllib.error
 
 import srp
-import passwordmeter
 import colorlog
 import parsedatetime
 
@@ -319,7 +318,7 @@ def _readWithTimeout(prompt, timeout):
         signal.signal(signal.SIGALRM, previous)
     return password.rstrip()
 
-def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, strength=False, timeout=Defaults.getDefault('TARDIS_PWTIMEOUT')):
+def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, timeout=Defaults.getDefault('TARDIS_PWTIMEOUT')):
     methods = 0
     if password: methods += 1
     if pwurl:    methods += 1
@@ -354,22 +353,7 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
     if not allowNone and not password:
         raise Exception("Password required")
 
-    if strength and password:
-        if not checkPasswordStrength(password):
-            raise Exception("Password not strong enough")
-
     return password
-
-
-def checkPasswordStrength(password):
-    pwStrMin     = float(Defaults.getDefault('TARDIS_PW_STRENGTH'))
-    strength, improvements = passwordmeter.test(password)
-    if strength < pwStrMin:
-        logger.error("Password too weak: %f (%f required)", strength, pwStrMin)
-        for i in improvements:
-            logger.error("    %s", improvements[i])
-        return False
-    return True
 
 # Get the database, cachedir, and crypto object.
 

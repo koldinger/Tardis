@@ -1695,8 +1695,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
 
     if resp['status'] in [ Protocol.Responses.NEEDKEYS, Protocol.Responses.AUTH ]:
         if password is None:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ",
-                                        confirm=create, strength=create)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=create)
         if create:
             setCrypto(password, args.cryptoScheme or TardisCrypto.DEF_CRYPTO_SCHEME)
 
@@ -2246,8 +2245,7 @@ def initialize():
 
         # Load any password info
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ",
-                                        confirm=args.create, strength=args.create)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.: %s", str(e))
             exceptionLogger.log(e)
