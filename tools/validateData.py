@@ -60,7 +60,7 @@ def validate(root, client, dbname, password):
     cache = CacheDir.CacheDir(base)
     if password:
         crypto = TardisCrypto.TardisCrypto(password, client)
-        token = crypto.encryptFilename(client)
+        token = crypto.encryptName(client)
     db = TardisDB.TardisDB(os.path.join(base, dbname), token=token, backup=False)
     regen = Regenerate.Regenerator(cache, db, crypto)
 
