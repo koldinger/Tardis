@@ -504,7 +504,7 @@ def purge(db, cache):
             (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
         else:
             (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset['endtime'], bset['backupset'])
-        print(f"Purged {int(setsDeleted)} sets, containing {int(filesDeleted)} files")
+        print(f"Purged {setsDeleted} sets, containing {filesDeleted} files")
         removeOrphans(db, cache)
 
     return 0
@@ -526,8 +526,9 @@ def deleteBsets(db, cache):
     if confirm():
         filesDeleted = 0
         for bset in bsets:
-            filesDeleted = filesDeleted + db.deleteBackupSet(bset['backupset'])
-        print(f"Deleted {int(filesDeleted)} files")
+            filesDeleted += db.deleteBackupSet(bset['backupset'])
+
+        print(f"Deleted {filesDeleted} files")
         if args.purge:
             removeOrphans(db, cache)
 
@@ -542,7 +543,7 @@ def removeOrphans(db, cache):
         rounds = r['rounds']
     else:
         count, size, rounds = Util.removeOrphans(db, cache)
-    print(f"Removed {int(count)} orphans, for {Util.fmtSize(size)}, in {int(rounds)} rounds")
+    print(f"Removed {count} orphans, for {Util.fmtSize(size)}, in {rounds} rounds")
 
 def checkSanity(db, cache, crypt):
     if not isinstance(db, TardisDB.TardisDB):
