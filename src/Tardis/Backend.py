@@ -68,8 +68,6 @@ class FileResponse(IntEnum):
 config = None
 args   = None
 
-schemaFile      = Defaults.getDefault('TARDIS_SCHEMA')
-
 pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
 _sessions = {}
@@ -1098,15 +1096,13 @@ class Backend:
         if not os.path.exists(dbfile):
             if not os.path.exists(dbdir):
                 os.makedirs(dbdir)
-            self.logger.debug("Initializing database for %s with file %s", client, schemaFile)
-            script = schemaFile
             ret = "NEW"
 
         if self.config.journal:
             journal = os.path.join(dbdir, self.config.journal)
 
         self.db = TardisDB.TardisDB(dbfile,
-                                    initialize=script,
+                                    initialize=True,
                                     backup=(self.config.dbbackups > 0),
                                     connid=connid,
                                     user=self.config.user,

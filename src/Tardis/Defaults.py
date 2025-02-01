@@ -32,6 +32,7 @@ import socket
 import configparser
 import os
 import os.path
+import importlib.resources
 
 SECTION = 'Tardis'
 
@@ -54,7 +55,7 @@ _defaults = {
     'TARDIS_PWTIMEOUT'      : '120',
     'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
     'TARDIS_JOURNAL'        : 'tardis.journal.gz',
-    'TARDIS_SCHEMA'         : os.path.join(os.path.dirname(__file__), 'schema', 'tardis.sql'),
+    #'TARDIS_SCHEMA'         : importlib.resources.files().joinpath('schema', 'tardis.sql'),
     'TARDIS_SEND_CONFIG'    : 'true',
     'TARDIS_REMOTE_PORT'    : '7430',
     'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',

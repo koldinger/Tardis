@@ -114,7 +114,6 @@ configDefaults = {
     'BaseDir':              Defaults.getDefault('TARDIS_DB'),
     'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
     'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
-    'Schema':               Defaults.getDefault('TARDIS_SCHEMA'),
 
     'Local':                '',
 
@@ -1831,7 +1830,6 @@ def processCommandLine():
     locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
     locgroup.add_argument('--dbdir',              dest='dbdir',           default=c.get(t, 'DBDir'),   help='Location of database files (if different from database directory above) (Default: %(default)s)')
     locgroup.add_argument('--dbname', '-N',       dest='dbname',          default=c.get(t, 'DBName'),  help='Use the database name (Default: %(default)s)')
-    locgroup.add_argument('--schema',             dest='schema',          default=c.get(t, 'Schema'),  help='Path to the schema to use (Default: %(default)s)')
 
     remotegroup = parser.add_argument_group("Remote Server options")
     remotegroup.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)

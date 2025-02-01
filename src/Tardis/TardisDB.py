@@ -40,6 +40,7 @@ import importlib
 import gzip
 import base64
 from binascii import hexlify, unhexlify
+import importlib.resources
 
 import srp
 
@@ -143,7 +144,7 @@ class TardisDB:
     srpSrv          = None
     authenticated   = False
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=None, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False, check_threads=True):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False, check_threads=True):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbname)
@@ -181,8 +182,9 @@ class TardisDB:
         if initialize:
             self.logger.info("Creating database from schema: %s", initialize)
             try:
-                with open(initialize, "r") as f:
-                    self.conn.executescript(f.read())
+                # read the script from the package, and execute it.
+                script = importlib.resources.files().joinpath('schema', 'tardis.sql').read_text()
+                self.conn.executescript(script)
             except IOError:
                 self.logger.critical("Could not read initialization script %s", initialize)
                 #self.logger.exception(e)

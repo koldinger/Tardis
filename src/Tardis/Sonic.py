@@ -64,7 +64,7 @@ sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoS
 logger: logging.Logger
 args: argparse.Namespace
 
-def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
+def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
     loc = urllib.parse.urlparse(args.database)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if loc.scheme in ['http', 'https']:
@@ -89,8 +89,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
             raise Exception(f"Database for client {args.client} already exists.")
 
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
-        schema = args.schema if new else None
-        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=schema, allow_upgrade=allowUpgrade)
+        tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=create, allow_upgrade=allowUpgrade)
 
     if tardisdb.needsAuthentication():
         if password is None:
@@ -107,7 +106,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False):
 
 def createClient(password):
     try:
-        getDB(None, True, allowRemote=False)
+        getDB(None, True, allowRemote=False, create=True)
         if password:
             setPassword(password)
         return 0
@@ -714,9 +713,6 @@ def parseArgs() -> argparse.Namespace:
     Config.addPasswordOptions(common, addscheme=True)
     Config.addCommonOptions(common)
 
-    create = argparse.ArgumentParser(add_help=False)
-    create.add_argument('--schema',                 dest='schema',          default=c.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
-
     newPassParser = argparse.ArgumentParser(add_help=False)
     newpassgrp = newPassParser.add_argument_group("New Password specification options")
     npwgroup = newpassgrp.add_mutually_exclusive_group()
@@ -753,7 +749,7 @@ def parseArgs() -> argparse.Namespace:
     sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=Util.StoreBoolean, help="Delete mismatched files")
 
     subs = parser.add_subparsers(help="Commands", dest='command')
-    subs.add_parser('create',       parents=[common, create],                               help='Create a client database')
+    subs.add_parser('create',       parents=[common],                                       help='Create a client database')
     subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
     subs.add_parser('chpass',       parents=[common, newPassParser],                        help='Change a password')
     subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')

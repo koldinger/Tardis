@@ -74,7 +74,6 @@ args: argparse.Namespace
 configSection = 'Daemon'
 
 databaseName    = Defaults.getDefault('TARDIS_DBNAME')
-schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir         = Defaults.getDefault('TARDIS_DB')
 dbDir           = Defaults.getDefault('TARDIS_DBDIR')
@@ -85,22 +84,11 @@ timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
 logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
 skipFile        = Defaults.getDefault('TARDIS_SKIP')
 
-if os.path.isabs(schemaName):
-    schemaFile = schemaName
-else:
-    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    schemaFile   = os.path.join(parentDir, schemaName)
-    # Hack.  Make it look shorter.
-    schemaFile = min([schemaFile, os.path.relpath(schemaFile)], key=len)
-    #if len(schemaFile) > len(os.path.relpath(schemaFile)):
-        #schemaFile = os.path.relpath(schemaFile)
-
 configDefaults = {
     'Port'              : portNumber,
     'BaseDir'           : baseDir,
     'DBDir'             : dbDir,
     'DBName'            : databaseName,
-    'Schema'            : schemaFile,
     'LogCfg'            : '',
     'Profile'           : str(False),
     'LogFile'           : '',
@@ -275,7 +263,6 @@ class TardisServer:
 
         self.dbname         = args.dbname
         self.allowNew       = args.newhosts
-        self.schemaFile     = args.schema
         self.journal        = args.journal
 
         self.linkBasis      = config.getboolean(configSection, 'LinkBasis')
@@ -476,7 +463,6 @@ def processArgs():
     parser.add_argument('--database',           dest='database',        default=config.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbdir',              dest='dbdir',           default=config.get(t, 'DBDir'),  help='Dabatase directory (Default: %(default)s)')
     parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    parser.add_argument('--schema',             dest='schema',          default=config.get(t, 'Schema'), help='Path to the schema to use (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')

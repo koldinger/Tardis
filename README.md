@@ -243,7 +243,6 @@ Environment Variables
 | TARDIS_GLOBAL_EXCLUDES| Name of the file containing patterns to exclude globally| /etc/tardis/excludes| Client |
 | TARDIS_SKIP           | Name of a file whose presence excludes a current directory (and all directories below)| .tardis-skip| Client |
 | TARDIS_PIDFILE        | File to indicate that the daemon is running.| /var/run/tardisd.pid | Daemon |
-| TARDIS_SCHEMA         | File containing the schema for the database.| schema/tardis.sql | Daemon |
 | TARDIS_LS_COLORS      | Description of colors for lstardis | | lstardis |
 | TARDIS_REMOTE_PORT    | Port used for the HTTP Remote interface| 7430 | Remote, User Tools |
 | TARDIS_REMOTE_CONFIG  | Configuration file for tardisremote| /etc/tardis/tardisremote.cfg | Remote |
@@ -334,7 +333,6 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | Port            | 7420                | TARDIS_PORT     | Port to listen on |
 | BaseDir         | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
 | DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
-| Schema          | schema/tardis.sql   | TARDIS_SCHEMA   | Path to the file containing the database schema. |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
 | JournalFile     | tardis.journal      |                 | Journal file for logging which files are dependent on others.  Stored in the DB directory for each client. |
 | Profile         | False               |                 | If true, a profile of each session will be generated and printed to stdout| 
