@@ -68,17 +68,7 @@ class FileResponse(IntEnum):
 config = None
 args   = None
 
-schemaName      = Defaults.getDefault('TARDIS_SCHEMA')
-
-if os.path.isabs(schemaName):
-    schemaFile = schemaName
-else:
-    parentDir    = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    schemaFile   = os.path.join(parentDir, schemaName)
-    # Hack.  Make it look shorter.
-    schemaFile = min([schemaFile, os.path.relpath(schemaFile)], key=len)
-    #if len(schemaFile) > len(os.path.relpath(schemaFile)):
-        #schemaFile = os.path.relpath(schemaFile)
+schemaFile      = Defaults.getDefault('TARDIS_SCHEMA')
 
 pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
@@ -148,11 +138,8 @@ class BackendConfig:
 class Backend:
     def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None):
         self.numfiles       = 0
-        self.logger: logging.Logger     = None
         self.sessionid      = None
-        self.cache: CacheDir.CacheDir   = None
         self.tempdir        = None
-        self.db: TardisDB.TardisDB      = None
         self.purged         = False
         self.full           = False
         self.done           = False
@@ -174,6 +161,8 @@ class Backend:
         self.lastCompleted  = None
         self.maxChain       = 0
 
+        self.db: TardisDB.TardisDB = None
+
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
         self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         if logSession:
@@ -190,7 +179,6 @@ class Backend:
         os.umask(self.config.umask)
 
         self.exceptionLogger = Util.ExceptionLogger(self.logger, self.config.exceptions, True)
-
 
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
@@ -257,7 +245,7 @@ class Backend:
         else:
             old = None
 
-        if f["dir"] == 1:
+        if f['dir']:
             #self.logger.debug("Is a directory: %s", name)
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
@@ -713,6 +701,7 @@ class Backend:
                 # Check to see if the checksum already exists
                 info = self.db.getChecksumInfo(cksum)
                 if info and info['isfile'] and info['size'] >= 0:
+                    old = self.db.getFileInfoByInode((inode, dev))
                     # if it does, set the new checksum
                     self.db.setChecksum(inode, dev, cksum)
                     done.append(f['inode'])
@@ -1197,11 +1186,11 @@ class Backend:
         prev = self.db.lastBackupSet(completed=False)
         if prev['endtime'] is None or checkSession(prev['session']):
             if force:
-                self.logger.warning("Staring session %s while previous backup still warning: %s", name, prev['name'])
+                self.logger.warning("Staring session %s while previous backup still running: %s", name, prev['name'])
             else:
                 if checkSession(prev['session']):
                     raise InitFailedException(f"Previous backup session still running: {prev['name']}.  Run with --force to force starting the new backup")
-                self.logger.warning('Previous session for client %s (%s) did not complete.', self.client, prev['session'])
+                self.logger.warning('Previous session for client %s (%s, %s) did not complete.', self.client, prev['name'], prev['session'])
 
         addSession(self.sessionid, self.client)
 
