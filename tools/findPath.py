@@ -122,7 +122,7 @@ def printParentInfo(checksum, tardis, crypto, bset, quiet, printchain, orig=None
     parents = tardis.getChecksumsByBasis(checksum)
     for data in parents:
         parent = data[0]
-        print(f"{colored(orig, 'red')} -> {colored(parent, 'red')}")
+        print(f"---- {colored(orig, 'red')} -> {colored(parent, 'red')}")
         printFileInfo(parent, bset, tardis, crypto, quiet)
         if printchain:
             printChainInfo(parent, tardis)
