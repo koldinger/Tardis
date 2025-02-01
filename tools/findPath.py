@@ -34,8 +34,14 @@ import logging
 import os.path
 import os
 import sys
+import functools
+
+from termcolor import cprint, colored
 
 from Tardis import Util, Config
+
+from icecream import ic
+ic.enable()
 
 logger = None
 
@@ -48,15 +54,16 @@ def reader(quiet):
         return
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Extract paths for a changeset', fromfile_prefix_chars='@', add_help=False)
+    parser = argparse.ArgumentParser(description='Extract paths for a checksum', fromfile_prefix_chars='@', add_help=False)
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
     parser.add_argument('--quiet', '-q', dest='quiet', default=False, action='store_true', help="Only print the translation, not the input strings")
-    parser.add_argument('--backup', '-b', dest='backup', default=None, help='Look in specific backupset')
+    parser.add_argument('--backup', '-b', dest='backup', default='Any', help='Look in specific backupset')
     parser.add_argument('--chain', '-c', dest='chain', default=False, action='store_true', help="Print file info on all stages in the chain")
+    parser.add_argument('--inchain', '-i', dest='inchain', default=False, action='store_true', help='Find files for which are dependent on this checksum')
 
     parser.add_argument('--help', '-h',     action='help')
     parser.add_argument('checksums',          nargs='*', help="List of checksums to extract")
@@ -67,15 +74,14 @@ def processArgs():
 
     return args
 
-_paths = {(0, 0): '/'}
-
 def _decryptFilename(name, crypt):
     return crypt.decryptFilename(name) if crypt else name
 
+functools.cache
 def _path(db, crypt, bset, inode):
-    global _paths
-    if inode in _paths:
-        return _paths[inode]
+    #ic(inode, bset)
+    if inode == (0, 0):
+        return '/'
 
     fInfo = db.getFileInfoByInode(inode, bset)
     if fInfo:
@@ -84,9 +90,44 @@ def _path(db, crypt, bset, inode):
 
         name = _decryptFilename(fInfo['name'], crypt)
         path = os.path.join(prefix, name)
-        _paths[inode] = path
+        #_paths[inode] = path
         return path
     return ''
+
+def printFileInfo(checksum, bset, tardis, crypto, quiet):
+    for finfo in tardis.getFileInfoByChecksum(checksum, bset):
+        prevInode = None
+        inode = (finfo['inode'], finfo['device'])
+        if inode == prevInode:
+            continue
+        prevInode = inode
+        actual = finfo['firstset']
+        if quiet:
+            print(_path(tardis, crypto, actual, inode))
+        else:
+            print(f"{colored(checksum, 'cyan')} => [{finfo['firstset']:5}, {finfo['lastset']:5}] ({finfo['inode']:5}, {finfo['device']:4})\t{colored(_path(tardis, crypto, actual, inode), 'green')}")
+
+def printChainInfo(checksum, tardis):
+    info = tardis.getChecksumInfoChain(checksum)
+    x = 0
+    for j in info:
+        print(f"  {colored(x, 'red'):2}: {colored(j['checksum'], 'cyan')} Size: {j['size']:8} File: {bool(j['isfile'])} Compressed: {j['compressed']} Encrypted: {bool(j['encrypted'])} DiskSize: {j['disksize']}")
+        x += 1
+    print("")
+
+def printParentInfo(checksum, tardis, crypto, bset, quiet, printchain, orig=None):
+    if orig is None:
+        orig = checksum
+
+    parents = tardis.getChecksumsByBasis(checksum)
+    for data in parents:
+        parent = data[0]
+        print(f"{colored(orig, 'red')} -> {colored(parent, 'red')}")
+        printFileInfo(parent, bset, tardis, crypto, quiet)
+        if printchain:
+            printChainInfo(parent, tardis)
+        printParentInfo(parent, tardis, crypto, bset, quiet, printchain, orig)
+        print("")
 
 def main():
     global logger
@@ -97,7 +138,9 @@ def main():
 
     tardis, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
-    if args.backup is not None:
+    if isinstance(args.backup, str) and args.backup.lower() == 'any':
+        bset = None
+    elif args.backup is not None:
         bsetInfo = Util.getBackupSet(tardis, args.backup)
         if bsetInfo:
             bset = bsetInfo['backupset']
@@ -115,25 +158,14 @@ def main():
         else:
             data = reader(args.quiet)
 
-    prevInode = None
     for i in data:
+        cprint(f"---- {i}:", 'yellow')
         try:
-            for finfo in tardis.getFileInfoByChecksum(i, bset):
-                inode = (finfo['inode'], finfo['device'])
-                if inode == prevInode:
-                    continue
-                prevInode = inode
-                if args.quiet:
-                    print(_path(tardis, crypto, bset, inode))
-                else:
-                    print(f"{i} => [{finfo['firstset']}, {finfo['lastset']}] ({finfo['inode']}, {finfo['device']})\t{_path(tardis, crypto, bset, inode)}")
+            printFileInfo(i, bset, tardis, crypto, args.quiet)
             if args.chain:
-                info = tardis.getChecksumInfoChain(i)
-                x = 0
-                for j in info:
-                    print(f"  {x:2}: {j['checksum']} Size: {j['size']:8} File: {bool(j['isfile'])} Compressed: {j['compressed']} Encrypted: {bool(j['encrypted'])} DiskSize: {j['disksize']}")
-                    x += 1
-                print("")
+                printChainInfo(i, tardis)
+            if args.inchain:
+                printParentInfo(i, tardis, crypto, bset, args.quiet, args.chain)
 
         except Exception as e:
             print("Caught exception: " + str(e))
