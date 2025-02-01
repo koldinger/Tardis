@@ -91,21 +91,21 @@ CREATE TABLE IF NOT EXISTS CheckSums (
 
 CREATE TABLE IF NOT EXISTS Names (
     Name        TEXT UNIQUE NOT NULL,
-    NameId      INTEGER PRIMARY KEY AUTOINCREMENT
+    NameID      INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
 CREATE TABLE IF NOT EXISTS Users (
-    UserId      INTEGER PRIMARY KEY AUTOINCREMENT,
-    NameId      INTEGER REFERENCES Names(NameId)
+    UserID      INTEGER PRIMARY KEY AUTOINCREMENT,
+    NameID      INTEGER REFERENCES Names(NameID)
 );
 
 CREATE TABLE IF NOT EXISTS Groups (
-    GroupId     INTEGER PRIMARY KEY AUTOINCREMENT,
-    NameId      INTEGER REFERENCES Names(NameId)
+    GroupID     INTEGER PRIMARY KEY AUTOINCREMENT,
+    NameID      INTEGER REFERENCES Names(NameID)
 );
 
 CREATE TABLE IF NOT EXISTS Files (
-    NameId      INTEGER  NOT NULL,
+    NameID      INTEGER  NOT NULL,
     FirstSet    INTEGER  NOT NULL,
     LastSet     INTEGER  NOT NULL,
     Inode       INTEGER  NOT NULL,
@@ -122,27 +122,27 @@ CREATE TABLE IF NOT EXISTS Files (
     Mode        INTEGER,
     UID         INTEGER,
     GID         INTEGER, 
-    UserId      INTEGER,
-    GroupId     INTEGER,
+    UserID      INTEGER,
+    GroupID     INTEGER,
     NLinks      INTEGER,
     XattrID     INTEGER,
     AclID       INTEGER,
 
-    PRIMARY KEY(NameId, FirstSet, LastSet, Parent, ParentDev),
-    FOREIGN KEY(NameId)      REFERENCES Names(NameId),
+    PRIMARY KEY(NameID, FirstSet, LastSet, Parent, ParentDev),
+    FOREIGN KEY(NameID)      REFERENCES Names(NameID),
     FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumId)
     FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumId)
     FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumId)
-    FOREIGN KEY(UserID)      REFERENCES Users(UserId)
+    FOREIGN KEY(UserID)      REFERENCES Users(UserID)
     FOREIGN KEY(GroupID)     REFERENCES Groups(GroupID)
 );
 
 CREATE TABLE IF NOT EXISTS Tags (
     TagId       INTEGER PRIMARY KEY AUTOINCREMENT,
     BackupSet   INTEGER NOT NULL,
-    NameId      INTEGER UNIQUE NOT NULL,
+    NameID      INTEGER UNIQUE NOT NULL,
     FOREIGN KEY(BackupSet)   REFERENCES Backups(BackupSet),
-    FOREIGN KEY(NameId)      REFERENCES Names(NameId)
+    FOREIGN KEY(NameID)      REFERENCES Names(NameID)
 );
 
 CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
@@ -160,7 +160,7 @@ INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, 
 CREATE VIEW IF NOT EXISTS VFiles AS
     SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
     FROM Files
-    JOIN Names ON Files.NameId = Names.NameId
+    JOIN Names ON Files.NameID = Names.NameID
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
