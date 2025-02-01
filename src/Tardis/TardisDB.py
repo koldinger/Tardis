@@ -311,16 +311,15 @@ class TardisDB:
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
-            row = self._executeWithResult("SELECT " +
+            return self._executeWithResult("SELECT " +
                                             _backupSetInfoFields +
                                             _backupSetInfoJoin +
                                             "WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
         else:
-            row = self._executeWithResult("SELECT " +
-                                    _backupSetInfoFields +
-                                    _backupSetInfoJoin +
-                                    "ORDER BY BackupSet DESC LIMIT 1", {})
-        return row
+            return self._executeWithResult("SELECT " +
+                                           _backupSetInfoFields +
+                                           _backupSetInfoJoin +
+                                           "ORDER BY BackupSet DESC LIMIT 1", {})
 
     def _execute(self, query, data=None):
         """ Execute a query, and return a cursor to the results """
@@ -335,8 +334,8 @@ class TardisDB:
 
     def _executeWithResult(self, query, data=None):
         """ Execute a query, and return the (first) result row. """
-        r = self._executeWithResult(query, data)
-        return r
+        c = self._execute(query, data)
+        return c.fetchone()
 
     @authenticate
     def newBackupSet(self, name, session, priority, clienttime, version=None, ip=None, full=False, serverID=None):
