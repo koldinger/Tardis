@@ -841,19 +841,15 @@ def main():
                 logger.exception(e)
             return -1
 
-        if args.command == 'create':
-            if password and not Util.checkPasswordStrength(password):
-                return -1
-            return createClient(password)
+        match args.command:
+            case 'create':
+                return createClient(password)
+            case 'setpass':
+                return setPassword(password)
+            case 'chpass':
+                return changePassword(crypt, password)
 
-        if args.command == 'setpass':
-            if not Util.checkPasswordStrength(password):
-                return -1
-
-            return setPassword(password)
-
-        if args.command == 'chpass':
-            return changePassword(crypt, password)
+        # Fall through to here if it didn't match any of the above.
 
         upgrade = args.command == 'upgrade'
 
