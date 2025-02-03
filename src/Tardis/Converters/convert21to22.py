@@ -56,11 +56,8 @@ def upgrade(conn, logger):
         """
     )
 
-    try:
-        conn.execute("ALTER TABLE Files ADD COLUMN UserID INTEGER;")
-        conn.execute("ALTER TABLE Files ADD COLUMN GroupID INTEGER;")
-    except Exception as e:
-        print("Caught exception", e)
+    conn.execute("ALTER TABLE Files ADD COLUMN UserID INTEGER;")
+    conn.execute("ALTER TABLE Files ADD COLUMN GroupID INTEGER;")
 
     # Here we put the name insertion but it really doesn't work, because we really want to insert
     # encrypted names.
