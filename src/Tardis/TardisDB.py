@@ -144,16 +144,14 @@ class TardisDB:
     currBackupSet   = None
     prevBackupSet   = None
     clientId        = None
-    journal         = None
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, journal=None, allow_upgrade=False, check_threads=True):
+    def __init__(self, dbname, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, allow_upgrade=False, check_threads=True):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbname)
         self.dbName = dbname
         self.chunksize = chunksize
         self.prevSet = prevSet
-        self.journalName = journal
         self.allow_upgrade = allow_upgrade
         self.authenticated = False
 
@@ -277,12 +275,6 @@ class TardisDB:
         self.conn.execute("PRAGMA synchronous=false")
         self.conn.execute("PRAGMA foreignkeys=true")
 
-        if self.journalName:
-            if self.journalName.endswith('.gz'):
-                self.journal = gzip.open(self.journalName, 'at')
-            else:
-                self.journal = open(self.journalName, 'a')
-
         # Make sure the permissions are set the way we want, if that's specified.
         if self.user != -1 or self.group != -1:
             os.chown(self.dbName, self.user, self.group)
@@ -378,9 +370,6 @@ class TardisDB:
         self.currBackupName = name
         self.conn.commit()
         self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
-        if self.journal:
-            # self.journal.write("===== S: {} {} {} D: {} V:{} {}\n".format(self.currBackupSet, name, session, time.strftime("%Y-%m-%d %H:%M:%S"), version, Tardis.__buildversion__))
-            self.journal.write(f"===== S: {self.currBackupSet} {name} {session} D: {time.strftime('%Y-%m-%d %H:%M:%S')} V:{version} {Tardis.__buildversion__}\n")
 
         return self.currBackupSet
 
@@ -767,9 +756,6 @@ class TardisDB:
 
         def _xstr(x):
             return x if x is not None else ''
-
-        if self.journal:
-            self.journal.write(f"{checksum}:{_xstr(basis)}:{int(encrypted)}:{compressed}\n")
 
         if basis is None:
             chainlength = 0

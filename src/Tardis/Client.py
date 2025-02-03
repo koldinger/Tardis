@@ -166,7 +166,6 @@ configDefaults = {
     'SaveConfig':           str(True),
     'AllowClientOverrides': str(True),
     'AllowSchemaUpgrades':  str(False),
-    'JournalFile':          Defaults.getDefault('TARDIS_JOURNAL'),
     'SaveFull':             str(False),
     'MaxDeltaChain':        '5',
     'MaxChangePercent':     '50',
@@ -502,8 +501,6 @@ def processDelta(inode, cksum):
     """ Generate a delta and send it.   Requests a signature if it's not available already. """
     if verbosity > 3:
         logger.debug("ProcessDelta: %s %s", inode, getInodeDBName(inode))
-    if args.loginodes:
-        args.loginodes.write(f"ProcessDelta {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
 
     try:
         (_, pathname) = inodeDB.get(inode)
@@ -544,8 +541,6 @@ def processSig(inode, sigfile, oldchksum):
     """ Generate a delta and send it """
     if verbosity > 3:
         logger.debug("processSig: %s %s", inode, getInodeDBName(inode))
-    if args.loginodes:
-        args.loginodes.write(f"ProcessSig {str(inode)} {getInodeDBName(inode)}\n".encode('utf8'))
 
     try:
         (_, pathname) = inodeDB.get(inode)
@@ -638,8 +633,6 @@ def processSig(inode, sigfile, oldchksum):
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", inode)
         logger.debug(repr(traceback.format_stack()))
-        if args.loginodes:
-            args.loginodes.write(f"ProcessDelta No inode entry for {str(inode)}\n".encode('utf8'))
         exceptionLogger.log(e)
 
 def sendContent(inode, reportType):
@@ -647,8 +640,6 @@ def sendContent(inode, reportType):
 
     if verbosity > 3:
         logger.debug("SendContent: %s %s %s", inode, reportType, getInodeDBName(inode))
-    if args.loginodes:
-        args.loginodes.write(f"SendContent: {inode} {reportType} {getInodeDBName(inode)}\n".encode('utf8'))
     try:
         checksum = None
         (fileInfo, pathname) = inodeDB.get(inode)
@@ -746,8 +737,6 @@ def sendContent(inode, reportType):
     except KeyError as e:
         logger.error("SendContent: No inode entry for %s", inode)
         logger.debug(repr(traceback.format_stack()))
-        if args.loginodes:
-            args.loginodes.write(f"SendContent: No inode entry for {inode}\n".encode('utf8'))
         exceptionLogger.log(e)
 
 def handleAckMeta(response):
@@ -850,12 +839,6 @@ def handleAckDir(message):
             path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
-    if args.loginodes:
-        args.loginodes.write(f"Adding to AllContent: ({len(allContent)}):: {len(content)}: {str(content)}\n".encode('utf8'))
-        args.loginodes.write(f"Adding to AllRefresh: ({len(allRefresh)}):: {len(refresh)}: {str(refresh)}\n".encode('utf8'))
-        args.loginodes.write(f"Adding to AllDelta:   ({len(allDelta)}):: {len(delta)}: {str(delta)}\n".encode('utf8'))
-        args.loginodes.write(f"Adding to AllCkSum:   ({len(allCkSum)}):: {len(cksum)}: {str(cksum)}\n".encode('utf8'))
-
     allContent += content
     allDelta   += delta
     allCkSum   += cksum
@@ -865,12 +848,6 @@ def handleAckDir(message):
 def pushFiles():
     global allContent, allDelta, allCkSum, allRefresh, allDone
     logger.debug("Pushing files")
-    if args.loginodes:
-        args.loginodes.write("Pushing Files\n".encode('utf8'))
-        args.loginodes.write(f"AllContent: {len(allContent)}: {str(allContent)}\n".encode('utf8'))
-        args.loginodes.write(f"AllRefresh: {len(allRefresh)}: {str(allRefresh)}\n".encode('utf8'))
-        args.loginodes.write(f"AllDelta:   {len(allDelta)}: {str(allDelta)}\n".encode('utf8'))
-        args.loginodes.write(f"AllCkSum:   {len(allCkSum)}: {str(allCkSum)}\n".encode('utf8'))
 
     processed = []
 
@@ -1012,8 +989,6 @@ def mkFileInfo(f):
 
         # Insert into the inode DB
         inode = (s.st_ino, s.st_dev)
-        if args.loginodes:
-            args.loginodes.write(f"Add {str(inode)} {pathname}\n".encode('utf8'))
 
         inodeDB.insert(inode, finfo, pathname)
     else:
@@ -1884,7 +1859,7 @@ def processCommandLine():
     parser.add_argument('--send-config', '-S',      dest='sendconfig', action=Util.StoreBoolean, default=c.getboolean(t, 'SendClientConfig'),
                         help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s')
 
-    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zlib', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
+    parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zstd', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
                         help='Compress files.  ' + _def)
     parser.add_argument('--compress-min',           dest='mincompsize', type=int, default=c.getint(t, 'CompressMin'),   help='Minimum size to compress.  ' + _def)
     parser.add_argument('--nocompress-types',       dest='nocompressfile', default=splitList(c.get(t, 'NoCompressFile')), action='append',
@@ -1944,9 +1919,6 @@ def processCommandLine():
 
     parser.add_argument('--deltathreshold',         dest='deltathreshold', default=66, type=int,
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  ' + _def))
-
-    parser.add_argument('--sanity',                 dest='sanity', default=False, action=Util.StoreBoolean, help=_d('Run sanity checks to determine if everything is pushed to server'))
-    parser.add_argument('--loginodes',              dest='loginodes', default=None, type=argparse.FileType('wb'), help=_d('Log inode actions, and messages'))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
     purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  ' + _def)
@@ -2200,8 +2172,6 @@ def mkBackendConfig(jobname):
     bc.priorities      = list(map(int, config.get(j, 'Priorities').split(',')))
     bc.keep            = list(map(int, config.get(j, 'KeepDays').split(',')))
     bc.forceFull       = list(map(int, config.get(j, 'ForceFull').split(',')))
-
-    bc.journal         = config.get(j, 'JournalFile')
 
     bc.savefull        = config.getboolean(j, 'SaveFull')
     bc.maxChain        = config.getint(j, 'MaxDeltaChain')
@@ -2457,20 +2427,6 @@ def main():
             backendThread.join()        # Should I do communicate?
 
     endtime = datetime.datetime.now()
-
-    if args.sanity:
-        # Sanity checks.  Enable for debugging.
-        if len(cloneContents) != 0:
-            logger.warning("Some cloned directories not processed: %d", len(cloneContents))
-            for (path, files) in cloneContents.values():
-                print(f"{path}:: {len(files)}")
-
-        # This next one is usually non-zero, for some reason.  Enable to debug.
-        #if len(inodeDB) != 0:
-            #logger.warning("%d InodeDB entries not processed", len(inodeDB))
-            #for key in list(inodeDB.keys()):
-                #(_, path) = inodeDB.get(key)
-                #print("{}:: {}".format(key, path))
 
     if args.progress:
         statusBar.shutdown()

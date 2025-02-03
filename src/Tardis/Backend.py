@@ -104,7 +104,6 @@ class BackendConfig:
     priorities      = []
     keep            = []
     forceFull       = False
-    journal         = None
 
     savefull        = False
     maxChain        = 0
@@ -1082,7 +1081,6 @@ class Backend:
     def getDB(self, client, create):
         script = None
         ret = "EXISTING"
-        journal = None
 
         (dbdir, dbfile) = self.genPaths()
 
@@ -1098,9 +1096,6 @@ class Backend:
                 os.makedirs(dbdir)
             ret = "NEW"
 
-        if self.config.journal:
-            journal = os.path.join(dbdir, self.config.journal)
-
         self.db = TardisDB.TardisDB(dbfile,
                                     initialize=True,
                                     backup=(self.config.dbbackups > 0),
@@ -1108,7 +1103,6 @@ class Backend:
                                     user=self.config.user,
                                     group=self.config.group,
                                     numbackups=self.config.dbbackups,
-                                    journal=journal,
                                     allow_upgrade = self.config.allowUpgrades)
 
         self.regenerator = Regenerator.Regenerator(self.cache, self.db, TardisCrypto.Crypto_Null())
