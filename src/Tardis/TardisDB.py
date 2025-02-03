@@ -701,10 +701,7 @@ class TardisDB:
     @authenticate
     def extendFileRowID(self, rowid, current=True):
         current = self._bset(current)
-        cursor = self._execute("UPDATE Files "
-                               "SET LastSet = :new "
-                               "WHERE RowID = :rowid",
-                               {"new": current, "rowid": rowid})
+        self._execute("UPDATE Files SET LastSet = :new WHERE RowID = :rowid", {"new": current, "rowid": rowid})
 
     @authenticate
     def extendFileInode(self, parent, inode, old=False, current=True):
