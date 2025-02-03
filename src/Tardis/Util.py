@@ -751,7 +751,6 @@ def mkKeyString(client, nameKey, contentKey):
 ### Create a metadata file for file.
 ###
 def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
-    f = None
     metaName = checksum + '.meta'
     metaData = {'checksum': checksum, 'compressed': bool(compressed), 'encrypted': bool(encrypted), 'size': size, 'disksize': disksize }
     if basis:
@@ -760,10 +759,9 @@ def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis
     logger.debug("Storing metadata for %s: %s", checksum, metaStr)
 
     try:
-        f = cache.open(metaName, 'w')
-        f.write(metaStr)
-        f.write('\n')
-        f.close()
+        with cache.open(metaName, 'w') as f:
+            f.write(metaStr)
+            f.write('\n')
     except Exception as e:
         logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
 
