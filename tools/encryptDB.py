@@ -64,34 +64,6 @@ def encryptNames(db, crypto):
             conn.rollback()
     logger.info("Encrypted %d names", names)
 
-def encryptNames(db, crypto, table, keyField):
-    conn = db.conn
-    c = conn.cursor()
-    c2 = conn.cursor()
-    names = 0
-    r = c.execute(f"SELECT COUNT(*) FROM {table}")
-    z = r.fetchone()[0]
-    logger.info("Encrypting %d name from %s", z, table)
-    with progressbar.ProgressBar(max_value=z) as bar:
-        try:
-            r = c.execute(f"SELECT Name, {keyField} FROM {table}")
-            while True:
-                row = r.fetchone()
-                if row is None:
-                    break
-                (name, nameid) = row
-                newname = crypto.encryptName(name)
-                c2.execute(f'UPDATE {table} SET Name = "{newname}" WHERE {keyField} = {nameid}')
-                names = names + 1
-                bar.update(names)
-            conn.commit()
-        except Exception as e:
-            logger.error("Caught exception encrypting name %s: %s", name, str(e))
-            logger.exception(e)
-            conn.rollback()
-    logger.info("Encrypted %d names", names)
-
-
 def encryptFile(checksum, cacheDir, cipher, iv, output = None):
     f = cacheDir.open(checksum, 'rb')
     if output is None:
@@ -200,7 +172,7 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength, pbar):
     for row in r.fetchall():
         try:
             checksum = row[0]
-            logger.info("Encrypting File %s : %d", checksum, chainlength)
+            #logger.info("Encrypting File %s : %d", checksum, chainlength)
             chain = db.getChecksumInfoChain(checksum)
             bFile = None
             while chain:
@@ -314,14 +286,12 @@ def generateMetadata(db, cacheDir):
     metas = 0
     logger.info("Generating metadata/recovery info for %d files", n)
     with progressbar.ProgressBar(max_value=int(n)) as pbar:
-        batch = r.fetchmany(4096)
-        while batch:
+        while batch := r.fetchmany(4096):
             for row in batch:
                 # recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
                 Util.recordMetaData(cacheDir, row[0], row[1], row[2], row[3], row[4], basis=row[5], logger=logger)
                 metas += 1
                 pbar.update(metas)
-            batch = r.fetchmany(4096)
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Encrypt the database', add_help = False)
@@ -331,7 +301,6 @@ def processArgs():
     Config.addPasswordOptions(parser)
 
     parser.add_argument('--names',          dest='names',    action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
-    parser.add_argument('--usergroup',      dest='usergroup',action='store_true', default=False,       help='Encrypt filenames. Default=%(default)s')
     parser.add_argument('--dirs',           dest='dirs',     action='store_true', default=False,       help='Generate directory hashes.  Default=%(default)s')
     parser.add_argument('--sigs',           dest='sigs',     action='store_true', default=False,       help='Generate signature files.  Default=%(default)s')
     parser.add_argument('--files',          dest='files',    action='store_true', default=False,       help='Encrypt files. Default=%(default)s')
@@ -344,7 +313,7 @@ def processArgs():
 
     args = parser.parse_args(remaining)
 
-    if (not (args.names or args.usergroup or args.files or args.dirs or args.meta or args.all or args.sigs)):
+    if (not (args.names or args.files or args.dirs or args.meta or args.all or args.sigs)):
         parser.error("Must specify at least one --names, --files, --dirs, --meta, or --all")
     return args
 
@@ -373,9 +342,6 @@ def main():
 
     if args.names or args.all:
         encryptNames(db, crypto)
-    if args.usergroup or args.all:
-        encryptNames(db, crypto, 'Users', 'UserID')
-        encryptNames(db, crypto, 'Groups', 'GroupID')
     if args.dirs or args.all:
         generateDirHashes(db, crypto)
     if args.sigs or args.all:
