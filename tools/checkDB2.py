@@ -36,6 +36,8 @@ import os
 import io
 import json
 
+from rich.progress import track
+
 import Tardis
 from Tardis import Util
 from Tardis import Config
@@ -65,13 +67,18 @@ def processArgs():
 
     return parser.parse_args(remaining)
 
+def numChecksums(tardis):
+    rs = tardis.conn.execute("SELECT COUNT(Checksum) FROM Checksums WHERE isFile = 1")
+    if rs:
+        return rs[0]
+    return None
+
 def listChecksums(tardis, chunksize=10000):
     rs = tardis.conn.execute("SELECT Checksum, DiskSize, Basis, Compressed, Encrypted, Added FROM Checksums WHERE isFile = 1 ORDER BY Checksum")
-    data = rs.fetchmany(chunksize)
-    while data:
+
+    while data := rs.fetchmany(chunksize):
         for row in data:
             yield(row[0], row[1], row[2], row[3], row[4], row[5])
-        data = rs.fetchmany(chunksize)
 
 def decryptHeader(crypt, infile):
    # Get the IV, if it's not specified.
@@ -211,7 +218,7 @@ def main():
     (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
 
     count = 0
-    for (checksum, size, basis, compressed, encrypted, added) in listChecksums(tardis):
+    for (checksum, size, basis, compressed, encrypted, added) in track(listChecksums(tardis), description="Processing "):
         count += 1
         checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, args.authenticate)
 
