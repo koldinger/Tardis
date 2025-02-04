@@ -1079,7 +1079,6 @@ class Backend:
             raise InitFailedException("Must request new client (--create))") from exc
 
     def getDB(self, client, create):
-        script = None
         ret = "EXISTING"
 
         (dbdir, dbfile) = self.genPaths()
@@ -1097,7 +1096,7 @@ class Backend:
             ret = "NEW"
 
         self.db = TardisDB.TardisDB(dbfile,
-                                    initialize=True,
+                                    initialize=create,
                                     backup=(self.config.dbbackups > 0),
                                     connid=connid,
                                     user=self.config.user,
