@@ -32,6 +32,7 @@
 import argparse
 import logging
 import re
+import json
 
 import pwd
 import grp
@@ -100,7 +101,7 @@ def editData(data):
         printData(data)
         print("Note: ID May be the User/Group ID, especially if the current ID is blank or not appopriate")
         key = input("Line to edit (S to use all system names, C to use all current names, U to set unknown names, Q to quit, W to write and quit): ").strip()
-        
+
         match key.lower():
             case 'q':
                 return None
@@ -119,6 +120,16 @@ def editData(data):
                 for entry in data.values():
                     if not entry.current:
                         entry.current = value
+            case 'x':
+                filename = input("Enter filename: ")
+                with open("filename", "w", "utf8") as f:
+                    json.dump(data, f)
+            case 'l':
+                filename = input("Enter filename: ")
+                with open("filename", "r", "utf8") as f:
+                    vals = json.load(f)
+                    data = data | vals
+                
             case value if asint(value) in data.keys():
                 editEntry(data, int(value))
             case value:
@@ -144,7 +155,7 @@ def editUserNames(tardis, crypt):
     data = editData(data)
     if data:
         for key, value in data.items():
-            tardis.setUserInfo(key, crypt.encryptName(value.current))
+            tardis.setUserInfo(key, crypt.encryptName(value.current or ''))
 
 def editGroupNames(tardis, crypt):
     groups = list(tardis.getGroups())
@@ -156,8 +167,11 @@ def editGroupNames(tardis, crypt):
         except: 
             proposed = None
         curname = i['Name']
-        if curname:
-            curname = crypt.decryptName(curname)
+        try
+            if curname:
+                curname = crypt.decryptName(curname)
+        except Exception as e:
+            print(f"Couldn't decrypt {curname} {e}")
         grpId = i['GroupId']
         #print(f"{grpId} {curname} {proposed}")
         data[grpId] = Entry(curname, proposed, grpId, i['NameId'], curname)
@@ -165,7 +179,7 @@ def editGroupNames(tardis, crypt):
     data = editData(data)
     if data:
         for key, value in data.items():
-            tardis.setGroupInfo(key, crypt.encryptName(value.current))
+            tardis.setGroupInfo(key, crypt.encryptName(value.current or ''))
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Decrypt a File', fromfile_prefix_chars='@', add_help=False)
@@ -200,6 +214,8 @@ def main():
         print("--- Editing User Names ---")
         print("--------------------------")
         editUserNames(tardis, crypto)
+        print("")
+
     if args.groups:
         print("---------------------------")
         print("--- Editing Group Names ---")
