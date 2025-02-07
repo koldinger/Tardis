@@ -43,7 +43,7 @@ from Tardis import Util, Config
 #from icecream import ic
 #ic.enable()
 
-logger = None
+logger: logging.Logger
 
 def reader(quiet):
     prompt = '' if quiet else '--> '
@@ -136,7 +136,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    tardis, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    tardis, _, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
 
     if isinstance(args.backup, str) and args.backup.lower() == 'any':
         bset = None

@@ -88,7 +88,7 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
     try:
-        (tardis, cache, crypt, password) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir, retpassword=True)
+        Util.setupDataConnection(args.database, password, args.keys)
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed")
         sys.exit(1)

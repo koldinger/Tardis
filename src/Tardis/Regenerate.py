@@ -54,6 +54,7 @@ from . import TardisCrypto
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
 crypt: TardisCrypto.CryptoScheme
+args: argparse.Namespace
 
 class OwMode(enum.StrEnum):
     OW_NEVER  = 'never'
@@ -546,7 +547,7 @@ def main():
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
         args.password = None
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, cache, crypt, _) = Util.setupDataConnection(args.database, password, args.keys)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException:

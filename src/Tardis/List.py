@@ -728,15 +728,15 @@ def main():
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
 
-        (tardis, _, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, _, crypt, client) = Util.setupDataConnection(args.database, password, args.keys)
 
         setupDisplay(tardis)
 
         if args.headers:
-            doprint(f"Client: {args.client}    DB: {args.database}", color=colors['name'], eol=True)
+            doprint(f"Client: {client}    DB: {args.database}", color=colors['name'], eol=True)
 
         if args.glob:
             directories = []

@@ -99,8 +99,8 @@ def processArgs():
 def main():
     args = processArgs()
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client} ")
-    tardis, _, crypt = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
+    tardis, _, crypt, client = Util.setupDataConnection(args.database, password, args.keys)
 
     (f, c) = crypt.getKeys()
     client = tardis.getConfigValue('ClientID')
@@ -108,7 +108,8 @@ def main():
     data = Util.mkKeyString(client, f, c)
 
     qrfile = mkQrFile(data)
-    makePdf(args.output, qrfile.name, data, args.client)
+    makePdf(args.output, qrfile.name, data, client)
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

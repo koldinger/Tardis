@@ -99,7 +99,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=False)
 
-    _, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, _, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
 
     if args.input:
         files = json.load(open(args.input, 'r', encoding='utf8'))

@@ -37,8 +37,6 @@ SECTION = 'Tardis'
 
 _defaults = {
     'TARDIS_DB'             : '/srv/tardis',
-    'TARDIS_DBDIR'          : '',
-    'TARDIS_DBNAME'         : 'tardis.db',
     'TARDIS_CONFIG'         : '',
     'TARDIS_JOB'            : SECTION,
     'TARDIS_CLIENT'         : socket.gethostname(),

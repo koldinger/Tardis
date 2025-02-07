@@ -56,6 +56,9 @@ import srp
 import colorlog
 import parsedatetime
 
+from icecream import ic
+ic.configureOutput(includeContext=True)
+
 from . import Connection
 from . import CompressedBuffer
 from . import Defaults
@@ -325,37 +328,42 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
 
 # Get the database, cachedir, and crypto object.
 
-def setupDataConnection(dataLoc, client, password, keyFile=None, dbName="tardis.db", dbLoc=None, allow_upgrade=False, retpassword=False):
+def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, allow_remote=True):
     """ Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem,
     or via TardisRemote (http).
     Returns a 3-tuple, the TardisDB object, the CacheDir object, and the appropriate crypto object
     """
-    logger.debug("Connection requested for %s under %s", client, dataLoc)
+    logger.debug("Connection requested for %s", dataLoc)
     crypt = None
 
     loc = urllib.parse.urlparse(dataLoc)
-    if loc.scheme in ['http', 'https', 'tardis']:
-        logger.debug("Creating remote connection to %s", dataLoc)
-        # If no port specified, insert the port
-        if loc.port is None:
-            netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
-            dbLoc = urllib.parse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
-        else:
-            dbLoc = dataLoc
-        # get the RemoteURL object
-        logger.debug("==> %s %s", dbLoc, client)
-        tardis = RemoteDB.RemoteDB(dbLoc, client)
-        cache = tardis
-    else:
-        logger.debug("Creating direct connection to %s", dataLoc)
-        cacheDir = os.path.join(loc.path, client)
-        cache = CacheDir.CacheDir(cacheDir, create=False)
-        if not dbLoc:
-            dbDir = cacheDir
-        else:
-            dbDir = os.path.join(dbLoc, client)
-        dbPath = os.path.join(dbDir, dbName)
-        tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
+
+    #_, client = os.path.split(loc.path)
+    client = os.path.split(loc.path)[1]
+    match loc.scheme:
+        case 'http' | 'https' | 'tardis':
+            if not allow_remote:
+                raise Exception("Remote Connections not allowed")
+
+            scheme = 'http' if loc.scheme == 'tardis' else loc.scheme
+            # If no port specified, insert the port
+            port = Defaults.getDefault('TARDIS_REMOTE_PORT') if loc.port is None else loc.port
+            netloc = f"{loc.netloc}:{port}"
+            # FIXME: Needs client in path
+            dbLoc = urllib.parse.urlunparse((scheme, netloc, '', loc.params, loc.query, loc.fragment))
+            ic(dbLoc, client)
+            # get the RemoteURL object
+            logger.debug("==> %s %s", dbLoc, client)
+            tardis = RemoteDB.RemoteDB(dbLoc, client)
+            cache = tardis
+        case 'file' | '':
+            logger.debug("Creating direct connection to %s", dataLoc)
+            cache = CacheDir.CacheDir(loc.path, create=False)
+            dbPath = os.path.join(loc.path, "tardis.db")
+            tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
+        case _:
+            logger.error("Unrecognized scheme: %s", loc.scheme)
+            raise Exception(f"Invalid URL specified: {dataLoc}")
 
     needsAuth = tardis.needsAuthentication()
     if needsAuth and password is None:
@@ -376,9 +384,7 @@ def setupDataConnection(dataLoc, client, password, keyFile=None, dbName="tardis.
         (f, c) = tardis.getKeys()
     crypt.setKeys(f, c)
 
-    if retpassword:
-        return (tardis, cache, crypt, password)
-    return (tardis, cache, crypt)
+    return tardis, cache, crypt, client
 
 # Perform SRP authentication locally against the DB
 def authenticate(db, client, password):

@@ -327,7 +327,7 @@ def main():
 
     #Util.authenticate(db, args.client, password)
 
-    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    db, cacheDir, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
 
 
     #(f, c) = db.getKeys()

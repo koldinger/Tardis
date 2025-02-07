@@ -128,8 +128,11 @@ def createClient(password):
 
 def setPassword(password):
     try:
-        (db, _, _) = getDB(None)
-        crypt = TardisCrypto.getCrypto(TardisCrypto.DEF_CRYPTO_SCHEME, password, args.client)
+        #(db, _, _) = getDB(None)
+        (db, _, _, client) = Util.setupDataConnection(args.database, None, args.keys)
+        password = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"Set Password for {args.database}: ",
+                                     allowNone=False, confirm=True, strength=True)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.DEF_CRYPTO_SCHEME, password, client)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(args.client, password)
@@ -158,11 +161,13 @@ def setPassword(password):
 
 def changePassword(crypt, oldpw) :
     try:
-        (db, _, crypt) = getDB(oldpw)
+        #(db, _, crypt) = getDB(oldpw)
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.database}")
+        (db, _, crypt) = Util.setupDataConnection(args.database, password, args.keys)
 
         # Get the new password
         try:
-            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"New Password for {args.client}: ",
+            newpw = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"New Password for {args.database}: ",
                                      allowNone=False, confirm=True)
         except Exception as e:
             logger.critical(str(e))
@@ -876,7 +881,8 @@ def main():
         upgrade = args.command == 'upgrade'
 
         try:
-            (db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
+            #(db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
+            (db, cache, crypt) = Util.setupDataConnection(args.database, password, args.keys)
 
             if crypt and args.command != 'keys':
                 if args.keys:

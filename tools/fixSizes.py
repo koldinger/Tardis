@@ -37,7 +37,7 @@ import Tardis
 from Tardis import Util
 from Tardis import Config
 
-args = None
+args: argparse.Namespace
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Check contents of the DB against the file system', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
@@ -60,7 +60,7 @@ def main():
     args = processArgs()
 
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
-    (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    tardis, _, _, _ = Util.setupDataConnection(args.database, password, args.keys)
 
     allData = json.load(args.input)
     sizes = allData['size']
