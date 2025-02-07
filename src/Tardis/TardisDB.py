@@ -1266,6 +1266,8 @@ class TardisDB:
     def setUserInfo(self, userId, name):
         nameId = self._getNameId(name)
         self._execute("UPDATE Users SET NameId = :nameid WHERE UserID = :userId", {"nameid": nameId, "userId": userId})
+        # Not sure why we need this, but the remote interface gets cranky if we don't commit.
+        self.commit()
 
     @authenticate
     def getGroups(self):
@@ -1276,6 +1278,8 @@ class TardisDB:
     def setGroupInfo(self, groupId, name):
         nameId = self._getNameId(name)
         self._execute("UPDATE Groups SET NameId = :nameid WHERE GroupID = :groupId", {"nameid": nameId, "groupId": groupId})
+        # Not sure why we need this, but the remote interface gets cranky if we don't commit.
+        self.commit()
 
     @authenticate
     def setLock(self, locked, current=False):
