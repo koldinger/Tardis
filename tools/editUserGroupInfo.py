@@ -37,7 +37,7 @@ import json
 import pwd
 import grp
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from Tardis import Util, Config
 
@@ -122,11 +122,12 @@ def editData(data):
                         entry.current = value
             case 'x':
                 filename = input("Enter filename: ")
-                with open("filename", "w", "utf8") as f:
-                    json.dump(data, f)
+                print(data)
+                with open(filename, "w") as f:
+                    json.dump(list(map(asdict, data.values())), f)
             case 'l':
                 filename = input("Enter filename: ")
-                with open("filename", "r", "utf8") as f:
+                with open(filename, "r") as f:
                     vals = json.load(f)
                     data = data | vals
                 
@@ -146,8 +147,11 @@ def editUserNames(tardis, crypt):
         except: 
             proposed = None
         curname = i['Name']
-        if curname:
-            curname = crypt.decryptName(curname)
+        try:
+            if curname:
+                curname = crypt.decryptName(curname)
+        except Exception as e:
+            print(f"Couldn't decrypt {curname} {e}")
         userId = i['UserId']
         #print(f"{userId} {curname} {proposed}")
         data[userId] = Entry(curname, proposed, userId, i['NameId'], curname)
@@ -167,7 +171,7 @@ def editGroupNames(tardis, crypt):
         except: 
             proposed = None
         curname = i['Name']
-        try
+        try:
             if curname:
                 curname = crypt.decryptName(curname)
         except Exception as e:
@@ -214,7 +218,8 @@ def main():
         print("--- Editing User Names ---")
         print("--------------------------")
         editUserNames(tardis, crypto)
-        print("")
+        if args.groups:
+            print("")
 
     if args.groups:
         print("---------------------------")

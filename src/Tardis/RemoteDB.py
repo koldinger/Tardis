@@ -517,6 +517,7 @@ class RemoteDB:
 
     @reconnect
     def setUserInfo(self, userId, name):
+        name = urllib.parse.quote(name, '')
         r = self.session.get(self.buildURL('setUserInfo', userId, name), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -529,6 +530,7 @@ class RemoteDB:
 
     @reconnect
     def setGroupInfo(self, groupId, name):
+        name = urllib.parse.quote(name, '')
         r = self.session.get(self.buildURL('setGroupInfo', groupId, name), headers=self.headers)
         r.raise_for_status()
         return r.json()
