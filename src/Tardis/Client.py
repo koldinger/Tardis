@@ -1003,13 +1003,23 @@ def mkFileInfo(f):
 
 @functools.cache 
 def getUserName(uid):
-    info = pwd.getpwuid(uid)
-    return crypt.encryptName(info.pw_name)
+    try:
+        name = pwd.getpwuid(uid).pw_name
+    except Exception as e:
+        logger.warning("Unable to retrieve user name for UID %d", uid)
+        exceptionLogger.log(e)
+        name = 'UNKNOWN'
+    return crypt.encryptName(name)
 
 @functools.cache 
 def getGroupName(gid):
-    info = grp.getgrgid(gid)
-    return crypt.encryptName(info.gr_name)
+    try:
+        name = grp.getgrgid(gid).gr_name
+    except Exception as e:
+        logger.warning("Unable to retrieve group name for GID %d", gid)
+        exceptionLogger.log(e)
+        name = 'UNKNOWN'
+    return crypt.encryptName(name)
 
 def getDirContents(dirname, dirstat, excludes=None):
     """ Read a directory, load any new exclusions, delete the excluded files, and return a list
