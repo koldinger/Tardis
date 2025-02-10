@@ -1008,7 +1008,7 @@ def getUserName(uid):
     except Exception as e:
         logger.warning("Unable to retrieve user name for UID %d", uid)
         exceptionLogger.log(e)
-        name = 'UNKNOWN'
+        name = str(uid)
     return crypt.encryptName(name)
 
 @functools.cache 
@@ -1018,7 +1018,7 @@ def getGroupName(gid):
     except Exception as e:
         logger.warning("Unable to retrieve group name for GID %d", gid)
         exceptionLogger.log(e)
-        name = 'UNKNOWN'
+        name = str(gid)
     return crypt.encryptName(name)
 
 def getDirContents(dirname, dirstat, excludes=None):
@@ -1678,8 +1678,6 @@ def doSrpAuthentication(password, response):
 def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
     global lastTimestamp, crypt, trackOutstanding
     triedAuthentication = False
-    crypt = None
-
     crypt = None
 
     # Create a BACKUP message
