@@ -336,8 +336,7 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
     logger.debug("Connection requested for %s", dataLoc)
     crypt = None
 
-    loc = urllib.parse.urlparse(dataLoc)
-
+    loc = urllib.parse.urlparse(dataLoc, scheme='file')
     #_, client = os.path.split(loc.path)
     client = os.path.split(loc.path)[1]
     match loc.scheme:
@@ -351,7 +350,6 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
             netloc = f"{loc.netloc}:{port}"
             # FIXME: Needs client in path
             dbLoc = urllib.parse.urlunparse((scheme, netloc, '', loc.params, loc.query, loc.fragment))
-            ic(dbLoc, client)
             # get the RemoteURL object
             logger.debug("==> %s %s", dbLoc, client)
             tardis = RemoteDB.RemoteDB(dbLoc, client)
