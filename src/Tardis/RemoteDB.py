@@ -448,7 +448,7 @@ class RemoteDB:
     @reconnect
     def listPurgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        timestamp = float(timestamp | 0)
+        timestamp = float(timestamp or 0)
         r = self.session.get(self.buildURL('listPurgeSets', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -456,7 +456,7 @@ class RemoteDB:
     @reconnect
     def listPurgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        timestamp = float(timestamp | 0)
+        timestamp = float(timestamp or 0)
         r = self.session.get(self.buildURL('listPurgeIncomplete', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -464,7 +464,7 @@ class RemoteDB:
     @reconnect
     def purgeSets(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        timestamp = float(timestamp | 0)
+        timestamp = float(timestamp or 0)
         r = self.session.get(self.buildURL('purgeSets', bset, priority, timestamp), verify=self.verify, headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -472,7 +472,7 @@ class RemoteDB:
     @reconnect
     def purgeIncomplete(self, priority, timestamp, current=False):
         bset = self._bset(current)
-        timestamp = float(timestamp | 0)
+        timestamp = float(timestamp or 0)
         r = self.session.get(self.buildURL('purgeIncomplete', bset, priority, timestamp), headers=self.headers)
         r.raise_for_status()
         return r.json()
