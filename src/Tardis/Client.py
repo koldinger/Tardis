@@ -1413,7 +1413,6 @@ def loadExcludeFile(name):
         #traceback.print_exc()
         return set()
 
-
 # Load all the excludes we might want
 def loadExcludes():
     global excludeFile, globalExcludes
@@ -1432,6 +1431,51 @@ def loadExcludedDirs():
     if args.excludedirs is not None:
         excludeDirs.extend(list(map(Util.fullPath, args.excludedirs)))
 
+def loadNoCompressTypes():
+    global noCompTypes
+
+    # If no compression types are specified, load the list
+    types = []
+    for i in args.nocompressfile:
+        try:
+            logger.debug("Reading types to ignore from: %s", i)
+            with open(i, 'r', encoding=systemencoding) as f:
+                data = list(map(Util.stripComments, f.readlines()))
+            types = types + [x for x in data if len(x)]
+        except Exception as e:
+            logger.error("Could not load nocompress types list from: %s", i)
+            raise e
+    types = types + args.nocompress
+    noCompTypes = set(types)
+    logger.debug("Types to ignore: %s", sorted(noCompTypes))
+
+def calculateDirectories() -> tuple[list, str]:
+    # Calculate the base directories
+    directories = list(itertools.chain.from_iterable(list(map(glob.glob, list(map(Util.fullPath, args.directories))))))
+    if args.basepath == 'common':
+        rootdir = os.path.commonpath(directories)
+        # If the rootdir is actually one of the directories, back off one directory
+        if rootdir in directories:
+            rootdir  = os.path.split(rootdir)[0]
+    elif args.basepath == 'full':
+        rootdir = '/'
+    else:
+        # None, just using the final component of the pathname.
+        # Check that each final component is unique, or will cause server error.
+        names = {}
+        errors = False
+        for i in directories:
+            x = os.path.split(i)[1]
+            if x in names:
+                logger.error("%s directory name (%s) is not unique.  Collides with %s", i, x, names[x])
+                errors = True
+            else:
+                names[x] = i
+        if errors:
+            raise Exception('All paths must have a unique final directory name if basepath is none')
+        rootdir = None
+    logger.debug("Rootdir is: %s", rootdir)
+    return directories, rootdir
 
 _nextMsgId = 0
 outstandingMessages = 0
@@ -2254,44 +2298,10 @@ def initialize():
             sys.exit(1)
 
         # If no compression types are specified, load the list
-        types = []
-        for i in args.nocompressfile:
-            try:
-                logger.debug("Reading types to ignore from: %s", i)
-                data = list(map(Util.stripComments, open(i, 'r', encoding=systemencoding).readlines()))
-                types = types + [x for x in data if len(x)]
-            except Exception as e:
-                logger.error("Could not load nocompress types list from: %s", i)
-                raise e
-        types = types + args.nocompress
-        noCompTypes = set(types)
-        logger.debug("Types to ignore: %s", sorted(noCompTypes))
+        loadNoCompressTypes()
 
-        # Calculate the base directories
-        directories = list(itertools.chain.from_iterable(list(map(glob.glob, list(map(Util.fullPath, args.directories))))))
-        if args.basepath == 'common':
-            rootdir = os.path.commonpath(directories)
-            # If the rootdir is actually one of the directories, back off one directory
-            if rootdir in directories:
-                rootdir  = os.path.split(rootdir)[0]
-        elif args.basepath == 'full':
-            rootdir = '/'
-        else:
-            # None, just using the final component of the pathname.
-            # Check that each final component is unique, or will cause server error.
-            names = {}
-            errors = False
-            for i in directories:
-                x = os.path.split(i)[1]
-                if x in names:
-                    logger.error("%s directory name (%s) is not unique.  Collides with %s", i, x, names[x])
-                    errors = True
-                else:
-                    names[x] = i
-            if errors:
-                raise Exception('All paths must have a unique final directory name if basepath is none')
-            rootdir = None
-        logger.debug("Rootdir is: %s", rootdir)
+        directories, rootdir = calculateDirectories()
+
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
         exceptionLogger.log(e)
