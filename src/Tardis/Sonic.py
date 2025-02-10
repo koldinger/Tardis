@@ -72,9 +72,10 @@ eLogger: Util.ExceptionLogger
 args: argparse.Namespace
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
-    loc = urllib.parse.urlparse(args.database)
+    loc = urllib.parse.urlparse(args.database, scheme='file')
+    client = loc[1]
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
-    if loc.scheme in ['http', 'https']:
+    if loc.scheme in ['http', 'https', 'tardis']:
         if not allowRemote:
             raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
         # If no port specified, insert the port
@@ -83,28 +84,28 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=Fals
             dbLoc = urllib.parse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         else:
             dbLoc = args.database
-        tardisdb = RemoteDB.RemoteDB(dbLoc, args.client)
+        tardisdb = RemoteDB.RemoteDB(dbLoc, client)
         cache = tardisdb
     else:
-        basedir = os.path.join(args.database, args.client)
+        basedir = os.path.join(args.database, client)
         if not args.dbdir:
-            dbdir = os.path.join(args.database, args.client)
+            dbdir = os.path.join(args.database, client)
         else:
-            dbdir = os.path.join(args.dbdir, args.client)
+            dbdir = os.path.join(args.dbdir, client)
         dbfile = os.path.join(dbdir, args.dbname)
         if new and os.path.exists(dbfile):
-            raise Exception(f"Database for client {args.client} already exists.")
+            raise Exception(f"Database for client {client} already exists.")
 
         cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=create, allow_upgrade=allowUpgrade)
 
     if tardisdb.needsAuthentication():
         if password is None:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ", allowNone=False, confirm=False)
-        Util.authenticate(tardisdb, args.client, password)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", allowNone=False, confirm=False)
+        Util.authenticate(tardisdb, client, password)
 
         scheme = tardisdb.getCryptoScheme()
-        crypt = TardisCrypto.getCrypto(scheme, password, args.client)
+        crypt = TardisCrypto.getCrypto(scheme, password, client)
         logger.info("Using crypto scheme %s", TardisCrypto.getCryptoNames(int(scheme)))
     else:
         crypt = TardisCrypto.getCrypto(0, None, None)
@@ -135,7 +136,7 @@ def setPassword(password):
         crypt = TardisCrypto.getCrypto(TardisCrypto.DEF_CRYPTO_SCHEME, password, client)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
-        (salt, vkey) = srp.create_salted_verification_key(args.client, password)
+        (salt, vkey) = srp.create_salted_verification_key(client, password)
         if args.keys:
             db.beginTransaction()
             db.setSrpValues(salt, vkey)
@@ -163,7 +164,7 @@ def changePassword(crypt, oldpw) :
     try:
         #(db, _, crypt) = getDB(oldpw)
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.database}")
-        (db, _, crypt) = Util.setupDataConnection(args.database, password, args.keys)
+        (db, _, crypt, client) = Util.setupDataConnection(args.database, password, args.keys)
 
         # Get the new password
         try:
@@ -175,7 +176,7 @@ def changePassword(crypt, oldpw) :
             return -1
 
         scheme = db.getConfigValue('CryptoScheme', 1)
-        crypt2 = TardisCrypto.getCrypto(scheme, newpw, args.client)
+        crypt2 = TardisCrypto.getCrypto(scheme, newpw, client)
 
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
@@ -196,7 +197,7 @@ def changePassword(crypt, oldpw) :
         # Now get the encrypted versions
         (f, c) = crypt2.getKeys()
 
-        (salt, vkey) = srp.create_salted_verification_key(args.client, newpw)
+        (salt, vkey) = srp.create_salted_verification_key(client, newpw)
 
         if args.keys:
             db.beginTransaction()
@@ -862,7 +863,7 @@ def main():
         confirmPw = args.command in ['setpass', 'create']
         allowNone = args.command not in ['setpass', 'chpass']
         try:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ", allowNone=allowNone, confirm=confirmPw)
+            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password: ", allowNone=allowNone, confirm=confirmPw)
         except Exception as e:
             logger.critical(str(e))
             eLogger.log(e)
@@ -882,7 +883,7 @@ def main():
 
         try:
             #(db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
-            (db, cache, crypt) = Util.setupDataConnection(args.database, password, args.keys)
+            (db, cache, crypt, _) = Util.setupDataConnection(args.database, password, args.keys, allow_upgrade=upgrade)
 
             if crypt and args.command != 'keys':
                 if args.keys:
