@@ -387,11 +387,11 @@ def checkMessage(message, expected):
 
 def filelist(dirname, excludes, skipfile):
     """ List the files in a directory, except those that match something in a set of patterns """
-    ic(dirname, excludes)
-    excludeObj = compileExcludes(excludes)
-    ic(excludeObj)
-    files = itertools.filterfalse(lambda x: excludeObj.match(x.path), os.scandir(dirname))
-    files = ic(list(files))
+    if excludes:
+        excludeObj = compileExcludes(excludes)
+        files = itertools.filterfalse(lambda x: excludeObj.match(x.path), os.scandir(dirname))
+    else:
+        files = os.scandir(dirname)
     for f in files:
         # if it's a directory, and there's a skipfile in it, then just skip the directory
         if f.is_dir() and os.path.lexists(os.path.join(f, skipfile)):
@@ -1198,7 +1198,6 @@ processedDirs = set()
 
 def processDirectory(path, top, depth=0, excludes=None):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
-    ic(path)
     excludes = excludes or []
 
     newdepth = max(depth - 1, 0)
@@ -1404,17 +1403,14 @@ def compileExcludes(patterns):
 
 def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
-    ic(name)
     try:
         with open(name) as f:
             excludes = [mkExcludePattern(x.rstrip('\n')) for x in f.readlines()]
-        ic(excludes)
         return set(excludes)
     except FileNotFoundError:
         return set()
     except IOError as e:
         #traceback.print_exc()
-        ic("Failed", e)
         return set()
 
 
