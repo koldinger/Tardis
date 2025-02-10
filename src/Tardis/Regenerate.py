@@ -545,9 +545,9 @@ def main():
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
     try:
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
-        (tardis, cache, crypt, _) = Util.setupDataConnection(args.database, password, args.keys)
+        (tardis, cache, crypt, client) = Util.setupDataConnection(args.database, password, args.keys)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException:
