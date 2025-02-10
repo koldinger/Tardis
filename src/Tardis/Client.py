@@ -58,6 +58,7 @@ import socket
 import pwd
 import grp
 import concurrent.futures
+import hashlib
 
 from collections import defaultdict, deque
 from binascii import hexlify
@@ -281,7 +282,6 @@ def getInodeDBName(inode):
         return name
     return "Unknown"
 
-
 class CustomArgumentParser(argparse.ArgumentParser):
     """
     A custom argument parser to nicely handle argument files, and strip out any blank lines or commented lines
@@ -395,6 +395,7 @@ def filelist(dirname, excludes, skipfile):
         files = itertools.filterfalse(lambda x: excludeObj.match(x.path), os.scandir(dirname))
     else:
         files = os.scandir(dirname)
+
     for f in files:
         # if it's a directory, and there's a skipfile in it, then just skip the directory
         if f.is_dir() and os.path.lexists(os.path.join(f, skipfile)):
@@ -1630,21 +1631,21 @@ def createPrefixPath(root, path):
         parentDev = virtualDev(st.st_dev, dirPath)
         current   = dirPath
 
-def setCrypto(password, version):
+def setCrypto(client, password, version):
     global srpUsr, crypt
-    srpUsr = srp.User(args.client, password)
-    crypt = TardisCrypto.getCrypto(version, password, args.client)
+    srpUsr = srp.User(client, password)
+    crypt = TardisCrypto.getCrypto(version, password, client)
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
     return password
 
-def doSendKeys(password):
+def doSendKeys(client, password):
     """ Set up cryptography system, and send the generated keys """
     assert(crypt)
     assert(srpUsr)
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
-    (salt, vkey) = srp.create_salted_verification_key(args.client, password)
+    (salt, vkey) = srp.create_salted_verification_key(client, password)
     message = {
         "message": Protocol.Commands.SETKEYS,
         "filenameKey": f,
@@ -1656,10 +1657,10 @@ def doSendKeys(password):
     resp = sendAndReceive(message)
     return resp
 
-def doSrpAuthentication(password, response):
+def doSrpAuthentication(client, password, response):
     """ Setup cryptography and do authentication """
     try:
-        setCrypto(password, response['cryptoScheme'])
+        setCrypto(client, password, response['cryptoScheme'])
 
         srpUname, srpValueA = srpUsr.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
@@ -1702,7 +1703,7 @@ def doSrpAuthentication(password, response):
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
 
-def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, version=Tardis.__versionstring__):
+def startBackup(name, priority, client, force, full=False, create=False, password=None, scheme=None, url = None, version=Tardis.__versionstring__):
     global lastTimestamp, crypt, trackOutstanding
     triedAuthentication = False
     crypt = None
@@ -1731,15 +1732,15 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
         if password is None:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=create)
         if create:
-            setCrypto(password, args.cryptoScheme or TardisCrypto.DEF_CRYPTO_SCHEME)
+            setCrypto(client, password, args.cryptoScheme or TardisCrypto.DEF_CRYPTO_SCHEME)
 
     if resp['status'] == Protocol.Responses.NEEDKEYS:
-        resp = doSendKeys(password)
+        resp = doSendKeys(client, password)
     if resp['status'] == Protocol.Responses.AUTH:
         triedAuthentication = True
         if not password:
             raise InitFailedException(f"Client {client} requires a password")
-        resp = doSrpAuthentication(password, resp)
+        resp = doSrpAuthentication(client, password, resp)
 
     if resp['status'] != 'OK':
         errmesg = "BACKUP request failed"
@@ -1760,7 +1761,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
     contentKey     = resp.get('contentKey')
     # FIXME: TODO: Should this be in the initialization?
     if not crypt:
-        crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, args.client)
+        crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
     # Set up the encryption, if needed.
     ### TODO
@@ -1793,7 +1794,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
         crypt.setKeys(f, c)
 
     if verbosity or args.stats or args.report != 'none':
-        logger.log(log.STATS, f"Name: {backupName} Server: {server}:{port} Session: {sessionid}")
+        logger.log(log.STATS, f"Name: {backupName} Locationn: {url} Session: {sessionid}")
 
     trackOutstanding = True
 
@@ -1851,20 +1852,12 @@ def processCommandLine():
     locgroup = parser.add_argument_group("Local Backup options")
     locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
 
-    remotegroup = parser.add_argument_group("Remote Server options")
-    remotegroup.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
-    remotegroup.add_argument('--port', '-p',             dest='port', type=int, default=c.getint(t, 'Port'),                 help='Set the destination server port. ' + _def)
-
-    modegroup = parser.add_mutually_exclusive_group()
-    modegroup.add_argument('--local',               dest='local', action='store_true',  default=c.get(t, 'Local'), help='Run as a local job')
-    modegroup.add_argument('--remote',              dest='local', action='store_false', default=c.get(t, 'Local'), help='Run against a remote server')
-
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
-    parser.add_argument('--client', '-C',           dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  ' + _def)
     parser.add_argument('--force',                  dest='force', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Force'),
                         help='Force the backup to take place, even if others are currently running.  ' + _def)
+
     parser.add_argument('--full',                   dest='full', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Full'),
                         help='Perform a full backup, with no delta information. ' + _def)
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
@@ -1981,28 +1974,40 @@ def processCommandLine():
 
     return (args, c, t)
 
-def parseServerInfo():
-    """ Break up the server info passed in into useable chunks """
-    serverStr = args.server
-    if not serverStr.startswith('tardis://'):
-        serverStr = 'tardis://' + serverStr
-    try:
-        info = urllib.parse.urlparse(serverStr)
-        if info.scheme != 'tardis':
-            raise Exception(f"Invalid URL scheme: {info.scheme}")
+def checkURL():
+    logger.debug("Parsing %s", args.database)
+    urlInfo = urllib.parse.urlparse(args.database, scheme='file')
+    parts = os.path.split(urlInfo.path)
 
-        sServer = info.hostname
-        sPort   = info.port
-        sClient = info.path.lstrip('/')
+    match urlInfo.scheme:
+        case 'tardis':
+            if not urlInfo.path:
+                raise InitFailedException(f"Invalid URL: no client specified: {urlInfo.path})")
+            if urlInfo.params or urlInfo.query:
+                raise InitFailedException(f"Invalid URL: no params or query info accepted: {args.database}")
 
-    except Exception as e:
-        raise Exception(f"Invalid URL: {args.server} -- {e}")
+            if parts[0] != '/':
+                raise InitFailedException(f"Invalid path for remote access: {urlInfo.path}: {args.database}")
 
-    server = sServer or args.server
-    port = sPort or args.port
-    client = sClient or args.client
+            port = urlInfo.port or int(Defaults.getDefault('TARDIS_PORT'))
+            netloc = f"{urlInfo.hostname}:{port}"
+        case 'file':
+            if urlInfo.netloc or urlInfo.params or urlInfo.query:
+                raise InitFailedException(f"Invalid URL: {args.database}")
+            if not parts[1]:
+                raise InitFailedException(f"Invalid URL: No path to database: {args.database}")
+            netloc = ''
+        case _:
+            raise InitFailedException(f"Invalid URL: unrecognized scheme: {urlInfo.scheme}: {args.database}")
 
-    return (server, port, client)
+    client = parts[1]
+    if not client:
+        raise InitFailedException(f"Invalid URL: No client specified: {args.database}")
+
+    info = urllib.parse.ParseResult(urlInfo.scheme, netloc, urlInfo.path, '', '', '')
+    url = urllib.parse.urlunparse(info)
+    logger.debug("Canonical URL: %s - %s", url, info)
+    return url, client, info
 
 def setupLogging(logfiles, verbosity, logExceptions):
     global logger, exceptionLogger
@@ -2101,28 +2106,6 @@ def printStats(starttime, endtime):
     logger.log(log.STATS, f"Wait Times:   {str(datetime.timedelta(0, waittime))}")
     logger.log(log.STATS, f"Sending Time: {str(datetime.timedelta(0, Util._transmissionTime))}")
 
-def pickMode():
-    if args.local != '' and args.local is not None:
-        if args.local in [True, 'True']:
-            if args.server is None:
-                raise Exception("Remote mode specied without a server")
-            return True
-
-        if args.local in [False, 'False']:
-            if args.database is None:
-                raise Exception("Local mode specied without a database")
-            return False
-
-    if args.server is not None and args.database is not None:
-        raise Exception("Both database and server specified.  Unable to determine mode.   Use --local/--remote switches")
-
-    if args.server is not None:
-        return False
-    if args.database is not None:
-        return True
-
-    raise Exception("Neither database nor remote server is set.   Unable to backup")
-
 def printReport(repFormat):
     lastDir = None
     length = 0
@@ -2171,11 +2154,12 @@ def printReport(repFormat):
     else:
         logger.log(log.STATS, "No files backed up")
 
-def lockRun(server, port, client):
-    lockName = 'tardis_' + str(server) + '_' + str(port) + '_' + str(client)
 
+def lockRun(location: str):
     # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by
     # the superuser (ie, can't write to /var/run)
+    hash = hashlib.md5(location.encode()).hexdigest()
+    lockName = 'tardis_' + hash
     pidfile = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
 
     try:
@@ -2188,7 +2172,7 @@ def lockRun(server, port, client):
         raise
     return pidfile
 
-def mkBackendConfig(jobname):
+def mkBackendConfig(jobname, dbLoc):
     bc = Backend.BackendConfig()
     j = jobname
     bc.umask           = Util.parseInt(config.get(j, 'Umask'))
@@ -2209,7 +2193,9 @@ def mkBackendConfig(jobname):
     bc.user            = None
     bc.group           = None
 
-    bc.basedir         = args.database
+    #bc.basedir         = args.database
+    bc.basedir         = dbLoc
+
     bc.allowNew        = True
     bc.allowUpgrades   = True
 
@@ -2224,9 +2210,10 @@ def mkBackendConfig(jobname):
 
     return bc
 
-def runBackend(jobname):
+def runBackend(jobname, urlinfo):
     conn = Connection.DirectConnection(args.timeout)
-    beConfig = mkBackendConfig(jobname)
+    database = os.path.split(urlinfo.path)
+    beConfig = mkBackendConfig(jobname, database[0])
 
     backend = Backend.Backend(conn.serverMessages, beConfig, logSession=False)
     backendThread = threading.Thread(target=backend.runBackup, name="Backend")
@@ -2240,10 +2227,10 @@ def initialize():
         starttime = datetime.datetime.now()
 
         # Get the actual names we're going to use
-        (server, port, client) = parseServerInfo()
+        url, client, urlinfo = checkURL()
 
         if args.exclusive:
-            lockRun(server, port, client)
+            lockRun(url)
 
         # setup purge times
         setPurgeValues()
@@ -2272,7 +2259,7 @@ def initialize():
         exceptionLogger.log(e)
         sys.exit(1)
 
-    return password, directories, rootdir, server, port
+    return password, directories, rootdir, client, url, urlinfo
 
 def shutdown():
     # Send a purge command, if requested.
@@ -2340,7 +2327,6 @@ def main():
     try:
         setupLogging(args.logfiles, verbosity, args.exceptions)
         # determine mode:
-        localmode = pickMode()
     except Exception as e:
         logger.critical(e)
         sys.exit(1)
@@ -2357,18 +2343,18 @@ def main():
 
     # Get the connection object
     try:
-        password, directories, rootdir, server, port = initialize()
+        password, directories, rootdir, client, url, urlinfo = initialize()
 
-        if localmode:
-            (conn, _, backendThread) = runBackend(jobname)
+        if urlinfo.scheme == 'file':
+            (conn, _, backendThread) = runBackend(jobname, urlinfo)
         else:
-            conn = Connection.MsgPackConnection(server, port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
+            conn = Connection.MsgPackConnection(urlinfo.hostname, urlinfo.port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
 
         messenger = Messenger.Messenger(conn.sender, timeout=args.timeout)
         messenger.run()
         messenger.setProgressBar(statusBar)
     except Exception as e:
-        logger.critical("Unable to start session with %s:%s: %s", server, port, str(e))
+        logger.critical("Unable to start session with %s: %s", args.database, str(e))
         exceptionLogger.log(e)
         sys.exit(1)
 
@@ -2378,7 +2364,7 @@ def main():
         if args.progress:
             statusBar.start()
 
-        startBackup(args.name, args.priority, args.client, args.force, args.full, args.create, password, args.cryptoScheme)
+        startBackup(args.name, args.priority, client, args.force, args.full, args.create, password, args.cryptoScheme, url)
 
         # Send information about this backup.
         sendConfigInfo(directories)
@@ -2407,7 +2393,7 @@ def main():
         exceptionLogger.log(e)
     finally:
         conn.close(exc)
-        if localmode:
+        if urlinfo.scheme == 'file':
             logger.info("Waiting for server to complete")
             backendThread.join()        # Should I do communicate?
 
