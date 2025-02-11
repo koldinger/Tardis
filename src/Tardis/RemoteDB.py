@@ -223,7 +223,7 @@ class RemoteDB:
     @reconnect
     def getBackupSetInfo(self, name):
         name = urllib.parse.quote(name, '')
-        r = self.session.get(self.buildURL('getBackupSetInfo' + name), headers=self.headers)
+        r = self.session.get(self.buildURL('getBackupSetInfo', name), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
@@ -485,33 +485,33 @@ class RemoteDB:
 
     @reconnect
     def listOrphanChecksums(self, isFile):
-        r = self.session.get(self.baseURL + 'listOrphanChecksums/' + str(int(isFile)), headers=self.headers)
+        r = self.session.get(self.buildUrl('listOrphanChecksums/', str(int(isFile))), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def setTag(self, tag, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + 'setTag/' + bset + '/' + str(tag), headers=self.headers)
+        r = self.session.get(self.buildUrl('setTag', bset, str(tag)), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def removeTag(self, tag):
-        r = self.session.get(self.baseURL + 'removeTag/' + str(tag), headers=self.headers)
+        r = self.session.get(self.buildUrl('removeTag', str(tag)), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getTags(self, current=False):
         bset = self._bset(current)
-        r = self.session.get(self.baseURL + 'getTags/' + bset, headers=self.headers)
+        r = self.session.get(self.buildUrl('getTags', bset), headers=self.headers)
         r.raise_for_status()
         return r.json()
 
     @reconnect
     def getUsers(self):
-        r = self.session.get(self.baseURL + 'getUsers', headers=self.headers)
+        r = self.session.get(self.buildUrl('getUsers'), headers=self.headers)
         r.raise_for_status()
         yield from r.json()
 
@@ -524,7 +524,7 @@ class RemoteDB:
 
     @reconnect
     def getGroups(self):
-        r = self.session.get(self.baseURL + 'getGroups', headers=self.headers)
+        r = self.session.get(self.buildUrl('getGroups'), headers=self.headers)
         r.raise_for_status()
         yield from r.json()
 
@@ -538,7 +538,7 @@ class RemoteDB:
 
     @reconnect
     def setLock(self, locked, current=False):
-        r = self.session.get(self.baseURL + 'setLock')
+        r = self.session.get(self.buildUrl('setLock'))
         r.raise_for_status()
         return r.json()
 
