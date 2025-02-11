@@ -47,6 +47,8 @@ import pwd
 import grp
 from enum import IntEnum, auto
 
+from enum import IntEnum, auto
+
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
@@ -103,7 +105,6 @@ class TardisFS(LoggingMixIn, Operations):
 
     client   = Defaults.getDefault('TARDIS_CLIENT')
     database = Defaults.getDefault('TARDIS_DB')
-    dbdir    = Defaults.getDefault('TARDIS_DBDIR') % {'TARDIS_DB': database}          # HACK
     dbname   = Defaults.getDefault('TARDIS_DBNAME')
     current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
@@ -614,7 +615,7 @@ def processArgs():
     return args
 
 def delTardisKeys(kwargs):
-    keys = ['password', 'pwfile', 'pwprog', 'database', 'client', 'keys', 'dbname', 'dbdir']
+    keys = ['password', 'pwfile', 'pwprog', 'database', 'client', 'keys', 'dbname']
     for i in keys:
         kwargs.pop(i, None)
 
