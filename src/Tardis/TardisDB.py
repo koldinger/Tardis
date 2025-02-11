@@ -406,7 +406,7 @@ class TardisDB:
     def checkBackupSetName(self, name):
         """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
         row = self._executeWithResult("SELECT COUNT(*) FROM Backups WHERE Name = :name", { "name": name })
-        return (row[0] == 0)
+        return row[0] == 0
 
     @authenticate
     def getFileInfoByName(self, name, parent, current=True):
@@ -636,7 +636,7 @@ class TardisDB:
     @functools.cache
     def _getUserId(self, user):
         nameid = self._getNameId(user)
-        row = self._executeWithResult("SELECT UserID FROM Users WHERE UserID = :nameid", {"nameid": nameid})
+        row = self._executeWithResult("SELECT UserID FROM Users WHERE NameId = :nameid", {"nameid": nameid})
         if not row:
             self.logger.debug("Inserting username %s into Users Table", user)
             c = self._execute("INSERT INTO Users (NameID) VALUES (:nameid)", {"nameid": nameid})
@@ -927,12 +927,12 @@ class TardisDB:
         return row
 
     @authenticate
-    def getBackupSetInfoForTime(self, time):
+    def getBackupSetInfoForTime(self, when):
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
                           _backupSetInfoJoin +
                           "WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
-                          { "time": time })
+                          { "time": when })
         row = c.fetchone()
         return row
 
