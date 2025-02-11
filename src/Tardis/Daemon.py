@@ -73,13 +73,10 @@ args: argparse.Namespace
 
 configSection = 'Daemon'
 
-databaseName    = Defaults.getDefault('TARDIS_DBNAME')
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
 baseDir         = Defaults.getDefault('TARDIS_DB')
-dbDir           = Defaults.getDefault('TARDIS_DBDIR')
 portNumber      = Defaults.getDefault('TARDIS_PORT')
 pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
-journalName     = Defaults.getDefault('TARDIS_JOURNAL')
 timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
 logExceptions   = Defaults.getDefault('TARDIS_LOGEXCEPTIONS')
 skipFile        = Defaults.getDefault('TARDIS_SKIP')
@@ -87,12 +84,9 @@ skipFile        = Defaults.getDefault('TARDIS_SKIP')
 configDefaults = {
     'Port'              : portNumber,
     'BaseDir'           : baseDir,
-    'DBDir'             : dbDir,
-    'DBName'            : databaseName,
     'LogCfg'            : '',
     'Profile'           : str(False),
     'LogFile'           : '',
-    'JournalFile'       : journalName,
     'LinkBasis'         : str(False),
     'LogExceptions'     : str(False),
     'AllowNewHosts'     : str(False),
@@ -128,9 +122,6 @@ configDefaults = {
 
 server = None
 logger: logging.Logger
-
-logging.TRACE = logging.DEBUG - 1
-logging.MSGS  = logging.DEBUG - 2
 
 class InitFailedException(Exception):
     pass
@@ -252,18 +243,13 @@ class TardisServer:
     # Want to do this in multiple classes.
     def __init__(self):
         self.basedir        = args.database
-        if args.dbdir:
-            self.dbdir      = args.dbdir
-        else:
-            self.dbdir      = self.basedir
+
         self.savefull       = config.getboolean(configSection, 'SaveFull')
         self.maxChain       = config.getint(configSection, 'MaxDeltaChain')
         self.deltaPercent   = float(config.getint(configSection, 'MaxChangePercent')) / 100.0        # Convert to a ratio
         self.cksContent     = config.getint(configSection, 'CksContent')
 
-        self.dbname         = args.dbname
         self.allowNew       = args.newhosts
-        self.journal        = args.journal
 
         self.linkBasis      = config.getboolean(configSection, 'LinkBasis')
 
@@ -356,9 +342,6 @@ class TardisDomainSocketServer(socketserver.UnixStreamServer, TardisServer):
 
 def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
-
-    logging.addLevelName(logging.TRACE, 'Message')
-    logging.addLevelName(logging.MSGS,  'MSG')
 
     logging.raiseExceptions = False
 
@@ -461,8 +444,6 @@ def processArgs():
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
     parser.add_argument('--database',           dest='database',        default=config.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
-    parser.add_argument('--dbdir',              dest='dbdir',           default=config.get(t, 'DBDir'),  help='Dabatase directory (Default: %(default)s)')
-    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
@@ -478,7 +459,6 @@ def processArgs():
     parser.add_argument('--threads',            dest='threaded',        action=Util.StoreBoolean, default=True, help='Run a threaded server.  Default: %(default)s')
 
     parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
-    parser.add_argument('--journal', '-j',      dest='journal',         default=config.get(t, 'JournalFile'), help='Journal file actions to this file (Default: %(default)s)')
 
     parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean, default=config.getboolean(t, 'ReuseAddr'),
                         help='Reuse the socket address immediately')

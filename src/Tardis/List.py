@@ -52,6 +52,7 @@ columnfmt = None
 args: argparse.Namespace
 curcolor = None
 logger: logging.Logger
+eLogger: Util.ExceptionLogger
 backupSets = []
 
 line = ''
@@ -720,7 +721,7 @@ def processArgs():
     rangegrp.add_argument('--range',        dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',        dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
-    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
+    parser.add_argument('--exceptions', '-E', default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
 
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose',                  help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
@@ -733,11 +734,12 @@ def processArgs():
     return parser.parse_args(remaining)
 
 def main():
-    global args, logger
+    global args, logger, eLogger
     tardis = None
     try:
         args = processArgs()
         logger = Util.setupLogging(args.verbose)
+        eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
@@ -773,12 +775,10 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
     finally:
         if tardis:
             tardis.close()

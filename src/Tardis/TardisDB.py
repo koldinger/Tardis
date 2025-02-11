@@ -49,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -132,10 +132,6 @@ _checksumInfoFields = dedent(
     """)
 
 _schemaVersion = 22
-
-def _addFields(x, y):
-    """ Add fields to the end of a dict """
-    return dict(list(y.items()) + x)
 
 def _splitpath(path):
     """ Split a path into chunks, recursively """
@@ -653,8 +649,6 @@ class TardisDB:
             self.logger.debug("Inserting username %s into Users Table", user)
             c = self._execute("INSERT INTO Users (NameID) VALUES (:nameid)", {"nameid": nameid})
             userid = c.lastrowid
-        else:
-            userid = row[0]
         self.logger.debug("User ID %s -> %d", user, userid)
         return userid
 
@@ -662,12 +656,12 @@ class TardisDB:
     def _getGroupId(self, group):
         nameid = self._getNameId(group)
         row = self._executeWithResult("SELECT GroupID FROM Groups WHERE NameId = :nameid", {"nameid": nameid})
-        if not row:
+        if row:
+            groupid = row[0]
+        else:
             self.logger.debug("Inserting groupname %s into Groups Table", group)
             c = self._execute("INSERT INTO Groups (NameID) VALUES (:nameid)", {"nameid": nameid})
             groupid = c.lastrowid
-        else:
-            groupid = row[0]
         self.logger.debug("Group ID %s -> %d", group, groupid)
         return groupid
 
@@ -680,14 +674,18 @@ class TardisDB:
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
         user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
-        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev, "userid": user, "groupid": group}.items())
-        temp = _addFields(fields, fileInfo)
-        self.setNameID([temp])
+        fields = {"backup": self.currBackupSet,
+                  "parent": parIno,
+                  "parentDev": parDev,
+                  "userid": user,
+                  "groupid": group,
+                  'nameid': self._getNameId(fileInfo['name'])}
+        fields.update(fileInfo)
         self._execute("INSERT INTO Files "
                       "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
                       "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
-                      temp)
+                      fields)
 
     @authenticate
     def updateDirChecksum(self, directory, cksid, current=True):
@@ -746,17 +744,13 @@ class TardisDB:
     def _getNameId(self, name, insert=True):
         row = self._executeWithResult("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
         if row:
-            return row[0]
+            return row['NameId']
 
         if insert:
             c = self._execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
             return c.lastrowid
-        return None
 
-    @authenticate
-    def setNameID(self, files):
-        for f in files:
-            f['nameid'] = self._getNameId(f['name'])
+        return None
 
     @authenticate
     def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):

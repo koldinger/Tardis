@@ -54,6 +54,11 @@ from . import RemoteDB
 from . import Regenerator
 from . import Config
 
+
+from icecream import ic
+ic.configureOutput(includeContext=True)
+
+
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
 # Config keys which can be gotten or set.
@@ -62,6 +67,7 @@ configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'Max
 sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoScheme']
 
 logger: logging.Logger
+eLogger: Util.ExceptionLogger
 args: argparse.Namespace
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
@@ -112,13 +118,11 @@ def createClient(password):
         return 0
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
 
 def setPassword(password):
@@ -140,18 +144,15 @@ def setPassword(password):
         return 0
     except TardisDB.NotAuthenticated as e:
         logger.error('Client %s already has a password', args.client)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
 
 def changePassword(crypt, oldpw) :
@@ -164,8 +165,7 @@ def changePassword(crypt, oldpw) :
                                      allowNone=False, confirm=True)
         except Exception as e:
             logger.critical(str(e))
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
             return -1
 
         scheme = db.getConfigValue('CryptoScheme', 1)
@@ -202,8 +202,7 @@ def changePassword(crypt, oldpw) :
         return 0
     except Exception as e:
         logger.error(str(e))
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
 
 def moveKeys(db, _):
@@ -234,8 +233,7 @@ def moveKeys(db, _):
         return 1
     except Exception as e:
         logger.error(e)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
     return 0
 
@@ -299,8 +297,7 @@ def listBSets(db, crypt, cache):
         return 1
     except Exception as e:
         logger.error(e)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         return 1
     return 0
 
@@ -620,7 +617,8 @@ def checkSanity(db, cache, crypt):
                             db.deleteChecksum(i)
                         db.commit()
     except Exception as e:
-        logger.exception(e)
+        logger.error(e)
+        eLogger.log(e)
 
     return True
 
@@ -768,7 +766,7 @@ def parseArgs() -> argparse.Namespace:
     subs.add_parser('sanity',       parents=[common, sanityParser, cnfParser],              help='Perform a sanity check')
     subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
-    parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
+    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
     parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -820,9 +818,11 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
     return bInfo
 
 def main():
-    global logger
+    global logger, eLogger
     parseArgs()
     logger = Util.setupLogging(args.verbose)
+    eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
+
 
     # Commands which cannot be executed on remote databases
     allowRemote = args.command not in ['create', 'upgrade']
@@ -837,8 +837,7 @@ def main():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ", allowNone=allowNone, confirm=confirmPw)
         except Exception as e:
             logger.critical(str(e))
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
             return -1
 
         match args.command:
@@ -864,13 +863,11 @@ def main():
                 crypt.setKeys(f, c)
         except TardisDB.AuthenticationException as e:
             logger.error("Authentication failed.  Bad password")
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
             return 1
         except Exception as e:
             logger.critical("Unable to connect to database: %s", e)
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
             return 1
 
         # Dispatch the command
@@ -912,8 +909,7 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
     finally:
         if db:
             db.close()

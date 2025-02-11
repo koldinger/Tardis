@@ -33,6 +33,7 @@ import os.path
 import sys
 import difflib
 import argparse
+import logging
 import time
 
 import termcolor
@@ -44,8 +45,9 @@ from . import Defaults
 from . import Config
 from . import TardisDB
 
-logger = None
-args = None
+logger: logging.Logger
+eLogger: Util.ExceptionLogger
+args: argparse.Namespace
 
 current = Defaults.getDefault('TARDIS_RECENT_SET')
 
@@ -74,7 +76,7 @@ def parseArgs():
     parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
     parser.add_argument('--list', '-l',     dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
-    parser.add_argument('--exceptions',     default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
+    parser.add_argument('--exceptions', '-E', default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',     action='help')
@@ -266,9 +268,12 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
 def main():
     global logger, args
     tardis = None
+
+    args = parseArgs()
+    logger = Util.setupLogging(args.verbose)
+    eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
+
     try:
-        args = parseArgs()
-        logger = Util.setupLogging(args.verbose)
 
         if len(args.backup) > 2:
             logger.error(args.backup)
@@ -315,13 +320,11 @@ def main():
         pass
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
-        if args.exceptions:
-            logger.exception(e)
+        logger.exception(e)
     finally:
         if tardis:
             tardis.close()
