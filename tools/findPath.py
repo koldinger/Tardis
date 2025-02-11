@@ -40,8 +40,8 @@ from termcolor import cprint, colored
 
 from Tardis import Util, Config
 
-from icecream import ic
-ic.enable()
+#from icecream import ic
+#ic.enable()
 
 logger = None
 
