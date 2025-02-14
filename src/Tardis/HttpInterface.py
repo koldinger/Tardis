@@ -596,19 +596,19 @@ def processArgs():
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
 
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
-    parser.add_argument('--exceptions',         dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
+    parser.add_argument('--exceptions',         dest='exceptions',      action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
 
-    parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'), help='Run as a daemon')
+    parser.add_argument('--daemon',             dest='daemon',          action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Daemon'), help='Run as a daemon')
     parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
     parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
     parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')
 
-    parser.add_argument('--ssl',                dest='ssl',             action=Util.StoreBoolean, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
+    parser.add_argument('--ssl',                dest='ssl',             action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
-    parser.add_argument('--compress',           dest='compress',        action=Util.StoreBoolean, default=config.getboolean(t, 'Compress'), help='Compress data going out')
-    parser.add_argument('--cache',              dest='cache',           action=Util.StoreBoolean, default=config.getboolean(t, 'AllowCache'), help='Allow caching')
+    parser.add_argument('--compress',           dest='compress',        action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Compress'), help='Compress data going out')
+    parser.add_argument('--cache',              dest='cache',           action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'AllowCache'), help='Allow caching')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,   help='Show the version')
     parser.add_argument('--help', '-h',         action='help')

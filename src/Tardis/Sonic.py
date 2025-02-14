@@ -677,30 +677,30 @@ def parseArgs() -> argparse.Namespace:
 
     deleteParser = argparse.ArgumentParser(add_help=False)
     #deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
-    deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=Util.StoreBoolean,        help="Delete files in the backupset")
+    deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=argparse.BooleanOptionalAction,        help="Delete files in the backupset")
     deleteParser.add_argument("backups", nargs="*", default=None, help="Backup sets to delete")
 
     cnfParser = argparse.ArgumentParser(add_help=False)
-    cnfParser.add_argument('--confirm',          dest='confirm', action=Util.StoreBoolean, default=True,   help='Confirm deletes and purges')
+    cnfParser.add_argument('--confirm',          dest='confirm', action=argparse.BooleanOptionalAction, default=True,   help='Confirm deletes and purges')
 
     keyParser = argparse.ArgumentParser(add_help=False)
     keyGroup = keyParser.add_mutually_exclusive_group(required=True)
     keyGroup.add_argument('--extract',          dest='extract', default=False, action='store_true',         help='Extract keys from database')
     keyGroup.add_argument('--insert',           dest='insert', default=False, action='store_true',          help='Insert keys from database')
-    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=Util.StoreBoolean, help='Delete keys from server or database')
+    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=argparse.BooleanOptionalAction, help='Delete keys from server or database')
 
     filesParser = argparse.ArgumentParser(add_help=False)
-    filesParser.add_argument('--long', '-l',    dest='long', default=False, action=Util.StoreBoolean,           help='Long format')
-    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=Util.StoreBoolean,   help='Print full path name in names')
-    filesParser.add_argument('--previous',      dest='previous', default=False, action=Util.StoreBoolean,       help="Include files that first appear in the set, but weren't added here")
-    filesParser.add_argument('--dirs',          dest='dirs', default=False, action=Util.StoreBoolean,           help='Include directories in list')
-    filesParser.add_argument('--status',        dest='status', default=False, action=Util.StoreBoolean,         help='Include status (new/delta) in list')
-    filesParser.add_argument('--human', '-H',   dest='human', default=False, action=Util.StoreBoolean,          help='Print sizes in human readable form')
-    filesParser.add_argument('--checksums', '-c', dest='cksums', default=False, action=Util.StoreBoolean,       help='Print checksums')
-    filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=Util.StoreBoolean,        help='Print chainlengths')
-    filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=Util.StoreBoolean,          help='Print inodes')
-    filesParser.add_argument('--type', '-t',    dest='type', default=False, action=Util.StoreBoolean,           help='Print backup type')
-    filesParser.add_argument('--size', '-s',    dest='size', default=False, action=Util.StoreBoolean,           help='Print backup size')
+    filesParser.add_argument('--long', '-l',    dest='long', default=False, action=argparse.BooleanOptionalAction,           help='Long format')
+    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=argparse.BooleanOptionalAction,   help='Print full path name in names')
+    filesParser.add_argument('--previous',      dest='previous', default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
+    filesParser.add_argument('--dirs',          dest='dirs', default=False, action=argparse.BooleanOptionalAction,           help='Include directories in list')
+    filesParser.add_argument('--status',        dest='status', default=False, action=argparse.BooleanOptionalAction,         help='Include status (new/delta) in list')
+    filesParser.add_argument('--human', '-H',   dest='human', default=False, action=argparse.BooleanOptionalAction,          help='Print sizes in human readable form')
+    filesParser.add_argument('--checksums', '-c', dest='cksums', default=False, action=argparse.BooleanOptionalAction,       help='Print checksums')
+    filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=argparse.BooleanOptionalAction,        help='Print chainlengths')
+    filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=argparse.BooleanOptionalAction,          help='Print inodes')
+    filesParser.add_argument('--type', '-t',    dest='type', default=False, action=argparse.BooleanOptionalAction,           help='Print backup type')
+    filesParser.add_argument('--size', '-s',    dest='size', default=False, action=argparse.BooleanOptionalAction,           help='Print backup size')
 
     tagParser = argparse.ArgumentParser(add_help=False)
     tagParser.add_argument("--tag", "-t",      dest='tag',     default=None, required=True,             help="Set to tag")
@@ -720,7 +720,7 @@ def parseArgs() -> argparse.Namespace:
 
     configKeyParser = argparse.ArgumentParser(add_help=False)
     configKeyParser.add_argument('--key',       dest='configKeys', choices=configKeys, action='append',    help='Configuration key to retrieve.  None for all keys')
-    configKeyParser.add_argument('--sys',       dest='sysKeys', default=False, action=Util.StoreBoolean,   help='List System Keys as well as configurable ones')
+    configKeyParser.add_argument('--sys',       dest='sysKeys', default=False, action=argparse.BooleanOptionalAction,   help='List System Keys as well as configurable ones')
 
     configValueParser = argparse.ArgumentParser(add_help=False)
     configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
@@ -733,7 +733,7 @@ def parseArgs() -> argparse.Namespace:
     renameParser.add_argument('--name',         dest='newname', required=True,                      help='New name')
 
     listParser = argparse.ArgumentParser(add_help=False)
-    listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=Util.StoreBoolean,   help='Print long info')
+    listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=argparse.BooleanOptionalAction,   help='Print long info')
     listParser.add_argument('--minpriority',    dest='minpriority', default=0, type=int,            help='Minimum priority to list')
     listParser.add_argument('--number', '-n',   dest='number', default=sys.maxsize, type=int,       help='Maximum number to show')
 
@@ -743,8 +743,8 @@ def parseArgs() -> argparse.Namespace:
     lockGroup.add_argument("--unlock", "-U",   dest='lock', default=True, action='store_false',     help='Unlock the set(s)')
 
     sanityParser = argparse.ArgumentParser(add_help=False)
-    sanityParser.add_argument("--details", dest='details', default=False, action=Util.StoreBoolean, help="Print mismatched files")
-    sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=Util.StoreBoolean, help="Delete mismatched files")
+    sanityParser.add_argument("--details", dest='details', default=False, action=argparse.BooleanOptionalAction, help="Print mismatched files")
+    sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=argparse.BooleanOptionalAction, help="Delete mismatched files")
 
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common],                                       help='Create a client database')
@@ -766,7 +766,7 @@ def parseArgs() -> argparse.Namespace:
     subs.add_parser('sanity',       parents=[common, sanityParser, cnfParser],              help='Perform a sanity check')
     subs.add_parser('upgrade',      parents=[common],                                       help='Update the database schema')
 
-    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=Util.StoreBoolean,   help='Log exception messages')
+    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction,   help='Log exception messages')
     parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')

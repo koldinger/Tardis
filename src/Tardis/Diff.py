@@ -62,7 +62,7 @@ def parseArgs():
 
     parser.add_argument("--backup", '-b',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
 
-    parser.add_argument('--color',                  dest='color',   default=isatty, action=Util.StoreBoolean,   help='Use colors')
+    parser.add_argument('--color',                  dest='color',   default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors')
 
     diffgroup = parser.add_mutually_exclusive_group()
     diffgroup.add_argument('--unified', '-u',  dest='unified', type=int, default=0, nargs='?', const=3,         help='Generate unified diff')
@@ -72,11 +72,11 @@ def parseArgs():
     parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--binary', '-B',   dest='binary', default=False, action=Util.StoreBoolean, help='Print differences in binary files.  Default: %(default)s')
-    parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=Util.StoreBoolean, help='Recurse into directories.  Default: %(default)s')
-    parser.add_argument('--list', '-l',     dest='list', default=False, action=Util.StoreBoolean, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
+    parser.add_argument('--binary', '-B',   dest='binary', default=False, action=argparse.BooleanOptionalAction, help='Print differences in binary files.  Default: %(default)s')
+    parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=argparse.BooleanOptionalAction, help='Recurse into directories.  Default: %(default)s')
+    parser.add_argument('--list', '-l',     dest='list', default=False, action=argparse.BooleanOptionalAction, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
 
-    parser.add_argument('--exceptions', '-E', default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
+    parser.add_argument('--exceptions', '-E', default=False, action=argparse.BooleanOptionalAction, dest='exceptions', help="Log full exception data")
     parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',     action='help')

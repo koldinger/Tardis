@@ -447,29 +447,29 @@ def processArgs():
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
-    parser.add_argument('--exceptions',         dest='exceptions',      action=Util.StoreBoolean, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
-    parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=Util.StoreBoolean, default=config.getboolean(t, 'AllowNewHosts'),
+    parser.add_argument('--exceptions',         dest='exceptions',      action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
+    parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'AllowNewHosts'),
                         help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
 
-    parser.add_argument('--single',             dest='single',          action=Util.StoreBoolean, default=config.getboolean(t, 'Single'),
+    parser.add_argument('--single',             dest='single',          action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Single'),
                         help='Run a single transaction and quit')
     parser.add_argument('--local',              dest='local',           default=config.get(t, 'Local'),
                         help='Run as a Unix Domain Socket Server on the specified filename')
-    parser.add_argument('--threads',            dest='threaded',        action=Util.StoreBoolean, default=True, help='Run a threaded server.  Default: %(default)s')
+    parser.add_argument('--threads',            dest='threaded',        action=argparse.BooleanOptionalAction, default=True, help='Run a threaded server.  Default: %(default)s')
 
     parser.add_argument('--timeout',            dest='timeout',         default=config.getint(t, 'Timeout'), type=float, help='Timeout, in seconds.  0 for no timeout (Default: %(default)s)')
 
-    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=Util.StoreBoolean, default=config.getboolean(t, 'ReuseAddr'),
+    parser.add_argument('--reuseaddr',          dest='reuseaddr',       action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'ReuseAddr'),
                         help='Reuse the socket address immediately')
 
-    parser.add_argument('--daemon',             dest='daemon',          action=Util.StoreBoolean, default=config.getboolean(t, 'Daemon'),
+    parser.add_argument('--daemon',             dest='daemon',          action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Daemon'),
                         help='Run as a daemon')
     parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
     parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
     parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')
 
-    parser.add_argument('--ssl',                dest='ssl',             action=Util.StoreBoolean, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
+    parser.add_argument('--ssl',                dest='ssl',             action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
     parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
     parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
 
