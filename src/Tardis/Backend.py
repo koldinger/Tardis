@@ -115,8 +115,6 @@ class BackendConfig:
     user            = None
     group           = None
 
-    dbname          = ""
-    dbdir           = ""
     basedir         = ""
     allowNew        = True
     allowUpgrades   = True
@@ -1060,10 +1058,8 @@ class Backend:
     def genPaths(self):
         self.logger.debug("Generating paths: %s", self.config.basedir)
         self.basedir    = os.path.join(self.config.basedir, self.client)
-        dbdir           = os.path.join(self.config.dbdir, self.client)
-        dbname          = self.config.dbname.format({'client': self.client})
-        dbfile          = os.path.join(dbdir, dbname)
-        return (dbdir, dbfile)
+        dbfile          = os.path.join(self.basedir, 'tardis.db')
+        return dbfile
 
     def getCacheDir(self, create):
         try:
@@ -1081,7 +1077,7 @@ class Backend:
     def getDB(self, client, create):
         ret = "EXISTING"
 
-        (dbdir, dbfile) = self.genPaths()
+        dbfile = self.genPaths()
 
         if create and os.path.exists(dbfile):
             raise InitFailedException(f"Cannot create client {client}.  Already exists")
@@ -1091,8 +1087,8 @@ class Backend:
         connid = {'connid': self.idstr }
 
         if not os.path.exists(dbfile):
-            if not os.path.exists(dbdir):
-                os.makedirs(dbdir)
+            if not os.path.exists(self.basedir):
+                os.makedirs(self.basedir)
             ret = "NEW"
 
         self.db = TardisDB.TardisDB(dbfile,
@@ -1309,7 +1305,7 @@ class Backend:
 
         self.client = client
 
-        (_, dbfile) = self.genPaths()
+        dbfile = self.genPaths()
         self.logger.debug("Database File: %s", dbfile)
 
         if create and not self.config.allowNew:

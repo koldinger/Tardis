@@ -405,7 +405,7 @@ def parseArgs():
 
     parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=Util.StoreBoolean,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
-    parser.add_argument('--exceptions',         default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
+    parser.add_argument('--exceptions', '-E',   default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
     parser.add_argument('--verbose', '-v',      action='count', default=0, dest='verbose', help='Increase the verbosity')
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
     parser.add_argument('--help', '-h',         action='help')
@@ -453,6 +453,7 @@ def processFiles(files: list[str], r: Regenerator.Regenerator, bset: bool|int, o
                 retcode += 1
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
+            #eLogger.log(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
@@ -503,6 +504,7 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
 
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
+            #eLogger.log(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
@@ -554,8 +556,7 @@ def main():
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
-        #if args.exceptions:
-            #logger.exception(e)
+        #eLogger.log(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)

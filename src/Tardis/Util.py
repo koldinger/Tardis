@@ -381,7 +381,7 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
     crypt = None
 
     loc = urllib.parse.urlparse(dataLoc)
-    if loc.scheme in ['http', 'https']:
+    if loc.scheme in ['http', 'https', 'tardis']:
         logger.debug("Creating remote connection to %s", dataLoc)
         # If no port specified, insert the port
         if loc.port is None:

@@ -37,7 +37,6 @@ import sys
 import uuid
 import functools
 import importlib
-import gzip
 import base64
 from binascii import hexlify, unhexlify
 import importlib.resources
@@ -50,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -86,15 +85,21 @@ def authenticate(func):
 
 # Be sure to end all these lists with a space.
 
-_fileInfoFields =  dedent("""
+_fileInfoFields =  dedent(
+    """
     N1.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, 
     Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
     MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
-    FirstSet AS firstset, LastSet AS lastset, C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, 
-    C2.Checksum AS xattrs, C3.Checksum AS acl, N2.Name AS username, N3.Name AS groupname
+    FirstSet AS firstset, LastSet AS lastset,
+    C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, 
+    C2.Checksum AS xattrs,
+    C3.Checksum AS acl,
+    N2.Name AS username,
+    N3.Name AS groupname
     """)
 
-_fileInfoJoin = dedent("""
+_fileInfoJoin = dedent(
+    """
     FROM Files 
     JOIN Names N1 USING(NameID) 
     LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) 
@@ -108,22 +113,25 @@ _fileInfoJoin = dedent("""
 
 
 
-_backupSetInfoFields = "BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime, " \
-                       "Priority AS priority, Completed AS completed, Session AS session, Name AS name, Locked AS locked, " \
-                       "ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full, " \
-                       "FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline, "\
-                       "Exception AS exception, ErrorMsg AS errormsg "
+_backupSetInfoFields = dedent(
+    """
+    BackupSet AS backupset, StartTime AS starttime, EndTime AS endtime, ClientTime AS clienttime,
+    Priority AS priority, Completed AS completed, Session AS session, Name AS name, Locked AS locked,
+    ClientVersion AS clientversion, ClientIP AS clientip, ServerVersion AS serverversion, Full AS full,
+    FilesFull AS filesfull, FilesDelta AS filesdelta, BytesReceived AS bytesreceived, Checksum AS commandline,
+    Exception AS exception, ErrorMsg AS errormsg
+    """)
 
 _backupSetInfoJoin = "FROM Backups LEFT OUTER JOIN Checksums ON Checksums.ChecksumID = Backups.CmdLineId "
 
-_checksumInfoFields = "Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted, " \
-                      "Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed, ChainLength AS chainlength "
+_checksumInfoFields = dedent(
+    """
+    Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted,
+    Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed,
+    ChainLength AS chainlength
+    """)
 
 _schemaVersion = 22
-
-def _addFields(x, y):
-    """ Add fields to the end of a dict """
-    return dict(list(y.items()) + x)
 
 def _splitpath(path):
     """ Split a path into chunks, recursively """
@@ -145,11 +153,11 @@ class TardisDB:
     prevBackupSet   = None
     clientId        = None
 
-    def __init__(self, dbname, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, allow_upgrade=False, check_threads=True):
+    def __init__(self, dbfile, backup=False, prevSet=None, initialize=False, connid=None, user=-1, group=-1, chunksize=1000, numbackups=2, allow_upgrade=False, check_threads=True):
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
-        self.logger.debug("Initializing connection to %s", dbname)
-        self.dbName = dbname
+        self.logger.debug("Initializing connection to %s", dbfile)
+        self.dbfile = dbfile
         self.chunksize = chunksize
         self.prevSet = prevSet
         self.allow_upgrade = allow_upgrade
@@ -170,7 +178,7 @@ class TardisDB:
         self.currBackupName = None
 
         try:
-            conn = sqlite3.connect(self.dbName, check_same_thread=check_threads)
+            conn = sqlite3.connect(self.dbfile, check_same_thread=check_threads)
         except sqlite3.Error as e:
             self.logger.critical(f"Unable to open database: {e}")
             raise
@@ -244,11 +252,11 @@ class TardisDB:
         version = int(self._getConfigValue('SchemaVersion'))
         if version != _schemaVersion:
             if self.allow_upgrade:
-                self.logger.warning("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", self.dbName, int(version), _schemaVersion)
+                self.logger.warning("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", self.dbfile, int(version), _schemaVersion)
                 self.upgradeSchema(version)
             else:
-                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", self.dbName, int(version), _schemaVersion)
-                raise Exception(f"Schema version mismatch: Database {self.dbName} is {version}:  Expected {_schemaVersion}.   Please convert")
+                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", self.dbfile, int(version), _schemaVersion)
+                raise Exception(f"Schema version mismatch: Database {self.dbfile} is {version}:  Expected {_schemaVersion}.   Please convert")
 
         if self.prevSet:
             f = self.getBackupSetInfo(self.prevSet)
@@ -277,7 +285,7 @@ class TardisDB:
 
         # Make sure the permissions are set the way we want, if that's specified.
         if self.user != -1 or self.group != -1:
-            os.chown(self.dbName, self.user, self.group)
+            os.chown(self.dbfile, self.user, self.group)
 
     def _bset(self, current):
         """ Determine the backupset we're being asked about.
@@ -641,8 +649,6 @@ class TardisDB:
             self.logger.debug("Inserting username %s into Users Table", user)
             c = self._execute("INSERT INTO Users (NameID) VALUES (:nameid)", {"nameid": nameid})
             userid = c.lastrowid
-        else:
-            userid = row[0]
         self.logger.debug("User ID %s -> %d", user, userid)
         return userid
 
@@ -650,12 +656,12 @@ class TardisDB:
     def _getGroupId(self, group):
         nameid = self._getNameId(group)
         row = self._executeWithResult("SELECT GroupID FROM Groups WHERE NameId = :nameid", {"nameid": nameid})
-        if not row:
+        if row:
+            groupid = row[0]
+        else:
             self.logger.debug("Inserting groupname %s into Groups Table", group)
             c = self._execute("INSERT INTO Groups (NameID) VALUES (:nameid)", {"nameid": nameid})
             groupid = c.lastrowid
-        else:
-            groupid = row[0]
         self.logger.debug("Group ID %s -> %d", group, groupid)
         return groupid
 
@@ -668,14 +674,18 @@ class TardisDB:
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
         user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
-        fields = list({"backup": self.currBackupSet, "parent": parIno, "parentDev": parDev, "userid": user, "groupid": group}.items())
-        temp = _addFields(fields, fileInfo)
-        self.setNameID([temp])
+        fields = {"backup": self.currBackupSet,
+                  "parent": parIno,
+                  "parentDev": parDev,
+                  "userid": user,
+                  "groupid": group,
+                  'nameid': self._getNameId(fileInfo['name'])}
+        fields.update(fileInfo)
         self._execute("INSERT INTO Files "
                       "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
                       "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
-                      temp)
+                      fields)
 
     @authenticate
     def updateDirChecksum(self, directory, cksid, current=True):
@@ -734,17 +744,13 @@ class TardisDB:
     def _getNameId(self, name, insert=True):
         row = self._executeWithResult("SELECT NameId FROM Names WHERE Name = :name", {"name": name})
         if row:
-            return row[0]
+            return row['NameId']
 
         if insert:
             c = self._execute("INSERT INTO Names (Name) VALUES (:name)", {"name": name})
             return c.lastrowid
-        return None
 
-    @authenticate
-    def setNameID(self, files):
-        for f in files:
-            f['nameid'] = self._getNameId(f['name'])
+        return None
 
     @authenticate
     def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
@@ -1063,7 +1069,7 @@ class TardisDB:
                 self.delConfigValue('ContentKey')
             if backup:
                 # Attempt to save the keys away
-                backupName = self.dbName + ".keys"
+                backupName = self.dbfile + ".keys"
                 r = Rotator.Rotator(rotations=0)
                 r.backup(backupName)
                 Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode('utf8'), base64.b64encode(vkey).decode('utf8'))
@@ -1294,7 +1300,7 @@ class TardisDB:
 
     def close(self, completeBackup=False):
         if self._isAuthenticated():
-            #self.logger.debug("Closing DB: %s", self.dbName)
+            #self.logger.debug("Closing DB: %s", self.dbfile)
             # Apparently logger will get shut down if we're executing in __del__, so leave the debugging message out
             if self.currBackupSet:
                 self._execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
@@ -1304,8 +1310,8 @@ class TardisDB:
             if self.backup and completeBackup:
                 r = Rotator.Rotator(rotations=self.numbackups)
                 try:
-                    r.backup(self.dbName)
-                    r.rotate(self.dbName)
+                    r.backup(self.dbfile)
+                    r.rotate(self.dbfile)
                 except Exception as e:
                     self.logger.error("Error detected creating database backup: %s", e)
 

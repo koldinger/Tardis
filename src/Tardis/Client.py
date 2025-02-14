@@ -116,8 +116,6 @@ configDefaults = {
     'Port':                 Defaults.getDefault('TARDIS_PORT'),
     # Local Direct connect params
     'BaseDir':              Defaults.getDefault('TARDIS_DB'),
-    'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
-    'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
 
     'Local':                '',
 
@@ -1878,8 +1876,6 @@ def processCommandLine():
 
     locgroup = parser.add_argument_group("Local Backup options")
     locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
-    locgroup.add_argument('--dbdir',              dest='dbdir',           default=c.get(t, 'DBDir'),   help='Location of database files (if different from database directory above) (Default: %(default)s)')
-    locgroup.add_argument('--dbname', '-N',       dest='dbname',          default=c.get(t, 'DBName'),  help='Use the database name (Default: %(default)s)')
 
     remotegroup = parser.add_argument_group("Remote Server options")
     remotegroup.add_argument('--server', '-s',           dest='server', default=c.get(t, 'Server'),                          help='Set the destination server. ' + _def)
@@ -1996,7 +1992,7 @@ def processCommandLine():
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
     parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. ' + _def)
-    parser.add_argument('--exceptions',         dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
+    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
     parser.add_argument('--logtime',            dest='logtime', default=False, action=Util.StoreBoolean, help='Log time')
     parser.add_argument('--logcolor',           dest='logcolor', default=True, action=Util.StoreBoolean, help='Generate colored logs')
 
@@ -2109,7 +2105,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
     logging.root.setLevel(loglevel)
 
     # Mark if we're logging exceptions
-    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, False)
+    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
 
     # Create a special logger just for messages
     return logger
@@ -2245,8 +2241,6 @@ def mkBackendConfig(jobname):
     bc.basedir         = args.database
     bc.allowNew        = True
     bc.allowUpgrades   = True
-
-    bc.dbdir       = args.dbdir or bc.basedir
 
     bc.allowOverrides  = True
     bc.linkBasis       = config.getboolean(j, 'LinkBasis')
