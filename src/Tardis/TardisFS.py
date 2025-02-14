@@ -330,8 +330,8 @@ class TardisFS(LoggingMixIn, Operations):
                     'st_ino': f["inode"],
                     'st_dev': 0,
                     'st_nlink': f["nlinks"],
-                    'st_uid': self.getUserId(f["username"]),
-                    'st_gid': self.getGroupId(f["groupname"]),
+                    'st_uid': Util.getUserId(crypt.decryptName(f["username"])),
+                    'st_gid': Util.getGroupId(crypt.decryptName(f["groupname"])),
                     'st_atime': f["mtime"],
                     'st_mtime': f["mtime"],
                     'st_ctime': f["ctime"]
