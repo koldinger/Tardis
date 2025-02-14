@@ -44,6 +44,8 @@ import base64
 import time
 import stat    # for file properties
 import functools
+import pwd
+import grp
 
 #import fuse
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
@@ -233,6 +235,20 @@ class TardisFS(LoggingMixIn, Operations):
         # Return it
         return f
 
+    @functools.cache
+    def getGroupId(self, name):
+        gInfo = grp.getgrnam(self.crypt.decryptName(name))
+        if gInfo:
+            return gInfo.gr_gid
+        return -1
+
+    @functools.cache
+    def getUserId(self, name):
+        uInfo = pwd.getpwnam(self.crypt.decryptName(name))
+        if uInfo:
+            return uInfo.pw_uid
+        return -1
+
     #@tracer
     def getattr(self, path, fh=None):
         """
@@ -314,8 +330,8 @@ class TardisFS(LoggingMixIn, Operations):
                     'st_ino': f["inode"],
                     'st_dev': 0,
                     'st_nlink': f["nlinks"],
-                    'st_uid': f["uid"],
-                    'st_gid': f["gid"],
+                    'st_uid': self.getUserId(f["username"]),
+                    'st_gid': self.getGroupId(f["groupname"]),
                     'st_atime': f["mtime"],
                     'st_mtime': f["mtime"],
                     'st_ctime': f["ctime"]
