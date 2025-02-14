@@ -2237,7 +2237,6 @@ def mkBackendConfig(jobname):
     bc.user            = None
     bc.group           = None
 
-    bc.dbname          = args.dbname
     bc.basedir         = args.database
     bc.allowNew        = True
     bc.allowUpgrades   = True
