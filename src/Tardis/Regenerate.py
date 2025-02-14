@@ -52,6 +52,7 @@ from . import Defaults
 from . import TardisCrypto
 
 logger: logging.Logger
+eLogger: Util.ExceptionLogger
 crypt: TardisCrypto.CryptoScheme
 
 class OwMode(enum.StrEnum):
@@ -306,8 +307,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                     recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                 except Exception as e:
                     logger.error("Could not recover file %s in %s", name, path)
-                    if args.exceptions:
-                        logger.exception(e)
+                    eLogger.log(e)
 
             # And descend into the directories
             if args.recurse:
@@ -316,15 +316,13 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                         recoverObject(regenerator, childInfo, bset, outname, os.path.join(path, name), linkDB, authenticate=authenticate)
                     except Exception as e:
                         logger.error("Could not recover directory %s in %s", name, path)
-                        if args.exceptions:
-                            logger.exception(e)
+                        eLogger.log(e)
         elif not skip:
             doRecovery(regenerator, info, authenticate, path, outname)
 
     except Exception as e:
         logger.error("Recovery of %s failed. %s", outname, e)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         retCode += 1
 
     return retCode
@@ -455,13 +453,10 @@ def processFiles(files: list[str], r: Regenerator.Regenerator, bset: bool|int, o
                 retcode += 1
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
-            #if args.exceptions:
-                #logger.exception(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
     return retcode
 
 def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir: str, outname: str):
@@ -508,13 +503,10 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
 
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
-            #if args.exceptions:
-                #logger.exception(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
             retcode += 1
     return retcode
 
@@ -549,9 +541,10 @@ def calculateBackupSet():
 
 
 def main():
-    global logger, crypt, tardis, args, owMode
+    global logger, eLogger, crypt, tardis, args, owMode
     args = parseArgs()
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
+    eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
     try:
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
@@ -566,8 +559,7 @@ def main():
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
         sys.exit(1)
 
     retcode = 0
@@ -600,12 +592,10 @@ def main():
         logger.error("Recovery interupted")
     except TardisDB.AuthenticationException as e:
         logger.error("Authentication failed.  Bad password")
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
-        if args.exceptions:
-            logger.exception(e)
+        eLogger.log(e)
 
     if errors:
         logger.warning("%d files could not be recovered.")
