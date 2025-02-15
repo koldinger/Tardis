@@ -55,8 +55,8 @@ from . import Regenerator
 from . import Config
 
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
