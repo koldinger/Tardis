@@ -645,7 +645,9 @@ class TardisDB:
     def _getUserId(self, user):
         nameid = self._getNameId(user)
         row = self._executeWithResult("SELECT UserID FROM Users WHERE NameId = :nameid", {"nameid": nameid})
-        if not row:
+        if row:
+            userid = row[0]
+        else:
             self.logger.debug("Inserting username %s into Users Table", user)
             c = self._execute("INSERT INTO Users (NameID) VALUES (:nameid)", {"nameid": nameid})
             userid = c.lastrowid
