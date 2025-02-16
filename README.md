@@ -417,9 +417,9 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
-Release Notes -- Version 1.6
+Release Notes -- Version 1.6.1
 ============================
-Version 1.6 introduces a new way of storing user and group information.   These store the User and Group info by name, rather than just UID/GID.   The reason for this is that when you
+Version 1.6.1 introduces a new way of storing user and group information.   These store the User and Group info by name, rather than just UID/GID.   The reason for this is that when you
 rebuild a system, you may recreate the users and groups with different ID's.   Most likely you will create users and groups with the same names.  This makes
 the User and Group information persist across the reconfiguration.  If you do recreate the users/groups with the same ID's, this won't really change anything.
 
@@ -443,6 +443,9 @@ select individual entry to edit by entering the Key number.
 
 If you don't do this, ongoing backups will still work.   Previous backups will still exist, but may have trouble either recovering the user/group
 info, or setting it.
+
+Boolean options have been changed to use the python native BooleanOptionalArgument, so what had been --force/--noforce becomes --force/--no-force.
+
 
 Release Notes -- Version 1.1.5
 ==============================
