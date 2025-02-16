@@ -28,7 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
 import sys
 import pwd
 import grp
@@ -341,7 +340,7 @@ class TardisDomainSocketServer(socketserver.UnixStreamServer, TardisServer):
 
 
 def setupLogging():
-    levels = [logging.WARNING, logging.INFO, logging.DEBUG, logging.TRACE]
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
     logging.raiseExceptions = False
 
