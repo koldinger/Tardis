@@ -832,10 +832,11 @@ except ImportError:
 class ExceptionLogger:
     if _useRich:
         _con = rich.console.Console()
-    def __init__(self, logger, logExceptions, rich=False):
+
+    def __init__(self, logger, logExceptions, pretty=False):
         self.logger = logger
         self.logExceptions = logExceptions
-        self.rich = rich
+        self.rich = pretty
 
     def log(self, exception):
         if self.logExceptions:

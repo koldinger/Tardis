@@ -131,7 +131,7 @@ class BackendConfig:
 
 
 class Backend:
-    def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None):
+    def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None, prettyExceptions=True):
         self.numfiles       = 0
         self.sessionid      = None
         self.tempdir        = None
@@ -173,7 +173,7 @@ class Backend:
         # Not quite sure why I do this here.  But just in case.
         os.umask(self.config.umask)
 
-        self.exceptionLogger = Util.ExceptionLogger(self.logger, self.config.exceptions, True)
+        self.exceptionLogger = Util.ExceptionLogger(self.logger, self.config.exceptions, prettyExceptions)
 
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
@@ -1309,7 +1309,7 @@ class Backend:
         self.logger.debug("Database File: %s", dbfile)
 
         if create and not self.config.allowNew:
-            raise InitFailedException("New databases not allowed")
+            raise InitFailedException("New clients not allowed")
         if create and self.config.requirePW and not encrypted:
             raise InitFailedException("Server requires backups to be encrypted, ie, have a password")
         if create and os.path.exists(dbfile):
@@ -1429,8 +1429,8 @@ class Backend:
                 self.initializeBackup()
             except Exception as e:
                 self.logger.error("Caught exception : %s", str(e))
-                message = {"status": "FAIL", "error": str(e)}
                 self.exceptionLogger.log(e)
+                message = {"status": "FAIL", "error": str(e)}
                 self.sendMessage(message)
                 raise InitFailedException(str(e)) from e
 

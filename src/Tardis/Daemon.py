@@ -161,6 +161,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         self.sessionid = str(uuid.uuid1())
         self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {'connid': self.sessionid[0:13]})
         self.logger.info("Session created from: %s", self.address)
+        self.eLogger = Util.ExceptionLogger(self.logger, self.server.exceptions, False)
 
     def finish(self):
         self.logger.info("Ending session %s from %s", self.sessionid, self.address)
@@ -204,7 +205,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             messenger =  Messages.MsgPackMessages(sock, compress=fields['compress'])
 
             # Create a backend, and run it.
-            backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid)
+            backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid, prettyExceptions=False)
 
             started, completed, endtime, orphansRemoved, orphanSize = backend.runBackup()
 
@@ -219,12 +220,10 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
         except InitFailedException as e:
             self.logger.error("Connection initialization failed: %s", e)
-            if self.server.exceptions:
-                self.logger.exception(e)
+            self.eLogger.log(e)
         except Exception as e:
             self.logger.error("Caught exception %s: %s", type(e), e)
-            if self.server.exceptions:
-                self.logger.exception(e)
+            self.eLogger.log(e)
         finally:
             if started:
                 self.logger.info("Connection completed successfully: %s  Runtime: %s", str(completed), str(endtime - starttime))
@@ -446,7 +445,7 @@ def processArgs():
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
-    parser.add_argument('--exceptions',         dest='exceptions',      action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
+    parser.add_argument('--exceptions', '-E',   dest='exceptions',      action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
     parser.add_argument('--allow-new-hosts',    dest='newhosts',        action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'AllowNewHosts'),
                         help='Allow new clients to attach and create new backup sets')
     parser.add_argument('--profile',            dest='profile',         default=config.getboolean(t, 'Profile'), help='Generate a profile')
