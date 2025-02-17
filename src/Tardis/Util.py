@@ -203,7 +203,7 @@ def accumulateStat(stats, name, amount=1):
     if stats:
         stats[name] = stats.setdefault(name, 0) + amount
 
-def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout):
+def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout, handler=None, formatter=None):
     if levels is None:
         levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 
@@ -218,9 +218,10 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout):
     colors = colorlog.default_log_colors.copy()
     colors.update({ 'DEBUG': 'green' })
 
-    formatter = colorlog.TTYColoredFormatter(fmt, log_colors=colors, stream=stream)
-    handler = logging.StreamHandler()
-    handler.setFormatter(formatter)
+    if not handler:
+        handler = logging.StreamHandler()
+        formatter = colorlog.TTYColoredFormatter(fmt, log_colors=colors, stream=stream)
+        handler.setFormatter(formatter)
     logging.root.addHandler(handler)
 
     logging.raiseExceptions = False
