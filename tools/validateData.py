@@ -30,93 +30,66 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import argparse
 import hashlib
+import hmac
+import sys
 import os, os.path
 import hashlib
 import sqlite3
 import time
 import logging
 
-from Tardis import Regenerate, TardisDB, CacheDir, TardisCrypto, Defaults
+from rich.progress import Progress
+
+from Tardis import Regenerator, TardisDB, CacheDir, TardisCrypto, Config, Util
+from Tardis.Regenerator import RegenerateException
 
 checked = {}
 
-try:
-    for x in open("valid", "r"):
-        x = x.rstrip()
-        checked[x] = 1
-except:
-    pass
+def parseArgs():
+    parser = argparse.ArgumentParser(description='Check backup files for integrity', fromfile_prefix_chars='@')
+    (_, remaining) = Config.parseConfigOptions(parser)
 
-print("Loaded %d checksums." % (len(checked)))
+    Config.addCommonOptions(parser)
+    Config.addPasswordOptions(parser)
+    parser.add_argument("--verbose", "-v", dest='verbosity', action='count', default=0, help="Increase verbosity")
 
-output = open('output', 'a')
-valid = open('valid', 'a')
+    args = parser.parse_args(remaining)
+    return  args
 
-def validate(root, client, dbname, password):
-    crypto = None
-    token = None
-    base = os.path.join(root, client)
-    cache = CacheDir.CacheDir(base)
-    if password:
-        crypto = TardisCrypto.TardisCrypto(password, client)
-        token = crypto.encryptName(client)
-    db = TardisDB.TardisDB(os.path.join(base, dbname), token=token, backup=False)
-    regen = Regenerate.Regenerator(cache, db, crypto)
+def main():
+    args = parseArgs()
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
+    tardis, cache, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    logger = Util.setupLogging(args.verbosity)
 
-    conn = db.conn
+    regen = Regenerator.Regenerator(cache, tardis, crypto)
 
-    cur = conn.execute("SELECT count(*) FROM CheckSums WHERE IsFile = 1")
-    row = cur.fetchone()
-    num = row[0]
-    print("Checksums: %d" % (num))
+    numCks = tardis.getChecksumCount(isFile=True)
+    print(numCks)
 
-    cur = conn.execute("SELECT Checksum FROM CheckSums WHERE IsFile = 1 ORDER BY Checksum ASC");
-    #pbar = pb.ProgressBar(widgets=[pb.Percentage(), ' ', pb.Counter(), ' ', pb.Bar(), ' ', pb.ETA(), ' ', pb.Timer() ], maxval=num)
-    #pbar.start()
+    with Progress(refresh_per_second=2) as progress:
+        checksums = progress.add_task("Validating: ", total=numCks)
 
-    row = cur.fetchone()
-    i = 1
-    while row is not None:
-        #pbar.update(i)
-        i += 1
-        try:
-            checksum = row['Checksum']
-            if not checksum in checked:
-                try:
-                    f = regen.recoverChecksum(checksum)
-                    if f:
-                        m = hashlib.md5()
-                        d = f.read(128 * 1024)
-                        while d:
-                            m.update(d)
-                            d = f.read(128 * 1024)
-                        res = m.hexdigest()
-                        if res != checksum:
-                            print("Checksums don't match.  Expected: %s, result %s" % (checksum, res))
-                            checked[checksum] = 0
-                            output.write(checksum + '\n')
-                            output.flush()
-                        else:
-                            checked[checksum] = 1
-                            valid.write(checksum + "\n")
-                except Exception as e:
-                    print("Caught exception processing %s: %s" % (checksum, str(e)))
-                    output.write(checksum + '\n')
-                    output.flush()
+        for i in tardis.enumerateChecksums(isFile=True):
+            logger.info("Checking %s", i)
+            dataLen = 0
+            try:
+                hash = crypto.getHash()
+                f = regen.recoverChecksum(i, authenticate=True)
+                while x := f.read(1024 * 1024):
+                    hash.update(x)
+                    dataLen += len(x)
+                if not hmac.compare_digest(hash.hexdigest(), i):
+                    logger.error(f"{i} MAC does not match checksum: {hash.hexdigest()}")
+            except RegenerateException:
+                logger.error(f"{i} did not authenticate")
+            except Exception as e:
+                logger.error("Unexpected exception: %s", str(e))
 
-            row = cur.fetchone()
-        except sqlite3.OperationalError as e:
-            print("Caught operational error.  DB is probably locked.  Sleeping for a bit")
-            time.sleep(90)
-    #pbar.finish()
+            progress.advance(checksums, 1)
+
 
 if __name__ == "__main__":
-    root   = Defaults.getDefault('TARDIS_DB')
-    client = Defaults.getDefault('TARDIS_CLIENT')
-    dbname = Defaults.getDefault('TARDIS_DBNAME')
-    password = None # 'PassWord'
-
-    logging.basicConfig(level=logging.INFO)
-
-    validate(root, client, dbname, password)
+    sys.exit(main())
