@@ -240,8 +240,12 @@ def moveKeys(db, _):
 @functools.lru_cache()
 def getCommandLine(commandLineCksum, regenerator):
     if commandLineCksum:
-        data = regenerator.recoverChecksum(commandLineCksum).read().strip()
-        return data
+        try:
+            data = regenerator.recoverChecksum(commandLineCksum).read().strip()
+            return data
+        except Regenerator.RegenerateException as e:
+            logger.error(e)
+            eLogger.log(e)
     return None
 
 def listBSets(db, crypt, cache):
@@ -285,11 +289,15 @@ def listBSets(db, crypt, cache):
             if args.longinfo:
                 commandLine = getCommandLine(bset['commandline'], regenerator)
                 tags = [_decryptName(tag, crypt) for tag in db.getTags(bset['backupset'])]
+                cVersion = bset['clientversion']
+                sVersion = bset['serverversion']
                 if commandLine:
                     print(f"    Command Line: {commandLine.decode('utf-8')}")
                 if tags:
                     print(f"    Tags: {','.join(tags)}")
-                if tags or commandLine:
+                if cVersion or sVersion:
+                    print(f"    SW Versions: Client: {cVersion} Server {sVersion}")
+                if tags or commandLine or cVersion or sVersion:
                     print()
 
     except TardisDB.AuthenticationException:
