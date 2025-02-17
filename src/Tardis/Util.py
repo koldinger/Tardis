@@ -765,53 +765,6 @@ def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis
     except Exception as e:
         logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
 
-
-class StoreBoolean(argparse.Action):
-    """
-    Class to handle options of the form "--[no]argument" where you can specify --noargument to store a False,
-    or --argument to store a true.
-    """
-    def __init__(self, option_strings, dest, negate="no", nargs=0, **kwargs):
-        if nargs != 0:
-            raise ValueError("nargs not allowed")
-        #if len(option_strings) > 1:
-        #    raise ValueError("Multiple option strings not allowed")
-        self.negative_option = "--" + negate + option_strings[0][2:]
-        self.help_option = "--[" + negate + "]" + option_strings[0][2:]
-        option_strings.append(self.negative_option)
-        super().__init__(option_strings, dest, nargs=0, **kwargs)
-
-    def __call__(self, parser, arguments, values, option_string=None):
-        #print "Here: ", option_string, " :: ", self.option_strings
-        if option_string == self.negative_option:
-            value = False
-        else:
-            value = True
-        setattr(arguments, self.dest, value)
-
-
-class Toggle(argparse.Action):
-    """
-    Class to handle toggling options.  -x = true -xx = false -xxx = true, etc
-    """
-    def __init__(self,
-                 option_strings,
-                 dest,
-                 default=None,
-                 required=False,
-                 help=None):
-        super().__init__(
-            option_strings=option_strings,
-            dest=dest,
-            nargs=0,
-            default=default,
-            required=required,
-            help=help)
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        new_value = not argparse._ensure_value(namespace, self.dest, False)
-        setattr(namespace, self.dest, new_value)
-
 class GenShellCompletions(argparse.Action):
     """
     Class to generate arguments and exit
@@ -879,10 +832,11 @@ except ImportError:
 class ExceptionLogger:
     if _useRich:
         _con = rich.console.Console()
-    def __init__(self, logger, logExceptions, rich=False):
+
+    def __init__(self, logger, logExceptions, pretty=False):
         self.logger = logger
         self.logExceptions = logExceptions
-        self.rich = rich
+        self.rich = pretty
 
     def log(self, exception):
         if self.logExceptions:

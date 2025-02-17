@@ -1889,12 +1889,12 @@ def processCommandLine():
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
 
     parser.add_argument('--client', '-C',           dest='client', default=c.get(t, 'Client'),                          help='Set the client name.  ' + _def)
-    parser.add_argument('--force',                  dest='force', action=Util.StoreBoolean, default=c.getboolean(t, 'Force'),
+    parser.add_argument('--force',                  dest='force', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Force'),
                         help='Force the backup to take place, even if others are currently running.  ' + _def)
-    parser.add_argument('--full',                   dest='full', action=Util.StoreBoolean, default=c.getboolean(t, 'Full'),
+    parser.add_argument('--full',                   dest='full', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Full'),
                         help='Perform a full backup, with no delta information. ' + _def)
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
-    parser.add_argument('--create',                 dest='create', default=False, action=Util.StoreBoolean,             help='Create a new client.')
+    parser.add_argument('--create',                 dest='create', default=False, action=argparse.BooleanOptionalAction,             help='Create a new client.')
 
 
     passgroup = parser.add_argument_group("Password/Encryption specification options")
@@ -1910,7 +1910,7 @@ def processCommandLine():
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in database')
 
-    parser.add_argument('--send-config', '-S',      dest='sendconfig', action=Util.StoreBoolean, default=c.getboolean(t, 'SendClientConfig'),
+    parser.add_argument('--send-config', '-S',      dest='sendconfig', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'SendClientConfig'),
                         help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s')
 
     parser.add_argument('--compress-data',  '-Z',   dest='compress', const='zstd', default=c.get(t, 'CompressData'), nargs='?', choices=CompressedBuffer.getCompressors(),
@@ -1921,20 +1921,20 @@ def processCommandLine():
     parser.add_argument('--nocompress', '-z',       dest='nocompress', default=splitList(c.get(t, 'NoCompress')), action='append',
                         help='MIME type to not compress. Can be repeated')
     if support_xattr:
-        parser.add_argument('--xattr',              dest='xattr', default=support_xattr, action=Util.StoreBoolean,               help='Backup file extended attributes')
+        parser.add_argument('--xattr',              dest='xattr', default=support_xattr, action=argparse.BooleanOptionalAction,               help='Backup file extended attributes')
     if support_acl:
-        parser.add_argument('--acl',                dest='acl', default=support_acl, action=Util.StoreBoolean,                 help='Backup file access control lists')
+        parser.add_argument('--acl',                dest='acl', default=support_acl, action=argparse.BooleanOptionalAction,                 help='Backup file access control lists')
 
     parser.add_argument('--priority',           dest='priority', type=int, default=None,                                help='Set the priority of this backup')
     parser.add_argument('--maxdepth', '-d',     dest='maxdepth', type=int, default=0,                                   help='Maximum depth to search')
-    parser.add_argument('--crossdevice',        dest='crossdev', action=Util.StoreBoolean, default=False,               help='Cross devices. ' + _def)
+    parser.add_argument('--crossdevice',        dest='crossdev', action=argparse.BooleanOptionalAction, default=False,               help='Cross devices. ' + _def)
 
     parser.add_argument('--basepath',           dest='basepath', default='full', choices=['none', 'common', 'full'],    help='Select style of root path handling ' + _def)
 
     excgrp = parser.add_argument_group('Exclusion options', 'Options for handling exclusions')
-    excgrp.add_argument('--cvs-ignore',                 dest='cvs', default=c.getboolean(t, 'IgnoreCVS'), action=Util.StoreBoolean,
+    excgrp.add_argument('--cvs-ignore',                 dest='cvs', default=c.getboolean(t, 'IgnoreCVS'), action=argparse.BooleanOptionalAction,
                         help='Ignore files like CVS.  ' + _def)
-    excgrp.add_argument('--skip-caches',                dest='skipcaches', default=c.getboolean(t, 'SkipCaches'),action=Util.StoreBoolean,
+    excgrp.add_argument('--skip-caches',                dest='skipcaches', default=c.getboolean(t, 'SkipCaches'),action=argparse.BooleanOptionalAction,
                         help='Skip directories with valid CACHEDIR.TAG files.  ' + _def)
     excgrp.add_argument('--exclude', '-x',              dest='excludes', action='append', default=splitList(c.get(t, 'ExcludePatterns')),
                         help='Patterns to exclude globally (may be repeated)')
@@ -1949,16 +1949,16 @@ def processCommandLine():
                         help='Load local exclude files from this.  ' + _def)
     excgrp.add_argument('--skip-file-name',             dest='skipfile', default=c.get(t, 'SkipFileName'),
                         help='File to indicate to skip a directory.  ' + _def)
-    excgrp.add_argument('--exclude-no-access',          dest='skipNoAccess', default=c.get(t, 'ExcludeNoAccess'), action=Util.StoreBoolean,
+    excgrp.add_argument('--exclude-no-access',          dest='skipNoAccess', default=c.get(t, 'ExcludeNoAccess'), action=argparse.BooleanOptionalAction,
                         help="Exclude files to which the runner has no permission- won't generate directory entry. " + _def)
-    excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action=Util.StoreBoolean, default=False,
+    excgrp.add_argument('--ignore-global-excludes',     dest='ignoreglobalexcludes', action=argparse.BooleanOptionalAction, default=False,
                         help='Ignore the global exclude file.  ' + _def)
 
     comgrp = parser.add_argument_group('Communications options', 'Options for specifying details about the communications protocol.')
     comgrp.add_argument('--compress-msgs', '-Y',    dest='compressmsgs', nargs='?', const='snappy',
                         choices=['none', 'zlib', 'zlib-stream', 'snappy'], default=c.get(t, 'CompressMsgs'),
                         help='Compress messages.  ' + _def)
-    comgrp.add_argument('--validate-certs',         dest='validatecerts', action=Util.StoreBoolean, default=c.getboolean(t, 'ValidateCerts'),
+    comgrp.add_argument('--validate-certs',         dest='validatecerts', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'ValidateCerts'),
                         help="Validate Certificates.   Set to false for self-signed certificates. " + _def)
 
     comgrp.add_argument('--clones', '-L',           dest='clones', type=int, default=1024,              help=_d('Maximum number of clones per chunk.  0 to disable cloning.  ' + _def))
@@ -1967,7 +1967,7 @@ def processCommandLine():
     comgrp.add_argument('--chunksize',              dest='chunksize', type=int, default=256*1024,       help=_d('Chunk size for sending data.  ' + _def))
     comgrp.add_argument('--dirslice',               dest='dirslice', type=int, default=128*1024,        help=_d('Maximum number of directory entries per message.  ' + _def))
     comgrp.add_argument('--logmessages',            dest='logmessages', type=argparse.FileType('w'),    help=_d('Log messages to file'))
-    comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=Util.StoreBoolean,
+    comgrp.add_argument('--signature',              dest='signature', default=c.getboolean(t, 'SendSig'), action=argparse.BooleanOptionalAction,
                         help=_d('Always send a signature.  ' + _def))
     comgrp.add_argument('--timeout',                dest='timeout', default=c.getfloat(t, 'Timeout'), type=float, const=None,              help='Set the timeout to N seconds.  ' + _def)
 
@@ -1975,7 +1975,7 @@ def processCommandLine():
                         help=_d('If delta file is greater than this percentage of the original, a full version is sent.  ' + _def))
 
     purgegroup = parser.add_argument_group("Options for purging old backup sets")
-    purgegroup.add_argument('--purge',              dest='purge', action=Util.StoreBoolean, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  ' + _def)
+    purgegroup.add_argument('--purge',              dest='purge', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Purge'),  help='Purge old backup sets when backup complete.  ' + _def)
     purgegroup.add_argument('--purge-priority',     dest='purgeprior', type=int, default=None,              help='Delete below this priority (Default: Backup priority)')
 
     prggroup = purgegroup.add_mutually_exclusive_group()
@@ -1983,7 +1983,7 @@ def processCommandLine():
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
-    parser.add_argument('--stats',              action=Util.StoreBoolean, dest='stats', default=c.getboolean(t, 'Stats'),
+    parser.add_argument('--stats',              action=argparse.BooleanOptionalAction, dest='stats', default=c.getboolean(t, 'Stats'),
                         help='Print stats about the transfer.  Default=%(default)s')
     parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
                         help='Print a report on all files or directories transferred.  ' + _def)
@@ -1991,10 +1991,10 @@ def processCommandLine():
                         help='Increase the verbosity')
     parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
 
-    parser.add_argument('--exclusive',          dest='exclusive', action=Util.StoreBoolean, default=True, help='Make sure the client only runs one job at a time. ' + _def)
-    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=Util.StoreBoolean, help='Log full exception details')
-    parser.add_argument('--logtime',            dest='logtime', default=False, action=Util.StoreBoolean, help='Log time')
-    parser.add_argument('--logcolor',           dest='logcolor', default=True, action=Util.StoreBoolean, help='Generate colored logs')
+    parser.add_argument('--exclusive',          dest='exclusive', action=argparse.BooleanOptionalAction, default=True, help='Make sure the client only runs one job at a time. ' + _def)
+    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction, help='Log full exception details')
+    parser.add_argument('--logtime',            dest='logtime', default=False, action=argparse.BooleanOptionalAction, help='Log time')
+    parser.add_argument('--logcolor',           dest='logcolor', default=True, action=argparse.BooleanOptionalAction, help='Generate colored logs')
 
     parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
     parser.add_argument('--help', '-h',         action='help')

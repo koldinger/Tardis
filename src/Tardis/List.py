@@ -698,30 +698,30 @@ def processArgs():
     parser.add_argument('--chainlen', '-L', dest='chnlen',      default=False, action='store_true',         help='Print chainlengths.')
     parser.add_argument('--inode', '-i',    dest='inode',       default=False, action='store_true',         help='Print inode numbers')
     parser.add_argument('--versions', '-V', dest='versions',    default='change', choices=['none', 'change', 'all', 'last'],   help='Display all, changed, last, or no versions of files.  Default: %(default)s')
-    parser.add_argument('--deletions',      dest='deletions',   default=True,  action=Util.StoreBoolean,    help='Show deletions. Default: %(default)s')
-    parser.add_argument('--broken',         dest='broken',      default=True,  action=Util.StoreBoolean,    help='Show broken files (missing data). Default: %(default)s')
-    parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=Util.StoreBoolean,    help='Display versions on one line with the name.  Default: %(default)s')
-    parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=Util.StoreBoolean,    help='Use file time changes when determining diffs. Default: %(default)s')
-    parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=Util.StoreBoolean,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
-    parser.add_argument('--headers',        dest='headers',     default=True,  action=Util.StoreBoolean,    help='Show headers. Default: %(default)s')
-    parser.add_argument('--colors',         dest='colors',      default=isatty, action=Util.StoreBoolean,   help='Use colors. Default: %(default)s')
+    parser.add_argument('--deletions',      dest='deletions',   default=True,  action=argparse.BooleanOptionalAction,    help='Show deletions. Default: %(default)s')
+    parser.add_argument('--broken',         dest='broken',      default=True,  action=argparse.BooleanOptionalAction,    help='Show broken files (missing data). Default: %(default)s')
+    parser.add_argument('--oneline', '-O',  dest='oneline',     default=False, action=argparse.BooleanOptionalAction,    help='Display versions on one line with the name.  Default: %(default)s')
+    parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=argparse.BooleanOptionalAction,    help='Use file time changes when determining diffs. Default: %(default)s')
+    parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=argparse.BooleanOptionalAction,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
+    parser.add_argument('--headers',        dest='headers',     default=True,  action=argparse.BooleanOptionalAction,    help='Show headers. Default: %(default)s')
+    parser.add_argument('--colors',         dest='colors',      default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
     #parser.add_argument('--path',           dest='path',        default=False, action='store_true',         help='Print the full path of files')
 
-    parser.add_argument('--glob',           dest='glob',        default=False, action=Util.StoreBoolean,    help='Glob filenames')
+    parser.add_argument('--glob',           dest='glob',        default=False, action=argparse.BooleanOptionalAction,    help='Glob filenames')
 
     parser.add_argument('--reduce',         dest='reduce',      default=0, type=int, const=sys.maxsize, nargs='?',
                         help='Reduce paths by N directories.  No value for smart reduction')
-    parser.add_argument('--realpath',       dest='realpath',    default=True, action=Util.StoreBoolean,     help='Use the full path, expanding symlinks to their actual path components')
+    parser.add_argument('--realpath',       dest='realpath',    default=True, action=argparse.BooleanOptionalAction,     help='Use the full path, expanding symlinks to their actual path components')
 
     rangegrp = parser.add_mutually_exclusive_group()
     rangegrp.add_argument('--range',        dest='range',   default=None,                                   help="Use a range of backupsets.  Format: 'Start:End' Start and End can be names or backupset numbers.  Either value can be left off to indicate the first or last set respectively")
     rangegrp.add_argument('--dates',        dest='daterange', default=None,                                 help="Use a range of dates for the backupsets.  Format: 'Start:End'.  Start and End are names which can be intepreted liberally.  Either can be left off to indicate the first or last set respectively")
 
-    parser.add_argument('--exceptions', '-E', default=False, action=Util.StoreBoolean, dest='exceptions', help="Log full exception data")
+    parser.add_argument('--exceptions', '-E', default=False, action=argparse.BooleanOptionalAction, dest='exceptions', help="Log full exception data")
 
     parser.add_argument('--verbose', '-v',  action='count', default=0, dest='verbose',                  help='Increase the verbosity')
     parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
