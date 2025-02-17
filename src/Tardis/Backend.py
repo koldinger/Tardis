@@ -1029,11 +1029,7 @@ class Backend:
         self.logger.debug("Generating paths: %s", self.config.basedir)
         self.basedir    = os.path.join(self.config.basedir, self.client)
         dbfile          = os.path.join(self.basedir, 'tardis.db')
-<<<<<<< HEAD
         return dbfile
-=======
-        return (self.basedir, dbfile)
->>>>>>> df71abc (Changes to support both a tardis: and file: way of specifying the)
 
     def getCacheDir(self, create):
         try:
