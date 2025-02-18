@@ -100,7 +100,7 @@ def main():
     args = processArgs()
 
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
-    tardis, _, crypt, client = Util.setupDataConnection(args.database, password, args.keys)
+    tardis, _, crypt, client = Util.setupDataConnection(args.repo, password, args.keys)
 
     (f, c) = crypt.getKeys()
     client = tardis.getConfigValue('ClientID')

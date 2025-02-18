@@ -136,7 +136,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    tardis, _, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
+    tardis, _, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     if isinstance(args.backup, str) and args.backup.lower() == 'any':
         bset = None

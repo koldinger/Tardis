@@ -153,8 +153,8 @@ def login():
     if request.method == 'POST':
         try:
             host    = request.form['host']
-            dbPath  = os.path.join(args.database, host, dbname)
-            cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
+            dbPath  = os.path.join(args.repo, host, dbname)
+            cache   = CacheDir.CacheDir(os.path.join(args.repo, host), create=False)
             upgrade = config.getboolean('Remote', 'AllowSchemaUpgrades')
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 

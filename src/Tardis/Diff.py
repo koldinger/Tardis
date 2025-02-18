@@ -279,7 +279,7 @@ def main():
 
         password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
-        (tardis, cache, crypt, client) = Util.setupDataConnection(args.database, password, args.keys)
+        (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
         password = None
 
         bsets = []

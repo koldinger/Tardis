@@ -60,7 +60,7 @@ def main():
     args = processArgs()
 
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password for %s: " % (args.client))
-    tardis, _, _, _ = Util.setupDataConnection(args.database, password, args.keys)
+    tardis, _, _, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     allData = json.load(args.input)
     sizes = allData['size']

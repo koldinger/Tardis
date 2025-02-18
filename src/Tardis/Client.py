@@ -114,14 +114,7 @@ reportChoices = ["all", "dirs", "none"]
 
 configDefaults = {
     # Remote Socket connectionk params
-    'Server':               Defaults.getDefault('TARDIS_SERVER'),
-    'Port':                 Defaults.getDefault('TARDIS_PORT'),
-    # Local Direct connect params
-    'BaseDir':              Defaults.getDefault('TARDIS_DB'),
-
-    'Local':                '',
-
-    'Client':               Defaults.getDefault('TARDIS_CLIENT'),
+    'Repo':                 Defaults.getDefault('TARDIS_REPO'),
     'Force':                str(False),
     'Full':                 str(False),
     'Timeout':              str(300.0),
@@ -1850,7 +1843,7 @@ def processCommandLine():
         c.add_section(t)                        # Make it safe for reading other values from.
 
     locgroup = parser.add_argument_group("Local Backup options")
-    locgroup.add_argument('--database', '-D',     dest='database',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    locgroup.add_argument('--repo', '-R',           dest='repo',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
 
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
@@ -1875,7 +1868,7 @@ def processCommandLine():
                            help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
 
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
-                           help='Load keys from file.  Keys are not stored in database')
+                           help='Load keys from file.  Keys are not stored in repository')
 
     parser.add_argument('--send-config', '-S',      dest='sendconfig', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'SendClientConfig'),
                         help='Send the client config (effective arguments list) to the server for debugging.  Default=%(default)s')
@@ -1975,8 +1968,8 @@ def processCommandLine():
     return (args, c, t)
 
 def checkURL():
-    logger.debug("Parsing %s", args.database)
-    urlInfo = urllib.parse.urlparse(args.database, scheme='file')
+    logger.debug("Parsing %s", args.repo)
+    urlInfo = urllib.parse.urlparse(args.repo, scheme='file')
     parts = os.path.split(urlInfo.path)
 
     match urlInfo.scheme:
@@ -1984,25 +1977,25 @@ def checkURL():
             if not urlInfo.path:
                 raise InitFailedException(f"Invalid URL: no client specified: {urlInfo.path})")
             if urlInfo.params or urlInfo.query:
-                raise InitFailedException(f"Invalid URL: no params or query info accepted: {args.database}")
+                raise InitFailedException(f"Invalid URL: no params or query info accepted: {args.repo}")
 
             if parts[0] != '/':
-                raise InitFailedException(f"Invalid path for remote access: {urlInfo.path}: {args.database}")
+                raise InitFailedException(f"Invalid path for remote access: {urlInfo.path}: {args.repo}")
 
             port = urlInfo.port or int(Defaults.getDefault('TARDIS_PORT'))
             netloc = f"{urlInfo.hostname}:{port}"
         case 'file':
             if urlInfo.netloc or urlInfo.params or urlInfo.query:
-                raise InitFailedException(f"Invalid URL: {args.database}")
+                raise InitFailedException(f"Invalid URL: {args.repo}")
             if not parts[1]:
-                raise InitFailedException(f"Invalid URL: No path to database: {args.database}")
+                raise InitFailedException(f"Invalid URL: No path to repository: {args.repo}")
             netloc = ''
         case _:
-            raise InitFailedException(f"Invalid URL: unrecognized scheme: {urlInfo.scheme}: {args.database}")
+            raise InitFailedException(f"Invalid URL: unrecognized scheme: {urlInfo.scheme}: {args.repo}")
 
     client = parts[1]
     if not client:
-        raise InitFailedException(f"Invalid URL: No client specified: {args.database}")
+        raise InitFailedException(f"Invalid URL: No client specified: {args.repo}")
 
     info = urllib.parse.ParseResult(urlInfo.scheme, netloc, urlInfo.path, '', '', '')
     url = urllib.parse.urlunparse(info)
@@ -2193,7 +2186,7 @@ def mkBackendConfig(jobname, dbLoc):
     bc.user            = None
     bc.group           = None
 
-    #bc.basedir         = args.database
+    #bc.basedir         = args.repo
     bc.basedir         = dbLoc
 
     bc.allowNew        = True
@@ -2212,8 +2205,8 @@ def mkBackendConfig(jobname, dbLoc):
 
 def runBackend(jobname, urlinfo):
     conn = Connection.DirectConnection(args.timeout)
-    database = os.path.split(urlinfo.path)
-    beConfig = mkBackendConfig(jobname, database[0])
+    repository = os.path.split(urlinfo.path)
+    beConfig = mkBackendConfig(jobname, repository[0])
 
     backend = Backend.Backend(conn.serverMessages, beConfig, logSession=False)
     backendThread = threading.Thread(target=backend.runBackup, name="Backend")
@@ -2354,7 +2347,7 @@ def main():
         messenger.run()
         messenger.setProgressBar(statusBar)
     except Exception as e:
-        logger.critical("Unable to start session with %s: %s", args.database, str(e))
+        logger.critical("Unable to start session with %s: %s", args.repo, str(e))
         exceptionLogger.log(e)
         sys.exit(1)
 

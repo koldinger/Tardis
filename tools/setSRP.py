@@ -60,9 +60,7 @@ def createToken(crypto, client):
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Set directory hashes.')
-    parser.add_argument('--database', '-D', dest='database', default=Defaults.getDefault('TARDIS_DB'),      help="Database to use.  Default: %(default)s")
-    parser.add_argument('--client', '-C',   dest='client',   default=Defaults.getDefault('TARDIS_CLIENT'),  help="Client to list on.  Default: %(default)s")
-    parser.add_argument('--dbname',         dest='dbname',   default=Defaults.getDefault('TARDIS_DBNAME'),  help="Name of the database file. Default: %(default)s")
+    parser.add_argument('--repo', '-R',     dest='repo', default=Defaults.getDefault('TARDIS_REPO'),    help="Repository to use.  Default: %(default)s")
 
     passgroup= parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group(required=True)
@@ -83,7 +81,7 @@ def main():
     if password:
         crypto = TardisCrypto.TardisCrypto(password, args.client)
 
-    path = os.path.join(args.database, args.client, args.dbname)
+    path = os.path.join(args.repo, 'tardis.db')
     db = TardisDB.TardisDB(path, backup=False)
 
     token = createToken(crypto, args.client)

@@ -88,7 +88,7 @@ def main():
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
     try:
-        Util.setupDataConnection(args.database, password, args.keys)
+        Util.setupDataConnection(args.repo, password, args.keys)
     except TardisDB.AuthenticationFailed as e:
         logger.error("Authentication failed")
         sys.exit(1)
@@ -103,7 +103,7 @@ def main():
               handle.write(password)
             os.environ['TARDIS_PWFILE'] = pwFilePath
         os.environ['TARDIS_CLIENT'] = args.client
-        os.environ['TARDIS_DB'] = args.database
+        os.environ['TARDIS_DB'] = args.repo
         if args.keys:
             os.environ['TARDIS_KEYFILE'] = os.path.abspath(args.keys)
 

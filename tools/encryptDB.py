@@ -322,18 +322,18 @@ def main():
 
     #crypto = TardisCrypto.TardisCrypto(password, args.client)
 
-    #path = os.path.join(args.database, args.client, args.dbname)
+    #path = os.path.join(args.repo, args.client, args.dbname)
     #db = TardisDB.TardisDB(path, backup=False)
 
     #Util.authenticate(db, args.client, password)
 
-    db, cacheDir, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
+    db, cacheDir, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
 
     #(f, c) = db.getKeys()
     #crypto.setKeys(f, c)
 
-    #cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+    #cacheDir = CacheDir.CacheDir(os.path.join(args.repo, args.client))
 
     if args.names or args.all:
         encryptNames(db, crypto)

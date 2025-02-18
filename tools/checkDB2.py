@@ -214,8 +214,8 @@ def main():
     global args
     args = processArgs()
 
-    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.database}")
-    (tardis, cache, crypt, _) = Util.setupDataConnection(args.database, password, args.keys)
+    password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.repo}")
+    (tardis, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys)
 
     count = 0
     for (checksum, size, basis, compressed, encrypted, added) in track(listChecksums(tardis), description="Processing "):

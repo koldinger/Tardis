@@ -73,7 +73,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    _, _, crypto, _ = Util.setupDataConnection(args.database, password, args.keys)
+    _, _, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     data = args.names
     if not data:

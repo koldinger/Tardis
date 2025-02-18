@@ -36,16 +36,14 @@ import os.path
 SECTION = 'Tardis'
 
 _defaults = {
-    'TARDIS_DB'             : '/srv/tardis',
+    'TARDIS_BASEDIR'        : '/srv/tardis',
+    'TARDIS_REPO'           : '',
     'TARDIS_CONFIG'         : '',
     'TARDIS_JOB'            : SECTION,
-    'TARDIS_CLIENT'         : socket.gethostname(),
-    'TARDIS_SERVER'         : '',
     'TARDIS_EXCLUDES'       : '.tardis-excludes',
     'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
     'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
     'TARDIS_SKIP'           : '.tardis-skip',
-    'TARDIS_PORT'           : '7420',
     'TARDIS_TIMEOUT'        : '300',
     'TARDIS_DAEMON_CONFIG'  : '',
     'TARDIS_LOCAL_CONFIG'   : '',
