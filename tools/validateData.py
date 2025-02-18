@@ -34,7 +34,7 @@ import argparse
 import hmac
 import sys
 
-from rich.progress import BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn, TaskProgressColumn, Progress
+from rich.progress import RenderableColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn, TaskProgressColumn, Progress
 from rich.logging import RichHandler
 
 from Tardis import Regenerator, TardisDB, CacheDir, TardisCrypto, Config, Util
@@ -43,34 +43,40 @@ from Tardis.Regenerator import RegenerateException
 checked = {}
 
 def parseArgs():
-    parser = argparse.ArgumentParser(description='Check backup files for integrity', fromfile_prefix_chars='@')
+    parser = argparse.ArgumentParser(description='Check backup files for integrity', fromfile_prefix_chars='@', add_help=False)
     (_, remaining) = Config.parseConfigOptions(parser)
 
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
+
+    parser.add_argument("--authenticate", "-a", dest='authenticate', default=True, action=argparse.BooleanOptionalAction, help="Use internal authentication, Default: %(default)s")
     parser.add_argument("--verbose", "-v", dest='verbosity', action='count', default=0, help="Increase verbosity")
+    parser.add_argument("--help", "-h", action='help')
     parser.add_argument(dest='checksums', nargs='*', help="List of checksums to validate.   Blank = all")
 
     args = parser.parse_args(remaining)
     return  args
 
-def validateFile(cksum, regen, crypto, logger):
+def validateFile(cksum, regen, internal, tardis, crypto, logger):
     logger.info("Checking %s", cksum)
     dataLen = 0
     try:
+        info = tardis.getChecksumInfo(cksum)
         hash = crypto.getHash()
-        f = regen.recoverChecksum(cksum, authenticate=True)
+        f = regen.recoverChecksum(cksum, authenticate=internal)
         while x := f.read(1024 * 1024):
             hash.update(x)
             dataLen += len(x)
+
         if not hmac.compare_digest(hash.hexdigest(), cksum):
             logger.error(f"{cksum} MAC does not match checksum: {hash.hexdigest()}")
+        if dataLen != info['size']:
+            logger.error(f"{cksum} size {dataLen} does not match specified size {info['size']}")
     except RegenerateException:
         logger.error(f"{cksum} did not authenticate")
     except Exception as e:
         logger.error("Unexpected exception: %s", str(e))
     
-
 def main():
     args = parseArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
@@ -86,9 +92,12 @@ def main():
         numCks = tardis.getChecksumCount(isFile=True)
         checksums = tardis.enumerateChecksums(isFile=True)
 
+    nameCol = RenderableColumn("")
+
     with Progress(TextColumn("[progress.description]{task.description}"),
                   BarColumn(),
                   TaskProgressColumn(),
+                  nameCol,
                   MofNCompleteColumn(),
                   TimeElapsedColumn(),
                   TimeRemainingColumn(),
@@ -96,7 +105,8 @@ def main():
         ckProgress = progress.add_task("Validating: ", total=numCks)
 
         for i in checksums:
-            validateFile(i, regen, crypto, logger)
+            nameCol.renderable = i
+            validateFile(i, regen, args.authenticate, tardis, crypto, logger)
             progress.advance(ckProgress, 1)
 
 
