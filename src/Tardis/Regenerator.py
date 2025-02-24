@@ -37,6 +37,8 @@ from . import TardisCrypto
 from . import CompressedBuffer
 from . import librsync
 
+#from icecream import ic 
+#ic.configureOutput(includeContext=True)
 
 class RegenerateException(Exception):
     pass
@@ -149,7 +151,7 @@ class Regenerator:
                 if cksInfo['encrypted']:
                     output =  self.decryptFile(cksum, cksInfo['disksize'], authenticate)
                 else:
-                    output =  self.cacheDir.open(cksum, "rb")
+                    output =  self.cacheDir.open(cksum, "rb", streaming=False)
 
                 if cksInfo['compressed'] is not None and cksInfo['compressed'].lower() != 'none':
                     self.logger.debug("Uncompressing %s", cksum)
