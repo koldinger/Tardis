@@ -31,6 +31,7 @@
 import queue
 import threading
 import logging
+import errno
 
 from . import StatusBar
 
@@ -62,6 +63,7 @@ class Messenger:
 
     def stop(self):
         self.stopped = True
+        self.sendQ.shutdown()
 
     def status(self):
         return (self.stopped, self.senderThread.is_alive(), self.receiverThread.is_alive())
@@ -82,6 +84,8 @@ class Messenger:
                 #if not raw:
                 #    self.sendlogger.info("Sending message: %s %s %s", mesg, compress, raw)
                 self.messages.sendMessage(mesg, compress)
+        except queue.ShutDown:
+            pass
         except BaseException as e:
             self.sendlogger.exception("Caught an exception sending message %s", mesg)
             self.exception = e
@@ -102,6 +106,9 @@ class Messenger:
         except RuntimeError as e:
             self.recvlogger.error("Caught Runtime error: %s", e)
             self.recvQ.put(e)
+        except OSError as e:
+            if e.errno == errno.EBADF:
+                self.recvQ.shutdown()
         except BaseException as e:
             # Catch EVERYTHING and forward it on
             self.recvlogger.error("Caught exception: %s -- %s", e.__class__.__name__, e)
@@ -132,6 +139,9 @@ class Messenger:
         except queue.Empty:
             #self.recvlogger.error("Empty encountered")
             return None
+        except queue.ShutDown:
+            return None
+
         #self.recvlogger.info("Dequeued Received Message: Queue size %d", self.recvQ.qsize())
         if isinstance(ret, BaseException):
             raise ret
