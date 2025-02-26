@@ -81,7 +81,7 @@ def getCryptoNames(scheme=None):
 
     names = []
     for s in schemes:
-        crypto = getCrypto(s, 'password')
+        crypto = getCrypto(s, 'client', 'password')
         names.append(f"{s}: {crypto.getName()}")
     return '\n'.join(names)
 

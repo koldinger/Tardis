@@ -1787,7 +1787,7 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
         crypt.setKeys(f, c)
 
     if verbosity or args.stats or args.report != 'none':
-        logger.log(log.STATS, f"Name: {backupName} Locationn: {url} Session: {sessionid}")
+        logger.log(log.STATS, f"Name: {backupName} Repository: {url} Session: {sessionid}")
 
     trackOutstanding = True
 
@@ -1843,7 +1843,7 @@ def processCommandLine():
         c.add_section(t)                        # Make it safe for reading other values from.
 
     locgroup = parser.add_argument_group("Local Backup options")
-    locgroup.add_argument('--repo', '-R',           dest='repo',        default=c.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    locgroup.add_argument('--repository', '--repo', '-R',     dest='repo', default=c.get(t, 'Repo'), help='Dabatase directory (Default: %(default)s)')
 
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
@@ -1865,7 +1865,7 @@ def processCommandLine():
     pwgroup.add_argument('--password-prog',         dest='passwordprog', default=c.get(t, 'PasswordProg'),              help='Use the specified command to generate the password on stdout')
 
     passgroup.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=None,
-                           help="Crypto scheme to use.  0-4\n" + TardisCrypto.getCryptoNames())
+                           help=f"Crypto scheme to use.  0-{TardisCrypto.MAX_CRYPTO_SCHEME}\n" + TardisCrypto.getCryptoNames())
 
     passgroup.add_argument('--keys',                dest='keys', default=c.get(t, 'KeyFile'),
                            help='Load keys from file.  Keys are not stored in repository')
@@ -1982,6 +1982,7 @@ def checkURL():
             if parts[0] != '/':
                 raise InitFailedException(f"Invalid path for remote access: {urlInfo.path}: {args.repo}")
 
+            path = urlInfo.path
             port = urlInfo.port or int(Defaults.getDefault('TARDIS_PORT'))
             netloc = f"{urlInfo.hostname}:{port}"
         case 'file':
@@ -1990,6 +1991,7 @@ def checkURL():
             if not parts[1]:
                 raise InitFailedException(f"Invalid URL: No path to repository: {args.repo}")
             netloc = ''
+            path = os.path.abspath(urlInfo.path)
         case _:
             raise InitFailedException(f"Invalid URL: unrecognized scheme: {urlInfo.scheme}: {args.repo}")
 
@@ -1997,7 +1999,7 @@ def checkURL():
     if not client:
         raise InitFailedException(f"Invalid URL: No client specified: {args.repo}")
 
-    info = urllib.parse.ParseResult(urlInfo.scheme, netloc, urlInfo.path, '', '', '')
+    info = urllib.parse.ParseResult(urlInfo.scheme, netloc, path, '', '', '')
     url = urllib.parse.urlunparse(info)
     logger.debug("Canonical URL: %s - %s", url, info)
     return url, client, info

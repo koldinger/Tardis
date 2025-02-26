@@ -103,9 +103,6 @@ class TardisFS(LoggingMixIn, Operations):
     fsencoding = sys.getfilesystemencoding()
     name = "TardisFS"
 
-    client   = Defaults.getDefault('TARDIS_CLIENT')
-    database = Defaults.getDefault('TARDIS_DB')
-    dbname   = Defaults.getDefault('TARDIS_DBNAME')
     current  = Defaults.getDefault('TARDIS_RECENT_SET')
 
     rootVId = Util.hashPath("/")
@@ -615,7 +612,7 @@ def processArgs():
     return args
 
 def delTardisKeys(kwargs):
-    keys = ['password', 'pwfile', 'pwprog', 'database', 'client', 'keys', 'dbname']
+    keys = ['password', 'pwfile', 'pwprog', 'repository', 'keys']
     for i in keys:
         kwargs.pop(i, None)
 
@@ -636,14 +633,14 @@ def main():
         pwfile = kwargs.get('pwfile') or argsDict.get('passwordfile')
         pwprog = kwargs.get('pwprog') or argsDict.get('passwordprog')
 
-        password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt=f"Password for {getarg('client')}: ")
+        password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt=f"Password:")
         args.password = None
         (tardis, cache, crypt, _) = Util.setupDataConnection(getarg('database'), password, getarg('keys'))
     except TardisDB.AuthenticationException:
-        logger.error("Authentication failed.  Bad password")
+        logger.error("Authentication failed.  Incorrect password")
         sys.exit(1)
     except Exception as e:
-        logger.error("DB Connection failed: %s", e)
+        logger.error("Repository Connection failed: %s", e)
         sys.exit(1)
 
     delTardisKeys(kwargs)

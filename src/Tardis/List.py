@@ -674,7 +674,7 @@ def processArgs():
 
     parser.add_argument('--long', '-l',     dest='long',        default=False, action='store_true',         help='Use long listing format.')
     parser.add_argument('--hidden', '-a',   dest='hidden',      default=False, action='store_true',         help='Show hidden files.')
-    parser.add_argument('--reverse', '-R',  dest='reverse',     default=False, action='store_true',         help='Reverse the sort order')
+    parser.add_argument('--reverse', '-r',  dest='reverse',     default=False, action='store_true',         help='Reverse the sort order')
     parser.add_argument('--annotate', '-f', dest='annotate',    default=False, action='store_true',         help='Annotate files based on type.')
     parser.add_argument('--size', '-s',     dest='size',        default=False, action='store_true',         help='Show file sizes')
     parser.add_argument('--human', '-H',    dest='human',       default=False, action='store_true',         help='Format sizes for easy reading')
@@ -692,7 +692,7 @@ def processArgs():
     parser.add_argument('--colors',         dest='colors',      default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
-    parser.add_argument('--recurse', '-r',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
+    parser.add_argument('--recurse',        dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=argparse.BooleanOptionalAction,    help='Glob filenames')
@@ -758,7 +758,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
-        logger.error("Authentication failed.  Bad password")
+        logger.error("Authentication failed.  Incorrect password")
         eLogger.log(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))

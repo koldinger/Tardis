@@ -51,16 +51,17 @@ from . import Util
 from . import CacheDir
 from . import Defaults
 
-basedir     = Defaults.getDefault('TARDIS_DB')
-dbname      = Defaults.getDefault('TARDIS_DBNAME')
+#from icecream import ic 
+#ic.configureOutput(includeContext=True)
+
+basedir     = Defaults.getDefault('TARDIS_BASEDIR')
 port        = Defaults.getDefault('TARDIS_REMOTE_PORT')
 configName  = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
 pidFile     = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
 
 configDefaults = {
     'Port'              : port,
-    'Database'          : basedir,
-    'DBName'            : dbname,
+    'Basedir'          : basedir,
     'LogFile'           : '',
     'LogExceptions'     : str(False),
     'Verbose'           : '0',
@@ -148,13 +149,14 @@ def handleAuthenticationFailed(error):
     response.status_code = 401
     return response
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         try:
             host    = request.form['host']
-            dbPath  = os.path.join(args.repo, host, dbname)
-            cache   = CacheDir.CacheDir(os.path.join(args.repo, host), create=False)
+            dbPath  = os.path.join(args.basedir, host, 'tardis.db')
+            cache   = CacheDir.CacheDir(os.path.join(args.basedir, host), create=False)
             upgrade = config.getboolean('Remote', 'AllowSchemaUpgrades')
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 
@@ -574,8 +576,7 @@ def processArgs():
     config.read(args.config)
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
-    parser.add_argument('--dbname',             dest='dbname',          default=config.get(t, 'DBName'), help='Use the database name (Default: %(default)s)')
-    parser.add_argument('--database',           dest='database',        default=config.get(t, 'Database'), help='Database Directory (Default: %(default)s)')
+    parser.add_argument('--basedir',            dest='basedir',         default=config.get(t, 'Basedir'), help='Backup Directory (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
 
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')

@@ -59,7 +59,6 @@ from . import Config
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
 
-
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
 # Config keys which can be gotten or set.
@@ -73,7 +72,7 @@ args: argparse.Namespace
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
     loc = urllib.parse.urlparse(args.repo, scheme='file')
-    client = loc[1]
+    path, client = os.path.split(loc.path)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if loc.scheme in ['http', 'https', 'tardis']:
         if not allowRemote:
@@ -86,18 +85,15 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=Fals
             dbLoc = args.repo
         tardisdb = RemoteDB.RemoteDB(dbLoc, client)
         cache = tardisdb
-    else:
-        basedir = os.path.join(args.repo, client)
-        if not args.dbdir:
-            dbdir = os.path.join(args.repo, client)
-        else:
-            dbdir = os.path.join(args.dbdir, client)
-        dbfile = os.path.join(dbdir, args.dbname)
+    elif loc.scheme == 'file':
+        dbfile = os.path.join(loc.path, 'tardis.db')
         if new and os.path.exists(dbfile):
             raise Exception(f"Repository for client {client} already exists.")
 
-        cache = CacheDir.CacheDir(basedir, 2, 2, create=new)
+        cache = CacheDir.CacheDir(loc.path, 2, 2, create=new)
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=create, allow_upgrade=allowUpgrade)
+    else:
+        raise Exception(f"Unrecognized scheme: {loc.scheme}")
 
     if tardisdb.needsAuthentication():
         if password is None:
@@ -110,7 +106,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=Fals
     else:
         crypt = TardisCrypto.getCrypto(0, None, None)
 
-    return (tardisdb, cache, crypt)
+    return (tardisdb, cache, crypt, client)
 
 def createClient(password):
     try:
@@ -129,11 +125,8 @@ def createClient(password):
 
 def setPassword(password):
     try:
-        #(db, _, _) = getDB(None)
-        (db, _, _, client) = Util.setupDataConnection(args.repo, None, args.keys)
-        password = Util.getPassword(args.newpw, args.newpwf, args.newpwp, prompt=f"Set Password for {args.repo}: ",
-                                     allowNone=False, confirm=True, strength=True)
-        crypt = TardisCrypto.getCrypto(TardisCrypto.DEF_CRYPTO_SCHEME, password, client)
+        (db, _, _, client) = getDB(None)
+        crypt = TardisCrypto.getCrypto(args.cryptoScheme, password, client)
         crypt.genKeys()
         (f, c) = crypt.getKeys()
         (salt, vkey) = srp.create_salted_verification_key(client, password)
@@ -737,7 +730,7 @@ def parseArgs() -> argparse.Namespace:
     tagParser.add_argument("--move", "-m",     dest='move',    default=False, action='store_true',      help="Move the tag")
 
     common = argparse.ArgumentParser(add_help=False)
-    Config.addPasswordOptions(common, addscheme=True)
+    Config.addPasswordOptions(common, addscheme=False)
     Config.addCommonOptions(common)
 
     newPassParser = argparse.ArgumentParser(add_help=False)
@@ -775,9 +768,13 @@ def parseArgs() -> argparse.Namespace:
     sanityParser.add_argument("--details", dest='details', default=False, action=argparse.BooleanOptionalAction, help="Print mismatched files")
     sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=argparse.BooleanOptionalAction, help="Delete mismatched files")
 
+    cryptoParser = argparse.ArgumentParser(add_help=False, formatter_class=argparse.RawTextHelpFormatter)
+    cryptoParser.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
+                           help=f"Crypto scheme to use.  0-{TardisCrypto.MAX_CRYPTO_SCHEME}\n" + TardisCrypto.getCryptoNames())
+    
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common],                                       help='Create a client repository')
-    subs.add_parser('setpass',      parents=[common],                                       help='Set a password')
+    subs.add_parser('setpass',      parents=[common, cryptoParser],                         help='Set a password')
     subs.add_parser('chpass',       parents=[common, newPassParser],                        help='Change a password')
     subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')
     subs.add_parser('list',         parents=[common, listParser],                           help='List backup sets')
@@ -851,7 +848,6 @@ def main():
     parseArgs()
     logger = Util.setupLogging(args.verbose)
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
-
 
     # Commands which cannot be executed on remote repository
     allowRemote = args.command not in ['create', 'upgrade']

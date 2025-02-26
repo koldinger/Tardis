@@ -56,8 +56,9 @@ import srp
 import colorlog
 import parsedatetime
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
+#import traceback
 
 from . import Connection
 from . import CompressedBuffer
@@ -373,7 +374,7 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
         raise TardisDB.AuthenticationFailed()
 
     # Password specified, so create the crypto unit
-    cryptoScheme = tardis.getCryptoScheme()
+    #cryptoScheme = tardis.getConfigValue('CryptoScheme', '1')
 
     crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
     if keyFile:

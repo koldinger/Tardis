@@ -28,7 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import socket
 import configparser
 import os
 import os.path
@@ -51,6 +50,7 @@ _defaults = {
     'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
     'TARDIS_JOURNAL'        : 'tardis.journal.gz',
     'TARDIS_SEND_CONFIG'    : 'true',
+    'TARDIS_PORT'           : '7420',
     'TARDIS_REMOTE_PORT'    : '7430',
     'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
     'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',

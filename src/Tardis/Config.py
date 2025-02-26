@@ -74,7 +74,7 @@ def parseConfigOptions(parser, exit_on_error=True):
 
 def addCommonOptions(parser):
     dbGroup = parser.add_argument_group("Database specification options")
-    dbGroup.add_argument('--repo', '-R', dest='repo',    default=config.get(job, 'Database'),               help="Database to use.  Default: %(default)s")
+    dbGroup.add_argument('--repository', '-R', dest='repo',    default=config.get(job, 'Repo'),               help="Database to use.  Default: %(default)s")
 
 def addPasswordOptions(parser, addscheme=False):
     passgroup = parser.add_argument_group("Password/Encryption specification options")

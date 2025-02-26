@@ -73,7 +73,7 @@ args: argparse.Namespace
 configSection = 'Daemon'
 
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
-baseDir         = Defaults.getDefault('TARDIS_DB')
+baseDir         = Defaults.getDefault('TARDIS_DB') or Defaults.getDefault('TARDIS_BASEDIR')
 portNumber      = Defaults.getDefault('TARDIS_PORT')
 pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
 timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
