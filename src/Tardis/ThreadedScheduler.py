@@ -44,7 +44,7 @@ class ThreadedScheduler(sched.scheduler):
     def shutdown(self):
         while not self.empty():
             try:
-                self.cancel(queue[0])
+                self.cancel(self.queue[0])
             except:
                 pass
 
