@@ -65,27 +65,22 @@ def encryptNames(db, crypto):
     logger.info("Encrypted %d names", names)
 
 def encryptFile(checksum, cacheDir, cipher, iv, output = None):
-    f = cacheDir.open(checksum, 'rb')
     if output is None:
         output = checksum + '.enc'
-    o = cacheDir.open(output, 'wb')
-    o.write(iv)
-    nb = len(iv)
-    cipher.update(iv)
-    # Encrypt the chunks
-    for chunk, _ in Util._chunks(f, 64 * 1024):
-        ochunk = cipher.encrypt(chunk)
+    with cacheDir.open(checksum, 'rb') as f,  cacheDir.open(output, 'wb') as o:
+        o.write(iv)
+        nb = len(iv)
+        cipher.update(iv)
+        # Encrypt the chunks
+        for chunk, _ in Util._chunks(f, 64 * 1024):
+            ochunk = cipher.encrypt(chunk)
+            o.write(ochunk)
+            nb = nb + len(ochunk)
+
+        # add the digest chunk
+        ochunk = cipher.digest()
         o.write(ochunk)
         nb = nb + len(ochunk)
-
-    # add the digest chunk
-    ochunk = cipher.digest()
-    o.write(ochunk)
-    nb = nb + len(ochunk)
-
-    o.close()
-    f.close()
-
     return nb
 
 def generateFullFileInfo(checksum, regenerator, cacheDir, nameMac, signature=True, basis=None):
