@@ -1237,13 +1237,16 @@ class Backend:
             message = {"message": Protocol.Responses.AUTH, "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             auth1 = self.recvMessage()
+            if auth1['message'] == 'BYE':
+                raise TardisDB.AuthenticationFailed("Shutdown during initialization")
+
             self.checkMessage(auth1, Protocol.Commands.AUTH1)
             name = base64.b64decode(auth1['srpUname'])
             srpValueA = base64.b64decode(auth1['srpValueA'])
 
             srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
             if srpValueS is None or srpValueB is None:
-                raise TardisDB.AuthenticationFailed
+                raise TardisDB.AuthenticationFailed("SRP Authentication failed")
 
             self.logger.debug("Sending Challenge values")
             message = {
@@ -1428,7 +1431,6 @@ class Backend:
             try:
                 self.initializeBackup()
             except Exception as e:
-                self.logger.error("Caught exception : %s", str(e))
                 self.exceptionLogger.log(e)
                 message = {"status": "FAIL", "error": str(e)}
                 self.sendMessage(message)
@@ -1449,6 +1451,8 @@ class Backend:
                     self.db.setBackupSetName(self.name, self.configPriority)
 
             completed = True
+        except (InitFailedException, TardisDB.AuthenticationFailed) as e:
+            pass
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
             self.exceptionLogger.log(e)

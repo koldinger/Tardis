@@ -163,6 +163,8 @@ class TardisDB:
         self.allow_upgrade = allow_upgrade
         self.authenticated = False
 
+        self.srpSrv = None
+
         if user  is None: user = -1
         if group is None: group = -1
 
