@@ -114,7 +114,7 @@ reportChoices = ["all", "dirs", "none"]
 
 configDefaults = {
     # Remote Socket connectionk params
-    'Repo':                 Defaults.getDefault('TARDIS_REPO'),
+    'Repository':           Defaults.getDefault('TARDIS_REPO'),
     'Force':                str(False),
     'Full':                 str(False),
     'Timeout':              str(300.0),
@@ -1843,7 +1843,7 @@ def processCommandLine():
         c.add_section(t)                        # Make it safe for reading other values from.
 
     locgroup = parser.add_argument_group("Local Backup options")
-    locgroup.add_argument('--repository', '--repo', '-R',     dest='repo', default=c.get(t, 'Repo'), help='Dabatase directory (Default: %(default)s)')
+    locgroup.add_argument('--repository', '--repo', '-R',     dest='repo', default=c.get(t, 'Repository'), help='Dabatase directory (Default: %(default)s)')
 
     parser.add_argument('--log', '-l',              dest='logfiles', action='append', default=splitList(c.get(t, 'LogFiles')), nargs="?", const=sys.stderr,
                         help='Send logging output to specified file.  Can be repeated for multiple logs. Default: stderr')
