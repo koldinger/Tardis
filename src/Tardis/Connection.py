@@ -154,8 +154,8 @@ class QueuedMsgPackConnection(MsgPackConnection):
         self.sender.run()
 
 class DirectConnection:
-
     def __init__(self, timeout):
+        self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
         self.timeout = timeout
         self.toClientQueue = queue.SimpleQueue()
         self.toServerQueue = queue.SimpleQueue()

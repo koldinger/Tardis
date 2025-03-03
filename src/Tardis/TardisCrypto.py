@@ -49,7 +49,7 @@ DEF_CRYPTO_SCHEME = 4
 MAX_CRYPTO_SCHEME = 4
 NO_CRYPTO_SCHEME = 0
 
-def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencoding()):
+def getCrypto(scheme, password, client=None):
     """
     Create a crypto object based on the scheme ID passed in.
     Set the password, client name, and encoding.
@@ -58,15 +58,15 @@ def getCrypto(scheme, password, client=None, fsencoding=sys.getfilesystemencodin
 
     match scheme:
         case 0:
-            return Crypto_Null(password, client, fsencoding)
+            return Crypto_Null(password, client)
         case 1:
-            return Crypto_AES_CBC_HMAC__AES_ECB(password, client, fsencoding)
+            return Crypto_AES_CBC_HMAC__AES_ECB(password, client)
         case 2:
-            return Crypto_AES_CBC_HMAC__AES_SIV(password, client, fsencoding)
+            return Crypto_AES_CBC_HMAC__AES_SIV(password, client)
         case 3:
-            return Crypto_AES_GCM__AES_SIV(password, client, fsencoding)
+            return Crypto_AES_GCM__AES_SIV(password, client)
         case 4:
-            return Crypto_ChaCha20_Poly1305__AES_SIV(password, client, fsencoding)
+            return Crypto_ChaCha20_Poly1305__AES_SIV(password, client)
         case _:
             raise ValueError(f"Unknown Crypto Scheme: {scheme}")
 
@@ -343,7 +343,7 @@ class Crypto_Null(CryptoScheme):
 
     ivLength    = 0
 
-    def __init__(self, password=None, client=None, fsencoding=sys.getfilesystemencoding()):
+    def __init__(self, password=None, client=None):
         pass
 
     def getName(self):
@@ -609,8 +609,8 @@ class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     _cryptoScheme = '3'
     _cryptoName   = 'AES-GCM/AES-SIV/scrypt'
 
-    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
-        super().__init__(password, client, fsencoding)
+    def __init__(self, password, client=None):
+        super().__init__(password, client)
 
     def getContentCipher(self, iv=None):
         if iv is None:
@@ -632,8 +632,8 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
 
     ivLength    = 12
 
-    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
-        super().__init__(password, client, fsencoding)
+    def __init__(self, password, client=None):
+        super().__init__(password, client)
 
     def getContentCipher(self, iv):
         return ChaCha20_Poly1305.new(key=self._contentKey, nonce=iv)
