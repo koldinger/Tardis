@@ -232,18 +232,23 @@ class NullEncryptor:
 
     def encrypt(self, data):
         return data
+
     def decrypt(self, data, last=False):
         return data
+
     def finish(self):
         return b''
+
     def digest(self):
         return b''
+
     def verify(self, tag):
         pass
 
 class NullCipher():
     def encrypt(self, data):
         return data
+
     def decrypt(self, data):
         return data
 
@@ -332,7 +337,6 @@ class Crypto_Null(CryptoScheme):
     _keyKey      = None
     _random      = None
     _filenameEnc = None
-    _fsEncoding  = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
     _altchars    = b'#@'
@@ -396,8 +400,7 @@ class Crypto_Null(CryptoScheme):
         pass
 
     def getKeys(self):
-        return (None, None)
-
+        return None, None
 
 
 class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
@@ -415,14 +418,13 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     _keyKey      = None
     _random      = None
     _filenameEnc = None
-    _fsEncoding  = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
     _altchars    = b'#@'
 
     ivLength    = _blocksize
 
-    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
+    def __init__(self, password, client=None):
         self._random = Cryptodome.Random.new()
         if client is None:
             client = Defaults.getDefault('TARDIS_CLIENT')
@@ -433,8 +435,6 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         self.salt = hashlib.sha256(self.client).digest()
         keys = self.genKeyKey(password)
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
-
-        self._fsEncoding = fsencoding
 
     def getName(self):
         return self._cryptoName
@@ -470,8 +470,6 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         return data
 
     def unpad(self, data):
-        #if validate:
-            #self.checkpad(data)
         unPaddedLen = len(data) - data[-1]
         return data[:unPaddedLen]
 
@@ -550,8 +548,8 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     _cryptoScheme = '2'
     _cryptoName   = 'AES-CBC-HMAC/AES-SIV/scrypt'
 
-    def __init__(self, password, client=None, fsencoding=sys.getfilesystemencoding()):
-        super().__init__(password, client, fsencoding)
+    def __init__(self, password, client=None):
+        super().__init__(password, client)
 
     def genKeyKey(self, password):
         return scrypt(password, self.salt, 32, 65536, 8, 1)
@@ -649,9 +647,8 @@ if __name__ == '__main__':
              b'ABCDEFGHIJKNLMNOPQRSTUVWXYZ' + \
              b'1234567890!@#$%&*()[]{}-_,.<>'
 
-    #print(string)
     path = '/srv/home/kolding/this is a/test.onlyATest/X'
-    fname ='test.only1234'
+    fname = 'test.only1234'
 
     print(getCryptoNames())
     print(getCryptoNames(3))
@@ -662,7 +659,6 @@ if __name__ == '__main__':
             c = getCrypto(i, 'PassWordXYZ123')
             print(f"Type: {c.getName()}")
             c.genKeys()
-
 
             print("--- Testing Content Encryptor ---")
             e = c.getContentEncryptor()
@@ -679,14 +675,12 @@ if __name__ == '__main__':
 
             print("--- Testing Filename Encryptor ---")
             cname = c.encryptName(fname)
-            #print(cf)
             plainname = c.decryptName(cname)
 
             assert plainname == fname
 
             print("--- Testing FilePath Encryptor ---")
             cpath = c.encryptPath(path)
-            #print(cp)
             plainpath = c.decryptPath(cpath)
 
             assert plainpath == path

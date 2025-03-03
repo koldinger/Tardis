@@ -86,7 +86,6 @@ def parseArgs():
     Util.addGenCompletions(parser)
     args = parser.parse_args(remaining)
 
-    #print args
     return args
 
 def setcolor(line):
@@ -111,7 +110,7 @@ def setcolor(line):
     return color
 
 def isBinary(lines, numLines = 128):
-    #TODO Fixme.  binaryornot doesn't seem to work for binary strings.
+    # TODO Fixme.  binaryornot doesn't seem to work for binary strings.
     #lineNo = 0
     #numLines = min(numLines, len(lines))
     #while lineNo < numLines:
@@ -172,7 +171,6 @@ def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recu
     names1 = ([x['name'] for x in entries1])
     if crypt:
         names1 = list(map(crypt.decryptName, names1))
-    #names1 = map(lambda x: x.decode('utf-8'), names1)
     names1 = sorted(names1)
 
     if bsets[1]:
@@ -240,7 +238,6 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
                 diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
             return
         logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
-        #f1 = regenerator.recoverFile(p1, bsets[0]['backupset'])
         f1 = regenerator.recoverChecksum(info1['checksum'])
         if not f1:
             logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])

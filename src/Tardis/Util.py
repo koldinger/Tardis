@@ -70,8 +70,8 @@ try:
 except ImportError:
     genzshcomp = None
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 logger = logging.getLogger('UTIL')
 
@@ -83,19 +83,11 @@ def fmtSize(num, base=1024, suffixes=None):
         return 'None'
     num = float(num)
     for x in suffixes[:-1]:
-        #if num < base and num > -base:
         if -base < num < base:
             return (fmt % (num, x)).strip()
         num /= float(base)
         fmt = "%3.1f %s"
     return (fmt % (num, suffixes[-1])).strip()
-
-def getIntOrNone(config, section, name):
-    try:
-        x = config.get(section, name)
-        return int(x, 0)
-    except Exception:
-        return None
 
 @functools.cache
 def getGroupName(gid):
@@ -173,24 +165,19 @@ def shortPath(path, width=80):
     # retPath is the current file at this point
     if len(retPath) > width:
         namecomps = retPath.rsplit('.', 1)
-        #print("Name Comps:: ",  namecomps)
         if len(namecomps) == 2:
             main, suffix = namecomps
         else:
             main = namecomps[0]
             suffix = ''
-        #print("Split:: ", main, suffix)
         length = min(len(retPath), width) - 5
         retPath   = main[0:(length // 2) - 1] + "..." + main[-(length // 2) + 1:]
         if suffix:
             retPath = '.'.join([retPath, suffix])
 
-    #print("First chunk:: ", len(retPath), retPath)
-
     # Build it up backwards from the end
     while len(retPath) < width:
         path, tail = os.path.split(path)
-        #print(retPath, len(retPath), path, tail)
         if not path or not tail:
             break
         if len(tail) + len(os.sep) + len(retPath) > width:
@@ -233,7 +220,6 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout, handler=
 # Functions for reducing a path.
 
 def findDirInRoot(tardis, bset, path, crypt=None):
-    #logger = logging.getLogger('UTIL')
     """
     Find a directory which exists in the root directory
     Return the number of components which must be removed to have a directory in
@@ -243,7 +229,6 @@ def findDirInRoot(tardis, bset, path, crypt=None):
     comps.pop(0)
     for i in range(0, len(comps)):
         name = comps[i]
-        #logger.debug("Looking for root directory %s (%d)", name, i)
         if crypt:
             name = crypt.encryptName(name)
         info = tardis.getFileInfoByName(name, (0, 0), bset)
@@ -252,23 +237,18 @@ def findDirInRoot(tardis, bset, path, crypt=None):
     return None
 
 def reducePath(tardis, bset, path, reduceBy, crypt=None):
-    #logger = logging.getLogger('UTIL')
     """
     Reduce a path by a specified number of directory levels.
     If the number is sys.maxint, perform a "smart" reduction, by looking for a directory
     element which occurs in the root directory.
     """
-    #logger.debug("Computing path for %s in %d (%d)", path, bset, reduce)
     if reduceBy == sys.maxsize:
         reduceBy = findDirInRoot(tardis, bset, path, crypt)
     if reduceBy:
-        #logger.debug("Reducing path by %d entries: %s", reduceBy, path)
         comps = path.split(os.sep)
         if reduceBy > len(comps):
-            #logger.error("Path reduction value (%d) greater than path length (%d) for %s.  Skipping.", reduceBy, len(comps), path)
             return None
         tmp = os.path.join(os.sep, *comps[reduceBy + 1:])
-        #logger.info("reduced path %s to %s", path, tmp)
         path = tmp
     return path
 
@@ -276,35 +256,6 @@ def isMagic(path):
     if ('*' in path) or ('?' in path) or ('[' in path):
         return True
     return False
-
-def matchPath(pattern, path):
-    if pattern == path:
-        return True
-    pats = pattern.split(os.sep)
-    dirs = path.split(os.sep)
-    inWild = False
-    while len(pats) != 0 and len(dirs) != 0:
-        if not inWild:
-            p = pats.pop(0)
-            d = dirs.pop(0)
-            if p == '**':
-                inWild = True
-            else:
-                if not fnmatch.fnmatch(d, p):
-                    return False
-        else:
-            d = dirs.pop(0)
-            p = pats[0]
-            if p != '**':
-                if fnmatch.fnmatch(d, p):
-                    inWild = False
-                    pats.pop(0)
-            else:
-                pats.pop(0)
-
-    if len(pats) or len(dirs):
-        return False
-    return True
 
 def fullPath(name):
     return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
@@ -415,7 +366,6 @@ def setupDataConnection(dataLoc, client, password, keyFile, dbName, dbLoc=None, 
         raise TardisDB.AuthenticationFailed()
 
     # Password specified, so create the crypto unit
-    #cryptoScheme = tardis.getConfigValue('CryptoScheme', '1')
     cryptoScheme = tardis.getCryptoScheme()
 
     crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
@@ -486,14 +436,11 @@ def getBackupSet(db, bset):
 
 _suffixes = [".basis", ".sig", ".meta", ""]
 def _removeOrphans(db, cache):
-    #logger = logging.getLogger('UTIL')
-
     size = 0
     count = 0
     # Get a list of orphan'd files
     orphans = db.listOrphanChecksums(isFile=True)
     for cksum in orphans:
-        #cksum = row[0]
         logger.debug("Removing %s", cksum)
         # And remove them each....
         try:
@@ -555,7 +502,6 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
     Send a block of data, optionally encrypt and/or compress it before sending
     Compress should be either None, for no compression, or one of the known compression types (zlib, bzip, lzma)
     """
-    #logger = logging.getLogger('Data')
     if isinstance(sender, Connection.Connection):
         sender = sender.sender
     size = 0
@@ -599,8 +545,6 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
 
     except Exception as e:
         status = "Fail"
-        #logger = logging.getLogger('Data')
-        #logger.exception(e)
         raise e
     finally:
         sender.sendMessage(b'')     # 0 length chunk, indicate end of data
@@ -785,12 +729,10 @@ def addGenCompletions(parser):
 
 class HelpFormatter(argparse.RawTextHelpFormatter):
     def _format_action_invocation(self, action):
-        #print "_format_action_invocation", str(action)
         if hasattr(action, 'help_option'):
             ret = action.help_option
         else:
             ret = super()._format_action_invocation(action)
-        #print "Got ", ret
         return ret
 
 # Argument formatter.  Useful for converting our command line arguments into strings"
@@ -846,25 +788,6 @@ class ExceptionLogger:
             else:
                 self.logger.exception(exception)
 
-# Class to have a two directional dictionary.
-
-class bidict(dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.inverse = {}
-        for key, value in self.items():
-            self.inverse.setdefault(value,[]).append(key)
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        self.inverse.setdefault(value,[]).append(key)
-
-    def __delitem__(self, key):
-        self.inverse.setdefault(self[key],[]).remove(key)
-        if self[key] in self.inverse and not self.inverse[self[key]]:
-            del self.inverse[self[key]]
-        super().__delitem__(key)
-
 # Get a hash function.  Configurable.
 
 _hashMagic = struct.pack("!I", 0xffeeddcc)
@@ -873,7 +796,6 @@ def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
         f = list(files)
-        #print map(crypt.decryptName, [x['name'] for x in f])
         filenames = sorted([crypt.decryptName(n) for n in [x['name'] for x in f]])
     else:
         filenames = sorted([x["name"] for x in files])

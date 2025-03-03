@@ -34,7 +34,6 @@ import os.path
 
 
 def processDir(path, bset, parent, device):
-    #print u"  Processing {}".format(path)
     s = conn.execute("UPDATE Files SET ParentDev = :device WHERE Parent = :parent AND :bset BETWEEN FirstSet AND LastSet",
                     {"parent": parent, "device": device, "bset": bset})
     s = conn.execute("UPDATE Files SET Device = :device WHERE Parent = :parent AND Device IS NULL AND :bset BETWEEN FirstSet AND LastSet",

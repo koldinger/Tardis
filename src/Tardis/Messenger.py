@@ -68,21 +68,13 @@ class Messenger:
     def status(self):
         return (self.stopped, self.senderThread.is_alive(), self.receiverThread.is_alive())
 
-    def _msgid(self, msg, t='msgid'):
-        if isinstance(msg, dict):
-            return msg.get(t, -1)
-        return 'data'
-
     def _sender(self):
         self.sendlogger.debug("Sender starting")
         try:
             while not self.stopped:
                 (mesg, compress, _) = self.sendQ.get()
-                #self.sendlogger.info("Dequeued Sending Message: Queue size %d", self.sendQ.qsize())
                 if mesg is None:
                     return
-                #if not raw:
-                #    self.sendlogger.info("Sending message: %s %s %s", mesg, compress, raw)
                 self.messages.sendMessage(mesg, compress)
         except queue.ShutDown:
             pass
@@ -123,12 +115,10 @@ class Messenger:
         if message is None:
             self.sendlogger.error("Sending None Message")
 
-        #self.sendlogger.info("Enqueuing message: %s %s %s", str(message)[:64], compress, raw)
         self.sendQ.put((message, compress, self.sendEnqueued))
 
         self.sendEnqueued += 1
         self.reportQueueSizes()
-        #self.sendlogger.info("Inserted Sending Message.  Queue Size: %d", self.sendQ.qsize())
 
     def recvMessage(self, wait=True, timeout=None):
         if self.exception:
@@ -137,16 +127,12 @@ class Messenger:
         try:
             ret = self.recvQ.get(block=wait, timeout=timeout)
         except queue.Empty:
-            #self.recvlogger.error("Empty encountered")
             return None
         except queue.ShutDown:
             return None
 
-        #self.recvlogger.info("Dequeued Received Message: Queue size %d", self.recvQ.qsize())
         if isinstance(ret, BaseException):
             raise ret
-        #if ret is None:
-        #    raise OSError("Socket closed")
         self.reportQueueSizes()
         if ret is None:
             self.recvlogger.critical("None value returned")
@@ -157,7 +143,7 @@ class Messenger:
         if self.pbar:
             s = self.sendQ.qsize()
             r = self.recvQ.qsize()
-            self.pbar.setValues({ "sendQ": s, "recvQ": r})
+            self.pbar.setValues({"sendQ": s, "recvQ": r})
 
     def setProgressBar(self, pbar: StatusBar.StatusBar):
         self.pbar = pbar
@@ -189,7 +175,7 @@ if __name__ == "__main__":
     m.run()
     time.sleep(1)
     for i in range(0, 20):
-        m.sendMessage({ "value": i})
+        m.sendMessage({"value": i})
 
     for i in range(0, 20):
         print(m.recvMessage(wait=True))

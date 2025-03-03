@@ -87,7 +87,6 @@ def upgrade(conn, logger, db):
     for i in checksums:
         checksum = i[0]
         size = os.path.getsize(cache.path(checksum))
-        #print "Setting size of %s to %d" % (checksum, size)
         c2.execute("UPDATE Checksums SET DiskSize = ? WHERE Checksum = ?", (size, checksum))
         x += 1
 

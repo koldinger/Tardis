@@ -33,10 +33,8 @@
 import os      # for filesystem modes (O_RDONLY, etc)
 import os.path
 import errno   # for error number codes (ENOENT, etc)
-               # - note: these must be returned as negatives
+
 import sys
-import logging
-import logging.handlers
 import argparse
 import tempfile
 import json
@@ -46,8 +44,8 @@ import stat    # for file properties
 import functools
 import pwd
 import grp
+from enum import IntEnum, auto
 
-#import fuse
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
@@ -59,41 +57,23 @@ from . import Defaults
 from . import TardisDB
 from . import Config
 
-_BackupSetInfo = 0
-_LastBackupSet = 1
-_DirInfo       = 2
-_DirContents   = 3
-_FileDetails   = 4
-_LinkContents  = 5
+class CacheKeys(IntEnum):
+    BackupSetInfo = auto()
+    LastBackupSet = auto()
+    DirInfo       = auto()
+    DirContents   = auto()
+    LinkContents  = auto()
 
 _infoEnabled    = True
 
 logger = None
-
-logLevels = [logging.WARNING, logging.INFO, logging.DEBUG]
-
-def tracer(func):
-    @functools.wraps(func)
-    def trace(*args, **kwargs):
-        if _infoEnabled:
-            logger.info("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
-        try:
-            x = func(*args, **kwargs)
-            logger.info("COMPLETE %s:(%s %s) => %s", func.__name__, str(args)[1:-1], str(kwargs)[1:-1], str(x)[:32])
-            return x
-        except Exception as e:
-            logger.error("CALL %s:(%s %s)", func.__name__, str(args)[1:-1], str(kwargs)[1:-1])
-            logger.error("%s raised exception %s: %s", func.__name__, e.__class__.__name__, str(e))
-            #logger.exception(e)
-            raise e
-    return trace
 
 def getDepth(path):
     """
     Return the depth of a given path, zero-based from root ('/')
     """
     logger.debug("getDepth: %s", path)
-    if path ==  '/':
+    if path == '/':
         return 0
 
     return path.count('/')
@@ -114,17 +94,14 @@ class TardisFS(LoggingMixIn, Operations):
     # Disable pylint complaints about "could me a function" and "unused argument" as lots of required FUSE functions
     # just return "read-only FS" status
     # pragma pylint: disable=nused-argument
-    backupsets = {}
-    dirInfo = {}
     fsencoding = sys.getfilesystemencoding()
     name = "TardisFS"
 
     client   = Defaults.getDefault('TARDIS_CLIENT')
     database = Defaults.getDefault('TARDIS_DB')
-    dbdir    = Defaults.getDefault('TARDIS_DBDIR') % { 'TARDIS_DB': database }          # HACK
+    dbdir    = Defaults.getDefault('TARDIS_DBDIR') % {'TARDIS_DB': database}          # HACK
     dbname   = Defaults.getDefault('TARDIS_DBNAME')
     current  = Defaults.getDefault('TARDIS_RECENT_SET')
-
 
     def __init__(self, db, cache, crypto, args):
         self.cacheDir = cache
@@ -143,7 +120,6 @@ class TardisFS(LoggingMixIn, Operations):
 
         self.authenticate = True
 
-
     def __del__(self):
         if self.tardis:
             self.tardis.close()
@@ -155,7 +131,7 @@ class TardisFS(LoggingMixIn, Operations):
         return name
 
     def getBackupSetInfo(self, b):
-        key = (_BackupSetInfo, b)
+        key = (CacheKeys.BackupSetInfo, b)
         info = self.cache.retrieve(key)
         if info:
             return info
@@ -164,7 +140,7 @@ class TardisFS(LoggingMixIn, Operations):
         return info
 
     def lastBackupSet(self, completed):
-        key = (_LastBackupSet, completed)
+        key = (CacheKeys.LastBackupSet, completed)
         backupset = self.cache.retrieve(key)
         if backupset:
             return backupset
@@ -174,22 +150,17 @@ class TardisFS(LoggingMixIn, Operations):
 
     def getDirInfo(self, path):
         """ Return the inode and backupset of a directory """
-        #self.log.info("getDirInfo: %s", path)
-        key = (_DirInfo, path)
+        key = (CacheKeys.DirInfo, path)
         info = self.cache.retrieve(key)
         if info:
             return info
 
-        #self.log.debug("No cache info available for %s", path)
         parts = getParts(path)
         bsInfo = self.getBackupSetInfo(parts[0])
         if len(parts) == 2:
-            subpath = parts[1]
-            if self.crypt:
-                subpath = self.crypt.encryptPath(subpath)
-            #fInfo = self.getFileInfoByPath(subpath, bsInfo['backupset'])
+            # Why is this here?
+            # subpath = self.crypt.encryptPath(parts[1])
             fInfo = self.getFileInfoByPath(path)
-            #self.log.info("fInfo %s %s %s", parts[1], "**", str(fInfo))
             info = (bsInfo, fInfo)
         else:
             fInfo = {'inode': 0, 'device': 0, 'dir': 1}
@@ -200,16 +171,12 @@ class TardisFS(LoggingMixIn, Operations):
         return info
 
     def getFileInfoByPath(self, path):
-        #self.log.info("getFileInfoByPath: %s", path)
-
         # First, check the cache
         f = self.fileCache.retrieve(path)
         if f:
-            #self.log.debug("getFileInfoByPath: %s found in cache", path)
             return f
 
         # Not in the cache, look things up
-        #self.log.debug("File info for %s not in cache", path)
         (head, tail) = os.path.split(path)
         data = self.getDirInfo(head)
         if data:
@@ -218,38 +185,32 @@ class TardisFS(LoggingMixIn, Operations):
             return None
 
         if bsInfo:
-            if self.crypt:
-                tail = self.crypt.encryptPath(tail)
-            #self.log.debug(str(dInfo))
+            tail = self.crypt.encryptPath(tail)
             f = self.tardis.getFileInfoByName(tail, (dInfo['inode'], dInfo['device']), bsInfo['backupset'])
         else:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
-            subpath = parts[1]
-            if self.crypt:
-                subpath = self.crypt.encryptPath(subpath)
-            #self.log.debug("getFileInfoByPath: %s=>%s", parts[1], subpath)
+            subpath = self.crypt.encryptPath(parts[1])
             f = self.tardis.getFileInfoByPath(subpath, b['backupset'])
         # Cache it.
         self.fileCache.insert(path, f)
         # Return it
         return f
 
-    @functools.cache
+    @functools.lru_cache
     def getGroupId(self, name):
         gInfo = grp.getgrnam(self.crypt.decryptName(name))
         if gInfo:
             return gInfo.gr_gid
         return -1
 
-    @functools.cache
+    @functools.lru_cache
     def getUserId(self, name):
         uInfo = pwd.getpwnam(self.crypt.decryptName(name))
         if uInfo:
             return uInfo.pw_uid
         return -1
 
-    #@tracer
     def getattr(self, path, fh=None):
         """
         - st_mode (protection bits)
@@ -265,10 +226,9 @@ class TardisFS(LoggingMixIn, Operations):
                     or the time of creation on Windows).
         """
 
-        #self.log.info("CALL getattr: %s",  path)
         path = self.fsEncodeName(path)
 
-        depth = getDepth(path) # depth of path, zero-based from root
+        depth = getDepth(path)  # depth of path, zero-based from root
         if depth == 0:
             # Fake the root
             target = self.lastBackupSet(False)
@@ -306,7 +266,6 @@ class TardisFS(LoggingMixIn, Operations):
                 }
                 return st
             f = self.getBackupSetInfo(lead[0])
-            #self.log.debug("Got backupset info for %s: %s", lead[0], str(f))
             if f:
                 timestamp = float(f['starttime'])
                 st = {
@@ -330,8 +289,8 @@ class TardisFS(LoggingMixIn, Operations):
                     'st_ino': f["inode"],
                     'st_dev': 0,
                     'st_nlink': f["nlinks"],
-                    'st_uid': Util.getUserId(crypt.decryptName(f["username"])),
-                    'st_gid': Util.getGroupId(crypt.decryptName(f["groupname"])),
+                    'st_uid': Util.getUserId(self.crypt.decryptName(f["username"])),
+                    'st_gid': Util.getGroupId(self.crypt.decryptName(f["groupname"])),
                     'st_atime': f["mtime"],
                     'st_mtime': f["mtime"],
                     'st_ctime': f["ctime"]
@@ -346,22 +305,12 @@ class TardisFS(LoggingMixIn, Operations):
         logger.debug("File not found: %s", path)
         raise FuseOSError(errno.ENOENT)
 
-    #@tracer
-    #def getdir(self, _, fh):
-        #"""
-        #return: [[('file1', 0), ('file2', 0), ... ]]
-        #"""
-        ##self.log.info('CALL getdir {}'.format(path))
-        #raise FuseOSError(errno.ENOSYS)
-
-    #@tracer
     def readdir(self, path, fh):
-        #self.log.info("CALL readdir %s Offset: %d", path, offset)
         parent = None
 
         path = self.fsEncodeName(path)
 
-        key = (_DirContents, path)
+        key = (CacheKeys.DirContents, path)
         dirents = self.cache.retrieve(key)
         if not dirents:
             dirents = ['.', '..']
@@ -378,71 +327,42 @@ class TardisFS(LoggingMixIn, Operations):
                 else:
                     (b, parent) = self.getDirInfo(path)
                     entries = self.tardis.readDirectory((parent["inode"], parent["device"]), b['backupset'])
-                #if self.crypt:
-                    #entries = self.decryptNames(entries)
 
                 # For each entry, cache it, so a later getattr() call can use it.
                 # Get attr will typically be called promptly after a call to
                 now = time.time()
                 for e in entries:
-                    name  = e['name']
-                    if self.crypt:
-                        name = self.crypt.decryptName(name)
-                    name = self.fsEncodeName(name)
+                    name = self.fsEncodeName(self.crypt.decryptName(e['name']))
                     p = os.path.join(path, name)
                     self.fileCache.insert(p, e, now=now)
                     dirents.append(name)
             self.cache.insert(key, dirents)
 
-        #self.log.debug("Direntries: %s", str(dirents))
-
         # Now, return each entry in the list.
-        for e in dirents:
-            name = e
-            #self.log.debug("readdir %s yielding dir entry for %s.  Mode: %s. Type: %s ", path, e, mode, type(mode))
-            yield name
+        yield from dirents
 
-    #@tracer
-    def mythread ( self ):
-        #self.log.info('mythread')
-        raise FuseOSError(errno.ENOSYS)
-
-    #@tracer
-    def chmod ( self, path, mode ):
-        #self.log.info('CALL chmod {} {}'.format(path, oct(mode)))
+    def chmod(self, path, mode):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def chown ( self, path, uid, gid ):
-        #self.log.info( 'CALL chown {} {} {}'.format(path, uid, gid))
+    def chown(self, path, uid, gid):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def fsync ( self, path, datasync, fh ):
-        #self.log.info( 'CALL fsync {} {}'.format(path, isFsyncFile))
+    def fsync(self, path, datasync, fh):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def link ( self, target, source ):
-        #self.log.info( 'CALL link {} {}'.format(targetPath, linkPath))
+    def link(self, target, source):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def mkdir ( self, path, mode ):
-        #self.log.info( 'CALL mkdir {} {}'.format(path, oct(mode)))
+    def mkdir(self, path, mode):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def mknod ( self, path, mode, dev ):
-        #self.log.info( 'CALL mknod {} {} {}'.format(path, oct(mode), dev))
+    def mknod(self, path, mode, dev):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def open ( self, path, flags ):
-        #self.log.info('CALL open {} {})'.format(path, flags))
+    def open(self, path, flags):
         path = self.fsEncodeName(path)
 
-        depth = getDepth(path) # depth of path, zero-based from root
+        depth = getDepth(path)  # depth of path, zero-based from root
 
         if depth < 2:
             raise FuseOSError(errno.ENOENT)
@@ -486,10 +406,7 @@ class TardisFS(LoggingMixIn, Operations):
         # Otherwise.....
         raise FuseOSError(errno.ENOENT)
 
-
-    #@tracer
-    def read ( self, path, size, offset, fh ):
-        #self.log.info('CALL read {} {} {}'.format(path, length, offset))
+    def read(self, path, size, offset, fh):
         path = self.fsEncodeName(path)
         f = self.files[path]["file"]
         if f:
@@ -500,12 +417,10 @@ class TardisFS(LoggingMixIn, Operations):
         logger.warning("No file for path %s", path)
         raise FuseOSError(errno.EINVAL)
 
-    #@tracer
-    def readlink ( self, path ):
-        #self.log.info('CALL readlink {}'.format(path))
+    def readlink(self, path):
         path = self.fsEncodeName(path)
 
-        key = (_LinkContents, path)
+        key = (CacheKeys.LinkContents, path)
         link = self.cache.retrieve(key)
         if link:
             return link
@@ -527,15 +442,11 @@ class TardisFS(LoggingMixIn, Operations):
                 f.flush()
                 link = f.readline().decode(self.fsencoding, errors='backslashreplace')
                 f.close()
-                #if self.repoint:
-                #    if os.path.isabs(link):
-                #        link = os.path.join(self.mountpoint, parts[0], os.path.relpath(link, "/"))
                 self.cache.insert(key, link)
                 return link
         raise FuseOSError(errno.ENOENT)
 
-    #@tracer
-    def release ( self, path, fh ):
+    def release(self, path, fh):
         path = self.fsEncodeName(path)
 
         if self.files[path]:
@@ -546,19 +457,13 @@ class TardisFS(LoggingMixIn, Operations):
             return 0
         raise FuseOSError(errno.EINVAL)
 
-    #@tracer
-    def rename ( self, old, new ):
-        #self.log.info('CALL rename {} {}'.format(oldPath, newPath))
+    def rename(self, old, new):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def rmdir ( self, path ):
-        #self.log.info('CALL rmdir {}'.format(path))
+    def rmdir(self, path):
         raise FuseOSError(errno.EROFS)
 
-    #@tracer
-    def statfs ( self, path ):
-        #self.log.info('CALL statfs: %s', path)
+    def statfs(self, path):
         if isinstance(self.cacheDir, CacheDir.CacheDir):
             fs = os.statvfs(self.cacheDir.root)
 
@@ -567,20 +472,16 @@ class TardisFS(LoggingMixIn, Operations):
                 'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
         raise FuseOSError(errno.EINVAL)
 
-    def symlink ( self, target, source ):
-        #self.log.info('CALL symlink {} {}'.format(path, linkPath))
+    def symlink(self, target, source):
         raise FuseOSError(errno.EROFS)
 
-    def truncate ( self, path, length, fh ):
-        #self.log.info('CALL truncate {} {}'.format(path, size))
+    def truncate(self, path, length, fh):
         raise FuseOSError(errno.EROFS)
 
-    def unlink ( self, path ):
-        #self.log.info('CALL unlink {}'.format(path))
+    def unlink(self, path):
         raise FuseOSError(errno.EROFS)
 
-    def write ( self, path, data, offset, fh ):
-        #self.log.info('CALL write {} {} {}'.format(path, offset, len(buf)))
+    def write(self, path, data, offset, fh):
         raise FuseOSError(errno.EROFS)
 
     # Map extrenal attribute names for the top level directories to backupset info names
@@ -591,11 +492,8 @@ class TardisFS(LoggingMixIn, Operations):
         'user.session'  : 'session'
     }
 
-    #@tracer
-    #def listxattr ( self, path, size ):
     def listxattr(self, path):
         path = self.fsEncodeName(path)
-        #self.log.info('CALL listxattr %s %d', path, size)
         if getDepth(path) == 1:
             parts = getParts(path)
             b = self.getBackupSetInfo(parts[0])
@@ -626,15 +524,11 @@ class TardisFS(LoggingMixIn, Operations):
 
         return None
 
-    #@tracer
-    #def getxattr (self, path, attr, size, *args):
     def getxattr(self, path, name, position=0):
         path = self.fsEncodeName(path)
-        #logger.info('CALL getxattr: %s %s', path, attr)
         attr = str(name)
 
         depth = getDepth(path)
-        #logger.info("Got depth of path %s -> %s", path, depth)
 
         if depth == 1:
             if attr in self.attrMap:
@@ -650,22 +544,18 @@ class TardisFS(LoggingMixIn, Operations):
             subpath = parts[1]
             if self.crypt:
                 subpath = self.crypt.encryptPath(subpath)
-            #logger.debug("-----> Asking for attribute %s", attr)
             if attr == 'user.tardis_checksum':
                 if b:
                     checksum = self.tardis.getChecksumByPath(subpath, b['backupset'])
-                    #logger.debug("Got checksum {}", str(checksum))
                     if checksum:
                         return bytes(str(checksum), 'utf-8')
             elif attr == 'user.tardis_since':
                 if b:
                     since = self.tardis.getFirstBackupSet(subpath, b['backupset'])
-                    #self.log.debug(str(since))
                     if since:
                         return bytes(str(since), 'utf-8')
             elif attr == 'user.tardis_chain':
                 info = self.tardis.getChecksumInfoByPath(subpath, b['backupset'])
-                #self.log.debug(str(checksum))
                 if info:
                     chain = info['chainlength']
                     return bytes(str(chain), 'utf-8')
@@ -679,7 +569,6 @@ class TardisFS(LoggingMixIn, Operations):
                         value = base64.b64decode(xattrs[attr])
                         return bytes(str(value), 'utf-8')
 
-        #self.log.debug("Getxattr -- default return value")
         return bytes('', 'utf-8')
 
 def processMountOpts(mountopts):
@@ -696,13 +585,13 @@ def processMountOpts(mountopts):
     return kwargs
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Mount a FUSE filesystem containing tardis backup data', add_help = False, fromfile_prefix_chars='@')
+    parser = argparse.ArgumentParser(description='Mount a FUSE filesystem containing tardis backup data', add_help=False, fromfile_prefix_chars='@')
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
-    parser.add_argument('-o',               dest='mountopts', action='append',help='Standard mount -o options')
+    parser.add_argument('-o',               dest='mountopts', action='append', help='Standard mount -o options')
     parser.add_argument('-d',               dest='debug', action='store_true', default=False, help='Run in FUSE debug mode')
     parser.add_argument('-f',               dest='foreground', action='store_true', default=False, help='Remain in foreground')
 
@@ -731,6 +620,7 @@ def main():
 
     try:
         argsDict = vars(args)
+
         def getarg(name):
             """ Extract a value from either the kwargs, or the regular args """
             return kwargs.get(name) or argsDict.get(name)
@@ -744,8 +634,6 @@ def main():
         (tardis, cache, crypt) = Util.setupDataConnection(getarg('database'), getarg('client'), password, getarg('keys'), getarg('dbname'), getarg('dbdir'))
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
-        #if args.exceptions:
-            #logger.exception(e)
         sys.exit(1)
     except Exception as e:
         logger.error("DB Connection failed: %s", e)

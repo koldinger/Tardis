@@ -69,13 +69,6 @@ class Lz4Compressor:
     def flush(self):
         return self.compressor.flush()
 
-class Lz4Decompressor:
-    def __init__(self):
-        self.decompressor = lz4.frame.LZ4FrameDecompressor()
-
-    def decompress(self, buffer):
-        return self.decompressor.decompress(buffer)
-
 _compressors = {
                  'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
                  'zlib': (zlib.compressobj, zlib.decompressobj, {}),
@@ -99,7 +92,6 @@ def getCompressor(alg='zlib'):
 
 def getDecompressor(alg='zlib'):
     alg = _updateAlg(alg)
-    #print alg
     return _compressors[alg][1]()
 
 def getCompressors():
@@ -116,9 +108,7 @@ class BufferedReader:
         self.sig = librsync.SignatureJob() if signature else None
 
     def _get(self):
-        #print "_get called"
         buf = self.stream.read(self.chunksize)
-        #print "back from stream read: {}", buf
         if buf:
             self.numbytes += len(buf)
             if self.hasher:
@@ -129,29 +119,18 @@ class BufferedReader:
         return buf
 
     def read(self, size=0x7fffffffffffffff):
-        #avail = 0
-        #if self.buffer:
-        #    avail = len(self.buffer)
-        #print "read called: {}  {} bytes available".format(size, avail)
         out = b''
         left = size
         while len(out) < size:
-            #print "read loop: so far: {}".format(len(out))
             if (not self.buffer) or (len(self.buffer) == 0):
-                #print "Calling _get"
                 self.buffer = self._get()
-                #print "Back from _get"
                 if not self.buffer:
-                    #print "_get return None, leaving read: {}".format(len(out))
                     return out
-                #print "_get returned {} bytes".format(len(self.buffer))
             amount = min(left, len(self.buffer))
-            #print "Adding {} bytes to output".format(amount)
             out = out + self.buffer[:amount]
             self.buffer = self.buffer[amount:]
             left -= amount
 
-        #print "leaving read: {}".format(len(out))
         self.position += len(out)
         return out
 
@@ -179,12 +158,10 @@ class CompressedBufferedReader(BufferedReader):
         self.compressed = 0
         self.uncompressed = 0
         self.first = True
-        self.flushed = False
         self.threshold = threshold
         self.compressor = getCompressor(compressor)
 
     def _get(self):
-        #print "_get called"
         ret = b''
         uncomp = b''
         if self.stream:
@@ -199,26 +176,20 @@ class CompressedBufferedReader(BufferedReader):
                     uncomp = uncomp + buf
                 if self.compressor:
                     if not buf:
-                        #print "_get: Done"
-                        #ret = self.compressor.flush(zlib.Z_FINISH)
                         ret = ret + self.compressor.flush()
                         self.stream = None
                     else:
-                        #print "_get: {} bytes read".format(len(buf))
                         ret = ret + self.compressor.compress(buf)
                 else:
                     ret = buf
                     break       # Make sure we don't got around the loop at the EOF
-                # end while
             # First time around, create a compressor and check the compression ratio
             if self.first:
                 self.first = False
                 # Flush the buf and colculate the size
-                #ret += self.compressor.flush(zlib.Z_SYNC_FLUSH)
                 # Now, check what we've got back.
                 if ret:
                     ratio = float(len(ret)) / float(self.uncompressed)
-                    #print "Initial ratio: {} {} {}".format(ratio, len(ret), len(buf))
                     if ratio > self.threshold:
                         ret = uncomp
                         self.compressor = None
@@ -250,13 +221,11 @@ class UncompressedBufferedReader(BufferedReader):
         self.compressor = getDecompressor(compressor)
 
     def _get(self):
-        #print "_get called"
         ret = None
         while not ret:
             if self.stream:
                 buf = self.stream.read(self.chunksize)
                 if not buf:
-                    #print "_get: Done"
                     try:
                         ret = self.compressor.flush()
                     except AttributeError:
@@ -265,7 +234,6 @@ class UncompressedBufferedReader(BufferedReader):
                         self.uncompressed = self.uncompressed + len(ret)
                     self.stream = None
                 else:
-                    #print "_get: {} bytes read".format(len(buf))
                     ret = self.compressor.decompress(buf)
                     self.compressed = self.uncompressed + len(buf)
                     self.uncompressed = self.compressed + len(ret)
@@ -276,22 +244,17 @@ if __name__ == "__main__":
     import time
     from . import Util
     print(f"Opening {sys.argv[1]}")
-    #line = x.get()
     readsize = 4 * 1024 * 1024
     for c in getCompressors():
         print(f"{c} => ", end='', flush=True)
         start = time.time()
-        x = CompressedBufferedReader(open(sys.argv[1], "rb"), compressor=c) #, hasher=hashlib.sha256())
+        x = CompressedBufferedReader(open(sys.argv[1], "rb"), compressor=c)
         try:
             line = x.read(readsize)
             while line:
-                #f.write(line)
-                #print "==== ",  len(line), " :: ", base64.b64encode(line)
-                #line = x.get()
                 line = x.read(readsize)
             end = time.time()
             duration = end - start
-            #print(x.origsize(), "  ", x.compsize(), "  ", x.ratio(), " ", duration," :: ", x.checksum())
             print(f"{x.origsize()} ({Util.fmtSize(x.origsize())})  -- {x.compsize()} ({Util.fmtSize(x.compsize())})  -- {x.ratio():.2%} {duration:3.3f}  {(x.origsize() / (1024 * 1024) / duration):2.2f} MB/s :: {x.checksum()}")
         except Exception as e:
             print(f"Caught exception: {str(e)}")

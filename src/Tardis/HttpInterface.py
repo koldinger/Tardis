@@ -28,8 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-
-
 import os
 import os.path
 import logging
@@ -82,7 +80,7 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 dbs = {}
-caches= {}
+caches = {}
 
 allowCompress = False
 allowCache = False
@@ -154,23 +152,20 @@ def handleAuthenticationFailed(error):
 def login():
     if request.method == 'POST':
         try:
-            #app.logger.debug(str(request))
             host    = request.form['host']
             dbPath  = os.path.join(args.database, host, dbname)
             cache   = CacheDir.CacheDir(os.path.join(args.database, host), create=False)
             upgrade = config.getboolean('Remote', 'AllowSchemaUpgrades')
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 
-            #session['tardis']   = tardis
             session['host']     = host
-            #app.logger.debug(str(session))
             dbs[host] = tardis
             caches[host] = cache
             if tardis.needsAuthentication():
                 status = 'AUTH'
             else:
                 status = 'OK'
-            return createResponse({"status": status }, compress=False, cacheable=False)
+            return createResponse({"status": status}, compress=False, cacheable=False)
         except Exception as e:
             app.logger.exception(e)
             abort(401)
@@ -197,7 +192,10 @@ def authenticate1():
     srpUname = base64.b64decode(data['srpUname'])
     srpValueA = base64.b64decode(data['srpValueA'])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
-    resp = { "srpValueS": str(base64.b64encode(srpValueS), 'utf8'), "srpValueB": str(base64.b64encode(srpValueB), 'utf8') }
+    resp = {
+        "srpValueS": str(base64.b64encode(srpValueS), 'utf8'), "srpValueB":
+        str(base64.b64encode(srpValueB), 'utf8')
+    }
     return createResponse(resp, compress=False, cacheable=False)
 
 @app.route('/authenticate2', methods=['POST'])
@@ -207,32 +205,32 @@ def authenticate2():
     app.logger.debug("Authenticate 2: Got data: %s", str(data))
     srpValueM = base64.b64decode(data['srpValueM'])
     srpValueH = db.authenticate2(srpValueM)
-    resp = { "srpValueH": str(base64.b64encode(srpValueH), 'utf8') }
+    resp = {
+        "srpValueH": str(base64.b64encode(srpValueH),
+                         'utf8')
+    }
     return createResponse(resp, compress=False, cacheable=False)
 
 @app.route('/close')
 def close():
     # remove the username from the session if it's there
-    #app.logger.info("close Invoked")
     host = session.pop('host', None)
     if host in dbs:
         dbs[host].close()
         del dbs[host]
     if host in caches:
         del caches[host]
-    ret = { 'status': 'OK' }
+    ret = {'status': 'OK'}
     return createResponse(ret)
 
 # getBackupSetInfo
 @app.route('/getBackupSetInfo/<name>')
 def getBackupSetInfo(name):
-    #app.logger.info("getBackupSetInfo Invoked: %s", name)
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfo(name)))
 
 @app.route('/getBackupSetInfoById/<int:backupset>')
 def getBackupSetInfoById(backupset):
-    #app.logger.info("getBackupSetInfoById Invoked: %s", backupset)
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoById(backupset)))
 
@@ -255,14 +253,11 @@ def lastBackupSet(completed):
 # listBackupSets
 @app.route('/listBackupSets')
 def listBackupSets():
-    #app.logger.info("listBackupSets Invoked")
     db = getDB()
     sets = []
     for backup in db.listBackupSets():
-        #app.logger.debug(str(backup))
         sets.append(makeDict(backup))
 
-    #app.logger.debug(str(sets))
     return createResponse(sets)
 
 @app.route('/getFileInfoByPath/<int:backupset>')
@@ -272,7 +267,6 @@ def getFileInfoByPathRoot(backupset):
 # getFileInfoByPath
 @app.route('/getFileInfoByPath/<int:backupset>/<path:pathname>')
 def getFileInfoByPath(backupset, pathname):
-    #app.logger.info("getFileInfoByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
@@ -289,7 +283,6 @@ def getFileInfoForPath(backupset, pathname):
 def getFileInfoByPathForRange(first, last, pathname):
     db = getDB()
     fInfos = []
-    #return createResponse(json.dumps(makeDict(db.getFileInfoByPathForRange(str(pathname), first, last))))
     for (bset, info) in db.getFileInfoByPathForRange(str(pathname), first, last):
         fInfos.append((bset, makeDict(info)))
     return createResponse(fInfos)
@@ -297,7 +290,6 @@ def getFileInfoByPathForRange(first, last, pathname):
 # getFileInfoByName
 @app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
-    #app.logger.info("getFileInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device, name)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
@@ -305,13 +297,11 @@ def getFileInfoByName(backupset, device, inode, name):
 # getFileInfoByInode
 @app.route('/getFileInfoByInode/<int:backupset>/<int:device>/<int:inode>')
 def getFileInfoByInode(backupset, device, inode):
-    #app.logger.info("getFileInfoByName Invoked: %d (%d,%d) %s", backupset, inode, device)
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByInode((inode, device), backupset)))
 
 @app.route('/getFileInfoByChecksum/<int:backupset>/<checksum>')
 def getFileInfoByChecksum(backupset, checksum):
-    #app.logger.info("getFileInfoByChceksum Invoked: %d %s", backupset, checksum)
     db = getDB()
     return createResponse([makeDict(x) for x in db.getFileInfoByChecksum(checksum, backupset)])
 
@@ -328,7 +318,6 @@ def getNewFiles(backupset, other):
 # readDirectory
 @app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
 def readDirectory(backupset, device, inode):
-    #app.logger.info("readDirectory Invoked: %d (%d,%d)", backupset, inode, device)
     db = getDB()
     directory = []
     for x in db.readDirectory((inode, device), backupset):
@@ -337,7 +326,6 @@ def readDirectory(backupset, device, inode):
 
 @app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
 def readDirectoryForRange(device, inode, first, last):
-    #app.logger.info("readDirectoryForRange Invoked: %d (%d,%d) %d %d", inode, device, first, last)
     db = getDB()
     directory = []
     for x in db.readDirectoryForRange((inode, device), first, last):
@@ -347,22 +335,18 @@ def readDirectoryForRange(device, inode, first, last):
 # getChecksumByPath
 @app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
 def getChecksumByPath(backupset, pathname):
-    #app.logger.info("getChecksumByPath Invoked: %d %s", backupset, pathname)
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
-    #app.logger.info("Checksum: %s", cksum)
     return createResponse(cksum)
 
 # getChecksumInfo
 @app.route('/getChecksumInfo/<checksum>')
 def getChecksumInfo(checksum):
-    #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
     return createResponse(makeDict(db.getChecksumInfo(checksum)))
 
 @app.route('/getChecksumInfoChain/<checksum>')
 def getChecksumInfoChain(checksum):
-    #app.logger.info("getChecksumInfo Invoked: %s", checksum)
     db = getDB()
     return createResponse(list(map(makeDict, db.getChecksumInfoChain(checksum))))
 
@@ -373,14 +357,12 @@ def getChecksumInfoChainByPath(pathname, backupset):
 
 @app.route('/getBackupSetInfoForTime/<float:time>')
 def getBackupSetInfoForTime(time):
-    #app.logger.info("getBackupSetInfoForTime Invoked: %f", time)
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoForTime(time)))
 
 # getFirstBackupSet
 @app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
 def getFirstBackupSet(backupset, pathname):
-    #app.logger.info("getFirstBackupSet Invoked: %d %s", backupset, pathname)
     db = getDB()
     if not pathname.startswith('/'):
         pathname = '/' + pathname
@@ -389,7 +371,6 @@ def getFirstBackupSet(backupset, pathname):
 # getChainLength
 @app.route('/getChainLength/<checksum>')
 def getChainLength(checksum):
-    #app.logger.info("getChainLength Invoked: d %s", checksum)
     db = getDB()
     return createResponse(db.getChainLength(checksum))
 
@@ -408,15 +389,13 @@ def _stream(f):
 
 @app.route('/getFileData/<checksum>')
 def getFileData(checksum):
-    #app.logger.info("getFileData Invoked: %s", checksum)
     db = getDB()
     host = session['host']
     cache = caches[host]
     try:
         ckinfo = db.getChecksumInfo(checksum)
         ckfile = cache.open(checksum, "rb")
-        #ckfile = os.path.abspath(cache.path(checksum))
-        #return send_file(ckfile)
+
         resp = Response(_stream(ckfile))
         resp.headers['Content-Length'] = ckinfo['disksize']
         resp.headers['Content-Type'] = 'application/octet-stream'
@@ -427,7 +406,6 @@ def getFileData(checksum):
 @app.route('/getConfigValue/<name>')
 def getConfigValue(name):
     db = getDB()
-    #app.logger.info("getConfigValue Invoked: %s", name)
     return createResponse(db.getConfigValue(name))
 
 @app.route('/setConfigValue/<name>/<value>')
@@ -450,7 +428,6 @@ def setBackupSetName(backupset, name, priority):
 
 @app.route('/setKeys', methods=['POST'])
 def setKeys():
-    #app.logger.info("Form: %s", str(request.form))
     try:
         db = getDB()
         salt  = request.form.get('Salt')
@@ -616,7 +593,7 @@ def processArgs():
     Util.addGenCompletions(parser)
 
     args = parser.parse_args(remaining)
-    return(args, config)
+    return args, config
 
 
 def setupLogging():
@@ -666,7 +643,7 @@ def run_server():
 
     logger.info("Tornado server starting: %s", Tardis.__versionstring__)
 
-    http_server = HTTPServer(WSGIContainer(app), ssl_options = sslOptions)
+    http_server = HTTPServer(WSGIContainer(app), ssl_options=sslOptions)
     http_server.listen(args.port)
     IOLoop.instance().start()
 

@@ -50,7 +50,6 @@ from . import TardisDB
 columns = None
 columnfmt = None
 args: argparse.Namespace
-curcolor = None
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
 backupSets = []
@@ -69,8 +68,6 @@ colors = {
     'default'   :  None
 }
 
-fsEncoding = sys.getfilesystemencoding()
-
 def setColors(s):
     groups = s.split(':')
     groups = list(map(str.strip, groups))
@@ -78,7 +75,6 @@ def setColors(s):
         x = g.split('=')
         name = str(x[0])
         c = list(map(str.strip, x[1].split(',')))
-        #c = map(lambda x: None if x.lower() == 'none' else x, c)
         c = [None if x.lower() == 'none' else x for x in c]
         if len(c) == 1:
             colors[name] = c[0]
@@ -103,7 +99,6 @@ def doprint(text='', color=None, eol=False):
     else:
         line += str(text)
 
-    #print(line)
     if eol:
         print(line.rstrip())
         line=''
@@ -178,28 +173,28 @@ def collectFileInfo(filename, tardis, crypt):
 
     return fInfos
 
-def collectDirContents(tardis, dirlist, crypt):
-    """
-    Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
-    Note: This is very inefficient.  You basically query for the same information over and over.
-    Because of this, we use collectDirContents2 instead.  This function is left here for documentation
-    purposes primarily.
-    """
-    contents = {}
-    names = set()
-    for (bset, finfo) in dirlist:
-        x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
-        dirInfo = {}
-        for y in x:
-            name = str(crypt.decryptName(y['name']) if crypt else y['name'])
-            dirInfo[name] = y
-            names.add(name)
-        contents[bset['backupset']] = dirInfo
-    return contents, names
+# def _collectDirContents(tardis, dirlist, crypt):
+#    """
+#    Build a hash of hashes.  Outer hash is indexed by backupset, inner by filename
+#    Note: This is very inefficient.  You basically query for the same information over and over.
+#    Because of this, we use collectDirContents instead.  This function is left here for documentation
+#    purposes primarily.
+#    """
+#    contents = {}
+#    names = set()
+#    for (bset, finfo) in dirlist:
+#        x = tardis.readDirectory((finfo['inode'], finfo['device']), bset['backupset'])
+#        dirInfo = {}
+#        for y in x:
+#            name = str(crypt.decryptName(y['name']) if crypt else y['name'])
+#            dirInfo[name] = y
+#            names.add(name)
+#        contents[bset['backupset']] = dirInfo
+#    return contents, names
 
-def collectDirContents2(tardis, dirList, crypt):
+def collectDirContents(tardis, dirList, crypt):
     """
-    Do the same thing as collectDirContents, just a lot faster, relying on the structure of the DB.
+    Do the same thing as _collectDirContents, just a lot faster, relying on the structure of the DB.
     Create a set of directory "ranges", a range being a set of entries in the dirlist that a: all have
     the same inode, and b: span a contiguous range of backupsets in the backupsets list (ie, if there are 3
     backupsets in the range in backupsets, there also must be the same three entries in the dirlist).  Then
@@ -236,7 +231,6 @@ def collectDirContents2(tardis, dirList, crypt):
         first = r[0]['backupset']
         last  = r[-1]['backupset']
         dinfo = dirHash[first]
-        #print "Reading for (%d, %d) : %d => %d" %(dinfo['inode'], dinfo['device'], first, last)
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             logger.debug("Processing %s", y['name'])
@@ -248,19 +242,6 @@ def collectDirContents2(tardis, dirList, crypt):
 
     # and return what we've discovered
     return (contents, names)
-
-
-def getFileNames(contents):
-    """
-    Extract a list of file names from file contents.  Names will contain a single entry
-    for each name encountered.
-    """
-    names = set()
-    for bset in backupSets:
-        if bset['backupset'] in contents:
-            lnames = set(contents[bset['backupset']].keys())
-            names = names.union(lnames)
-    return names
 
 def getInfoByName(contents, name):
     """
@@ -276,7 +257,6 @@ def getInfoByName(contents, name):
             fInfo[bset['backupset']] = None
 
     return fInfo
-
 
 column = 0
 
@@ -332,7 +312,6 @@ def printit(info, name, color, gone, crypt):
                     size = f"{info['size']:8}"
             else:
                 size = ''
-            #doprint('  %9s %3d %-8s %-8s %8s %12s ' % (mode, nlinks, owner, group, size, mtime), color=colors['name'])
             doprint(f"  {mode:9} {nlinks:3} {owner:8} {group:8} {size:8} {mtime:12} ", color=colors['details'])
             if args.size:
                 doprint(f' {fsize:8} ')
@@ -453,7 +432,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
         # Create the list of directories
         dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
         if len(dirs):
-            (contents, names) = collectDirContents2(tardis, dirs, crypt)
+            (contents, names) = collectDirContents(tardis, dirs, crypt)
             if not args.hidden:
                 names = [n for n in names if not n.startswith('.')]
             (numCols, fmt) = computeColumnWidth(names)
@@ -470,7 +449,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
         # This is inefficient.  We're recalculating info we grabbed above.  But recursion should be minimal
         dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
         if len(dirs):
-            (contents, names) = collectDirContents2(tardis, dirs, crypt)
+            (contents, names) = collectDirContents(tardis, dirs, crypt)
             if not args.hidden:
                 names = [n for n in names if not n.startswith('.')]
             (numCols, fmt) = computeColumnWidth(names)
@@ -618,7 +597,6 @@ def computeColumnWidth(names):
         else:
             cols = 1
 
-    #fmt = "%%-%ds  " % (longestName + 2)
     fmt = f"%-{longestName + 2}s"
     logger.debug("Setting columns to %d", cols)
 
@@ -662,7 +640,7 @@ def globPath(path, tardis, crypt, first=0):
             dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
 
             # And cons up the names which are in those directories
-            (_, names) = collectDirContents2(tardis, dirs, crypt)
+            (_, names) = collectDirContents(tardis, dirs, crypt)
 
             # Filter down any that match
             matches = fnmatch.filter(names, pattern)
@@ -709,7 +687,6 @@ def processArgs():
 
     parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
-    #parser.add_argument('--path',           dest='path',        default=False, action='store_true',         help='Print the full path of files')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=argparse.BooleanOptionalAction,    help='Glob filenames')
 

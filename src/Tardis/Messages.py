@@ -80,8 +80,6 @@ class zlibCompressor:
         return message
 
 class BinMessages(Messages):
-    compress = None
-    decompress = None
     def __init__(self, socket, stats=None, compress='none'):
         Messages.__init__(self, socket, stats)
         match compress:
@@ -99,7 +97,7 @@ class BinMessages(Messages):
                 pass
             case _:
                 raise Exception(f"Unrecognized compression method: {str(compress)}")
-                
+
         self.sendstream = None
         self.recvstream = None
         self.sent = 0
@@ -111,10 +109,6 @@ class BinMessages(Messages):
         if self.recvstream:
             self.recvstream.close()
         super().closeSocket()
-
-    def setStreams(self, sendstream, recvstream):
-        self.sendstream = sendstream
-        self.recvstream = recvstream
 
     def sendMessage(self, message, compress=True):
         if compress and self.compress:
@@ -194,10 +188,6 @@ class MsgPackMessages(BinMessages):
         BinMessages.__init__(self, socket, stats, compress=compress)
 
     def sendMessage(self, message, compress=True):
-        #if isinstance(message, dict):
-        #print("S", self.sent, (message.get('msgid', 0) or message.get('respid', 0)), message.get('message', ''))
-        #else:
-        #print("S", self.sent, len(message))
         super().sendMessage(msgpack.packb(message), compress=compress)
 
     def recvMessage(self, wait=False):
@@ -207,11 +197,6 @@ class MsgPackMessages(BinMessages):
         except Exception as e:
             print(self.received, mess)
             raise e
-
-            #if isinstance(message, dict):
-            #print("R", self.received, (message.get('msgid', 0) or message.get('respid', 0)), message.get('message', ''))
-            #else:
-            #print("R", self.received, len(message))
 
         return message
 
@@ -226,15 +211,15 @@ class MsgPackMessages(BinMessages):
 
 class ObjectMessages():
     def __init__(self, inQueue, outQueue, stats=None, compress=True, timeout=None):
-        self.inQueue = inQueue
-        self.outQueue= outQueue
-        self.timeout = timeout
+        self.inQueue  = inQueue
+        self.outQueue = outQueue
+        self.timeout  = timeout
 
     def sendMessage(self, message, compress=False):
         self.outQueue.put(message)
 
     def recvMessage(self):
-        ret =  self.inQueue.get(timeout=self.timeout)
+        ret = self.inQueue.get(timeout=self.timeout)
         if isinstance(ret, BaseException):
             raise ret
         return ret

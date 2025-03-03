@@ -141,21 +141,6 @@ class ProtocolConnection(Connection):
     def decode(self, string):
         return self.sender.decode(string)
 
-_defaultVersion = Tardis.__buildversion__  or Tardis.__version__
-
-class JsonConnection(ProtocolConnection):
-    """ Class to communicate with the Tardis server using a JSON based protocol """
-    def __init__(self, host, port, compress, timeout, validate):
-        ProtocolConnection.__init__(self, host, port, 'JSON', False, timeout, validate)
-        # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
-        self.sender = Messages.JsonMessages(self.sock, stats=self.stats)
-
-#class BsonConnection(ProtocolConnection):
-#   def __init__(self, host, port, compress, timeout, validate):
-#       ProtocolConnection.__init__(self, host, port, 'BSON', compress, timeout, validate)
-#       # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
-#       self.sender = Messages.BsonMessages(self.sock, stats=self.stats, compress=compress)
-
 class MsgPackConnection(ProtocolConnection):
     def __init__(self, host, port, compress, timeout, validate):
         ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout, validate)
@@ -164,13 +149,11 @@ class MsgPackConnection(ProtocolConnection):
 
 class QueuedMsgPackConnection(MsgPackConnection):
     def __init__(self, host, port, compress, timeout, validate):
-        MsgPackConnection().__init__(self, host, port, compress, timeout, validate)
+        super().__init__(host, port, compress, timeout, validate)
         self.sender = Messenger.Messenger(self.sender)
         self.sender.run()
 
 class DirectConnection:
-    stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
-    serverStats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
 
     def __init__(self, timeout):
         self.timeout = timeout
@@ -179,6 +162,13 @@ class DirectConnection:
         self.clientMessages = Messages.ObjectMessages(self.toClientQueue, self.toServerQueue, self.stats, timeout)
         self.serverMessages = Messages.ObjectMessages(self.toServerQueue, self.toClientQueue)
         self.sender = self.clientMessages
+
+        self.stats = {
+            'messagesRecvd': 0,
+            'messagesSent' : 0,
+            'bytesRecvd': 0,
+            'bytesSent': 0
+        }
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)

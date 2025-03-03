@@ -264,7 +264,6 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
         # If it's a directory, create the directory, and recursively process it
         if info['dir']:
             if not outname:
-                #logger.error("Cannot regenerate directory %s without outputdir specified", path)
                 raise Exception(f"Cannot regenerate directory {path} without outputdir specified")
 
             try:
@@ -352,7 +351,6 @@ def findLastPath(path, reduce):
 
 def recoverName(cksum):
     names = tardis.getNamesForChecksum(cksum)
-    #print names
     if names:
         names = list(map(crypt.decryptName, names))
         name = names[0]
@@ -453,7 +451,6 @@ def processFiles(files: list[str], r: Regenerator.Regenerator, bset: bool|int, o
                 retcode += 1
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
-            #eLogger.log(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
@@ -504,7 +501,6 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
 
         except TardisDB.AuthenticationException:
             logger.error("Authentication failed.  Bad password")
-            #eLogger.log(e)
             sys.exit(1)
         except Exception as e:
             logger.error("Could not recover: %s: %s", i, e)
@@ -532,7 +528,6 @@ def calculateBackupSet():
             logger.critical("Could not parse date string: %s", args.date)
             raise ValueError(args.date)
     elif args.backup:
-        #bsetInfo = tardis.getBackupSetInfo(args.backup)
         bsetInfo = Util.getBackupSet(tardis, args.backup)
         if bsetInfo:
             bset = bsetInfo['backupset']
@@ -556,7 +551,6 @@ def main():
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
-        #eLogger.log(e)
         sys.exit(1)
     except Exception as e:
         logger.error("Regeneration failed: %s", e)
@@ -580,9 +574,6 @@ def main():
             else:
                 outname = args.output
         logger.debug("Outputdir: %s  Outname: %s", outputdir, outname)
-
-
-        #permChecker = setupPermissionChecks()
 
         # do the work here
         if args.cksum:

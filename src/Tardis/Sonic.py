@@ -55,8 +55,8 @@ from . import Regenerator
 from . import Config
 
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
@@ -249,9 +249,7 @@ def getCommandLine(commandLineCksum, regenerator):
     return None
 
 def listBSets(db, crypt, cache):
-    #f = "%-30s %-4s %-6s %3s  %-5s  %-24s  %-8s %7s %6s %9s  %s"
     f = "{:30} {:4} {:6} {:>3}  {:5}  {:24}  {:8} {:>7} {:>6} {:>9} {:1} {:}"
-    #f = "{:30s} {:4s} {:6s} {:>3s}  {:5s} {:24s}  {:8} {:>7s} {:>6s} {:>6s}  {:s}"
     try:
         if args.longinfo:
             regenerator = Regenerator.Regenerator(cache, db, crypt)
@@ -281,7 +279,6 @@ def listBSets(db, crypt, cache):
                 status = bset['errormsg']
             else:
                 status = ''
-            #isCurrent = current if bset['backupset'] == last['backupset'] else ''
             size = Util.fmtSize(bset['bytesreceived'], suffixes=['', 'KB', 'MB', 'GB', 'TB'])
             locked = '*' if bset['locked'] else ' '
 
@@ -459,8 +456,6 @@ def bsetInfo(db, crypt):
 def confirm(message='Proceed (y/n): '):
     if not args.confirm:
         return True
-    #jprint(message, end='', flush=True)
-    #yesno = sys.stdin.readline().strip().upper()
     yesno = input(message).strip().upper()
     return yesno in ['YES', 'Y']
 
@@ -601,7 +596,6 @@ def checkSanity(db, cache, crypt):
         # If we found something, let's talk about it.
         if inCache or inDB:
             if args.details:
-                #width, _ = shutil.get_terminal_size((132, 24))
                 if inCache:
                     print("Unreferenced data files")
                     for i in inCache:
@@ -684,7 +678,6 @@ def parseArgs() -> argparse.Namespace:
     bsetgroup.add_argument("--backup", "-b",   dest='backup',     default=None,                            help="Purge sets before this set")
 
     deleteParser = argparse.ArgumentParser(add_help=False)
-    #deleteParser.add_argument("--backup", "-b",  dest='backup',     default=None,                          help="Purge sets before this set")
     deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=argparse.BooleanOptionalAction,        help="Delete files in the backupset")
     deleteParser.add_argument("backups", nargs="*", default=None, help="Backup sets to delete")
 

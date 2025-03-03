@@ -40,8 +40,6 @@ from rich.logging import RichHandler
 from Tardis import Regenerator, TardisDB, CacheDir, TardisCrypto, Config, Util
 from Tardis.Regenerator import RegenerateException
 
-checked = {}
-
 def parseArgs():
     parser = argparse.ArgumentParser(description='Check backup files for integrity', fromfile_prefix_chars='@', add_help=False)
     (_, remaining) = Config.parseConfigOptions(parser)

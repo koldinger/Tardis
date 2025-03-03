@@ -48,14 +48,13 @@ from . import TardisDB
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 # Define a decorator that will wrap our functions in a retry mechanism
 # so that if the connection to the server fails, we can automatically
 # reconnect.
 def reconnect(func):
-    #print "Decorating ", str(func)
     @functools.wraps(func)
     def doit(self, *args, **kwargs):
         try:
@@ -64,7 +63,7 @@ def reconnect(func):
         except requests.HTTPError as e:
             # Got an exception.  If it's ' 401 (not authorized)
             # reconnecton, and try it again
-            logger=logging.getLogger('Reconnect')
+            logger = logging.getLogger('Reconnect')
             logger.info("Got HTTPError: %s", e)
             if e.response.status_code == 401:
                 logger.info("Reconnecting")
@@ -80,7 +79,6 @@ def reconnect(func):
 def fs_encode(val):
     """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
     if not isinstance(val, bytes):
-        #return val.encode(sys.getfilesystemencoding())
         return val.encode(sys.getfilesystemencoding())
     return val
 
@@ -90,7 +88,7 @@ class RemoteDB:
     prevBackupSet = None
 
     def __init__(self, url, host, prevSet=None, extra=None, compress=True, verify=False):
-        self.logger=logging.getLogger('Remote')
+        self.logger = logging.getLogger('Remote')
         self.logger.debug("-> %s %s", url, host)
         self.baseURL = url
         if not url.endswith('/'):
@@ -98,28 +96,18 @@ class RemoteDB:
 
         self.verify = verify
         self.host = host
-        self.headers = { "user-agent": "TardisDB-" + Tardis.__versionstring__ }
+        self.headers = {"user-agent": "TardisDB-" + Tardis.__versionstring__}
 
         self.logger.debug("Connection to %s", url)
 
         # Disable insecure requests warning, if verify is disabled.
         # Generates too much output
-        #if not self.verify:
-        #   requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
         if compress:
             self.headers['Accept-Encoding'] = "deflate"
 
         self.prevSet = prevSet
         self.connect()
-
-
-    #def __del__(self):
-    #    try:
-    #        self.close()
-    #    except Exception as e:
-    #        self.logger.warning("Caught exception closing: " + str(e))
-    #        self.logger.exception(e)
 
     def buildURL(self, function, *args):
         return self.baseURL + '/'.join([function] + list(map(str, args)))
@@ -129,7 +117,7 @@ class RemoteDB:
         self.session: requests.Session = requests.Session()
         self.session.verify = self.verify
 
-        postData = { 'host': self.host }
+        postData = {'host': self.host}
         self.loginData = postData
 
         response = self.session.post(self.buildURL("login"), data=postData)
@@ -209,10 +197,7 @@ class RemoteDB:
     def listBackupSets(self):
         r = self.session.get(self.buildURL('listBackupSets'), headers=self.headers)
         r.raise_for_status()
-        for i in r.json():
-            self.logger.debug("Returning %s", str(i))
-            #i['name'] = (i['name'])
-            yield i
+        yield from r.json()
 
     @reconnect
     def lastBackupSet(self, completed=True):
@@ -261,7 +246,6 @@ class RemoteDB:
         r.raise_for_status()
         return r.json()
 
-
     @reconnect
     def getFileInfoByInode(self, node, current=True):
         bset = self._bset(current)
@@ -295,7 +279,6 @@ class RemoteDB:
         r = self.session.get(self.buildURL('getFileInfoByPathForRange', first, last, path), headers=self.headers)
         r.raise_for_status()
         yield from r.json()
-
 
     @reconnect
     def readDirectory(self, dirNode, current=False):
@@ -400,7 +383,7 @@ class RemoteDB:
         return r.json()
 
     @reconnect
-    def setBackupsetName(self, name, priority, current=True):
+    def setBackupSetName(self, name, priority, current=True):
         backupset = self._bset(current)
         r = self.session.get(self.buildURL('setBackupSetName', backupset, name, priority), headers=self.headers)
         r.raise_for_status()
@@ -409,7 +392,6 @@ class RemoteDB:
     def getKeys(self):
         fnKey = self.getConfigValue('FilenameKey')
         cnKey = self.getConfigValue('ContentKey')
-        #self.logger.info("Got keys: %s %s", fnKey, cnKey)
         return (fnKey, cnKey)
 
     @reconnect
@@ -424,13 +406,18 @@ class RemoteDB:
 
     @reconnect
     def setKeys(self, salt, vkey, fKey, cKey):
-        postData = { 'Salt': base64.b64encode(salt), 'SrpVKey': base64.b64encode(vkey), 'FilenameKey': fKey, 'ContentKey': cKey }
+        postData = {
+            'Salt': base64.b64encode(salt),
+            'SrpVKey': base64.b64encode(vkey),
+            'FilenameKey': fKey,
+            'ContentKey': cKey
+        }
         response = self.session.post(self.buildURL('setKeys'), data=postData)
         response.raise_for_status()
 
     @reconnect
     def setSrpValues(self, salt, vkey):
-        postData = { 'salt': salt, 'vkey': vkey }
+        postData = {'salt': salt, 'vkey': vkey}
         response = self.session.post(self.buildURL('setSrpValues'), data=postData)
         response.raise_for_status()
         return response.json()
@@ -534,7 +521,6 @@ class RemoteDB:
         r = self.session.get(self.buildURL('setGroupInfo', groupId, name), headers=self.headers)
         r.raise_for_status()
         return r.json()
-        ...
 
     @reconnect
     def setLock(self, locked, current=False):
@@ -549,7 +535,6 @@ class RemoteDB:
 
         r = self.session.get(self.buildURL('getFileData', checksum), stream=True)
         r.raise_for_status()
-        #self.logger.debug("%s", str(r.headers))
 
         if streaming:
             return r.raw

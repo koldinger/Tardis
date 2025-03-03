@@ -54,8 +54,8 @@ from . import Util
 from . import Protocol
 from . import log
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0
@@ -71,6 +71,7 @@ args   = None
 pp = pprint.PrettyPrinter(indent=2, width=256, compact=True)
 
 _sessions = {}
+
 def addSession(sessionId, client):
     _sessions[sessionId] = client
 
@@ -94,8 +95,7 @@ class ProcessingError(Exception):
 
 class BackendConfig:
     """
-    Configuration class.   Used by the Client class when an integrated backend is used (ie, 
-    local mode)
+    Configuration class.   Used by the Client class when an integrated backend is used (ie, local mode)
     """
     umask           = 0
     cksContent      = 0
@@ -132,7 +132,6 @@ class BackendConfig:
 
 class Backend:
     def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None, prettyExceptions=True):
-        self.numfiles       = 0
         self.sessionid      = None
         self.tempdir        = None
         self.purged         = False
@@ -140,7 +139,6 @@ class Backend:
         self.done           = False
         self.statNewFiles   = 0
         self.statUpdFiles   = 0
-        self.statDirs       = 0
         self.statBytesReceived  = 0
         self.statPurgedFiles    = 0
         self.statPurgedSets = 0
@@ -152,16 +150,15 @@ class Backend:
         self.saveConfig     = False
         self.deltaPercent   = 80
         self.forceFull      = False
-        self.saveFull       = False
         self.lastCompleted  = None
         self.maxChain       = 0
 
         self.db: TardisDB.TardisDB = None
 
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
-        self.idstr  = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
+        self.idstr = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         if logSession:
-            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr })
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr})
         else:
             self.logger = logging.getLogger('Backend')
 
@@ -189,8 +186,6 @@ class Backend:
             self.db.setAcl(inode, device, acl)
 
     def sendMessage(self, message):
-        #if not 'message' in message:
-        #    self.logger.error("No `message` block in message: %s", message)
         if self.printMessages:
             self.logger.log(log.MSGS, "Sending:\n" + pp.pformat(message))
         self.messenger.sendMessage(message)
@@ -232,19 +227,14 @@ class Backend:
         if 'acl' in f:
             acl = f['acl']
 
-        #self.logger.debug("Processing Inode: %8d %d -- File: %s -- Parent: %s", inode, device, name, str(parent))
-        #self.logger.debug("DirHash: %s", str(dirhash))
-
         if name in dirhash:
             old = dirhash[name]
         else:
             old = None
 
         if f['dir']:
-            #self.logger.debug("Is a directory: %s", name)
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
-                    #self.db.extendFileInode(parent, (inode, device))
                     self.db.extendFileRowID(old['rowid'])
                 else:
                     self.db.insertFile(f, parent)
@@ -257,34 +247,24 @@ class Backend:
             # Check to see if there's an updated version.
             if not self.lastCompleted:
                 # not in this directory, but lets look further in any incomplete sets if there are any
-                #self.logger.debug("Looking up file in partial backup(s): %s (%s)", name, inode)
                 tmp = self.db.getFileFromPartialBackup(f)
                 if tmp:
                     old = tmp
                     self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
 
             if old:
-                #self.logger.debug("Comparing version:  New: %s", str(f))
-                #self.logger.debug("Comparing version:  Old: %s", str(makeDict(old)))
-
                 # Got something.  If the inode, size, and mtime are the same, just keep it
                 fsize = f['size']
                 osize = old['size']
 
                 if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
-                    #self.logger.debug("Main info matches: %s", name)
-                    #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                     # Just request full content if the old version was a link or dir
                     if old["checksum"] is not None and not (old['dir'] or old['link']):
-                        #self.db.setChecksum(inode, device, old['checksum'])
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
-                            #self.logger.debug("Extending %s", name)
-                            #self.db.extendFileInode(parent, (inode, device), old=fromPartial)
                             self.db.extendFileRowID(old['rowid'])
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
-                            #self.logger.debug("Inserting new version %s", name)
                             self.db.insertFile(f, parent)
                             self.db.setChecksum(inode, device, old['checksum'])
                             self.setXattrAcl(inode, device, xattr, acl)
@@ -294,13 +274,10 @@ class Backend:
                             retVal = FileResponse.DONE       # we're done either way
                     else:
                         # Otherwise we need a whole new file
-                        #self.logger.debug("No checksum: Get new file %s", name)
                         self.db.insertFile(f, parent)
                         self.setXattrAcl(inode, device, xattr, acl)
                         retVal = FileResponse.CONTENT
-                #elif (osize == fsize) and ("checksum" in old.keys()) and not (old["checksum"] is None):
                 elif (osize == fsize) and (old["checksum"] is not None):
-                    #self.logger.debug("Secondary match, requesting checksum: %s", name)
                     # Size hasn't changed, but something else has.  Ask for a checksum
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
@@ -308,7 +285,6 @@ class Backend:
                 elif (f["size"] < 4096) or (old["size"] is None) or \
                      not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
                      ((old["basis"] is not None) and (old["chainlength"]) >= self.maxChain):
-                    #self.logger.debug("Third case.  Weirdos: %s", name)
                     # Couple conditions that can cause it to always load
                     # File is less than 4K
                     # Old file had now size
@@ -319,7 +295,6 @@ class Backend:
                     retVal = FileResponse.REFRESH
                 else:
                     # Otherwise, let's just get the delta
-                    #self.logger.debug("Fourth case.  Should be a delta: %s", name)
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
                     if self.full:
@@ -330,7 +305,6 @@ class Backend:
                         basis = old['checksum']
             else:           # if old (i.e., if not old)
                 # Create a new record for this file
-                #self.logger.debug("No file found: %s", name)
                 self.db.insertFile(f, parent)
                 self.setXattrAcl(inode, device, xattr, acl)
                 if f["nlinks"] > 1:
@@ -339,24 +313,19 @@ class Backend:
                     # TODO: Check that the file hasn't changed since it was last written. If file is in flux,
                     # it's a problem.
                     checksum = self.db.getChecksumByInode(inode, device, True)
-                    #self.logger.debug('Checksum for inode %d: %s -- %s', inode, f['name'], checksum)
                     if checksum:
-                        #self.logger.debug('Setting linked inode %d: %s to checksum %s', inode, f['name'], checksum)
                         self.db.setChecksum(inode, device, checksum)
                         retVal = FileResponse.LINKED             # special value, allowing the caller to determine that this was handled as a link
                     else:
-                        #self.logger.debug('No link data found for inode %d: %s.   Requesting new content', inode, f['name'])
                         retVal = self.checkForSize(f['size'])
                 else:
-                    #Check to see if it's been moved or copied
-                    #self.logger.debug(u'Looking for similar file: %s (%s)', name, inode)
+                    # Check to see if it's been moved or copied
                     # BUG: Don't we need to extend or insert the file here?
                     old = self.db.getFileInfoBySimilar(f)
 
                     if old:
                         if (old["name"] == f["name"]) and (old["parent"] == parent) and (old['device'] == f['parentdev']):
                             # If the name and parent ID are the same, assume it's the same
-                            #if ("checksum" in old.keys()) and not (old["checksum"] is None):
                             if old["checksum"] is not None:
                                 self.db.setChecksum(inode, device, old['checksum'])
                                 retVal = FileResponse.DONE
@@ -367,7 +336,6 @@ class Backend:
                             retVal = FileResponse.CKSUM
                     else:
                         # TODO: Lookup based on inode.
-                        #self.logger.debug("No old file.")
                         retVal = self.checkForSize(f['size'])
 
         return retVal, basis
@@ -377,7 +345,6 @@ class Backend:
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
-        #self.logger.debug(u'Processing directory entry: {} : {}'.format(data["path"], str(data["inode"])))
 
         # Create some sets that we'll collect the inodes into
         # Use sets to remove duplicates due to hard links in a directory
@@ -407,7 +374,7 @@ class Backend:
                 oldDir = self.db.getFileInfoByPath(data['path'], current=False)
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
-                #### TODO: FIXME: Get actual Device
+                # TODO: FIXME: Get actual Device
                 dirInode = (oldDir['inode'], oldDir['device'])
             else:
                 # Otherwise
@@ -426,10 +393,6 @@ class Backend:
             self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
             res, basis = self.checkFile(parentInode, f, dirhash)
             # Shortcut for this:
-            #if res == 0: done.append(inode)
-            #elif res == 1: content.append(inode)
-            #elif res == 2: cksum.append(inode)
-            #elif res == 3: delta.append(inode)
             if res == FileResponse.LINKED:
                 # Determine if this fileid is already in one of the queues
                 if not any(map(lambda x: fileId in x, queues)):
@@ -490,7 +453,7 @@ class Backend:
             'message': Protocol.Commands.SIG,
             'status' : "DONE"
         }
-        return(response, True)
+        return response, True
 
     def processSigRequest(self, message):
         """ Generate and send a signature for a file """
@@ -504,7 +467,7 @@ class Backend:
         sig = b''
 
         self.logger.debug("Signature requested: %s %s %s", inode, dev, chksum)
-        ### TODO: Remove this function.  Shouldn't be needed anymore.
+        # TODO: Remove this function.  Shouldn't be needed anymore.
         if chksum is None:
             info = self.db.getFileInfoByInode((inode, dev), current=False)
             if info:
@@ -522,7 +485,7 @@ class Backend:
                     sig = sigfile.read()       # TODO: Does this always read the entire file?
                     sigfile.close()
                 else:
-                    ### TODO: Remove this?   Only valid for unencrypted backups.
+                    # TODO: Remove this?   Only valid for unencrypted backups.
                     try:
                         rpipe = self.regenerator.recoverChecksum(chksum)
                         if rpipe:
@@ -543,7 +506,8 @@ class Backend:
                     "status": "OK",
                     "encoding": self.messenger.getEncoding(),
                     "checksum": chksum,
-                    "size": len(sig) }
+                    "size": len(sig)
+                }
                 self.sendMessage(response)
                 sigio = io.BytesIO(sig)
                 Util.sendDataPlain(self.messenger, sigio, compress=None)
@@ -567,8 +531,8 @@ class Backend:
     def processDelta(self, message):
         """ Receive a delta message. """
         self.logger.debug("Processing delta message: %s", message)
-        output  = None
-        temp    = None
+        output   = None
+        temp     = None
         checksum = message["checksum"]
         basis    = message["basis"]
         size     = message["size"]          # size of the original file, not the content
@@ -589,7 +553,6 @@ class Backend:
                     savefull = True
             if savefull:
                 # Save the full output, rather than just a delta.  Save the delta to a file
-                #output = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=True)
                 output = tempfile.SpooledTemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
             else:
                 output = self.cache.open(checksum, "wb")
@@ -617,7 +580,6 @@ class Backend:
                         delta = output
 
                     # Process the delta file into the new file.
-                    #subprocess.call(["rdiff", "patch", self.cache.path(basis), output.name], stdout=self.cache.open(checksum, "wb"))
                     basisFile = self.regenerator.recoverChecksum(basis)
                     # Can't use isinstance
                     if not basisFile.seekable():
@@ -679,7 +641,10 @@ class Backend:
         if output is not None:
             output.close()
 
-        response = { 'message': Protocol.Responses.ACKSIG, 'status': 'OK' }
+        response = {
+            'message': Protocol.Responses.ACKSIG,
+            'status': 'OK'
+        }
         return (response, False)
 
     def processChecksum(self, message):
@@ -822,14 +787,12 @@ class Backend:
             if info and info['checksum'] is not None:
                 numFiles = self.db.getDirectorySize(inoDev)
                 if numFiles is not None:
-                    #logger.debug("Clone info: %s %s %s %s", info['size'], type(info['size']), info['checksum'], type(info['checksum']))
                     if (numFiles == d['numfiles']) and (info['checksum'] == d['cksum']):
                         self.db.cloneDir(inoDev)
                         if self.full:
                             numDeltas = self.db.getNumDeltaFilesInDirectory(inoDev, current=False)
                             if numDeltas > 0:
                                 # Oops, there's a delta file in here on a full backup.
-                                #self.logger.debug("Inode %d contains %d deltas on full backup.  Requesting refresh.", inode, numDeltas)
                                 content.append(inoDev)
                             else:
                                 # No delta files for full backup.  We're done
@@ -837,16 +800,18 @@ class Backend:
                         else:
                             done.append(inoDev)
                     else:
-                        #self.logger.debug("No match on clone.  Inode: %d Rows: %d %d Checksums: %s %s", inode, int(info['size']), d['numfiles'], info['checksum'], d['cksum'])
                         content.append(inoDev)
                 else:
-                    #self.logger.debug("Unable to get number of files to process clone (%d %d)", inode, device)
                     content.append(inoDev)
             else:
-                #self.logger.debug("No info available to process clone (%d %d)", inode, device)
                 content.append(inoDev)
         self.logger.debug("Clone done")
-        return ({"message" : Protocol.Responses.ACKCLN, "done" : done, 'content' : content }, True)
+        response = {
+            "message" : Protocol.Responses.ACKCLN,
+            "done" : done,
+            "content" : content
+        }
+        return response, True
 
     _sequenceNumber = 0
 
@@ -861,7 +826,6 @@ class Backend:
                 self.logger.debug("Checksum file %s already exists", checksum)
             output = self.cache.open(checksum, "w")
         else:
-            #temp = tempfile.NamedTemporaryFile(dir=self.tempdir, delete=False, prefix=self.tempPrefix)
             tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
             self._sequenceNumber += 1
             self.logger.debug("Sending output to temporary file %s", tempName)
@@ -910,14 +874,16 @@ class Backend:
             # a version which had a basis without updating the base file.
             Util.recordMetaData(self.cache, checksum, size, compressed, encrypted, bytesReceived, logger=self.logger)
 
-
         except Exception as e:
             self.logger.error("Could insert checksum %s info: %s", checksum, str(e))
             self.exceptionLogger.log(e)
 
         self.statBytesReceived += bytesReceived
 
-        response = { 'message': Protocol.Responses.ACKCON, 'status': 'OK' }
+        response = {
+            'message': Protocol.Responses.ACKCON,
+            'status': 'OK'
+        }
         return (response, False)
 
     def processBatch(self, message):
@@ -1000,9 +966,6 @@ class Backend:
             # Stats
             self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
-            #if transaction:
-            #    self.db.beginTransaction()
-
             match messageType:
                 case Protocol.Commands.DIR:
                     (response, flush) = self.processDir(message)
@@ -1084,7 +1047,7 @@ class Backend:
 
         self.cache = self.getCacheDir(create)
 
-        connid = {'connid': self.idstr }
+        connid = {'connid': self.idstr}
 
         if not os.path.exists(dbfile):
             if not os.path.exists(self.basedir):
@@ -1098,7 +1061,7 @@ class Backend:
                                     user=self.config.user,
                                     group=self.config.group,
                                     numbackups=self.config.dbbackups,
-                                    allow_upgrade = self.config.allowUpgrades)
+                                    allow_upgrade=self.config.allowUpgrades)
 
         self.regenerator = Regenerator.Regenerator(self.cache, self.db, TardisCrypto.Crypto_Null())
         return ret
@@ -1160,7 +1123,7 @@ class Backend:
                     self.autoPurge = bool(autoPurge)
                 if saveConfig is not None:
                     self.logger.debug("Overriding global saveconfig value: %s", bool(autoPurge))
-                    self.saveconfig = bool(saveConfig)
+                    self.saveConfig = bool(saveConfig)
             except Exception as e:
                 self.logger.error("Client %s: Unable to override global configuration: %s", self.client, str(e))
 
@@ -1188,9 +1151,6 @@ class Backend:
     def endSession(self):
         try:
             pass
-            #if (self.tempdir):
-                # Clean out the temp dir
-                #shutil.rmtree(self.tempdir)
         except OSError as error:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
@@ -1211,18 +1171,21 @@ class Backend:
 
     def doGetKeys(self):
         try:
-            message = {"status": Protocol.Responses.NEEDKEYS }
-            self.sendMessage(message)
+            response = {
+                "status": Protocol.Responses.NEEDKEYS
+            }
+            self.sendMessage(response)
+
             resp = self.recvMessage()
             self.checkMessage(resp, "SETKEYS")
 
-            filenameKey = resp['filenameKey']
-            contentKey  = resp['contentKey']
-            srpSalt     = resp['srpSalt']
-            srpVkey     = resp['srpVkey']
+            filenameKey  = resp['filenameKey']
+            contentKey   = resp['contentKey']
+            srpSalt      = resp['srpSalt']
+            srpVkey      = resp['srpVkey']
             cryptoScheme = resp['cryptoScheme']
             # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-            return(srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme)
+            return srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme
         except KeyError as e:
             raise InitFailedException(str(e)) from e
 
@@ -1284,7 +1247,7 @@ class Backend:
     def initializeBackup(self):
         try:
             message:dict = self.recvMessage()
-            messType    = message['message']
+            messType = message['message']
             if messType != Protocol.Commands.BACKUP:
                 raise InitFailedException(f"Unknown message type: {messType}")
 
@@ -1388,7 +1351,7 @@ class Backend:
             "new": newBackup,
             "name": serverName if serverName else name,
             "clientid": str(self.db.clientId)
-            }
+        }
 
         if authResp:
             response.update(authResp)
@@ -1438,7 +1401,6 @@ class Backend:
 
             started = True
 
-            #sock.sendall("OK {} {} {}".format(str(self.sessionid), str(self.db.prevBackupDate), serverName if serverName else name))
             self.processBackupMessages()
 
             # Shutdown the backup
@@ -1451,7 +1413,7 @@ class Backend:
                     self.db.setBackupSetName(self.name, self.configPriority)
 
             completed = True
-        except (InitFailedException, TardisDB.AuthenticationFailed) as e:
+        except (InitFailedException, TardisDB.AuthenticationFailed):
             pass
         except Exception as e:
             self.logger.warning("Caught Exception during run: %s", str(e))
@@ -1463,8 +1425,6 @@ class Backend:
             endtime = datetime.now()
             count = 0
             size = 0
-            #sock.close()
-            #self.messenger.closeSocket()
 
             rmSession(self.sessionid)
 

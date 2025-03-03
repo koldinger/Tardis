@@ -57,7 +57,6 @@ def fmtSize(num, base=1024, suffixes=None):
     fmt = "%d %s"
     num = float(num)
     for x in suffixes[:-1]:
-        #if num < base and num > -base:
         if -base < num < base:
             return (fmt % (num, x)).strip()
         num /= float(base)
@@ -79,7 +78,6 @@ class StatusBarFormatter(string.Formatter):
         self.starttime = time.time()
 
     def get_field(self, field_name, args, kwargs):
-        #print(f"get_field({field_name}, {args}, {kwargs}")
         if field_name == "__elapsed__":
             seconds = time.time() - self.starttime
             if seconds > 3600:
@@ -103,7 +101,6 @@ class StatusBar():
         self.base = base
         self.live = live
         self.trailer = None
-        self.halt = False
         self.values = {}
         self.delay = delay
         self.formatter = formatter if formatter else StatusBarFormatter()
@@ -133,19 +130,10 @@ class StatusBar():
         Stop the status bar from further updating
         """
         self.scheduler.cancel(self.event)
-        self.halt = True
         self.clearStatus()
         atexit.unregister(resetCursor)
         if self.thread:
             self.thread.join()
-
-    def pTime(self, seconds):
-        """
-        Print the time
-        """
-        if seconds > 3600:
-            return time.strftime("%H:%M:%S", time.gmtime(seconds))
-        return time.strftime("%M:%S", time.gmtime(seconds))
 
     def setWidth(self, width):
         """

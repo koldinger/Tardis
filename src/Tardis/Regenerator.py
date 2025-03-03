@@ -37,8 +37,8 @@ from . import TardisCrypto
 from . import CompressedBuffer
 from . import librsync
 
-#from icecream import ic 
-#ic.configureOutput(includeContext=True)
+# from icecream import ic 
+# ic.configureOutput(includeContext=True)
 
 class RegenerateException(Exception):
     pass
@@ -58,7 +58,6 @@ class Regenerator:
         infile = self.cacheDir.open(filename, 'rb')
 
         # Get the IV, if it's not specified.
-        #infile.seek(0, os.SEEK_SET)
         iv = infile.read(self.crypt.ivLength)
 
         self.logger.debug("Got IV: %d %s", len(iv), binascii.hexlify(iv))
@@ -69,7 +68,6 @@ class Regenerator:
         outfile = tempfile.TemporaryFile()
 
         contentSize = size - self.crypt.ivLength - encryptor.getDigestSize()
-        #self.logger.info("Computed Size: %d.  Specified size: %d.  Diff: %d", ctSize, size, (ctSize - size))
 
         rem = contentSize
         blocksize = 64 * 1024
@@ -89,7 +87,6 @@ class Regenerator:
                     try:
                         encryptor.verify(digest)
                     except ValueError:
-                        #self.logger.debug("HMAC's:  File: %-128s Computed: %-128s", binascii.hexlify(digest), binascii.hexlify(encryptor.digest()))
                         raise RegenerateException(f"File {filename} did not authenticate.")
             outfile.write(pt)
             rem -= readsize
@@ -114,8 +111,6 @@ class Regenerator:
         if cksInfo is None:
             self.logger.error("Checksum %s not found", cksum)
             return None
-
-        #self.logger.debug(" %s: %s", cksum, str(cksInfo))
 
         try:
             if not cksInfo['isfile']:
@@ -142,7 +137,6 @@ class Regenerator:
                     patchfile = temp
                 try:
                     output = librsync.patch(basis, patchfile)
-                    #output.seek(0)
                     return output
                 except librsync.LibrsyncError as e:
                     self.logger.error("Recovering checksum: %s : %s", cksum, e)
@@ -167,7 +161,6 @@ class Regenerator:
             raise
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
-            #self.logger.exception(e)
             raise RegenerateException(f"Checksum: {cksum}: Error: {e}") from e
 
     def recoverFile(self, filename, bset=False, nameEncrypted=False, permchecker=None, authenticate=True):
@@ -184,10 +177,8 @@ class Regenerator:
             return None
         except RegenerateException as e:
             self.logger.error("Could not regenerate file: %s: %s", filename, str(e))
-            #self.logger.exception(e)
             return None
         except Exception as e:
-            #logger.exception(e)
             self.logger.error("Error recovering file: %s: %s", filename, str(e))
             self.errors += 1
             return None

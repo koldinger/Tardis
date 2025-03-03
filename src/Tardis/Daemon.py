@@ -129,17 +129,9 @@ class ProtocolError(Exception):
     pass
 
 class TardisServerHandler(socketserver.BaseRequestHandler):
-    numfiles = 0
-    logger   = None
-    sessionid = None
-    tempdir = None
-    cache   = None
-    db      = None
-    purged  = False
     full    = False
     statNewFiles = 0
     statUpdFiles = 0
-    statDirs     = 0
     statBytesReceived = 0
     statPurgedFiles = 0
     statPurgedSets = 0
@@ -149,7 +141,6 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
     autoPurge = False
     saveConfig = False
     forceFull = False
-    saveFull = False
     lastCompleted = None
 
     def setup(self):
@@ -197,12 +188,9 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             resp = {'status': 'OK'}
             sock.sendall(bytes(json.dumps(resp), 'utf-8'))
 
-            #self.addSession(self.sessionid, fields['host'])
-
             # Create the messenger object.  From this point on, ALL communications should
             # go through messenger, not director to the socket
-            #messenger = self.mkMessenger(sock, fields['encoding'], fields['compress'])
-            messenger =  Messages.MsgPackMessages(sock, compress=fields['compress'])
+            messenger = Messages.MsgPackMessages(sock, compress=fields['compress'])
 
             # Create a backend, and run it.
             backend = Backend.Backend(messenger, self.server, sessionid=self.sessionid, prettyExceptions=False)
@@ -283,8 +271,6 @@ class TardisServer:
         self.user = None
         self.group = None
 
-        self.sessions = {}
-
         # If the User or Group is set, attempt to determine the users
         # Note, these will throw exeptions if the User or Group is unknown.  Will get
         # passed up.
@@ -317,7 +303,6 @@ class TardisServer:
         else:
             self.profiler = None
 
-#class TardisSocketServer(SocketServer.TCPServer):
 class TardisSocketServer(socketserver.ThreadingMixIn, socketserver.TCPServer, TardisServer):
     def __init__(self):
 
@@ -421,7 +406,7 @@ def stopServer():
 
 def signalTermHandler(signal, frame):
     logger.info("Caught term signal.  Stopping")
-    t = threading.Thread(target = shutdownHandler)
+    t = threading.Thread(target=shutdownHandler)
     t.start()
     logger.info("Server stopped")
 

@@ -37,7 +37,6 @@ v = sys.version_info
 
 __buildversion__ = ''
 __pythonversion__ = f" Python {v.major}.{v.minor}.{v.micro}"
-#__versionstring__ = __version__ + '(' + __pythonversion__ + ')'
 __versionstring__ = f"{__version__} ({__pythonversion__})"
 
 try:

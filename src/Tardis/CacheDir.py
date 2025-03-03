@@ -164,7 +164,6 @@ class CacheDir:
         deleted = 0
         for suffix in suffixes:
             if self.remove(name + suffix):
-                #logger.debug("Removed %s", name + suffix)
                 deleted += 1
         return deleted
 

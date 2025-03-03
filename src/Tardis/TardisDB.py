@@ -49,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -87,11 +87,11 @@ def authenticate(func):
 
 _fileInfoFields =  dedent(
     """
-    N1.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link, 
-    Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
-    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
+    N1.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link,
+    Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size,
+    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks,
     FirstSet AS firstset, LastSet AS lastset,
-    C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize, 
+    C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize,
     C2.Checksum AS xattrs,
     C3.Checksum AS acl,
     N2.Name AS username,
@@ -100,18 +100,16 @@ _fileInfoFields =  dedent(
 
 _fileInfoJoin = dedent(
     """
-    FROM Files 
-    JOIN Names N1 USING(NameID) 
-    LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) 
-    LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId 
-    LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId 
+    FROM Files
+    JOIN Names N1 USING(NameID)
+    LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId)
+    LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId
+    LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId
     JOIN Users USING (UserID)
-    JOIN Groups USING (GroupID) 
+    JOIN Groups USING (GroupID)
     JOIN Names N2 ON Users.NameID = N2.NameID
     JOIN Names N3 ON Groups.NameID = N3.NameID
     """)
-
-
 
 _backupSetInfoFields = dedent(
     """
@@ -136,7 +134,7 @@ _schemaVersion = 22
 def _splitpath(path):
     """ Split a path into chunks, recursively """
     (head, tail) = os.path.split(path)
-    return _splitpath(head) + [ tail ] if head and head != path else [ head or tail ]
+    return _splitpath(head) + [tail] if head and head != path else [head or tail]
 
 def _fetchEm(cursor):
     while batch := cursor.fetchmany(10000):
@@ -165,8 +163,10 @@ class TardisDB:
 
         self.srpSrv = None
 
-        if user  is None: user = -1
-        if group is None: group = -1
+        if user is None:
+            user = -1
+        if group is None:
+            group = -1
 
         self.user = user
         self.group = group
@@ -176,8 +176,6 @@ class TardisDB:
 
         self.backup = backup
         self.numbackups = numbackups
-
-        self.currBackupName = None
 
         try:
             conn = sqlite3.connect(self.dbfile, check_same_thread=check_threads)
@@ -198,11 +196,9 @@ class TardisDB:
                 self.conn.executescript(script)
             except IOError:
                 self.logger.critical("Could not read initialization script %s", initialize)
-                #self.logger.exception(e)
                 raise
             except sqlite3.Error:
                 self.logger.critical("Could not execute initialization script %s", initialize)
-                #self.logger.exception(e)
                 raise
             self._setConfigValue('ClientID', str(uuid.uuid1()))
             newDB = True
@@ -228,12 +224,10 @@ class TardisDB:
         salt, vkey = self.getSrpValues()
         if salt is None or vkey is None:
             raise AuthenticationFailed("Password doesn't match")
-        #self.logger.debug("Beginning authentication: %s %s %s %s", hexlify(uname), hexlify(salt), hexlify(vkey), hexlify(srpValueA))
         self.srpSrv = srp.Verifier(uname, salt, vkey, srpValueA)
         s, B = self.srpSrv.get_challenge()
         if s is None or B is None:
             raise AuthenticationFailed("Password doesn't match")
-        #self.logger.debug("Authentication Challenge: %s %s", hexlify(s), hexlify(B))
         return s, B
 
     def authenticate2(self, srpValueM):
@@ -265,16 +259,12 @@ class TardisDB:
             if f:
                 self.prevBackupSet  = f['backupset']
                 self.prevBackupDate = f['starttime']
-                self.lastClientTime = f['clienttime']
                 self.prevBackupName = self.prevSet
-            #self.cursor.execute = ("SELECT Name, BackupSet FROM Backups WHERE Name = :backup", {"backup": prevSet})
         else:
             b = self.lastBackupSet()
             self.prevBackupName = b['name']
             self.prevBackupSet  = b['backupset']
             self.prevBackupDate = b['starttime']
-            self.lastClientTime = b['clienttime']
-            #self.cursor.execute("SELECT Name, BackupSet FROM Backups WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
 
         self.clientId = self.getConfigValue('ClientID')
 
@@ -307,8 +297,7 @@ class TardisDB:
 
     def upgradeSchema(self, baseVersion):
         for i in range(baseVersion, _schemaVersion):
-            name = f'convert{i}to{i+1}'
-            #from schema import name name
+            name = f'convert{i}to{i + 1}'
             converter = self._getConverter(name)
             self.logger.debug("Running conversion script from version %d, %s", i, name)
             converter.upgrade(self.conn, self.logger)
@@ -318,22 +307,20 @@ class TardisDB:
     def lastBackupSet(self, completed=True):
         """ Select the last backup set. """
         if completed:
-            return self._executeWithResult("SELECT " +
-                                            _backupSetInfoFields +
-                                            _backupSetInfoJoin +
-                                            "WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1")
-        else:
-            return self._executeWithResult("SELECT " +
-                                           _backupSetInfoFields +
-                                           _backupSetInfoJoin +
-                                           "ORDER BY BackupSet DESC LIMIT 1", {})
+            return self._executeWithResult(
+                "SELECT " + _backupSetInfoFields + _backupSetInfoJoin +
+                "WHERE Completed = 1 ORDER BY BackupSet DESC LIMIT 1"
+            )
+        return self._executeWithResult(
+            "SELECT " + _backupSetInfoFields + _backupSetInfoJoin +
+            "ORDER BY BackupSet DESC LIMIT 1"
+        )
 
     def _execute(self, query, data=None):
         """ Execute a query, and return a cursor to the results """
         try:
             if data is None:
                 data = {}
-            #ic(query)
             ret = self.conn.execute(query, data)
             return ret
         except sqlite3.IntegrityError as e:
@@ -350,23 +337,23 @@ class TardisDB:
         """ Create a new backupset.  Set the current backup set to be that set. """
         now = time.time()
         try:
-            c = self._execute("INSERT INTO Backups "
-                              "           (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, SchemaVersion, ClientIP, ServerSession) "
-                              "    VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :schemaversion, :clientip, :serversessionid)",
-                              {
-                                  "name": name,
-                                  "now": now,
-                                  "session": session,
-                                  "priority": priority,
-                                  "full": full,
-                                  "clienttime": clienttime,
-                                  "clientversion": version,
-                                  "clientip": ip,
-                                  "schemaversion": _schemaVersion,
-                                  "serversessionid": serverID,
-                                  "serverversion": (Tardis.__buildversion__ or Tardis.__version__)
-                                }
-                            )
+            c = self._execute(
+                "INSERT INTO Backups "
+                "           (Name, Completed, StartTime, Session, Priority, Full, ClientTime, ClientVersion, ServerVersion, SchemaVersion, ClientIP, ServerSession) "
+                "    VALUES (:name, 0, :now, :session, :priority, :full, :clienttime, :clientversion, :serverversion, :schemaversion, :clientip, :serversessionid)",
+                {
+                    "name": name,
+                    "now": now,
+                    "session": session,
+                    "priority": priority,
+                    "full": full,
+                    "clienttime": clienttime,
+                    "clientversion": version,
+                    "clientip": ip,
+                    "schemaversion": _schemaVersion,
+                    "serversessionid": serverID,
+                    "serverversion": (Tardis.__buildversion__ or Tardis.__version__)
+                })
         except sqlite3.IntegrityError:
             self.logger.critical(f"Backupset {name} already exists")
             raise Exception(f"Backupset {name} already exists")
@@ -377,7 +364,6 @@ class TardisDB:
             name = f"INCOMPLETE-{self.currBackupSet}"
             self.setBackupSetName(name, priority)
 
-        self.currBackupName = name
         self.conn.commit()
         self.logger.info("Created new backup set: %d: %s %s", self.currBackupSet, name, session)
 
@@ -398,24 +384,29 @@ class TardisDB:
     def setClientConfig(self, config, current=True):
         """ Store the full client configuration in the database """
         backupset = self._bset(current)
-        r = self._executeWithResult("SELECT ClientConfigID FROM ClientConfig WHERE ClientConfig = :config", {"config": config})
+        r = self._executeWithResult("SELECT ClientConfigID FROM ClientConfig WHERE ClientConfig = :config",
+                                    {"config": config})
         if r is None:
-            c = self._execute("INSERT INTO ClientConfig (ClientConfig) VALUES (:config)", {"config": config})
+            c = self._execute("INSERT INTO ClientConfig (ClientConfig) VALUES (:config)",
+                              {"config": config})
             clientConfigId = c.lastrowid
         else:
             clientConfigId = r[0]
-        self._execute("UPDATE Backups SET ClientConfigID = :configId WHERE BackupSet = :backupset", {"configId": clientConfigId, "backupset": backupset})
+        self._execute("UPDATE Backups SET ClientConfigID = :configId WHERE BackupSet = :backupset",
+                      {"configId": clientConfigId, "backupset": backupset})
 
     @authenticate
     def setCommandLine(self, cksum, current=True):
         """ Set a command line variable in the database """
         backupset = self._bset(current)
-        self._execute("UPDATE Backups SET CmdLineID = :cksid WHERE BackupSet = :backupset", {'cksid': cksum, 'backupset': backupset})
+        self._execute("UPDATE Backups SET CmdLineID = :cksid WHERE BackupSet = :backupset",
+                      {'cksid': cksum, 'backupset': backupset})
 
     @authenticate
     def checkBackupSetName(self, name):
         """ Check to see if a backupset by this name exists. Return TRUE if it DOESN'T exist. """
-        row = self._executeWithResult("SELECT COUNT(*) FROM Backups WHERE Name = :name", { "name": name })
+        row = self._executeWithResult("SELECT COUNT(*) FROM Backups WHERE Name = :name",
+                                      {"name": name})
         return row[0] == 0
 
     @authenticate
@@ -441,7 +432,6 @@ class TardisDB:
         parent = (0, 0)         # Root directory value
         info = None
 
-        #(dirname, name) = os.path.split(path)
         # Walk the path
         for name in _splitpath(path):
             if name == '/':
@@ -466,7 +456,6 @@ class TardisDB:
     def getFileInfoForPath(self, path, current=False):
         """ Return the FileInfo structures for each file along a path """
         backupset = self._bset(current)
-        #self.logger.debug("Looking up file by path {} {}".format(path, backupset))
         parent = (0, 0)         # Root directory value
         info = None
         for name in _splitpath(path):
@@ -519,10 +508,8 @@ class TardisDB:
     @authenticate
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
-        #self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
-        #self.logger.info("getFileFromPartialBackup: %s", str(fileInfo))
         row = self._executeWithResult("SELECT " +
                                 _fileInfoFields + _fileInfoJoin +
                                 "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
@@ -539,7 +526,7 @@ class TardisDB:
                                 "WHERE Inode = :inode AND Device = :device AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
-                                {"inode": ino, "device": dev, "backup": self.prevBackupSet })
+                                {"inode": ino, "device": dev, "backup": self.prevBackupSet})
 
         return r
 
@@ -557,7 +544,6 @@ class TardisDB:
                             "WHERE Inode = :inode AND Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
-        #self.logger.info("Setting XAttr ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return c.rowcount
 
     @authenticate
@@ -566,7 +552,6 @@ class TardisDB:
                             "WHERE Inode = :inode AND Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
-        #self.logger.info("Setting ACL ID for %d to %s, %d rows changed", inode, checksum, self.cursor.rowcount)
         return c.rowcount
 
 
@@ -578,7 +563,7 @@ class TardisDB:
                                 "FROM Files JOIN CheckSums USING (ChecksumID) "
                                 "WHERE Files.INode = :inode AND Device = :device AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                                { "backup" : backupset, "inode" : inode, "device": device })
+                                {"backup" : backupset, "inode" : inode, "device": device})
         return row[0] if row else None
 
     @authenticate
@@ -592,10 +577,9 @@ class TardisDB:
                           "JOIN CheckSums USING (ChecksumId) "
                           "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDev = :parentDev AND "
                           ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                          { "name": name, "parent": inode, "parentDev": device, "backup": backupset })
+                          {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         row = c.fetchone()
         return row[0] if row else None
-        #if row: return row[0] else: return None
 
     @authenticate
     def getChecksumByPath(self, name, current=False, permchecker=None):
@@ -624,7 +608,7 @@ class TardisDB:
             return self.getChecksumInfoChain(cksum)
         return None
 
-    @authenticate 
+    @authenticate
     def getChecksumsByBasis(self, checksum):
         c = self._execute("SELECT Checksum FROM CheckSums WHERE BASIS = :basis", {'basis': checksum})
         return _fetchEm(c)
@@ -643,7 +627,7 @@ class TardisDB:
         # General purpose failure
         return None
 
-    @functools.cache
+    @functools.lru_cache
     def _getUserId(self, user):
         nameid = self._getNameId(user)
         row = self._executeWithResult("SELECT UserID FROM Users WHERE NameId = :nameid", {"nameid": nameid})
@@ -656,7 +640,7 @@ class TardisDB:
         self.logger.debug("User ID %s -> %d", user, userid)
         return userid
 
-    @functools.cache
+    @functools.lru_cache
     def _getGroupId(self, group):
         nameid = self._getNameId(group)
         row = self._executeWithResult("SELECT GroupID FROM Groups WHERE NameId = :nameid", {"nameid": nameid})
@@ -669,7 +653,7 @@ class TardisDB:
         self.logger.debug("Group ID %s -> %d", group, groupid)
         return groupid
 
-    @functools.cache
+    @functools.lru_cache
     def _getUserAndGroup(self, user, group):
         return self._getUserId(user), self._getGroupId(group)
 
@@ -709,7 +693,7 @@ class TardisDB:
                                "SET LastSet = :new "
                                "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
                                ":old BETWEEN FirstSet AND LastSet",
-                               { "parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current })
+                               {"parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current})
         return cursor.rowcount
 
     @authenticate
@@ -723,12 +707,11 @@ class TardisDB:
         current = self._bset(current)
         (parIno, parDev) = parent
         (ino, dev) = inode
-        #self.logger.debug("ExtendFileInode: %s %s %s %s", parent, inode, current, old)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
                                "WHERE Parent = :parent AND ParentDev = :parentDev AND Inode = :inode AND Device = :device AND "
                                ":old BETWEEN FirstSet AND LastSet",
-                               { "parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current })
+                               {"parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current})
         return cursor.rowcount
 
     @authenticate
@@ -741,7 +724,7 @@ class TardisDB:
                                "SET LastSet = :new "
                                "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                                ":old BETWEEN FirstSet AND LastSet",
-                               { "new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev })
+                               {"new": newBSet, "old": oldBSet, "parent": parIno, "parentDev": parDev})
         return cursor.rowcount
 
     @functools.lru_cache(16 * 1024)
@@ -760,9 +743,6 @@ class TardisDB:
     def insertChecksum(self, checksum, encrypted=False, size=0, basis=None, deltasize=None, compressed='None', disksize=None, current=True, isFile=True):
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
-
-        def _xstr(x):
-            return x if x is not None else ''
 
         if basis is None:
             chainlength = 0
@@ -831,6 +811,7 @@ class TardisDB:
         if data:
             return data['chainlength']
         return -1
+
         """
         Could do this, but not all versions of SQLite3 seem to support "WITH RECURSIVE" statements
         c = self._execute("WITH RECURSIVE x(n) AS (VALUES(:checksum) UNION SELECT Basis FROM Checksums, x WHERE x.n=Checksums.Checksum) "
@@ -847,7 +828,6 @@ class TardisDB:
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
-        #self.logger.debug("Reading directory values for (%d, %d) %d", inode, device, backupset)
 
         c = self._execute("SELECT " + _fileInfoFields + ", C1.Basis AS basis, C1.Encrypted AS encrypted " +
                           _fileInfoJoin +
@@ -879,7 +859,7 @@ class TardisDB:
                                       "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                                       ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
                                       "(Dir = 1 OR ChecksumId IS NOT NULL)",
-                                      { "parent": inode, "parentDev": device, "backup": backupset })
+                                      {"parent": inode, "parentDev": device, "backup": backupset})
         if row:
             return row[0]
         return 0
@@ -887,7 +867,6 @@ class TardisDB:
     @authenticate
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
-        #self.logger.debug("Reading directory values for (%d, %d) in range (%d, %d)", inode, device, first, last)
         c = self._execute("SELECT " + _fileInfoFields + ", "
                           "C1.Basis AS basis, C1.Encrypted AS encrypted " +
                           _fileInfoJoin +
@@ -898,7 +877,6 @@ class TardisDB:
 
     @authenticate
     def listBackupSets(self):
-        #self.logger.debug("list backup sets")
         #                 "Name AS name, BackupSet AS backupset "
         c = self._execute("SELECT " +
                           _backupSetInfoFields +
@@ -912,7 +890,7 @@ class TardisDB:
                           _backupSetInfoFields +
                           _backupSetInfoJoin +
                           "WHERE BackupSet = :bset",
-                          { "bset": bset })
+                          {"bset": bset})
         row = c.fetchone()
         return row
 
@@ -932,7 +910,7 @@ class TardisDB:
                           _backupSetInfoFields +
                           _backupSetInfoJoin +
                           "WHERE Name = :name",
-                          { "name": name })
+                          {"name": name})
         row = c.fetchone()
         return row
 
@@ -942,7 +920,7 @@ class TardisDB:
                           _backupSetInfoFields +
                           _backupSetInfoJoin +
                           "WHERE BackupSet = (SELECT MAX(BackupSet) FROM Backups WHERE StartTime <= :time)",
-                          { "time": when })
+                          {"time": when})
         row = c.fetchone()
         return row
 
@@ -998,7 +976,7 @@ class TardisDB:
 
     @authenticate
     def getFileSizes(self, minsize):
-        cursor = self._execute("SELECT DISTINCT(Size) FROM Checksums WHERE Size > :minsize", {"minsize": minsize })
+        cursor = self._execute("SELECT DISTINCT(Size) FROM Checksums WHERE Size > :minsize", {"minsize": minsize})
         return _fetchEm(cursor)
 
     @authenticate
@@ -1013,7 +991,7 @@ class TardisDB:
 
     def _getConfigValue(self, key, default=None):
         self.logger.debug("Getting Config Value %s", key)
-        c = self._execute("SELECT Value FROM Config WHERE Key = :key", {'key': key })
+        c = self._execute("SELECT Value FROM Config WHERE Key = :key", {'key': key})
         row = c.fetchone()
         return row[0] if row else default
 
@@ -1037,7 +1015,6 @@ class TardisDB:
         self.logger.debug("Setting backupset priority to %d for backupset %s", priority, backup)
         self._execute("UPDATE Backups SET Priority = :priority WHERE BackupSet = :backup",
                       {'priority': priority, 'backup': backup})
-
 
     @authenticate
     def setSrpValues(self, salt, vkey):
@@ -1098,10 +1075,9 @@ class TardisDB:
     def commit(self):
         self.conn.commit()
 
-
     @authenticate
     def completeBackup(self):
-        self._execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", { "backup": self.currBackupSet })
+        self._execute("UPDATE Backups SET Completed = 1 WHERE BackupSet = :backup", {"backup": self.currBackupSet})
         self.commit()
 
     def _purgeFiles(self):
@@ -1181,19 +1157,19 @@ class TardisDB:
                               "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
                               "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
                               "AND IsFile = :isfile",
-                              { 'isfile': int(isFile)} )
+                              {'isfile': int(isFile)})
         return map(lambda row: row[0], _fetchEm(c))
 
     @authenticate
     def deleteOrphanChecksums(self, isFile):
         c = self._execute("DELETE FROM Checksums "
-                            "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
-                            "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
-                            "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
-                            "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
-                            "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
-                            "AND IsFile = :isfile",
-                            { 'isfile': int(isFile)} )
+                          "WHERE ChecksumID NOT IN (SELECT DISTINCT(ChecksumID) FROM Files WHERE ChecksumID IS NOT NULL) "
+                          "AND   ChecksumID NOT IN (SELECT DISTINCT(XattrId) FROM Files WHERE XattrID IS NOT NULL) "
+                          "AND   ChecksumID NOT IN (SELECT DISTINCT(AclId) FROM Files WHERE AclId IS NOT NULL) "
+                          "AND   ChecksumID NOT IN (SELECT DISTINCT(CmdLineID) FROM Backups WHERE CmdLineID IS NOT NULL) "
+                          "AND   Checksum   NOT IN (SELECT DISTINCT(Basis) FROM Checksums WHERE Basis IS NOT NULL) "
+                          "AND IsFile = :isfile",
+                          {'isfile': int(isFile)})
         return c.rowcount
 
     @authenticate
@@ -1219,7 +1195,7 @@ class TardisDB:
 
     @authenticate
     def enumerateChecksums(self, isFile=True):
-        c = self._execute("SELECT Checksum FROM Checksums WHERE IsFile = :isfile", {"isfile": int(isFile)})
+        c = self._execute("SELECT Checksum FROM Checksums WHERE IsFile = :isfile ORDER BY Checksum", {"isfile": int(isFile)})
         return map(lambda row: row[0], _fetchEm(c))
 
     @authenticate
@@ -1237,7 +1213,7 @@ class TardisDB:
     def setClientEndTime(self):
         if self.currBackupSet:
             self._execute("UPDATE Backups SET ClientEndTime = :now WHERE BackupSet = :backup",
-                              { "now": time.time(), "backup": self.currBackupSet })
+                          {"now": time.time(), "backup": self.currBackupSet})
 
     @authenticate
     def setTag(self, tag, current=False):
@@ -1294,21 +1270,19 @@ class TardisDB:
     @authenticate
     def setLock(self, locked, current=False):
         bset = self._bset(current)
-        self._execute("UPDATE Backups SET Locked = :locked WHERE BackupSet = :bset", { "locked": locked, "bset": bset })
+        self._execute("UPDATE Backups SET Locked = :locked WHERE BackupSet = :bset", {"locked": locked, "bset": bset})
 
     @authenticate
     def setFailure(self, ex):
         if self.currBackupSet:
             self._execute("UPDATE Backups SET Exception = :ex, ErrorMsg = :msg WHERE BackupSet = :backup",
-                          { "ex": type(ex).__name__, "msg": str(ex), "backup": self.currBackupSet})
+                          {"ex": type(ex).__name__, "msg": str(ex), "backup": self.currBackupSet})
 
     def close(self, completeBackup=False):
         if self._isAuthenticated():
-            #self.logger.debug("Closing DB: %s", self.dbfile)
-            # Apparently logger will get shut down if we're executing in __del__, so leave the debugging message out
             if self.currBackupSet:
                 self._execute("UPDATE Backups SET EndTime = :now WHERE BackupSet = :backup",
-                              { "now": time.time(), "backup": self.currBackupSet })
+                              {"now": time.time(), "backup": self.currBackupSet})
             self.conn.commit()
 
             if self.backup and completeBackup:
