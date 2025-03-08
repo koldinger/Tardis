@@ -35,6 +35,7 @@ import shutil
 import string
 import atexit
 import sched
+import collections
 
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
@@ -99,7 +100,7 @@ class StatusBar():
         if live is None:
             live = {}
         self.base = base
-        self.live = live
+        self.live = collections.ChainMap(live)
         self.trailer = None
         self.values = {}
         self.delay = delay
@@ -141,11 +142,17 @@ class StatusBar():
         """
         self.width = width
 
-    def setLiveValues(self, live):
+    def setLiveValues(self, live:dict):
         """
         Set a new dictionary to use for live values
         """
-        self.live = live
+        self.live = collections.ChainMap(live)
+
+    def addLiveValues(self, live:dict):
+        """
+        Add another dict to the set of live values
+        """
+        self.live = self.live.new_child(live)
 
     def setTrailer(self, trailer):
         """

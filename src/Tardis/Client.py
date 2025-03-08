@@ -86,6 +86,11 @@ from . import log
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
+# ic.disable()
+
+import faulthandler
+import signal
+faulthandler.register(signal.SIGUSR1)
 
 features = Tardis.check_features()
 support_xattr = 'xattr' in features
@@ -339,7 +344,41 @@ class FakeDirEntry:
             return os.stat(self.path)
         return os.lstat(self.path)
 
-def fs_encode(val):
+    def is_dir(self):
+        return os.path.isdir(self.path)
+
+def findMountPoint(path):
+    if path:
+        if os.path.ismount(path):
+            return path
+        return findMountPoint(os.path.dirname(path))
+    return "/"
+
+_deviceCache = {}
+def virtualDev(device, path):
+    try:
+        return _deviceCache[device]
+    except KeyError:
+        mp = findMountPoint(path)
+        h = crypt.getHash()
+        h.update(fs_encode(mp))
+        digest =  h.hexdigest()
+        _deviceCache[device] = digest
+        return digest
+
+
+def setEncoder(fmt):
+    global encoder, encoding, decoder
+    if fmt == 'base64':
+        encoding = "base64"
+        encoder  = base64.b64encode
+        decoder  = base64.b64decode
+    elif fmt == 'bin':
+        encoding = "bin"
+        encoder = lambda x: x
+        decoder = lambda x: x
+
+def fs_encode(val) -> bytes:
     """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
     if not isinstance(val, bytes):
         return val.encode(systemencoding)
@@ -902,6 +941,11 @@ def mkFileInfo(f):
     if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
         return None
 
+    if f.is_dir():
+        dirname = os.path.dirname(pathname)
+    else:
+        dirname = pathname
+
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
         finfo = {
             'name':   name,
@@ -918,7 +962,7 @@ def mkFileInfo(f):
             'gid':    s.st_gid,                 # TODO: Remove
             'user':   getUserName(s.st_uid),
             'group':  getGroupName(s.st_gid),
-            'dev':    s.st_dev
+            'dev':    virtualDev(s.st_dev, pathname)
         }
 
         if support_xattr and args.xattr:
@@ -947,7 +991,7 @@ def mkFileInfo(f):
                 logger.warning("Could not read ACL's from %s.   Ignoring", pathname.encode('utf8', 'backslashreplace').decode('utf8'))
 
         # Insert into the inode DB
-        inode = (s.st_ino, s.st_dev)
+        inode = (s.st_ino, virtualDev(s.st_dev, pathname))
 
         inodeDB.insert(inode, finfo, pathname)
     else:
@@ -982,7 +1026,7 @@ def getDirContents(dirname, dirstat, excludes=None):
 
     excludes = excludes or set()
     Util.accumulateStat(stats, 'dirs')
-    device = dirstat.st_dev
+    device = virtualDev(dirstat.st_dev, dirname)
 
     # Process an exclude file which will be passed on down to the receivers
     newExcludes = loadExcludeFile(os.path.join(dirname, excludeFile))
@@ -1101,10 +1145,13 @@ def sendPurge():
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     path = crypt.encryptPath(path)
+    (inum, dev) = inode
+    vdev = virtualDev(dev, path)
+
     message = {
         'message': Protocol.Commands.DIR,
         'path'   : path,
-        'inode'  : list(inode)
+        'inode'  : (inum, vdev)
     }
 
     chunkNum = 0
@@ -1254,6 +1301,7 @@ def processDirectory(path, top, depth=0, excludes=None):
         raise ExitRecursionException(e)
     except Exception as e:
         # TODO: Clean this up
+        logger.error("Error handling directory: %s: %s", path, str(e))
         exceptionLogger.log(e)
         raise ExitRecursionException(e)
 
@@ -1565,7 +1613,7 @@ def createPrefixPath(root, path):
     logger.debug("Making prefix path for: %s as %s", path, rPath)
     pathDirs  = splitDirs(rPath)
     parent    = 0
-    parentDev = 0
+    parentDev = virtualDev(0, "/")
     current   = root
     for d in pathDirs:
         dirPath = os.path.join(current, d)
@@ -1577,7 +1625,7 @@ def createPrefixPath(root, path):
             sendDirEntry(parent, parentDev, [f])
             processedDirs.add(dirPath)
         parent    = st.st_ino
-        parentDev = st.st_dev
+        parentDev = virtualDev(st.st_dev, dirPath)
         current   = dirPath
 
 def setCrypto(password, version):

@@ -104,14 +104,21 @@ CREATE TABLE IF NOT EXISTS Groups (
     NameID      INTEGER REFERENCES Names(NameID)
 );
 
+CREATE TABLE IF NOT EXISTS Devices (
+    DeviceID    INTEGER PRIMARY KEY AUTOINCREMENT,
+    VirtualID   TEXT UNIQUE NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS Files (
     NameID      INTEGER  NOT NULL,
     FirstSet    INTEGER  NOT NULL,
     LastSet     INTEGER  NOT NULL,
     Inode       INTEGER  NOT NULL,
     Device      INTEGER  NOT NULL,
+    DeviceID    INTEGER  NOT NULL,
     Parent      INTEGER  NOT NULL,
     ParentDev   INTEGER  NOT NULL,
+    ParentDevID INTEGER  NOT NULL,
     ChecksumId  INTEGER,            -- On a file, represents the file data.  On a directory, the hash of the filenames in the directory.
                                     -- On a directory, this can be rewritten over time, and is the most recent hash.
     Dir         INTEGER,
@@ -128,13 +135,15 @@ CREATE TABLE IF NOT EXISTS Files (
     XattrID     INTEGER,
     AclID       INTEGER,
 
-    PRIMARY KEY(NameID, FirstSet, LastSet, Parent, ParentDev),
-    FOREIGN KEY(NameID)      REFERENCES Names(NameID),
-    FOREIGN KEY(ChecksumId)  REFERENCES CheckSums(ChecksumId)
-    FOREIGN KEY(XattrID)     REFERENCES CheckSums(ChecksumId)
-    FOREIGN KEY(AclID)       REFERENCES CheckSums(ChecksumId)
-    FOREIGN KEY(UserID)      REFERENCES Users(UserID)
-    FOREIGN KEY(GroupID)     REFERENCES Groups(GroupID)
+    PRIMARY KEY(NameID, FirstSet, LastSet, Parent, ParentDev)
+    FOREIGN KEY(NameID)         REFERENCES Names(NameID)
+    FOREIGN KEY(ChecksumId)     REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(XattrID)        REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(AclID)          REFERENCES CheckSums(ChecksumId)
+    FOREIGN KEY(UserID)         REFERENCES Users(UserID)
+    FOREIGN KEY(GroupID)        REFERENCES Groups(GroupID)
+    FOREIGN KEY(DeviceID)       REFERENCES Devices(DeviceID)
+    FOREIGN KEY(ParentDevID)    REFERENCES Devices(DeviceID)
 );
 
 CREATE TABLE IF NOT EXISTS Tags (
@@ -164,6 +173,6 @@ CREATE VIEW IF NOT EXISTS VFiles AS
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
-INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "22");
+INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "23");
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("VacuumInterval", "5");

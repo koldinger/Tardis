@@ -49,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -85,11 +85,11 @@ def authenticate(func):
 
 # Be sure to end all these lists with a space.
 
-_fileInfoFields =  dedent(
+_fileInfoFields = dedent(
     """
-    N1.Name AS name, Inode AS inode, Device AS device, Dir AS dir, Link AS link,
-    Parent AS parent, ParentDev AS parentdev, Files.RowId AS rowid, C1.Size AS size,
-    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks,
+    N1.Name AS name, Inode AS inode, D1.VirtualID AS device, Dir AS dir, Link AS link, 
+    Parent AS parent, D2.VirtualID AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
+    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
     FirstSet AS firstset, LastSet AS lastset,
     C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize,
     C2.Checksum AS xattrs,
@@ -106,7 +106,9 @@ _fileInfoJoin = dedent(
     LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId
     LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId
     JOIN Users USING (UserID)
-    JOIN Groups USING (GroupID)
+    JOIN Groups USING (GroupID) 
+    JOIN Devices D1 ON Files.DeviceID = D1.DeviceID
+    JOIN Devices D2 ON Files.ParentDevId = D2.DeviceID
     JOIN Names N2 ON Users.NameID = N2.NameID
     JOIN Names N3 ON Groups.NameID = N3.NameID
     """)
@@ -129,7 +131,7 @@ _checksumInfoFields = dedent(
     ChainLength AS chainlength
     """)
 
-_schemaVersion = 22
+_schemaVersion = 23
 
 def _splitpath(path):
     """ Split a path into chunks, recursively """
@@ -654,6 +656,19 @@ class TardisDB:
         return groupid
 
     @functools.lru_cache
+    def _getDeviceId(self, virtualDevice):
+        row = self._executeWithResult("SELECT DeviceID FROM Devices WHERE VirtualID = :virtualDev", {"virtualDev": virtualDevice})
+        if row:
+            deviceId = row[0]
+        else:
+            self.logger.debug("Inserting virtual device %s into Devices Table", virtualDevice)
+            c = self._execute("INSERT INTO Devices (VirtualID) VALUES (:virtualDev)", {"virtualDev": virtualDevice})
+            deviceId = c.lastrowid
+        self.logger.debug("Device ID %s -> %d", virtualDevice, deviceId)
+        return deviceId
+
+
+    @functools.cache
     def _getUserAndGroup(self, user, group):
         return self._getUserId(user), self._getGroupId(group)
 
@@ -662,17 +677,21 @@ class TardisDB:
         self.logger.debug("Inserting file: %s", fileInfo)
         (parIno, parDev) = parent
         user, group = self._getUserAndGroup(fileInfo['user'], fileInfo['group'])
+        deviceId = self._getDeviceId(fileInfo['dev'])
+        parentDevId = self._getDeviceId(parDev)
         fields = {"backup": self.currBackupSet,
                   "parent": parIno,
                   "parentDev": parDev,
+                  "parentdevid": parentDevId,
+                  "deviceid": deviceId,
                   "userid": user,
                   "groupid": group,
                   'nameid': self._getNameId(fileInfo['name'])}
         fields.update(fileInfo)
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, DeviceID, Parent, ParentDev, ParentDevID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
-                      "(:nameid, :backup, :backup, :inode, :dev, :parent, :parentDev, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
+            "(:nameid, :backup, :backup, :inode, :dev, :deviceid, :parent, :parentDev, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
                       fields)
 
     @authenticate
@@ -689,11 +708,12 @@ class TardisDB:
         old = self._bset(old)
         current = self._bset(current)
         (parIno, parDev) = parent
+        parDevId = self._getDeviceId(parDev)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
-                               "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
+                               "WHERE Parent = :parent AND ParentDevID = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
                                ":old BETWEEN FirstSet AND LastSet",
-                               {"parent": parIno, "parentDev": parDev , "name": name, "old": old, "new": current})
+                               {"parent": parIno, "parentDev": parDevId , "name": name, "old": old, "new": current })
         return cursor.rowcount
 
     @authenticate
@@ -707,11 +727,14 @@ class TardisDB:
         current = self._bset(current)
         (parIno, parDev) = parent
         (ino, dev) = inode
+        parDevId = self._getDeviceId(parDev)
+        devId = self._getDeviceId(dev)
+        #self.logger.debug("ExtendFileInode: %s %s %s %s", parent, inode, current, old)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
-                               "WHERE Parent = :parent AND ParentDev = :parentDev AND Inode = :inode AND Device = :device AND "
+                               "WHERE Parent = :parent AND ParentDevID = :parentDev AND Inode = :inode AND DeviceID = :device AND "
                                ":old BETWEEN FirstSet AND LastSet",
-                               {"parent": parIno, "parentDev": parDev , "inode": ino, "device": dev, "old": old, "new": current})
+                               {"parent": parIno, "parentDev": parDevId, "inode": ino, "device": devId, "old": old, "new": current})
         return cursor.rowcount
 
     @authenticate
