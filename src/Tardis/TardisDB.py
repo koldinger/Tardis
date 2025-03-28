@@ -38,8 +38,8 @@ import uuid
 import functools
 import importlib
 import base64
-from binascii import hexlify, unhexlify
 import importlib.resources
+from binascii import hexlify, unhexlify
 from textwrap import dedent
 
 import srp
@@ -165,6 +165,8 @@ class TardisDB:
 
         self.srpSrv = None
 
+        self.rootVId = Util.hashPath("/")
+
         if user is None:
             user = -1
         if group is None:
@@ -196,6 +198,8 @@ class TardisDB:
                 # read the script from the package, and execute it.
                 script = importlib.resources.files().joinpath('schema', 'tardis.sql').read_text()
                 self.conn.executescript(script)
+                # Insert an element 
+                conn.execute("INSERT INTO Devices (DeviceID, VirtualID) VALUES (0, :virtid)", {"virtid": self.rootVId})
             except IOError:
                 self.logger.critical("Could not read initialization script %s", initialize)
                 raise
@@ -425,13 +429,21 @@ class TardisDB:
                   {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
         return row
 
+    @authenticate 
+    def getRootDirectory(self, current=False):
+        backupset = self._bset(current)
+        r = self._executeWithResult("SELECT " + _fileInfoFields + _fileInfoJoin +
+                                    "WHERE Inode = 0 AND :backupset BETWEEN FirstSet AND LastSet",
+                                    {"backupset": backupset})
+        return r
+
     @authenticate
     def getFileInfoByPath(self, path, current=False, permchecker=None):
         """ Lookup a file by a full path. """
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self._bset(current)
         self.logger.debug("Looking up file by path %s %s", path, backupset)
-        parent = (0, 0)         # Root directory value
+        parent = (0, self._getDeviceId(self.rootVId))
         info = None
 
         # Walk the path

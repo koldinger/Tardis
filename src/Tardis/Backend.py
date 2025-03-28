@@ -38,8 +38,11 @@ import pprint
 import shutil
 import tempfile
 import uuid
+import textwrap
 from datetime import datetime
 from enum import IntEnum
+
+from rich import text
 
 from . import CacheDir
 from . import CompressedBuffer
@@ -1014,7 +1017,7 @@ class Backend:
         except ProtocolError as e:
             raise ProtocolError(str(e)) from e
         except Exception as e:
-            self.logger.error("Caught exception processing message: %s", json.dumps(message))
+            self.logger.error("Caught exception processing message: %d %s -- %s", message.get('msgid', -1), message.get('message', ''), textwrap.shorten(json.dumps(message), 256, placeholder='...'))
             self.exceptionLogger.log(e)
             raise ProcessingError(str(e)) from e
 

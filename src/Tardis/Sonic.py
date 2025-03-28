@@ -331,7 +331,7 @@ def _path(db, crypt, bset, inode):
         path = os.path.join(prefix, name)
         _paths[inode] = path
         return path
-    return ''
+    return '/'
 
 def humanify(size):
     if size is not None:

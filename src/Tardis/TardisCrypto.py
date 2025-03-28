@@ -92,6 +92,7 @@ class HasherMixin:
 
     def update(self, data):
         self.hasher.update(data)
+        return self.hasher
 
     def encrypt(self, data):
         ctext = super().encrypt(data)

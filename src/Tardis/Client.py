@@ -57,6 +57,7 @@ import threading
 import socket
 import pwd
 import grp
+import hashlib
 import concurrent.futures
 
 from collections import defaultdict, deque
@@ -360,9 +361,7 @@ def virtualDev(device, path):
         return _deviceCache[device]
     except KeyError:
         mp = findMountPoint(path)
-        h = crypt.getHash()
-        h.update(fs_encode(mp))
-        digest =  h.hexdigest()
+        digest = Util.hashPath(mp)
         _deviceCache[device] = digest
         return digest
 

@@ -155,7 +155,7 @@ def runDiff(f1, f2, name, then, now):
 
 def getFileInfo(path, bset, tardis, crypt, reducePath):
     p = Util.reducePath(tardis, bset, path, reducePath, crypt)
-    e = crypt.encryptPath(p) if crypt else p
+    e = crypt.encryptPath(p)
     info = tardis.getFileInfoByPath(e, bset)
     return info, p
 

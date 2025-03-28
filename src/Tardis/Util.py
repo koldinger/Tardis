@@ -37,7 +37,6 @@ import subprocess
 import shlex
 import getpass
 import stat
-import fnmatch
 import json
 import base64
 import functools
@@ -48,6 +47,7 @@ import struct
 import io
 import signal
 import pprint
+import hashlib
 
 import urllib.request
 import urllib.parse
@@ -260,6 +260,8 @@ def isMagic(path):
 def fullPath(name):
     return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
 
+def hashPath(path):
+    return hashlib.md5(bytes(path, 'utf8')).hexdigest()
 
 """
 Retrieve a password.

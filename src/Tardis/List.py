@@ -47,6 +47,9 @@ from . import Defaults
 from . import Config
 from . import TardisDB
 
+from icecream import ic 
+ic.configureOutput(includeContext=True)
+
 columns = None
 columnfmt = None
 args: argparse.Namespace
@@ -112,7 +115,11 @@ def flushLine():
         print(line.rstrip())     # clear out any trailing spaces
         line=''
 
-def makeFakeRootInfo():
+def makeFakeRootInfo(crypt):
+    vh = crypt.getHash()
+    vh.update(bytes('/', 'utf-8'))
+    virtDev0 = vh.hexdigest()
+    ic(virtDev0)
     fInfos = {}
     fSet = backupSets[0]
     lSet = backupSets[-1]
@@ -120,11 +127,12 @@ def makeFakeRootInfo():
         fInfos[bset['backupset']] = {
             "name"          : '',
             "inode"         : 0,
-            "device"        : 0,
+            "device"        : virtDev0,
             "dir"           : 1,
             "link"          : 0,
             "parent"        : 0,
-            "parentdev"     : 0,
+            "parentdev"     : virtDev0,
+
             "size"          : 0,
             "mtime"         : 0,
             "ctime"         : 0,
@@ -148,12 +156,13 @@ def collectFileInfo(filename, tardis, crypt):
     Note that we sometimes need to reduce the pathlength.  It's done here, on a directory
     by directory basis.
     """
-    lookup = crypt.encryptPath(filename) if crypt else filename
+    lookup = crypt.encryptPath(filename)
+    ic(filename)
 
     fInfos = {}
     lInfo = {}
     if filename == '/':
-        fInfos = makeFakeRootInfo()
+        fInfos = makeFakeRootInfo(crypt)
     elif args.reduce:
         for bset in backupSets:
             temp = lookup
@@ -171,6 +180,7 @@ def collectFileInfo(filename, tardis, crypt):
             logger.debug("Bset: %s, info: %s", bset, info)
             fInfos[bset] = info
 
+    ic(fInfos)
     return fInfos
 
 # def _collectDirContents(tardis, dirlist, crypt):
@@ -295,9 +305,10 @@ def printit(info, name, color, gone, crypt):
             else:
                 fsize = f"{int(info['size']):8}"
 
+        ic(info)
         mode = stat.filemode(info['mode'])
-        group = crypt.decryptName(info['groupname'])
-        owner = crypt.decryptName(info['username'])
+        group = crypt.decryptName(info.get('groupname', ''))
+        owner = crypt.decryptName(info.get('username', ''))
         mtime = Util.formatTime(info['mtime'])
         nlinks = info['nlinks']
 
@@ -410,6 +421,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     Print a header for the file.
     """
     logger.debug("Processing file %s", filename)
+    ic(filename, fInfos)
 
     # Count the number of non-null entries
     numFound = len([i for i in fInfos if fInfos[i] is not None])
@@ -635,6 +647,7 @@ def globPath(path, tardis, crypt, first=0):
 
             # Collect info about the current path (without the globb pattern)
             fInfos = collectFileInfo(currentPath, tardis, crypt)
+            ic(fInfos)
 
             # Collect any directories in that poth
             dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
@@ -741,11 +754,14 @@ def main():
         else:
             directories = args.directories
 
+        ic(directories)
         for d in directories:
             d = os.path.abspath(d)
             if args.realpath:
                 d = os.path.realpath(d)
+            ic(d)
             fInfos = collectFileInfo(d, tardis, crypt)
+            ic(fInfos)
             recurse = args.maxdepth if args.recurse else 0
             processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=recurse)
     except KeyboardInterrupt:
