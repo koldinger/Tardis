@@ -96,9 +96,6 @@ def upgrade(conn, logger):
         c = conn.execute("UPDATE Files SET ParentDevId = :deviceid WHERE ParentDev = :device", {"deviceid": deviceId, "device": device})
         total += c.rowcount
     
-    print(f"Total rows updated: {total}")
-
-
     convertutils.updateVersion(conn, version, logger)
     conn.commit()
 

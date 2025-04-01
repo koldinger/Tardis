@@ -1354,6 +1354,8 @@ def cloneDir(inode, device, files, path, info=None):
     else:
         (h, s) = Util.hashDir(crypt, files)
 
+    device = virtualDev(device, path)
+
     message = {
         'inode': inode,
         'dev': device,

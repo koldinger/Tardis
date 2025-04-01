@@ -49,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -443,7 +443,7 @@ class TardisDB:
         ### TODO: Could be a LOT faster without the repeated calls to getFileInfoByName
         backupset = self._bset(current)
         self.logger.debug("Looking up file by path %s %s", path, backupset)
-        parent = (0, self._getDeviceId(self.rootVId))
+        parent = (0, self.rootVId)
         info = None
 
         # Walk the path
@@ -489,9 +489,9 @@ class TardisDB:
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         row = self._executeWithResult("SELECT " +
                       _fileInfoFields + _fileInfoJoin +
-                      "WHERE Inode = :inode AND Device = :device AND "
+                      "WHERE Inode = :inode AND Files.DeviceId = :device AND "
                       ":backup BETWEEN FirstSet AND LastSet",
-                      {"inode": inode, "device": device, "backup": backupset})
+                      {"inode": inode, "device": self._getDeviceId(device), "backup": backupset})
         return row
 
     @authenticate
@@ -500,10 +500,11 @@ class TardisDB:
         backupset = self._bset(current)
         self.logger.debug("Looking up file for similar info: %s", fileInfo)
         temp = fileInfo.copy()
+        temp['dev'] = self._getDeviceId(temp['dev'])
         temp["backup"] = backupset
         row = self._executeWithResult("SELECT " +
                                       _fileInfoFields + _fileInfoJoin +
-                                      "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
+                                      "WHERE Inode = :inode AND Files.DeviceId = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                       ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                       temp)
         return row
@@ -523,10 +524,11 @@ class TardisDB:
     def getFileFromPartialBackup(self, fileInfo):
         """ Find a file which is similar, namely the same size, inode, and mtime.  Identifies files which have moved. """
         temp = fileInfo.copy()
+        temp["dev"] = self._getDeviceId(temp['dev'])
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         row = self._executeWithResult("SELECT " +
                                 _fileInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
+                                "WHERE Inode = :inode AND Files.DeviceId = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
@@ -537,35 +539,35 @@ class TardisDB:
         (ino, dev) = inode
         r = self._executeWithResult("SELECT " +
                                 _fileInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Device = :device AND "
+                                "WHERE Inode = :inode AND Files.DeviceId = :device AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
-                                {"inode": ino, "device": dev, "backup": self.prevBackupSet})
+                                {"inode": ino, "device": self._getDeviceId(dev), "backup": self.prevBackupSet})
 
         return r
 
     @authenticate
     def setChecksum(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Device = :device AND "
+                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
 
     @authenticate
     def setXattrs(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET XattrId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Device = :device AND "
+                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
 
     @authenticate
     def setAcl(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET AclId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Device = :device AND "
+                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
-                            {"inode": inode, "device": device, "checksum": checksum, "backup": self.currBackupSet})
+                            {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
 
 
@@ -575,9 +577,9 @@ class TardisDB:
         row = self._executeWithResult("SELECT "
                                 "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums USING (ChecksumID) "
-                                "WHERE Files.INode = :inode AND Device = :device AND "
+                                "WHERE Files.INode = :inode AND Files.DeviceId = :device AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                                {"backup" : backupset, "inode" : inode, "device": device})
+                                {"backup" : backupset, "inode" : inode, "device": self._getDeviceId(device)})
         return row[0] if row else None
 
     @authenticate
@@ -585,14 +587,14 @@ class TardisDB:
         backupset = self._bset(current)
         (inode, device) = parent
         self.logger.debug("Looking up checksum for file %s (%d %d) in %d", name, inode, device, backupset)
-        c = self._execute("SELECT CheckSums.CheckSum AS checksum "
-                          "FROM Files "
-                          "JOIN Names USING (NameId) "
-                          "JOIN CheckSums USING (ChecksumId) "
-                          "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDev = :parentDev AND "
-                          ":backup BETWEEN Files.FirstSet AND Files.LastSet",
-                          {"name": name, "parent": inode, "parentDev": device, "backup": backupset})
-        row = c.fetchone()
+        row = self._executeWithResult(
+            "SELECT CheckSums.CheckSum AS checksum "
+            "FROM Files "
+            "JOIN Names USING (NameId) "
+            "JOIN CheckSums USING (ChecksumId) "
+            "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDevId = :parentDev AND "
+            ":backup BETWEEN Files.FirstSet AND Files.LastSet",
+            {"name": name, "parent": inode, "parentDev": self._getDeviceId(device), "backup": backupset})
         return row[0] if row else None
 
     @authenticate
@@ -669,6 +671,8 @@ class TardisDB:
 
     @functools.lru_cache
     def _getDeviceId(self, virtualDevice):
+        if not isinstance(virtualDevice, str):
+            raise Exception(f"Invalid argument type {type(virtualDevice)} {virtualDevice}")
         row = self._executeWithResult("SELECT DeviceID FROM Devices WHERE VirtualID = :virtualDev", {"virtualDev": virtualDevice})
         if row:
             deviceId = row[0]

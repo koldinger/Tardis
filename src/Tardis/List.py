@@ -47,8 +47,8 @@ from . import Defaults
 from . import Config
 from . import TardisDB
 
-from icecream import ic 
-ic.configureOutput(includeContext=True)
+#from icecream import ic 
+#ic.configureOutput(includeContext=True)
 
 columns = None
 columnfmt = None
@@ -119,7 +119,6 @@ def makeFakeRootInfo(crypt):
     vh = crypt.getHash()
     vh.update(bytes('/', 'utf-8'))
     virtDev0 = vh.hexdigest()
-    ic(virtDev0)
     fInfos = {}
     fSet = backupSets[0]
     lSet = backupSets[-1]
@@ -157,7 +156,6 @@ def collectFileInfo(filename, tardis, crypt):
     by directory basis.
     """
     lookup = crypt.encryptPath(filename)
-    ic(filename)
 
     fInfos = {}
     lInfo = {}
@@ -180,7 +178,6 @@ def collectFileInfo(filename, tardis, crypt):
             logger.debug("Bset: %s, info: %s", bset, info)
             fInfos[bset] = info
 
-    ic(fInfos)
     return fInfos
 
 # def _collectDirContents(tardis, dirlist, crypt):
@@ -305,7 +302,6 @@ def printit(info, name, color, gone, crypt):
             else:
                 fsize = f"{int(info['size']):8}"
 
-        ic(info)
         mode = stat.filemode(info['mode'])
         group = crypt.decryptName(info.get('groupname', ''))
         owner = crypt.decryptName(info.get('username', ''))
@@ -421,7 +417,6 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     Print a header for the file.
     """
     logger.debug("Processing file %s", filename)
-    ic(filename, fInfos)
 
     # Count the number of non-null entries
     numFound = len([i for i in fInfos if fInfos[i] is not None])
@@ -647,7 +642,6 @@ def globPath(path, tardis, crypt, first=0):
 
             # Collect info about the current path (without the globb pattern)
             fInfos = collectFileInfo(currentPath, tardis, crypt)
-            ic(fInfos)
 
             # Collect any directories in that poth
             dirs = [(x, fInfos[x['backupset']]) for x in backupSets if fInfos[x['backupset']] and fInfos[x['backupset']]['dir'] == 1]
@@ -754,14 +748,11 @@ def main():
         else:
             directories = args.directories
 
-        ic(directories)
         for d in directories:
             d = os.path.abspath(d)
             if args.realpath:
                 d = os.path.realpath(d)
-            ic(d)
             fInfos = collectFileInfo(d, tardis, crypt)
-            ic(fInfos)
             recurse = args.maxdepth if args.recurse else 0
             processFile(d, fInfos, tardis, crypt, printContents=(not args.dirinfo), recurse=recurse)
     except KeyboardInterrupt:
