@@ -81,6 +81,10 @@ def upgrade(conn, logger):
     conn.execute("ALTER TABLE Files ADD COLUMN DeviceID INTEGER REFERENCES Devices(DeviceID)")
     conn.execute("ALTER TABLE Files ADD COLUMN ParentDevID INTEGER REFERENCES Devices(DeviceID)")
 
+    # Create a root device.
+    rootVId = Util.hashPath("/")
+    conn.execute("INSERT INTO Devices (DeviceID, VirtualID) VALUES (0, :virtid)", {"virtid": rootVId})
+
     # Here we put the name insertion but it really doesn't work, because we really want to insert
     # encrypted names.
     cursor = conn.execute("SELECT DISTINCT(Device) FROM Files UNION SELECT DISTINCT(ParentDev) FROM Files")
@@ -89,7 +93,10 @@ def upgrade(conn, logger):
     total = 0
     for row in rows:
         device = row[0]
-        deviceId = getDeviceId(conn, Util.hashPath(str(device)))
+        if device == 0:
+            deviceId = getDeviceId(conn, Util.hashPath("/"))
+        else:
+            deviceId = getDeviceId(conn, Util.hashPath(str(device)))
         #name = row[0]
         c = conn.execute("UPDATE Files SET DeviceID = :deviceid WHERE Device = :device", {"deviceid": deviceId, "device": device})
         total += c.rowcount
