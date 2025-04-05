@@ -219,21 +219,13 @@ class Backend:
         Process an individual file.  Check to see if it's different from what's there already
         """
         basis = None
-        xattr = None
-        acl = None
         self.logger.debug("Processing file: %s %s", str(f), str(parent))
         name = f["name"]
         inode = f["inode"]
         device = f["dev"]
-        if 'xattr' in f:
-            xattr = f['xattr']
-        if 'acl' in f:
-            acl = f['acl']
-
-        if name in dirhash:
-            old = dirhash[name]
-        else:
-            old = None
+        xattr = f.get('xattr', None)
+        acl = f.get('acl', None)
+        old = dirhash.get(name, None)
 
         if f['dir']:
             if old:
