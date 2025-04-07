@@ -1775,6 +1775,7 @@ def processCommandLine():
         return shlex.split(line.strip())
 
     _def = 'Default: %(default)s'
+    interactive =  os.isatty(sys.stdin.fileno()) and os.isatty(sys.stdout.fileno())
 
     # Use the custom arg parser, which handles argument files more cleanly
     parser = CustomArgumentParser(description='Tardis Backup Client', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False,
@@ -1906,13 +1907,13 @@ def processCommandLine():
     prggroup.add_argument('--keep-hours',       dest='purgehours', type=int, default=None,          help='Number of hours to keep')
     prggroup.add_argument('--keep-time',        dest='purgetime', default=None,                     help='Purge before this time.  Format: YYYY/MM/DD:hh:mm')
 
-    parser.add_argument('--stats',              action=argparse.BooleanOptionalAction, dest='stats', default=c.getboolean(t, 'Stats'),
+    parser.add_argument('--stats',              action=argparse.BooleanOptionalAction, dest='stats', default=c.getboolean(t, 'Stats') or interactive,
                         help='Print stats about the transfer.  Default=%(default)s')
     parser.add_argument('--report',             dest='report', choices=['all', 'dirs', 'none'], const='all', default=c.get(t, 'Report'), nargs='?',
                         help='Print a report on all files or directories transferred.  ' + _def)
     parser.add_argument('--verbose', '-v',      dest='verbose', action='count', default=c.getint(t, 'Verbosity'),
                         help='Increase the verbosity')
-    parser.add_argument('--progress',           dest='progress', action='store_true',               help='Show a one-line progress bar.')
+    parser.add_argument('--progress',           dest='progress', default=interactive, action=argparse.BooleanOptionalAction,               help='Show a one-line progress bar.')
 
     parser.add_argument('--exclusive',          dest='exclusive', action=argparse.BooleanOptionalAction, default=True, help='Make sure the client only runs one job at a time. ' + _def)
     parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction, help='Log full exception details')
