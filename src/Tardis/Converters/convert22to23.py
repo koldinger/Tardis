@@ -78,8 +78,8 @@ def upgrade(conn, logger):
         """
     )
 
-    conn.execute("ALTER TABLE Files ADD COLUMN DeviceID INTEGER REFERENCES Devices(DeviceID)")
-    conn.execute("ALTER TABLE Files ADD COLUMN ParentDevID INTEGER REFERENCES Devices(DeviceID)")
+    #conn.execute("ALTER TABLE Files ADD COLUMN DeviceID INTEGER REFERENCES Devices(DeviceID)")
+    #conn.execute("ALTER TABLE Files ADD COLUMN ParentDevID INTEGER REFERENCES Devices(DeviceID)")
 
     # Create a root device.
     rootVId = Util.hashPath("/")
@@ -98,10 +98,23 @@ def upgrade(conn, logger):
         else:
             deviceId = getDeviceId(conn, Util.hashPath(str(device)))
         #name = row[0]
-        c = conn.execute("UPDATE Files SET DeviceID = :deviceid WHERE Device = :device", {"deviceid": deviceId, "device": device})
+        c = conn.execute("UPDATE Files SET Device = :deviceid WHERE Device = :device", {"deviceid": deviceId, "device": device})
         total += c.rowcount
-        c = conn.execute("UPDATE Files SET ParentDevId = :deviceid WHERE ParentDev = :device", {"deviceid": deviceId, "device": device})
+        c = conn.execute("UPDATE Files SET ParentDev = :deviceid WHERE ParentDev = :device", {"deviceid": deviceId, "device": device})
         total += c.rowcount
+
+    conn.executescript("""
+        DROP VIEW  VFiles;
+
+        CREATE VIEW IF NOT EXISTS VFiles AS
+            SELECT Names.Name AS Name, Inode, D1.VirtualID AS Device, Parent, D2.VirtualID AS ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
+            FROM Files
+            JOIN Names ON Files.NameID = Names.NameID
+            JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
+            JOIN Devices D1 ON Files.Device = D1.DeviceID
+            JOIN Devices D2 ON Files.ParentDev = D2.ParentDevID
+            LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
+        """)
     
     convertutils.updateVersion(conn, version, logger)
     conn.commit()

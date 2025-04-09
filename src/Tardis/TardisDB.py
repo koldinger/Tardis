@@ -49,8 +49,8 @@ from . import ConnIdLogAdapter
 from . import Rotator
 from . import Util
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 # Exception classes
 class AuthenticationException(Exception):
@@ -73,6 +73,16 @@ class TardisRow(sqlite3.Row):
             return default
         except IndexError:
             return default
+
+    def __str__(self):
+        row = ""
+        for i in self.keys():
+            row = row + f"{i}: {self.get(i)}  "
+        return row
+
+    def __repr__(self):
+        return f"{hex(id(self))} -- {self.__str__()}"
+
 
 # Utility functions
 def authenticate(func):
@@ -107,8 +117,8 @@ _fileInfoJoin = dedent(
     LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId
     JOIN Users USING (UserID)
     JOIN Groups USING (GroupID) 
-    JOIN Devices D1 ON Files.DeviceID = D1.DeviceID
-    JOIN Devices D2 ON Files.ParentDevId = D2.DeviceID
+    JOIN Devices D1 ON Files.Device = D1.DeviceID
+    JOIN Devices D2 ON Files.ParentDev = D2.DeviceID
     JOIN Names N2 ON Users.NameID = N2.NameID
     JOIN Names N3 ON Groups.NameID = N3.NameID
     """)
@@ -420,6 +430,7 @@ class TardisDB:
         """ Lookup a file in a directory in the previous backup set"""
         backupset = self._bset(current)
         (inode, device) = parent
+        device = self._getDeviceId(device)
         self.logger.debug(f"Looking up file by name {name} {parent} {backupset}")
         row = self._executeWithResult(
                   "SELECT " +
@@ -489,7 +500,7 @@ class TardisDB:
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         row = self._executeWithResult("SELECT " +
                       _fileInfoFields + _fileInfoJoin +
-                      "WHERE Inode = :inode AND Files.DeviceId = :device AND "
+                      "WHERE Inode = :inode AND Files.Device = :device AND "
                       ":backup BETWEEN FirstSet AND LastSet",
                       {"inode": inode, "device": self._getDeviceId(device), "backup": backupset})
         return row
@@ -504,7 +515,7 @@ class TardisDB:
         temp["backup"] = backupset
         row = self._executeWithResult("SELECT " +
                                       _fileInfoFields + _fileInfoJoin +
-                                      "WHERE Inode = :inode AND Files.DeviceId = :dev AND Mtime = :mtime AND C1.Size = :size AND "
+                                      "WHERE Inode = :inode AND Files.Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                       ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                       temp)
         return row
@@ -528,7 +539,7 @@ class TardisDB:
         temp["backup"] = self.prevBackupSet         ### Only look for things newer than the last backup set
         row = self._executeWithResult("SELECT " +
                                 _fileInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Files.DeviceId = :dev AND Mtime = :mtime AND C1.Size = :size AND "
+                                "WHERE Inode = :inode AND Files.Device = :dev AND Mtime = :mtime AND C1.Size = :size AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 temp)
@@ -539,7 +550,7 @@ class TardisDB:
         (ino, dev) = inode
         r = self._executeWithResult("SELECT " +
                                 _fileInfoFields + _fileInfoJoin +
-                                "WHERE Inode = :inode AND Files.DeviceId = :device AND "
+                                "WHERE Inode = :inode AND Files.Device = :device AND "
                                 "Files.LastSet >= :backup "
                                 "ORDER BY Files.LastSet DESC LIMIT 1",
                                 {"inode": ino, "device": self._getDeviceId(dev), "backup": self.prevBackupSet})
@@ -549,7 +560,7 @@ class TardisDB:
     @authenticate
     def setChecksum(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET ChecksumId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
+                            "WHERE Inode = :inode AND Files.Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
@@ -557,7 +568,7 @@ class TardisDB:
     @authenticate
     def setXattrs(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET XattrId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
+                            "WHERE Inode = :inode AND Files.Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
@@ -565,7 +576,7 @@ class TardisDB:
     @authenticate
     def setAcl(self, inode, device, checksum):
         c = self._execute("UPDATE Files SET AclId = (SELECT ChecksumId FROM CheckSums WHERE CheckSum = :checksum) "
-                            "WHERE Inode = :inode AND Files.DeviceId = :device AND "
+                            "WHERE Inode = :inode AND Files.Device = :device AND "
                             ":backup BETWEEN FirstSet AND LastSet",
                             {"inode": inode, "device": self._getDeviceId(device), "checksum": checksum, "backup": self.currBackupSet})
         return c.rowcount
@@ -577,7 +588,7 @@ class TardisDB:
         row = self._executeWithResult("SELECT "
                                 "CheckSums.Checksum AS checksum "
                                 "FROM Files JOIN CheckSums USING (ChecksumID) "
-                                "WHERE Files.INode = :inode AND Files.DeviceId = :device AND "
+                                "WHERE Files.INode = :inode AND Files.Device = :device AND "
                                 ":backup BETWEEN Files.FirstSet AND Files.LastSet",
                                 {"backup" : backupset, "inode" : inode, "device": self._getDeviceId(device)})
         return row[0] if row else None
@@ -592,7 +603,7 @@ class TardisDB:
             "FROM Files "
             "JOIN Names USING (NameId) "
             "JOIN CheckSums USING (ChecksumId) "
-            "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDevId = :parentDev AND "
+            "WHERE Names.Name = :name AND Files.Parent = :parent AND ParentDev = :parentDev AND "
             ":backup BETWEEN Files.FirstSet AND Files.LastSet",
             {"name": name, "parent": inode, "parentDev": self._getDeviceId(device), "backup": backupset})
         return row[0] if row else None
@@ -697,7 +708,6 @@ class TardisDB:
         parentDevId = self._getDeviceId(parDev)
         fields = {"backup": self.currBackupSet,
                   "parent": parIno,
-                  "parentDev": parDev,
                   "parentdevid": parentDevId,
                   "deviceid": deviceId,
                   "userid": user,
@@ -705,9 +715,9 @@ class TardisDB:
                   'nameid': self._getNameId(fileInfo['name'])}
         fields.update(fileInfo)
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, DeviceID, Parent, ParentDev, ParentDevID, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
                       "VALUES  "
-            "(:nameid, :backup, :backup, :inode, :dev, :deviceid, :parent, :parentDev, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
+                      "(:nameid, :backup, :backup, :inode, :deviceid, :parent, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
                       fields)
 
     @authenticate
@@ -727,7 +737,7 @@ class TardisDB:
         parDevId = self._getDeviceId(parDev)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
-                               "WHERE Parent = :parent AND ParentDevID = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
+                               "WHERE Parent = :parent AND ParentDev = :parentDev AND NameID = (SELECT NameID FROM Names WHERE Name = :name) AND "
                                ":old BETWEEN FirstSet AND LastSet",
                                {"parent": parIno, "parentDev": parDevId , "name": name, "old": old, "new": current })
         return cursor.rowcount
@@ -748,7 +758,7 @@ class TardisDB:
         #self.logger.debug("ExtendFileInode: %s %s %s %s", parent, inode, current, old)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
-                               "WHERE Parent = :parent AND ParentDevID = :parentDev AND Inode = :inode AND DeviceID = :device AND "
+                               "WHERE Parent = :parent AND ParentDev = :parentDev AND Inode = :inode AND Device = :device AND "
                                ":old BETWEEN FirstSet AND LastSet",
                                {"parent": parIno, "parentDev": parDevId, "inode": ino, "device": devId, "old": old, "new": current})
         return cursor.rowcount
@@ -758,6 +768,7 @@ class TardisDB:
         newBSet = self._bset(new)
         oldBSet = self._bset(old)
         (parIno, parDev) = parent
+        parDev = self._getDeviceId(parDev)
         self.logger.debug("Cloning directory inode %d, %d from %d to %d", parIno, parDev, oldBSet, newBSet)
         cursor = self._execute("UPDATE FILES "
                                "SET LastSet = :new "
@@ -867,6 +878,7 @@ class TardisDB:
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
+        device = self._getDeviceId(device)
 
         c = self._execute("SELECT " + _fileInfoFields + ", C1.Basis AS basis, C1.Encrypted AS encrypted " +
                           _fileInfoJoin +
@@ -879,6 +891,7 @@ class TardisDB:
     def getNumDeltaFilesInDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
+        device = self._getDeviceId(device)
         row = self._executeWithResult("SELECT COUNT(*) FROM Files "
                                       "JOIN Names USING (NameID) "
                                       "LEFT OUTER JOIN Checksums AS C1 USING (ChecksumId) "
@@ -894,6 +907,7 @@ class TardisDB:
     def getDirectorySize(self, dirNode, current=False):
         (inode, device) = dirNode
         backupset = self._bset(current)
+        device = self._getDeviceId(device)
         row = self._executeWithResult("SELECT COUNT(*) FROM Files "
                                       "WHERE Parent = :parent AND ParentDev = :parentDev AND "
                                       ":backup BETWEEN Files.FirstSet AND Files.LastSet AND "
@@ -906,6 +920,7 @@ class TardisDB:
     @authenticate
     def readDirectoryForRange(self, dirNode, first, last):
         (inode, device) = dirNode
+        device = self._getDeviceId(device)
         c = self._execute("SELECT " + _fileInfoFields + ", "
                           "C1.Basis AS basis, C1.Encrypted AS encrypted " +
                           _fileInfoJoin +

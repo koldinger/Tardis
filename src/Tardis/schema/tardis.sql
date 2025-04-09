@@ -115,12 +115,10 @@ CREATE TABLE IF NOT EXISTS Files (
     LastSet     INTEGER  NOT NULL,
     Inode       INTEGER  NOT NULL,
     Device      INTEGER  NOT NULL,
-    DeviceID    INTEGER  NOT NULL,
     Parent      INTEGER  NOT NULL,
     ParentDev   INTEGER  NOT NULL,
-    ParentDevID INTEGER  NOT NULL,
     ChecksumId  INTEGER,            -- On a file, represents the file data.  On a directory, the hash of the filenames in the directory.
-                                    -- On a directory, this can be rewritten over time, and is the most recent hash.
+
     Dir         INTEGER,
     Link        INTEGER,
     MTime       INTEGER,
@@ -142,8 +140,8 @@ CREATE TABLE IF NOT EXISTS Files (
     FOREIGN KEY(AclID)          REFERENCES CheckSums(ChecksumId)
     FOREIGN KEY(UserID)         REFERENCES Users(UserID)
     FOREIGN KEY(GroupID)        REFERENCES Groups(GroupID)
-    FOREIGN KEY(DeviceID)       REFERENCES Devices(DeviceID)
-    FOREIGN KEY(ParentDevID)    REFERENCES Devices(DeviceID)
+    FOREIGN KEY(Device)         REFERENCES Devices(DeviceID)
+    FOREIGN KEY(ParentDev)      REFERENCES Devices(DeviceID)
 );
 
 CREATE TABLE IF NOT EXISTS Tags (
@@ -159,7 +157,7 @@ CREATE INDEX IF NOT EXISTS CheckSumIndex ON CheckSums(Checksum);
 CREATE INDEX IF NOT EXISTS InodeFirstIndex ON Files(Inode ASC, Device ASC, FirstSet ASC);
 CREATE INDEX IF NOT EXISTS ParentFirstIndex ON Files(Parent ASC, ParentDev ASC, FirstSet ASC);
 CREATE INDEX IF NOT EXISTS InodeLastIndex ON Files(Inode ASC, Device ASC, LastSet ASC);
-CREATE INDEX IF NOT EXISTS ParentLastndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
+CREATE INDEX IF NOT EXISTS ParentLastIndex ON Files(Parent ASC, ParentDev ASC, LastSet ASC);
 CREATE INDEX IF NOT EXISTS NameIndex ON Names(Name ASC);
 CREATE INDEX IF NOT EXISTS InodeIndex ON Files(Inode ASC, Device ASC, Parent ASC, ParentDev ASC, FirstSet ASC, LastSet ASC);
 CREATE INDEX IF NOT EXISTS FileChksumIndex ON Files(ChecksumID ASC);
@@ -167,10 +165,12 @@ CREATE INDEX IF NOT EXISTS FileChksumIndex ON Files(ChecksumID ASC);
 INSERT OR IGNORE INTO Backups (Name, StartTime, EndTime, ClientTime, Completed, Priority, FilesFull, FilesDelta, BytesReceived) VALUES (".Initial", 0, 0, 0, 1, 0, 0, 0, 0);
     
 CREATE VIEW IF NOT EXISTS VFiles AS
-    SELECT Names.Name AS Name, Inode, Device, Parent, ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
+    SELECT Names.Name AS Name, Inode, D1.VirtualID AS Device, Parent, D2.VirtualID AS ParentDev, Dir, Link, Size, MTime, CTime, ATime, Mode, UID, GID, NLinks, Checksum, Backups.BackupSet, Backups.Name AS Backup
     FROM Files
     JOIN Names ON Files.NameID = Names.NameID
     JOIN Backups ON Backups.BackupSet BETWEEN Files.FirstSet AND Files.LastSet
+    JOIN Devices D1 ON Files.Device = D1.DeviceID
+    JOIN Devices D2 ON Files.ParentDev = D2.DeviceID
     LEFT OUTER JOIN CheckSums ON Files.ChecksumId = CheckSums.ChecksumId;
 
 INSERT OR REPLACE INTO Config (Key, Value) VALUES ("SchemaVersion", "23");
