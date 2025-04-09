@@ -497,6 +497,7 @@ class TardisDB:
     def getFileInfoByInode(self, info, current=False):
         backupset = self._bset(current)
         (inode, device) = info
+        device = self._getDeviceId(device)
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         row = self._executeWithResult("SELECT " +
                       _fileInfoFields + _fileInfoJoin +
