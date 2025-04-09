@@ -797,8 +797,7 @@ _hashMagic = struct.pack("!I", 0xffeeddcc)
 def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
-        f = list(files)
-        filenames = sorted([crypt.decryptName(n) for n in [x['name'] for x in f]])
+        filenames = sorted(map(crypt.decryptName,[x['name'] for x in files]))
     else:
         filenames = sorted([x["name"] for x in files])
 
