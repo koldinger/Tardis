@@ -1170,7 +1170,7 @@ def sendDirChunks(path, inode, files):
             logger.debug("---- Sending chunk at %d ----", x)
         sendMessage(message)
 
-    sendDirHash(inode)
+    sendDirHash((inum, vdev))
 
 def makeMetaMessage():
     global newmeta
@@ -1243,7 +1243,8 @@ def processDirectory(path, top, depth=0, excludes=None):
         (files, subdirs, subexcludes) = getDirContents(path, s, excludes)
 
         h = Util.hashDir(crypt, files)
-        dirHashes[(s.st_ino, s.st_dev)] = h
+        devId = virtualDev(s.st_dev, path)
+        dirHashes[(s.st_ino, devId)] = h
 
         # Figure out which files to clone, and which to update
         if files and args.clones:

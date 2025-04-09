@@ -497,7 +497,6 @@ class TardisDB:
     def getFileInfoByInode(self, info, current=False):
         backupset = self._bset(current)
         (inode, device) = info
-        device = self._getDeviceId(device)
         self.logger.debug("Looking up file by inode (%d %d) %d", inode, device, backupset)
         row = self._executeWithResult("SELECT " +
                       _fileInfoFields + _fileInfoJoin +
@@ -725,10 +724,11 @@ class TardisDB:
     def updateDirChecksum(self, directory, cksid, current=True):
         bset = self._bset(current)
         (inode, device) = directory
+        deviceId = self._getDeviceId(device)
         self._execute("UPDATE FILES "
                       "SET ChecksumID = :cksid "
                       "WHERE Inode = :inode AND DEVICE = :device AND :bset BETWEEN FirstSet AND LastSet",
-                      {"inode": inode, "device": device, "cksid": cksid, "bset": bset})
+                      {"inode": inode, "device": deviceId, "cksid": cksid, "bset": bset})
 
     @authenticate
     def extendFile(self, parent, name, old=False, current=True):
