@@ -57,7 +57,6 @@ import threading
 import socket
 import pwd
 import grp
-import hashlib
 import concurrent.futures
 
 from collections import defaultdict, deque
@@ -419,9 +418,10 @@ def genChecksum(inode):
 
         m = crypt.getHash()
         s = os.lstat(pathname)
-        mode = s.st_mode
-        if stat.S_ISLNK(mode):
+
+        if stat.S_ISLNK(s.st_mode):
             m.update(fs_encode(os.readlink(pathname)))
+            checksum = m.hexdigest()
         else:
             try:
                 with open(pathname, "rb") as f:
