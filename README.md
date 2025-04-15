@@ -417,16 +417,30 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
+Release Notes -- Version 1.7
+============================
+Version 1.7 introduces a new way of storing file ID's.   Previously files had been a inode and device pair.  However, the device ID was not guaranteed to be consistent between mounts of the file system.
+1.7 uses a virtual device ID (based on a hash of the mount point) to eliminate this problem, assuming that filesystems are usually mounted at the same mount point.
+
+
+When upgrading to version 1.7 it recommended that you upgrade the database schema manually, via:
+    sonic upgrade
+When this completes, run the tool "adjustVirtualDevices"
+    tools/adjustVirtualDevices.py <connection info>
+
+Both need to be run on the server.
+The second step is not necessary, but skipping it can cause the next run to be very long.
+
 Release Notes -- Version 1.6.1
 ============================
 Version 1.6.1 introduces a new way of storing user and group information.   These store the User and Group info by name, rather than just UID/GID.   The reason for this is that when you
 rebuild a system, you may recreate the users and groups with different ID's.   Most likely you will create users and groups with the same names.  This makes
 the User and Group information persist across the reconfiguration.  If you do recreate the users/groups with the same ID's, this won't really change anything.
 
-When upgrading to version 1.6 it recommended that you upgrade the database schema manually, via:
+When upgrading to version 1.6.1 it recommended that you upgrade the database schema manually, via:
     sonic upgrade
 When this completes, run the tool "editUserGroup.":
-    tools/editUpserGroupInfo.py -u -g
+    tools/editUpserGroupInfo.py -u -g <connection info>
 This will present you with a screen like:
     --------------------------
     --- Editing User Names ---
