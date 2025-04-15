@@ -42,8 +42,6 @@ import textwrap
 from datetime import datetime
 from enum import IntEnum
 
-from rich import text
-
 from . import CacheDir
 from . import CompressedBuffer
 from . import ConnIdLogAdapter
