@@ -30,6 +30,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+from ast import increment_lineno
 import os      # for filesystem modes (O_RDONLY, etc)
 import os.path
 import errno   # for error number codes (ENOENT, etc)
@@ -56,6 +57,9 @@ from . import Cache
 from . import Defaults
 from . import TardisDB
 from . import Config
+
+# from icecream import ic 
+# ic.configureOutput(includeContext=True)
 
 class CacheKeys(IntEnum):
     BackupSetInfo = auto()
@@ -102,6 +106,8 @@ class TardisFS(LoggingMixIn, Operations):
     dbdir    = Defaults.getDefault('TARDIS_DBDIR') % {'TARDIS_DB': database}          # HACK
     dbname   = Defaults.getDefault('TARDIS_DBNAME')
     current  = Defaults.getDefault('TARDIS_RECENT_SET')
+
+    rootVId = Util.hashPath("/")
 
     def __init__(self, db, cache, crypto, args):
         self.cacheDir = cache
@@ -163,7 +169,7 @@ class TardisFS(LoggingMixIn, Operations):
             fInfo = self.getFileInfoByPath(path)
             info = (bsInfo, fInfo)
         else:
-            fInfo = {'inode': 0, 'device': 0, 'dir': 1}
+            fInfo = {'inode': 0, 'device': self.rootVId, 'dir': 1}
             info = (bsInfo, fInfo)
 
         if info:
@@ -323,7 +329,7 @@ class TardisFS(LoggingMixIn, Operations):
                 parts = getParts(path)
                 if depth == 1:
                     b = self.getBackupSetInfo(parts[0])
-                    entries = self.tardis.readDirectory((0, 0), b['backupset'])
+                    entries = self.tardis.readDirectory((0, self.rootVId), b['backupset'])
                 else:
                     (b, parent) = self.getDirInfo(path)
                     entries = self.tardis.readDirectory((parent["inode"], parent["device"]), b['backupset'])
