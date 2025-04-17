@@ -775,7 +775,7 @@ def handleAckMeta(response):
         if x:
             data = data + x
         if iv:
-            data = iv + encrypt.encrypt(data) + encrypt.finish()
+            data = iv + encrypt.encrypt(data) + encrypt.finish() + encrypt.digest()
         chunk = {
             "checksum": cks,
             "encrypted": bool(iv),
