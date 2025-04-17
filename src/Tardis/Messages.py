@@ -30,7 +30,6 @@
 
 import json
 import base64
-import struct
 import zlib
 
 import msgpack
@@ -116,7 +115,7 @@ class BinMessages(Messages):
         length = len(message)
         if compress and self.compress:
             length |= 0x80000000
-        lBytes = struct.pack("!I", length)
+        lBytes = length.to_bytes(length=4, signed=False)
         self.sendBytes(lBytes)
         self.sendBytes(message)
         self.sent += 1
@@ -129,7 +128,7 @@ class BinMessages(Messages):
     def recvMessage(self):
         comp = False
         x = self.receiveBytes(4)
-        n = struct.unpack("!I", x)[0]
+        n = int.from_bytes(x, signed=False)
         if (n & 0x80000000) != 0:
             n &= 0x7fffffff
             comp = True

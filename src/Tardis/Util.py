@@ -43,7 +43,6 @@ import functools
 import pwd
 import grp
 import time
-import struct
 import io
 import signal
 import pprint
@@ -792,7 +791,7 @@ class ExceptionLogger:
 
 # Get a hash function.  Configurable.
 
-_hashMagic = struct.pack("!I", 0xffeeddcc)
+_hashMagic = (0xffeeddcc).to_bytes(length=4, signed=False)
 
 def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
@@ -806,7 +805,7 @@ def hashDir(crypt, files, decrypt=False):
     m.update(_hashMagic)
     # Insert a magic number
     # Generate a length, and convert it to a byte string
-    z = struct.pack("!I", len(filenames))
+    z = len(filenames).to_bytes(length=4, signed=False)
     # Hash that
     m.update(z)
     for f in filenames:
