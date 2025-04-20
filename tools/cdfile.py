@@ -39,6 +39,7 @@ logging.basicConfig()
 
 parser = argparse.ArgumentParser(description="Generate file paths in a cache dir directory", add_help=True)
 parser.add_argument('--base', '-b', dest='base', default='.', help='Base CacheDir directory')
+parser.add_argument('--dir', '-d', dest='dir', default=False, action='store_true', help='Directory portion only')
 parser.add_argument('files', nargs='*', help='List of files to print')
 
 Util.addGenCompletions(parser)
@@ -48,4 +49,7 @@ args = parser.parse_args()
 c = CacheDir.CacheDir(args.base, create=False)
 
 for i in args.files:
-    print(c.path(i))
+    if args.dir:
+        print(c.dirPath(i))
+    else:
+        print(c.path(i))

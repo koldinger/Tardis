@@ -253,6 +253,15 @@ class NullCipher():
     def decrypt(self, data):
         return data
 
+    def finish(self):
+        return b''
+
+    def digest(self):
+        return b''
+
+    def getDigestSize(self):
+        return 0
+
 class CryptoScheme(ABC):
     @abstractmethod
     def getName(self):
