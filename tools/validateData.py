@@ -48,14 +48,16 @@ def parseArgs():
     Config.addPasswordOptions(parser)
 
     parser.add_argument("--authenticate", "-a", dest='authenticate', default=True, action=argparse.BooleanOptionalAction, help="Use internal authentication, Default: %(default)s")
+    parser.add_argument("--output", "-o", dest='output', type=str, default=None, help='Output a list of error files to this file')
     parser.add_argument("--verbose", "-v", dest='verbosity', action='count', default=0, help="Increase verbosity")
+    parser.add_argument("--maxsize", "-m", dest='maxsize', default=0, type=int, help="Maximum size to process")
     parser.add_argument("--help", "-h", action='help')
     parser.add_argument(dest='checksums', nargs='*', help="List of checksums to validate.   Blank = all")
 
     args = parser.parse_args(remaining)
     return  args
 
-def validateFile(cksum, regen, internal, tardis, crypto, logger):
+def validateFile(cksum, regen, internal, tardis, crypto, logger, output):
     logger.info("Checking %s", cksum)
     dataLen = 0
     try:
@@ -72,6 +74,8 @@ def validateFile(cksum, regen, internal, tardis, crypto, logger):
             logger.error(f"{cksum} size {dataLen} does not match specified size {info['size']}")
     except RegenerateException:
         logger.error(f"{cksum} did not authenticate")
+        if output:
+            print(cksum, file=output, flush=True)
     except Exception as e:
         logger.error("Unexpected exception: %s", str(e))
     
@@ -82,6 +86,11 @@ def main():
     logger = Util.setupLogging(args.verbosity, handler=RichHandler(show_time=False, show_path=False))
 
     regen = Regenerator.Regenerator(cache, tardis, crypto)
+
+    if args.output:
+        output = open(args.output, "w")
+    else:
+        output = None
 
     if args.checksums:
         checksums = args.checksums
@@ -104,7 +113,7 @@ def main():
 
         for i in checksums:
             nameCol.renderable = i
-            validateFile(i, regen, args.authenticate, tardis, crypto, logger)
+            validateFile(i, regen, args.authenticate, tardis, crypto, logger, output)
             progress.advance(ckProgress, 1)
 
 
