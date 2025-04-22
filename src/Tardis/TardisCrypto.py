@@ -263,13 +263,11 @@ class NullCipher():
         return 0
 
 class CryptoScheme(ABC):
-    @abstractmethod
     def getName(self):
-        return ""
+        return self._cryptoName
 
-    @abstractmethod
     def getCryptoScheme(self):
-        pass
+        return self._cryptoScheme
 
     @abstractmethod
     def encrypting(self):
@@ -356,12 +354,6 @@ class Crypto_Null(CryptoScheme):
     def __init__(self, password=None, client=None):
         pass
 
-    def getName(self):
-        return self._cryptoName
-
-    def getCryptoScheme(self):
-        return self._cryptoScheme
-
     def encrypting(self):
         return False
 
@@ -445,12 +437,6 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         self.salt = hashlib.sha256(self.client).digest()
         keys = self.genKeyKey(password)
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
-
-    def getName(self):
-        return self._cryptoName
-
-    def getCryptoScheme(self):
-        return self._cryptoScheme
 
     def encrypting(self):
         return True
