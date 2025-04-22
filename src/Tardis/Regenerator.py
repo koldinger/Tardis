@@ -159,6 +159,9 @@ class Regenerator:
 
         except RegenerateException:
             raise
+        except (OSError, IOError) as e:
+            self.logger.error("Unable to recover checksum: %s: %s", cksum, e)
+            raise
         except Exception as e:
             self.logger.error("Unable to recover checksum %s: %s", cksum, e)
             raise RegenerateException(f"Checksum: {cksum}: Error: {e}") from e
