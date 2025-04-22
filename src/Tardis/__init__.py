@@ -32,7 +32,7 @@ import os
 import sys
 import subprocess
 
-__version__ = '1.7.1'
+__version__ = '1.7.2'
 v = sys.version_info
 
 __buildversion__ = ''
