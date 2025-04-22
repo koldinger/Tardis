@@ -288,14 +288,14 @@ def getFileInfoByPathForRange(first, last, pathname):
     return createResponse(fInfos)
 
 # getFileInfoByName
-@app.route('/getFileInfoByName/<int:backupset>/<int:device>/<int:inode>/<name>')
+@app.route('/getFileInfoByName/<int:backupset>/<device>/<int:inode>/<name>')
 def getFileInfoByName(backupset, device, inode, name):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
 
 # getFileInfoByInode
-@app.route('/getFileInfoByInode/<int:backupset>/<int:device>/<int:inode>')
+@app.route('/getFileInfoByInode/<int:backupset>/<device>/<int:inode>')
 def getFileInfoByInode(backupset, device, inode):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByInode((inode, device), backupset)))
@@ -316,7 +316,7 @@ def getNewFiles(backupset, other):
     return createResponse(files)
 
 # readDirectory
-@app.route('/readDirectory/<int:backupset>/<int:device>/<int:inode>')
+@app.route('/readDirectory/<int:backupset>/<device>/<int:inode>')
 def readDirectory(backupset, device, inode):
     db = getDB()
     directory = []
@@ -324,7 +324,7 @@ def readDirectory(backupset, device, inode):
         directory.append(makeDict(x))
     return createResponse(directory)
 
-@app.route('/readDirectoryForRange/<int:device>/<int:inode>/<int:first>/<int:last>')
+@app.route('/readDirectoryForRange/<device>/<int:inode>/<int:first>/<int:last>')
 def readDirectoryForRange(device, inode, first, last):
     db = getDB()
     directory = []
@@ -373,6 +373,12 @@ def getFirstBackupSet(backupset, pathname):
 def getChainLength(checksum):
     db = getDB()
     return createResponse(db.getChainLength(checksum))
+
+# getNamesForChecksum
+@app.route('/getNamesForChecksum/<checksum>')
+def getNamesForChecksum(checksum):
+    db = getDB()
+    return createResponse(db.getNamesForChecksum(checksum))
 
 _blocksize = 1024 * 1024
 def _stream(f):

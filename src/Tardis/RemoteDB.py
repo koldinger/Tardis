@@ -363,6 +363,12 @@ class RemoteDB:
         return r.json()
 
     @reconnect
+    def getNamesForChecksum(self, checksum):
+        r = self.session.get(self.buildURL('getNamesForChecksum', checksum), headers=self.headers)
+        r.raise_for_status()
+        return r.json()
+
+    @reconnect
     def getConfigValue(self, name, default=None):
         r = self.session.get(self.buildURL('getConfigValue', name), headers=self.headers)
         r.raise_for_status()
