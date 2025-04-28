@@ -40,6 +40,7 @@ import functools
 import collections
 import stat
 import logging
+import re
 
 import parsedatetime
 import srp
@@ -496,7 +497,7 @@ def purge(db, cache):
         return 1
 
     print("Sets to be deleted:")
-    pprint.pprint(names)
+    pprint.pprint(names, compact=True)
 
     if confirm():
         if args.incomplete:
@@ -508,20 +509,41 @@ def purge(db, cache):
 
     return 0
 
+def getBackupSets(db, backups):
+    results = []
+    all = None
+    for i in backups:
+        if m := re.match(r'(\d+)-(\d+)', i):
+            lower = int(m.group(1))
+            upper = int(m.group(2))
+            if upper <= lower:
+                raise ValueError(f"Invalid range: {lower}-{upper}")
+            r = range(lower, upper+1)
+            if not all:
+                all = list(db.listBackupSets())
+            for b in all:
+                if b['backupset'] in r:
+                    results.append(b)
+        else:
+            bset = getBackupSet(db, i, None)
+            if bset is None:
+                logger.error("No backup set found for %s", i)
+            else:
+                results.append(bset)
+    return results
+
 def deleteBsets(db, cache):
     if not args.backups:
         logger.error("No backup sets specified")
         sys.exit(0)
-    bsets = []
-    for i in args.backups:
-        bset = getBackupSet(db, i, None)
-        if bset is None:
-            logger.error("No backup set found for %s", i)
-            sys.exit(1)
-        bsets.append(bset)
+    bsets = getBackupSets(db, args.backups)
+
+    if not bsets:
+        raise ValueError("No backupsets specified")
 
     names = [b['name'] for b in bsets]
-    print(f"Sets to be deleted: {names}")
+    print(f"Sets to be deleted:")
+    pprint.pprint(names, compact=True)
     if confirm():
         filesDeleted = 0
         for bset in bsets:
