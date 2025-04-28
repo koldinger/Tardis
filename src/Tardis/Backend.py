@@ -826,10 +826,17 @@ class Backend:
 
         encrypted = message.get('encrypted', False)
 
-        (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
-        self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
+        try:
+            (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
+            self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, size, checksum, compressed)
 
-        output.close()
+            output.close()
+        except:
+            if tempName:
+                os.unlink(tempName)
+            else:
+                self.cache.remove(checksum)
+            raise
 
         try:
             if tempName:
