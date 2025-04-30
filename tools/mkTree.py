@@ -110,7 +110,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, allowNone=True)
 
-    db, _, _ = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    db, _, _, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     bsetInfo = Util.getBackupSet(db, args.backup)
     if bsetInfo:

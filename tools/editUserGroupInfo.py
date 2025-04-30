@@ -211,7 +211,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    tardis, _, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    tardis, _, crypto = Util.setupDataConnection(args.repo, args.client, password, args.keys, args.dbname, args.dbdir)
 
     if args.users:
         print("--------------------------")

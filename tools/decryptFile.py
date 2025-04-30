@@ -38,7 +38,7 @@ import binascii
 
 from Tardis import Util, Config
 
-logger = None
+logger: logging.Logger
 
 def reader(quiet):
     prompt = '' if quiet else '--> '
@@ -110,7 +110,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    _, cache, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    _, cache, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     name = args.name[0]
 

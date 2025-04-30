@@ -28,7 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import socket
 import configparser
 import os
 import os.path
@@ -36,18 +35,14 @@ import os.path
 SECTION = 'Tardis'
 
 _defaults = {
-    'TARDIS_DB'             : '/srv/tardis',
-    'TARDIS_DBDIR'          : '',
-    'TARDIS_DBNAME'         : 'tardis.db',
+    'TARDIS_BASEDIR'        : '/srv/tardis',
+    'TARDIS_REPO'           : '',
     'TARDIS_CONFIG'         : '',
     'TARDIS_JOB'            : SECTION,
-    'TARDIS_CLIENT'         : socket.gethostname(),
-    'TARDIS_SERVER'         : '',
     'TARDIS_EXCLUDES'       : '.tardis-excludes',
     'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
     'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
     'TARDIS_SKIP'           : '.tardis-skip',
-    'TARDIS_PORT'           : '7420',
     'TARDIS_TIMEOUT'        : '300',
     'TARDIS_DAEMON_CONFIG'  : '',
     'TARDIS_LOCAL_CONFIG'   : '',
@@ -55,6 +50,7 @@ _defaults = {
     'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
     'TARDIS_JOURNAL'        : 'tardis.journal.gz',
     'TARDIS_SEND_CONFIG'    : 'true',
+    'TARDIS_PORT'           : '7420',
     'TARDIS_REMOTE_PORT'    : '7430',
     'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
     'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',

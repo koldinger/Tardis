@@ -69,7 +69,7 @@ def parseArgs():
     diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,         help='Generate context diff')
     diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',              help='Generate NDiff style diff')
 
-    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
+    parser.add_argument('--reduce-path',       dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
     parser.add_argument('--binary', '-B',   dest='binary', default=False, action=argparse.BooleanOptionalAction, help='Print differences in binary files.  Default: %(default)s')
@@ -277,9 +277,9 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
         password = None
 
         bsets = []
@@ -316,7 +316,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
-        logger.error("Authentication failed.  Bad password")
+        logger.error("Authentication failed.  Incorrect password")
         eLogger.log(e)
         sys.exit(1)
     except Exception as e:

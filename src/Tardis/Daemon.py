@@ -73,7 +73,7 @@ args: argparse.Namespace
 configSection = 'Daemon'
 
 configName      = Defaults.getDefault('TARDIS_DAEMON_CONFIG')
-baseDir         = Defaults.getDefault('TARDIS_DB')
+baseDir         = Defaults.getDefault('TARDIS_DB') or Defaults.getDefault('TARDIS_BASEDIR')
 portNumber      = Defaults.getDefault('TARDIS_PORT')
 pidFileName     = Defaults.getDefault('TARDIS_PIDFILE')
 timeout         = Defaults.getDefault('TARDIS_TIMEOUT')
@@ -228,7 +228,7 @@ class TardisServer:
     # HACK.  Operate on an object, but not in the class.
     # Want to do this in multiple classes.
     def __init__(self):
-        self.basedir        = args.database
+        self.basedir        = args.basedir
 
         self.savefull       = config.getboolean(configSection, 'SaveFull')
         self.maxChain       = config.getint(configSection, 'MaxDeltaChain')
@@ -426,7 +426,7 @@ def processArgs():
         config.read(args.config)
 
     parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
-    parser.add_argument('--database',           dest='database',        default=config.get(t, 'BaseDir'), help='Dabatase directory (Default: %(default)s)')
+    parser.add_argument('--basedir',            dest='basedir',         default=config.get(t, 'BaseDir'), help='Location where all backup clients are stored (Default: %(default)s)')
     parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
     parser.add_argument('--logcfg',             dest='logcfg',          default=config.get(t, 'LogCfg'), help='Logging configuration file')
     parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')

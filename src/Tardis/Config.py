@@ -36,10 +36,7 @@ from . import TardisCrypto
 
 
 configDefaults = {
-    'Database':             Defaults.getDefault('TARDIS_DB'),
-    'Client':               Defaults.getDefault('TARDIS_CLIENT'),
-    'DBDir':                Defaults.getDefault('TARDIS_DBDIR'),
-    'DBName':               Defaults.getDefault('TARDIS_DBNAME'),
+    'Repository':           Defaults.getDefault('TARDIS_REPO'),
     'Password':             None,
     'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
     'PasswordProg':         None,
@@ -56,7 +53,7 @@ job = None
 def parseConfigOptions(parser, exit_on_error=True):
     global job
     configGroup = parser.add_argument_group("Configuration File Options")
-    configGroup.add_argument('--config',         dest='config', default=Defaults.getDefault('TARDIS_CONFIG'),    help='Location of the configuration file.   Default: %(default)s')
+    configGroup.add_argument('--config',         dest='config', default=Defaults.getDefault('TARDIS_CONFIG'), const=None,    help='Location of the configuration file.   Default: %(default)s')
     configGroup.add_argument('--job',            dest='job', default=Defaults.getDefault('TARDIS_JOB'),          help='Job Name within the configuration file.  Default: %(default)s')
 
     (args, remaining) = parser.parse_known_args()
@@ -77,10 +74,7 @@ def parseConfigOptions(parser, exit_on_error=True):
 
 def addCommonOptions(parser):
     dbGroup = parser.add_argument_group("Database specification options")
-    dbGroup.add_argument('--database', '-D', dest='database',    default=config.get(job, 'Database'),               help="Database to use.  Default: %(default)s")
-    dbGroup.add_argument('--client', '-C',   dest='client',      default=config.get(job, 'Client'),                 help="Client to list on.  Default: %(default)s")
-    dbGroup.add_argument('--dbname', '-N',   dest='dbname',      default=config.get(job, 'DBName'),                 help="Name of the database file (Default: %(default)s)")
-    dbGroup.add_argument('--dbdir',  '-Y',   dest='dbdir',       default=config.get(job, 'DBDir'),                  help="Database directory.  If no value, uses the value of --database.  Default: %(default)s")
+    dbGroup.add_argument('--repository', '-R', dest='repo',    default=config.get(job, 'Repository'),               help="Database to use.  Default: %(default)s")
 
 def addPasswordOptions(parser, addscheme=False):
     passgroup = parser.add_argument_group("Password/Encryption specification options")

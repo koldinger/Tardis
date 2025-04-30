@@ -692,7 +692,7 @@ def processArgs():
     parser.add_argument('--colors',         dest='colors',      default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
-    parser.add_argument('--recurse', '-R',  dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
+    parser.add_argument('--recurse',        dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
     parser.add_argument('--maxdepth',       dest='maxdepth',    default=sys.maxsize, type=int,              help='Maximum depth to recurse directories')
 
     parser.add_argument('--glob',           dest='glob',        default=False, action=argparse.BooleanOptionalAction,    help='Glob filenames')
@@ -728,15 +728,15 @@ def main():
         setColors(Defaults.getDefault('TARDIS_LS_COLORS'))
 
         # Load any password info
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
 
-        (tardis, _, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, _, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
 
         setupDisplay(tardis)
 
         if args.headers:
-            doprint(f"Client: {args.client}    DB: {args.database}", color=colors['name'], eol=True)
+            doprint(f"Client: {client}    DB: {args.repo}", color=colors['name'], eol=True)
 
         if args.glob:
             directories = []
@@ -758,7 +758,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException as e:
-        logger.error("Authentication failed.  Bad password")
+        logger.error("Authentication failed.  Incorrect password")
         eLogger.log(e)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))

@@ -54,6 +54,7 @@ from . import TardisCrypto
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
 crypt: TardisCrypto.CryptoScheme
+args: argparse.Namespace
 
 class OwMode(enum.StrEnum):
     OW_NEVER  = 'never'
@@ -381,32 +382,32 @@ def parseArgs():
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
 
     bsetgroup = parser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--backup", "-b", help="Backup set to use.  Default: %(default)s", dest='backup', default=Defaults.getDefault('TARDIS_RECENT_SET'))
-    bsetgroup.add_argument("--date", "-d",   help="Regenerate as of date", dest='date', default=None)
+    bsetgroup.add_argument("--backup", "-b", dest='backup', default=Defaults.getDefault('TARDIS_RECENT_SET'), help="Backup set to use.  Default: %(default)s")
+    bsetgroup.add_argument("--date", "-d",   dest='date', default=None, help="Regenerate as of date", )
     bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file")
 
-    parser.add_argument('--recurse',        dest='recurse', default=True, action=argparse.BooleanOptionalAction, help='Recurse directory trees.  Default: %(default)s')
-    parser.add_argument('--recovername',    dest='recovername', default=False, action=argparse.BooleanOptionalAction,    help='Recover the name when recovering a checksum.  Default: %(default)s')
+    parser.add_argument('--recurse', '-r',    dest='recurse', default=True, action=argparse.BooleanOptionalAction, help='Recurse directory trees.  Default: %(default)s')
+    parser.add_argument('--recovername',      dest='recovername', default=False, action=argparse.BooleanOptionalAction,    help='Recover the name when recovering a checksum.  Default: %(default)s')
 
     parser.add_argument('--authenticate',    dest='auth', default=True, action=argparse.BooleanOptionalAction,    help='Cryptographically authenticate files while regenerating them.  Only for encrypted backups. Default: %(default)s')
-    parser.add_argument('--verify-action', dest='verifyaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not verify their checksum.  Default: %(default)s')
+    parser.add_argument('--verify-action',   dest='verifyaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not verify their checksum.  Default: %(default)s')
 
-    parser.add_argument('--reduce-path', '-R',  dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
+    parser.add_argument('--reduce-path',     dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
                         help='Reduce path by N directories.  No value for "smart" reduction')
-    parser.add_argument('--set-times', dest='settime', default=True, action=argparse.BooleanOptionalAction,      help='Set file times to match original file. Default: %(default)s')
-    parser.add_argument('--set-perms', dest='setperm', default=True, action=argparse.BooleanOptionalAction,      help='Set file owner and permisions to match original file. Default: %(default)s')
-    parser.add_argument('--set-attrs', dest='setattrs', default=True, action=argparse.BooleanOptionalAction,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
-    parser.add_argument('--set-acl',   dest='setacl', default=True, action=argparse.BooleanOptionalAction,       help='Set file access control lists to match the original file. Default: %(default)s')
+    parser.add_argument('--set-times',       dest='settime', default=True, action=argparse.BooleanOptionalAction,      help='Set file times to match original file. Default: %(default)s')
+    parser.add_argument('--set-perms',       dest='setperm', default=True, action=argparse.BooleanOptionalAction,      help='Set file owner and permisions to match original file. Default: %(default)s')
+    parser.add_argument('--set-attrs',       dest='setattrs', default=True, action=argparse.BooleanOptionalAction,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
+    parser.add_argument('--set-acl',         dest='setacl', default=True, action=argparse.BooleanOptionalAction,       help='Set file access control lists to match the original file. Default: %(default)s')
     parser.add_argument('--overwrite', '-O', dest='overwrite', default=owModeDefault, const='always', nargs='?',
                         choices=list(map(str, OwMode)),
                         help='Mode for handling existing files. Default: %(default)s')
 
-    parser.add_argument('--hardlinks',  dest='hardlinks',   default=True,   action=argparse.BooleanOptionalAction,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
+    parser.add_argument('--hardlinks',       dest='hardlinks',   default=True,   action=argparse.BooleanOptionalAction,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
 
-    parser.add_argument('--exceptions', '-E',   default=False, action=argparse.BooleanOptionalAction, dest='exceptions', help="Log full exception data")
-    parser.add_argument('--verbose', '-v',      action='count', default=0, dest='verbose', help='Increase the verbosity')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
-    parser.add_argument('--help', '-h',         action='help')
+    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction, help="Log full exception data")
+    parser.add_argument('--verbose', '-v',   dest='verbose', action='count', default=0, help='Increase the verbosity')
+    parser.add_argument('--version',         action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
+    parser.add_argument('--help', '-h',      action='help')
 
     parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
 
@@ -544,9 +545,9 @@ def main():
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
     try:
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.client}: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
         args.password = None
-        (tardis, cache, crypt) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+        (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
 
         r = Regenerator.Regenerator(cache, tardis, crypt=crypt)
     except TardisDB.AuthenticationException:

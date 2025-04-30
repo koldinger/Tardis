@@ -118,7 +118,7 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
 
         pbar.update(numFiles)
 
-        #logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        logger.info("  Processing %s (%s, %s)", checksum, Util.fmtSize(cksInfo['size'], suffixes = suffixes), Util.fmtSize(cksInfo['diskSize'], suffixes = suffixes))
         signature = not cacheDir.exists(checksum + ".sig")
 
         nameHmac = crypto.getHash()
@@ -127,13 +127,13 @@ def processFile(cksInfo, regenerator, cacheDir, db, crypto, pbar, basis=None):
             basis.close()
         newCks = nameHmac.hexdigest()
 
-        #logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], formats = suffixes), Util.fmtSize(cksInfo['diskSize'], formats = suffixes))
+        logger.info("    Hashed     %s => %s (%s, %s)", checksum, newCks, Util.fmtSize(cksInfo['size'], suffixes = suffixes), Util.fmtSize(cksInfo['diskSize'], suffixes = suffixes))
 
         iv = crypto.getIV()
         cipher = crypto.getContentCipher(iv)
         #hmac = crypto.getHash(func=hashlib.sha512)
         fSize = encryptFile(checksum, cacheDir, cipher, iv, output=newCks)
-        #logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, formats = ['','KB','MB','GB', 'TB', 'PB']))
+        logger.info("    Encrypted  %s => %s (%s)", checksum, newCks, Util.fmtSize(fSize, suffixes = ['','KB','MB','GB', 'TB', 'PB']))
 
         #cacheDir.link(checksum + '.enc', newCks, soft=False)
         #cacheDir.link(checksum + ".sig", newCks + ".sig", soft=False)
@@ -176,7 +176,7 @@ def encryptFilesAtLevel(db, crypto, cacheDir, chainlength, pbar):
         except Exception as e:
             logger.error("Error processing checksum: %s", checksum)
             logger.exception(e)
-            #raise e
+            raise e
 
 def encryptFiles(db, crypto, cacheDir):
     conn = db.conn
@@ -322,18 +322,18 @@ def main():
 
     #crypto = TardisCrypto.TardisCrypto(password, args.client)
 
-    #path = os.path.join(args.database, args.client, args.dbname)
+    #path = os.path.join(args.repo, args.client, args.dbname)
     #db = TardisDB.TardisDB(path, backup=False)
 
     #Util.authenticate(db, args.client, password)
 
-    (db, cacheDir, crypto) = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    db, cacheDir, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
 
     #(f, c) = db.getKeys()
     #crypto.setKeys(f, c)
 
-    #cacheDir = CacheDir.CacheDir(os.path.join(args.database, args.client))
+    #cacheDir = CacheDir.CacheDir(os.path.join(args.repo, args.client))
 
     if args.names or args.all:
         encryptNames(db, crypto)
