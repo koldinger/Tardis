@@ -4,7 +4,7 @@ A Time Machine style backup system.
 
 Tardis is a system for making incremental backups of filesystems, much like Apple's TimeMachine.
 
-Like TimeMachine, Tardis is aimed primarily at "live backups", namely a backup taken periodically, and available for quick recovery, typically stored on attached or online disks, or rather than being stored on archival backup media, such as tapes.
+Like Apple's TimeMachine, Tardis is aimed primarily at "live backups", namely a backup taken periodically, and available for quick recovery, typically stored on attached or online disks, or rather than being stored on archival backup media, such as tapes.
 
 Tardis runs in a client/server mode, or in a fully local mode.   
 
@@ -17,40 +17,45 @@ Installation
   * `pip install .`
   * Sometimes this fails, complaining about requests not being available.  If so, just rerun it, and it should work the second time.
   * If this doesn't work, you may need to install additional packages that this installer can't.   See the [Installation](#Installation) section below for more details.
-* Edit the daemon configuration file to indicate where you want to store the backups.   The configuration is stored (on linux) in `/etc/tardis/tardisd.cfg`, the database base directory is specified in the `BaseDir` option.   By default, the location is `/media/Backup/tardis`
-* Start the server:  `tardisd --config /etc/tardis/tardisd.config`
 
-Backing up data
----------------
-* Run the first backup job `tardis --server ServerName --create paths` where ServerName is the name of the server (if backing up to the local machine, this can be localhost, or the --server option can be left of entirely), and paths is a list of directories to backup (including all directories below them).   Depending on the amount of data you wish to backup, this can take a long time.
+Backing up data (locally)
+-------------------------
+* Run the first backup job `tardis --repository /path/to/backup/Name --create [paths to backup]` where /path/to/backup/Name is where you wish to store the backup, and [paths to backups] is a optional list of directories to backup.  If no paths are specified, the current directory will be used.
   * Adding the --password option will cause your backups to be encrypted.
    * With no password specified, you will be prompted to enter one.
    * you can also specify the --password-file and --password-prog to retrieve the password from a file, or from a program.
    * DO NOT LOSE YOUR PASSWORD.   There is no recovery mechanism.
-  * Adding the --progress option will show progress as your backup runs, but is not recommended for automated backups.
-* When the first job completes correctly, you can run subsequent backups using the same command line, but removing the --create option.  `tardis --server ServerName paths`
+* When the first job completes correctly, you can run subsequent backups using the same command line, but removing the --create option.  `tardis --repository /path/to/backup/Name`
   * If the first run doesn't complete successfully, subsequent runs without --create will simply move to complete the partial backup.
   * Creating a periodic job (such as daily or hourly) via cron can automate your backups.
   
 Each time you run the tardis program, you will create a new backup set.  By default backup sets are named Monthly-YYYY-MM for the first backup set stored in any month, Weekly-YYYY-WW for the first backup set any week (if not a monthly set), Daily-YYYY-MM-DD for the first set each day (unless weekly or monthly), and Hourly-YYYY-MM-DD-hh if run hourly.  Additional backup sets (ie, more than hourly), or incomplete backup sets (where the tardis job failed before the backup completed) are named Backup_YYYY-MM-DD-hh:mm:ss. (YYYY = year, MM = month, DD = date, WW = week of year, hh = hour, mm = min, and ss = seconds).
-Normally, hourly backups are pruned out of the database after 24 hours, daily sets after 30 days, weekly after 6 months, and monthly's kept forever.  All these names and pruning parameters can be adjusted.
+Normally, hourly backups are pruned out of the repository after 24 hours, daily sets after 30 days, weekly after 6 months, and monthly's kept forever.  All these names and pruning parameters can be adjusted.
+
+Backing up data (remotely)
+--------------------------
+* Select a machine to run the tardis servers on, and edit the configuration files appropriately.
+    * Tardis runs two server applications:
+        * tardisd which accepts incoming backup requests
+        * tardisremote provides access to previous backups.
+    * Create configuration files for both.   Configuration files are ini style files.   Basic configuration files are in the tardisd.cfg-template and tardisremote.cfg-template.
+    * Edit the 'BaseDir' value to specify where the backups belong.   Other values can be set as needed.
+    * Start tardisd and tardisremote:
+        * Typically on linux: `sudo systmectl start tardisd tardisremote`
+* Run the backups as above, specifying the --repository option as a 'tardis:' URL.
+    * `tardis --repository tardis://servername/Client [--create] [paths to backup]`
 
 Recovering data
 ---------------
-There are two ways to access backed up data, and it depends how you've done your backup.  If you've backed your data 
-up to the client machine, you can access the backup database directly.  In this case you will point tools directly
-at the database.   This can also be done if the database is accesible via a network file system, such as NFS or Samba/SMB/CIFS.   If the backup drive is not directly accessible, it can be reached via an http exposed filesystem.  Details on setting this up are below.
-
-* Determine which backup sets exist:  `sonic list --database DatabasePath`.
-  * DatabasePath could be a path on your local system, if you're using the system above, usually the same value you entered in the tardisd config file, so `sonic list --database /media/Backup/tardis`.   If you're using a remote system, it will be an HTTP (or HTTPS) URL, eg `sonic list --database http://serverhost` where serverhost is the name of the machine running the server.
+* Determine which backup sets exist:  `sonic list --repository RepoPath`.
+  * RepoPath could be a path on your local system, if you're using the system above, usually the same value you entered in the tardisd config file, so `sonic list --repository /media/Backup/tardis/client`.   If you're using a remote system, it will be an tardis: URL, eg `sonic list --repository tardis://serverhost/client` where serverhost is the name of the machine running the server.
   * If the backups were made with a password, the password will need to be specified via the --password or related options.  You will be prompted for a password if one isn't specified. 
-* Determine which version of the file are available using the lstardis program: `lstardis --databse DatabasePath /path/to/file`.  This will list all the backup sets which contain changed versions of the file.
-* Recover the file using the regenerate program: `regenerate --database DatabasePath --backup backupset /path/to/file`.  This will recover the versino of the file in backupset.  If the file is a directory, the directory, and all files below it will be recovered.   You can specify the -o option to indicate where the files should be recovered.   You can also replace --backup with --date Date to recover the most recent version backed up before Date.   If you don't specify a backupset or date, the most recent version will be recovered.
+* Determine which version of the file are available using the lstardis program: `lstardis --databse RepoPath /path/to/file`.  This will list all the backup sets which contain changed versions of the file.
+* Recover the file using the regenerate program: `regenerate --repository RepoPath --backup backupset /path/to/file`.  This will recover the versino of the file in backupset.  If the file is a directory, the directory, and all files below it will be recovered.   You can specify the -o option to indicate where the files should be recovered.   You can also replace --backup with --date Date to recover the most recent version backed up before Date.   If you don't specify a backupset or date, the most recent version will be recovered.
 
 Tardis File System
 ------------------
-The tardis dataset can also be mounted as a filesystem.   Typically the command: `tardisfs --database DatabasePath /path/to/mountpoint` will mount the filesystem under the directory /path/to/mountpoint (mountpoint should be an empty directory).  In this scenario, you will see files under mountpoint.   At the first level, there will be a directory for each backup set, with the names as above.   Within each directory will be a directory tree, with the data as backed up in that backup set.
-
+The tardis dataset can also be mounted as a filesystem.   Typically the command: `tardisfs --repository RepoPath /path/to/mountpoint` will mount the filesystem under the directory /path/to/mountpoint (mountpoint should be an empty directory).  In this scenario, you will see files under mountpoint.   At the first level, there will be a directory for each backup set, with the names as above.   Within each directory will be a directory tree, with the data as backed up in that backup set.
 
 Local and Remote Backups
 ------------------------
@@ -60,19 +65,19 @@ In the remote mode, there must be a backup server running, typically on a remote
 machine being backed up, either physically or via a network share.
 
 Normally, the mode will be selected by the switches, and various config options.  If a server is specified (via --server, the TARDIS_SERVER environment variable, or a configuration file), remote mode will
-be picked.   If a database is specified (via the --database/-D option, the TARDIS_DATABASE environment variable, or a configuration file), local mode will be selected.    In some circumstances, you can create a confusing situation, such as having
-both the TARDIS_SERVER and TARDIS_DATABASE environment variables set.  In this case, use either the --local or --remote options to select local or remote mode, respectively.
+be picked.   If a database is specified (via the --repository/-D option, the TARDIS_DATABASE environment variable, or a configuration file), local mode will be selected.
+both the TARDIS_SERVER and TARDIS_DATABASE environment variables set.  
 
 Components
 ==========
 Tardis consists of several components:
 * tardisd (Daemon.py): The tardis daemon process which maintains the backups
 * tardis  (Client.py): The tardis client process, which creates backup data and pushes it to the server
-* tardisfs (TardisFS.py): A FUSE based file system which provides views of the various backup sets.
-* regenerate (Regenerate.py): A program to retrieve an individual verson of the file without using the TardisFS
-* lstardis (List.py): List versions of files and directories in the database.
-* tardiff (Diff.py): Show the differences between versions of backed up files, and the current version.
 * sonic (Sonic.py): An administration tool, allowing things like setting and changing passwords, removing backup sets, purging orphans, etc.
+* lstardis (List.py): List versions of files and directories in the database.
+* regenerate (Regenerate.py): A program to retrieve an individual verson of the file without using the TardisFS
+* tardisfs (TardisFS.py): A FUSE based file system which provides views of the various backup sets.
+* tardiff (Diff.py): Show the differences between versions of backed up files, and the current version.
 * tardisremote (HttpInterface): An optional http server which provides a web api for retrieving information in the tardis database, for use by regenerate, tardisfs, and lstardis, etc.
 
 Tardis is written in Python 3, and only relies on a few non-pure python packages.
@@ -87,12 +92,6 @@ Tardis also comes with a number of "tools", which are not necessarily fully supp
 * cdfile.py: Give the full path of a file in the backup database.
 * mkKeyBackup.py: Generate a backup copy of your keys, suitable for hardcopy printing and archiving.
 Tools are located in the tools directory, and are not installed.
-
-Future Releases
-===============
-Several releases will be coming soon:
-  * 1.2.0 Integrated backend with frontend for local backups.
-  * 1.3.0 Asynchronous protocol allowing improved performance, and improved integration between client and server for local cases.
 
 Support
 =======
@@ -123,7 +122,7 @@ Server Setup
 ============
   * Edit the config file, /etc/tardis/tardisd.cfg
       * Set the BaseDir variable to point at a location to store all your databases.
-      * Set the Port to be the port you want to use.  Default is currently 7420.
+      * Set the Port to be the port you want to use.  Default is 7420.
   * If you want to use SSL, create a certificate and a key file (plenty of directions on the web).
   * Edit other parameters as necessary.
   * Create your backup directory, if need by (mkdir */path/to/your/backup/directory*)
@@ -151,13 +150,14 @@ Server Requirements
 The server should run on any system running Linux.  Fedora, Ubuntu, and Raspbian have all been used successfully
 
 It does not need to be particularly powerful.  A Raspberry Pi Model B has been used, but is a bit underpowered.  A Raspberry Pi 2 Model B seems to work quite well, primarily due to the larger memory.
+Raspberry Pi 4's and later support USB3, which has significantly improved disk IO performance.
 
 Typically, a faster processor and more memory will lead to shorter backup times, as will faster I/O connections to the disk drives.  On a benchmark system, a Raspberry Pi server would run a backup in about 40-50 minutes, a Raspberry Pi 2 will reduce that time to under 30 minutes, and a dual core 1.5GHz Celeron (with 4GB of memory, and USB 3.0 disk drives) will run the benchmark in 3-5 minutes.  
 
 Running the Client
 ==================
 Should probably run as root.  Basic operation is thus:
-  tardis [--port <targetPort>] [--server <host>] /path/to/directory-to-backup <more paths here>
+  tardis --repository repository-URL /path/to/directory-to-backup <more paths here>
 If you wish encrypted backups, add a password (via the --password, --password-file, or --password-prog options) to enable encryption.  Note that passwords can be added at a later point, and the database encrypted at that point, but it is a very slow operation.
 
 On your first backup, add the --create flag to initialize the backup set.
@@ -232,11 +232,9 @@ Environment Variables
 
 | Variable | Description | Default | Users |
 | -------- | ----------- | ------- | ----- |
-| TARDIS_DB             | Location of the tardis database| /srv/tardis | User Tools |
+| TARDIS_REPO           | Repository location, path, file: or tardis: URL | | Client, User Tools |
+| TARDIS_BASEDIR        | Location of backups for server based systems | | Daemon |
 | TARDIS_PORT           | Port to use to connect to the Tardis Daemon | 7420 | Client, Daemon |
-| TARDIS_DBNAME         | Name of the database file containing tardis information| tardis.db | Daemon, Remote, User Tools |
-| TARDIS_SERVER         | Name (or IP address) of the tardis server| localhost | Client |
-| TARDIS_CLIENT         | Name of the backup client. |Current hostname | Client, User Tools |
 | TARDIS_DAEMON_CONFIG  | Name of the file containing the daemon configuration| /etc/tardis/tardisd.cfg| Daemon |
 | TARDIS_EXCLUDES       | Name of the file containing patterns to exclude below the current directory.| .tardis-excludes | Client |
 | TARDIS_LOCAL_EXCLUDES | Name of the file containing patterns to exclude *only* in the local directory.| .tardis-local-excludes| Client |
@@ -286,10 +284,8 @@ By default, configurations are read from Tardis section, but can be overridden b
 
 | Name            | Default Value       | Environment Var   | Definition |
 | ---             | ------------        | ----------------- | ---------- |
-| Server          | localhost           | TARDIS_SERVER     | Server to use for backups |
+| Repository      |                     | TARDIS_REPO       | Path to the backup |
 | Port            | 7420                | TARDIS_PORT       | Port to listen on |
-| Client          | hostname            | TARDIS_CLIENT     | Name of the system to backup |
-| Database        |                     | TARDIS_DB         | Directory for  local backups |
 | Force           | False               |                   | Force the backup, even if another one might still be running. |
 | Full            | False               |                   | Perform a full backup (no delta's, full files for previous deltas. |
 | Timeout         | 300                 |                   | Time out (in seconds) for connections. |
@@ -314,7 +310,7 @@ By default, configurations are read from Tardis section, but can be overridden b
 | ExcludeDirs     |                     |                   | Directories to exclude. |
 | GlobalExcludeFileName |               |                   | Path to a global file containing filename patterns to exclude.|
 | ExcludeFileName | .tardis-excludes    |                   | Check for this file in each directory, and exclude files which match it's pattern in current directory and all below. |
-| LocalExcludeFileName | .tardis-local-excludes |            | Same, but only in the current directory. |
+| LocalExcludeFileName | .tardis-local-excludes |           | Same, but only in the current directory. |
 | SkipFileName    | .tardis-skip        |                   | If this file exists, skip this directory and all below. |
 | ExcludeNoAccess | True                |                   | Exclude files to which the user doesn't have access/permission. |
 | LogFiles        |                     |                   | List of files to log to. |
@@ -331,8 +327,7 @@ The server configuration file, usually in /etc/tardis/tardisd.cfg, is in the sta
 | Name            | Default Value       | Environment Var | Definition |
 | ---             | ------------        | --------------- | ---------- |
 | Port            | 7420                | TARDIS_PORT     | Port to listen on |
-| BaseDir         | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
-| DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
+| BaseDir         | /srv/tardis         | TARDIS_BASEDIR  | Directory containing all databases handled by this server |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
 | JournalFile     | tardis.journal      |                 | Journal file for logging which files are dependent on others.  Stored in the DB directory for each client. |
 | Profile         | False               |                 | If true, a profile of each session will be generated and printed to stdout| 
@@ -368,8 +363,7 @@ TardisRemote Configuration File
 | Name            | Default Value       | Environment Var | Definition |
 | ---             | ------------        | --------------- | ---------- |
 | Port            | 7420                | TARDIS_REMOTE_PORT     | Port to listen on |
-| Database        | /srv/tardis         | TARDIS_DB       | Directory containing all databases handled by this server |
-| DBName          | tardis.db           | TARDIS_DBNAME   | Name of the database containing all metadata |
+| Basedir         | /srv/tardis         | TARDIS_BASEDIR  | Directory containing all databases handled by this server |
 | LogFile         | None                |                 | Filename for logging.  stderr if not specified. |
 | LogExceptions   | False               |                 | Log full detail of all exceptions, including call chain. |
 | Verbose         | 0                   |                 | Level of verbosity.  0 is silent, 1 gives summaries of each client session, 2 and above get very noisy. |
@@ -392,7 +386,7 @@ The backup sets can be mounted as a filesystem, thus:
 
 Password should only be set if a password is specified in the backup.  If you leave it blank (ie, password=), it will prompt you for a password during mount.
 
-tardisfs options are specified in a format to enable fstab mounting.  Each option is specified as `-o name=value`.  For instance, `-o database=/nfs/tardis -o client=hostname`.  Options can be specified in a fstab, such as:
+tardisfs options are specified in a format to enable fstab mounting.  Each option is specified as `-o name=value`.  For instance, `-o repository=/nfs/tardis -o client=hostname`.  Options can be specified in a fstab, such as:
 ```
 tardisfs#0				/mnt/tardis/ClientName	fuse	user,noauto,default_permissions,allow_other,database=/nfs/tardis/,client=ClientName	0 2
 ```
@@ -417,11 +411,29 @@ The following steps should be performed:
 
 You can run all the steps at once with the --all option.  **As with --names, do NOT run this more than once.**  If it fails, restart the other stages as appropriate.
   
+Release Notes -- Version 1.8
+============================
+Version 1.8 introduces a new and incompatible method of specifying the location of the backup repository.   This is an attempt to create a new and consistent naming scheme in preparation for a 2.0 release.
+Instead of the database and client pair of options, Tardis now uses a URL based scheme.   The URL includes both the client and database values.   Two forms of URL are available, the 'file:' URL, and then
+'tardis:' URL.   The --local and --remote options are no longer neccessary, or available.
+
+Local backups use the 'file:' URL format.   Where previously the backup location would be specified by a database value, and a client value, e.g. database=/mnt/backup/tardis and client=Client, and would store 
+the data in /mnt/backup/tardis/Client, now the format is file://mnt/backup/tardis/Client.    The 'file:' component is optional, and assumed if just a path is specified.   Thus, a command like:
+    * `tardis --database /mnt/backup/tardis --client Client [other tardis options]` is simply replaced by `tardis --repository file://mnt/backup/tardis/Client [other tardis options]` and the simplest command, assuming no config files, can
+       literally be `tardis --repo /mnt/backup/tardis/Client`, which will backup the current directory.
+
+Remote backups are similar, but uset the 'tardis:' URL format.   Again, the repository option takes the database and client options together, with the client being the last path component of the URL,
+eg database=http://servername and client=Client becomes repository=tardis://servername/Client. The 'tardis:' component is not optional.  
+   * `tardis --remote --server Servername --client Client` becomes `tardis --repo tardis://Servername/Client`
+
+This format is consistent between all tools, tardis, lstardis, sonic, etc, all take the same URL forms.
+
+The only tools which don't use this are the server tools, tardisd and tardisremote, which take a --basedir option to indicate the location of the repository directories.
+
 Release Notes -- Version 1.7
 ============================
 Version 1.7 introduces a new way of storing file ID's.   Previously files had been a inode and device pair.  However, the device ID was not guaranteed to be consistent between mounts of the file system.
 1.7 uses a virtual device ID (based on a hash of the mount point) to eliminate this problem, assuming that filesystems are usually mounted at the same mount point.
-
 
 When upgrading to version 1.7 it recommended that you upgrade the database schema manually, via:
     sonic upgrade
