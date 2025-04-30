@@ -212,7 +212,7 @@ class Backend:
             return FileResponse.CKSUM
         return FileResponse.CONTENT
 
-    def checkFile(self, parent, f, dirhash):
+    def checkFile(self, parent, f, dirhash, extends):
         """
         Process an individual file.  Check to see if it's different from what's there already
         """
@@ -228,7 +228,8 @@ class Backend:
         if f['dir']:
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
-                    self.db.extendFileRowID(old['rowid'])
+                    extends.append(old['rowid'])
+                    #self.db.extendFileRowID(old['rowid'])
                 else:
                     self.db.insertFile(f, parent)
                     self.setXattrAcl(inode, device, xattr, acl)
@@ -255,7 +256,8 @@ class Backend:
                     if old["checksum"] is not None and not (old['dir'] or old['link']):
                         if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
                             # nothing has changed, just extend it
-                            self.db.extendFileRowID(old['rowid'])
+                            extends.append(old['rowid'])
+                            #self.db.extendFileRowID(old['rowid'])
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             self.db.insertFile(f, parent)
@@ -381,10 +383,11 @@ class Backend:
 
             self.logger.debug("Got directory: %s", str(dirhash))
 
+        extends = []
         for f in files:
             fileId = (f['inode'], f['dev'])
             self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
-            res, basis = self.checkFile(parentInode, f, dirhash)
+            res, basis = self.checkFile(parentInode, f, dirhash, extends)
             # Shortcut for this:
             if res == FileResponse.LINKED:
                 # Determine if this fileid is already in one of the queues
@@ -401,6 +404,10 @@ class Backend:
                 info = self.db.getChecksumInfo(xattr)
                 if (not info) or (info['size'] == -1):
                     attrs.add(xattr)
+
+        if extends:
+            self.db.extendFileRowIDs(extends)
+
         # And commit them to the DB
         self.db.commit()
 

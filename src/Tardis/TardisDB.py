@@ -745,8 +745,15 @@ class TardisDB:
 
     @authenticate
     def extendFileRowID(self, rowid, current=True):
+        """ Extend a file, based on the rowid (fileid) """
         current = self._bset(current)
         self._execute("UPDATE Files SET LastSet = :new WHERE RowID = :rowid", {"new": current, "rowid": rowid})
+
+    @authenticate
+    def extendFileRowIDs(self, rowids, current=True):
+        """ extend a set of files based on a list of rowid's """
+        current = self._bset(current)
+        self.conn.executemany("UPDATE Files SET LASTSET = :lastset WHERE RowID = :rowid", map(lambda x: {"lastset": current, "rowid": x}, rowids))
 
     @authenticate
     def extendFileInode(self, parent, inode, old=False, current=True):
