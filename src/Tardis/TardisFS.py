@@ -30,7 +30,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from ast import increment_lineno
 import os      # for filesystem modes (O_RDONLY, etc)
 import os.path
 import errno   # for error number codes (ENOENT, etc)
@@ -69,8 +68,6 @@ class CacheKeys(IntEnum):
     DirInfo       = auto()
     DirContents   = auto()
     LinkContents  = auto()
-
-_infoEnabled    = True
 
 logger = None
 
@@ -635,7 +632,7 @@ def main():
 
         password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt=f"Password:")
         args.password = None
-        (tardis, cache, crypt, _) = Util.setupDataConnection(getarg('database'), password, getarg('keys'))
+        (tardis, cache, crypt, _) = Util.setupDataConnection(getarg('repository'), password, getarg('keys'))
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Incorrect password")
         sys.exit(1)
