@@ -138,7 +138,7 @@ _checksumInfoFields = dedent(
     """
     Checksum AS checksum, ChecksumID AS checksumid, Basis AS basis, Encrypted AS encrypted,
     Size AS size, DeltaSize AS deltasize, DiskSize AS disksize, IsFile AS isfile, Compressed AS compressed,
-    ChainLength AS chainlength
+    ChainLength AS chainlength, Added AS added
     """)
 
 _schemaVersion = 23
