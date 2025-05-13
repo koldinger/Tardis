@@ -36,7 +36,9 @@ import os
 import io
 import json
 
-from rich.progress import track
+#from rich.progress import track
+from rich.progress import RenderableColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn, TaskProgressColumn, Progress
+from rich.logging import RichHandler
 
 import Tardis
 from Tardis import Util
@@ -165,7 +167,15 @@ notauth = []
 badcomp = []
 sizes = {}
 
-def checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, authCond):
+def checkFile(cache, crypt, db, checksum, authCond):
+    info = db.getChecksumInfo(checksum)
+    size = info.get('disksize', 0)
+    basis = info.get('basis', None)
+    compressed = info.get('compressed', None)
+    encrypted = info.get('encrypted', None)
+    added = info.get('added', 0)
+
+
     fsize = cache.size(checksum)
     if not cache.exists(checksum):
         #print(f"{checksum}: does not exist")
@@ -218,9 +228,30 @@ def main():
     (tardis, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys)
 
     count = 0
-    for (checksum, size, basis, compressed, encrypted, added) in track(listChecksums(tardis), description="Processing "):
-        count += 1
-        checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, args.authenticate)
+    #for (checksum, size, basis, compressed, encrypted, added) in track(listChecksums(tardis), description="Processing "):
+    #    count += 1
+    #    checkFile(cache, crypt, checksum, size, basis, compressed, encrypted, added, args.authenticate)
+
+    numCks = tardis.getChecksumCount(isFile=True)
+    checksums = tardis.enumerateChecksums(isFile=True)
+
+    nameCol = RenderableColumn("")
+    with Progress(TextColumn("[progress.description]{task.description}"),
+                  BarColumn(),
+                  TaskProgressColumn(),
+                  nameCol,
+                  MofNCompleteColumn(),
+                  TimeElapsedColumn(),
+                  TimeRemainingColumn(),
+                  refresh_per_second=2) as progress:
+
+        ckProgress = progress.add_task("Validating: ", total=numCks)
+
+        for cksum in checksums:
+            count += 1
+            nameCol.renderable = cksum
+            checkFile(cache, crypt, tardis, cksum, args.authenticate)
+            progress.advance(ckProgress, 1)
 
     print(f"Files: {count} Missing Files: {len(missing)} Empty: {len(zero)} Size mismatch: {len(mismatch)} Not Delta: {len(notdelta)} Wrong Comp: {len(badcomp)}")
     #for i in sizes:
