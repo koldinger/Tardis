@@ -46,8 +46,6 @@ import pwd
 import grp
 from enum import IntEnum, auto
 
-from enum import IntEnum, auto
-
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import Tardis
@@ -59,8 +57,8 @@ from . import Defaults
 from . import TardisDB
 from . import Config
 
-# from icecream import ic 
-# ic.configureOutput(includeContext=True)
+from icecream import ic 
+ic.configureOutput(includeContext=True)
 
 class CacheKeys(IntEnum):
     BackupSetInfo = auto()
@@ -609,7 +607,7 @@ def processArgs():
     return args
 
 def delTardisKeys(kwargs):
-    keys = ['password', 'pwfile', 'pwprog', 'repository', 'keys']
+    keys = ['password', 'pwfile', 'pwprog', 'repo', 'keys']
     for i in keys:
         kwargs.pop(i, None)
 
@@ -632,7 +630,7 @@ def main():
 
         password = Util.getPassword(getarg('password'), pwfile, pwprog, prompt=f"Password:")
         args.password = None
-        (tardis, cache, crypt, _) = Util.setupDataConnection(getarg('repository'), password, getarg('keys'))
+        (tardis, cache, crypt, _) = Util.setupDataConnection(getarg('repo'), password, getarg('keys'))
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Incorrect password")
         sys.exit(1)
