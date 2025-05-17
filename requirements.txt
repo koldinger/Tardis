@@ -39,7 +39,7 @@ six==1.16.0
 srp==1.0.20
 StrEnum==0.4.15
 termcolor==2.3.0
-tornado==6.4.2
+tornado==6.5
 typing==3.7.4.3
 typing_extensions==4.8.0
 url-normalize==1.4.3
