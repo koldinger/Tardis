@@ -55,8 +55,8 @@ from . import Util
 from . import Protocol
 from . import log
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0
@@ -212,7 +212,7 @@ class Backend:
             return FileResponse.CKSUM
         return FileResponse.CONTENT
 
-    def checkFile(self, parent, f, dirhash, extends):
+    def checkFile(self, parent, f, dirContents, extends):
         """
         Process an individual file.  Check to see if it's different from what's there already
         """
@@ -223,7 +223,7 @@ class Backend:
         device = f["dev"]
         xattr = f.get('xattr', None)
         acl = f.get('acl', None)
-        old = dirhash.get(name, None)
+        old = dirContents.get(name, None)
 
         if f['dir']:
             if old:
@@ -336,7 +336,7 @@ class Backend:
         return retVal, basis
 
     lastDirNode = None
-    lastDirHash = {}
+    lastDirContents = {}
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
@@ -356,17 +356,16 @@ class Backend:
         parentInode = tuple(data['inode'])      # Contains both inode and device in message
         files = data['files']
 
-        dirhash = {}
+        dirContents = {}
         oldDir = None
 
         # Get the old directory info
         # If we're still in the same directory, use cached info
         if self.lastDirNode == parentInode:
-            dirhash = self.lastDirHash
+            dirContents = self.lastDirContents
         else:
-            # Lookup the old directory based on the path
-            if 'path' in data and data['path']:
-                oldDir = self.db.getFileInfoByPath(data['path'], current=False)
+            # Lookup the old directory based on the inode
+            oldDir = self.db.getFileInfoByInode(parentInode)
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
                 # TODO: FIXME: Get actual Device
@@ -375,19 +374,17 @@ class Backend:
                 # Otherwise
                 dirInode = parentInode
 
-            directory = self.db.readDirectory(dirInode)
-            for i in directory:
-                dirhash[i["name"]] = i
-            self.lastDirHash = dirhash
+            dirContents = { i['name']: i for i in self.db.readDirectory(dirInode) }
+            self.lastDirContents = dirContents
             self.lastDirNode = parentInode
 
-            self.logger.debug("Got directory: %s", str(dirhash))
+            #self.logger.debug("Got directory: %s", str(dirContents))
 
         extends = []
         for f in files:
             fileId = (f['inode'], f['dev'])
             self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
-            res, basis = self.checkFile(parentInode, f, dirhash, extends)
+            res, basis = self.checkFile(parentInode, f, dirContents, extends)
             # Shortcut for this:
             if res == FileResponse.LINKED:
                 # Determine if this fileid is already in one of the queues
