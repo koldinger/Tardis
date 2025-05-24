@@ -342,20 +342,20 @@ class FakeDirEntry:
 
 def findMountPoint(path):
     if path:
+        if not os.path.exists(path):
+            logger.critical("Cannot stat %s", path)
+            raise FileNotFoundError(path)
         if os.path.ismount(path):
             return path
         return findMountPoint(os.path.dirname(path))
     return "/"
 
-_deviceCache = {}
+@functools.lru_cache(maxsize=1024)
 def virtualDev(device, path):
-    try:
-        return _deviceCache[device]
-    except KeyError:
-        mp = findMountPoint(path)
-        digest = Util.hashPath(mp)
-        _deviceCache[device] = digest
-        return digest
+    mp = findMountPoint(path)
+    digest = Util.hashPath(mp)
+    _deviceCache[device] = digest
+    return digest
 
 
 def setEncoder(fmt):
@@ -920,9 +920,12 @@ def addMeta(meta):
     newmeta.append(digest)
     return digest
 
-def mkFileInfo(f):
+def mkFileInfo(f, dirname=None):
     pathname = f.path
     s = f.stat(follow_symlinks=False)
+
+    if not dirname:
+        dirname, _ = os.path.split(pathname)
 
     # Cleanup any bogus characters
     name = f.name.encode('utf8', 'backslashreplace').decode('utf8')
@@ -955,7 +958,7 @@ def mkFileInfo(f):
             'gid':    s.st_gid,                 # TODO: Remove
             'user':   getUserName(s.st_uid),
             'group':  getGroupName(s.st_gid),
-            'dev':    virtualDev(s.st_dev, pathname)
+            'dev':    virtualDev(s.st_dev, dirname)
         }
 
         if support_xattr and args.xattr:
@@ -1137,13 +1140,14 @@ def sendPurge():
 
 def sendDirChunks(path, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
-    path = crypt.encryptPath(path)
     (inum, dev) = inode
     vdev = virtualDev(dev, path)
 
+    cPath = crypt.encryptPath(path)
+
     message = {
         'message': Protocol.Commands.DIR,
-        'path'   : path,
+        'path'   : cPath,
         'inode'  : (inum, vdev)
     }
 
