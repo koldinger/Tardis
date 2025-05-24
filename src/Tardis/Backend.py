@@ -55,8 +55,8 @@ from . import Util
 from . import Protocol
 from . import log
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0
@@ -153,6 +153,9 @@ class Backend:
         self.forceFull      = False
         self.lastCompleted  = None
         self.maxChain       = 0
+
+        self.lastDirNode = None
+        self.lastDirContents = {}
 
         self.db: TardisDB.TardisDB = None
 
@@ -335,9 +338,6 @@ class Backend:
 
         return retVal, basis
 
-    lastDirNode = None
-    lastDirContents = {}
-
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
 
@@ -365,7 +365,11 @@ class Backend:
             dirContents = self.lastDirContents
         else:
             # Lookup the old directory based on the inode
-            oldDir = self.db.getFileInfoByInode(parentInode)
+            if 'path' in data and data['path']:
+                oldDir = self.db.getFileInfoByPath(data['path'])
+            else:
+                oldDir = self.db.getFileInfoByInode(parentInode)
+
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
                 # TODO: FIXME: Get actual Device
