@@ -93,7 +93,8 @@ class BinMessages(Messages):
                 self.compress = snappy.compress
                 self.decompress = snappy.decompress
             case 'none':
-                pass
+                self.compress = None
+                self.decompress = None
             case _:
                 raise Exception(f"Unrecognized compression method: {str(compress)}")
 
