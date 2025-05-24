@@ -75,13 +75,11 @@ class TardisRow(sqlite3.Row):
             return default
 
     def __str__(self):
-        row = ""
-        for i in self.keys():
-            row = row + f"{i}: {self.get(i)}  "
-        return row
+        return str(dict(**self))
+
 
     def __repr__(self):
-        return f"{hex(id(self))} -- {self.__str__()}"
+        return repr(dict(**self))
 
 
 # Utility functions
