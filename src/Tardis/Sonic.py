@@ -29,32 +29,26 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import collections
+import datetime
+import functools
+import logging
 import os
 import os.path
+import pprint
+import re
+import stat
 import sys
 import time
-import datetime
-import pprint
 import urllib.parse
-import functools
-import collections
-import stat
-import logging
-import re
 
 import parsedatetime
 import srp
 
 import Tardis
-from . import Util
-from . import Defaults
-from . import TardisDB
-from . import TardisCrypto
-from . import CacheDir
-from . import RemoteDB
-from . import Regenerator
-from . import Config
 
+from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
+               TardisDB, Util)
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)

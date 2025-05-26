@@ -28,12 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import shutil
+import gzip
 import logging
 import os
 import os.path
+import shutil
 import time
-import gzip
+
 
 class Rotator:
     def __init__(self, rotations=5, compress=32 * 1024):

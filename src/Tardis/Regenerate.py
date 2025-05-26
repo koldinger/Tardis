@@ -28,28 +28,24 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import argparse
+import base64
+import enum
+import hmac
+import json
+import logging
 import os
 import os.path
 import sys
-import argparse
 import time
-import base64
-import json
-import hmac
-import logging
-import enum
 
 import parsedatetime
-import xattr
 import posix1e
+import xattr
 
 import Tardis
-from . import TardisDB
-from . import Regenerator
-from . import Util
-from . import Config
-from . import Defaults
-from . import TardisCrypto
+
+from . import Config, Defaults, Regenerator, TardisCrypto, TardisDB, Util
 
 logger: logging.Logger
 eLogger: Util.ExceptionLogger

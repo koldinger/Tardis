@@ -28,14 +28,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import functools
+import logging
+import os.path
 import sqlite3
 import sys
-import logging
-import functools
-import os.path
+
+from Tardis import Util
 
 from . import convertutils
-from Tardis import Util
 
 version = 22
 

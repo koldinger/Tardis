@@ -28,12 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import json
 import base64
+import json
 import zlib
 
 import msgpack
 import snappy
+
 
 class Messages:
     def __init__(self, socket, stats=None):

@@ -23,14 +23,12 @@ SOFTWARE.
 # Note: this is copied from python-librsync: https://github.com/smartfile/python-librsync
 # This will be removed when python-librsync is updated on pypi
 
-import os
 import ctypes
 import ctypes.util
+import os
 import syslog
 import tempfile
-
 from functools import wraps
-
 
 if os.name == 'posix':
     path = ctypes.util.find_library('rsync')

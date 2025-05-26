@@ -28,69 +28,59 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import os
-import os.path
-import logging
-import logging.handlers
+import argparse
+import base64
+import concurrent.futures
+import configparser
+import datetime
+import errno
+import faulthandler
+import functools
 import glob
-import re
+import grp
+import hashlib
+import io
 import itertools
 import json
-import argparse
-import configparser
-import time
-import datetime
-import base64
-import tempfile
-import io
-import shlex
-import urllib.parse
-import functools
-import stat
-import uuid
-import errno
-import unicodedata
+import logging
+import logging.handlers
+import os
+import os.path
 import pprint
-import traceback
-import threading
-import socket
 import pwd
-import grp
-import concurrent.futures
-import hashlib
-
-from collections import defaultdict, deque
+import re
+import shlex
+import signal
+import socket
+import stat
+import sys
+import tempfile
+import threading
+import time
+import traceback
+import unicodedata
+import urllib.parse
+import uuid
 from binascii import hexlify
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
-import magic
-import pid
-import parsedatetime
-import srp
 import colorlog
+import magic
+import parsedatetime
+import pid
+import srp
 
 import Tardis
-from . import TardisCrypto
-from . import CompressedBuffer
-from . import Connection
-from . import Util
-from . import Defaults
-from . import librsync
-from . import MultiFormatter
-from . import StatusBar
-from . import Backend
-from . import ThreadedScheduler
-from . import Protocol
-from . import Messenger
-from . import log
+
+from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
+               MultiFormatter, Protocol, StatusBar, TardisCrypto,
+               ThreadedScheduler, Util, librsync, log)
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
 # ic.disable()
 
-import faulthandler
-import signal
 faulthandler.register(signal.SIGUSR1)
 
 features = Tardis.check_features()

@@ -37,23 +37,14 @@ import os
 import pprint
 import shutil
 import tempfile
-import uuid
 import textwrap
+import uuid
 from datetime import datetime
 from enum import IntEnum
 
-from . import CacheDir
-from . import CompressedBuffer
-from . import ConnIdLogAdapter
-from . import Defaults
-from . import librsync
-from . import Messages
-from . import Regenerator
-from . import TardisCrypto
-from . import TardisDB
-from . import Util
-from . import Protocol
-from . import log
+from . import (CacheDir, CompressedBuffer, ConnIdLogAdapter, Defaults,
+               Messages, Protocol, Regenerator, TardisCrypto, TardisDB, Util,
+               librsync, log)
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)

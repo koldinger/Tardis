@@ -28,24 +28,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import os
-import os.path
-import stat
 import argparse
 import fnmatch
-import time
-import shutil
 import logging
+import os
+import os.path
+import shutil
+import stat
+import sys
+import time
 
 import parsedatetime
 import termcolor
 
 import Tardis
-from . import Util
-from . import Defaults
-from . import Config
-from . import TardisDB
+
+from . import Config, Defaults, TardisDB, Util
 
 #from icecream import ic 
 #ic.configureOutput(includeContext=True)

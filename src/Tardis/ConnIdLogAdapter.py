@@ -30,6 +30,7 @@
 
 import logging
 
+
 class ConnIdLogAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         if self.extra and 'connid' in self.extra:

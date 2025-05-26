@@ -28,22 +28,19 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import argparse
+import difflib
+import logging
 import os
 import os.path
 import sys
-import difflib
-import argparse
-import logging
 import time
 
 import termcolor
 
 import Tardis
-from . import Util
-from . import Regenerator
-from . import Defaults
-from . import Config
-from . import TardisDB
+
+from . import Config, Defaults, Regenerator, TardisDB, Util
 
 logger: logging.Logger
 eLogger: Util.ExceptionLogger

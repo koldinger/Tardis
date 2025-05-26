@@ -29,8 +29,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import collections
-import time
 import logging
+import time
+
 
 class Cache:
     def __init__(self, size, timeout, name='Cache'):

@@ -28,26 +28,25 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sqlite3
+import base64
+import functools
+import importlib
+import importlib.resources
 import logging
 import os
 import os.path
-import time
+import sqlite3
 import sys
+import time
 import uuid
-import functools
-import importlib
-import base64
-import importlib.resources
 from binascii import hexlify, unhexlify
 from textwrap import dedent
 
 import srp
 
 import Tardis
-from . import ConnIdLogAdapter
-from . import Rotator
-from . import Util
+
+from . import ConnIdLogAdapter, Rotator, Util
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)

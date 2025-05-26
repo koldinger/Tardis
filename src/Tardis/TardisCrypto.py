@@ -28,20 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import base64
+import binascii
 import hashlib
 import hmac
 import os
 import os.path
 import sys
-import base64
-import binascii
 from abc import ABC, abstractmethod
 from functools import reduce
 
+import Cryptodome.Random
 from Cryptodome.Cipher import AES, ChaCha20_Poly1305
 from Cryptodome.Protocol.KDF import PBKDF2, scrypt
 from Cryptodome.Util.Padding import pad, unpad
-import Cryptodome.Random
 
 from . import Defaults
 

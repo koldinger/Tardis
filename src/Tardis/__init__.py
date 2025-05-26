@@ -29,8 +29,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import sys
 import subprocess
+import sys
 
 __version__ = '1.8.2'
 v = sys.version_info

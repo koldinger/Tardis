@@ -28,45 +28,40 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import logging
 import argparse
-import configparser
-import sys
-import subprocess
-import shlex
-import getpass
-import stat
-import json
 import base64
+import configparser
 import functools
-import pwd
+import getpass
 import grp
-import time
-import io
-import signal
-import pprint
 import hashlib
-
-import urllib.request
-import urllib.parse
+import io
+import json
+import logging
+import os
+import pprint
+import pwd
+import shlex
+import signal
+import stat
+import subprocess
+import sys
+import time
 import urllib.error
+import urllib.parse
+import urllib.request
 
-import srp
 import colorlog
 import parsedatetime
+import srp
+
+from . import (CacheDir, CompressedBuffer, Connection, Defaults, RemoteDB,
+               TardisCrypto, TardisDB)
 
 #from icecream import ic
 #ic.configureOutput(includeContext=True)
 #import traceback
 
-from . import Connection
-from . import CompressedBuffer
-from . import Defaults
-from . import TardisDB
-from . import TardisCrypto
-from . import CacheDir
-from . import RemoteDB
 
 try:
     import genzshcomp
