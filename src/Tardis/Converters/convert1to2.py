@@ -46,7 +46,7 @@ def processDir(path, bset, parent, device):
         device = row[2]
         parentdev = row[3]
         sub = os.path.join(path, name)
-        print("    {} ({}) has different device from parent: {} {}".format(sub, inode, device, parentdev))
+        print(f"    {sub} ({inode}) has different device from parent: {device} {parentdev}")
     s = conn.execute("SELECT Name, inode, device FROM Files JOIN Names ON Files.Nameid = Names.Nameid WHERE Parent = :parent AND dir = 1 AND :bset BETWEEN FirstSet AND LastSet",
                     {"parent": parent, "bset": bset})
     for row in s.fetchall():
@@ -79,7 +79,7 @@ conn = sqlite3.connect(db)
 s = conn.execute('SELECT Value FROM Config WHERE Key = "SchemaVersion"')
 t = s.fetchone()
 if t[0] != 1:
-    print(("Invalid database schema version: {}".format(t[0])))
+    print(f"Invalid database schema version: {t[0]}")
     sys.exit(1)
 
 conn.execute("ALTER TABLE Files ADD COLUMN Device INTEGER")
@@ -88,7 +88,7 @@ conn.execute("UPDATE Files SET ParentDev = 0 WHERE Parent = 0")
 
 for i in topfiles:
     (name, device) = i
-    print(("Updating {} to device {}".format(name, device)))
+    print(f"Updating {name} to device {device}")
     s = conn.execute("UPDATE Files SET Device = :device "
                      "WHERE Inode = (SELECT Inode FROM Files JOIN Names ON Files.nameid = Names.nameid AND ParentDev = 0 and Names.name = :name)",
                      {"name": name, "device": device})
@@ -97,7 +97,7 @@ s = conn.execute("SELECT BackupSet, Name FROM Backups ORDER BY BackupSet ASC")
 for row in s.fetchall():
     bset = row[0]
     name = row[1]
-    print("Processing set {} ({})".format(name, bset))
+    print(f"Processing set {name} ({bset})")
     processDir("/", bset, 0, 0)
 
 print("Done updating.  Rearranging tables to meet new schema")
