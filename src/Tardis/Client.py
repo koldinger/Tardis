@@ -330,6 +330,7 @@ class FakeDirEntry:
     def is_dir(self):
         return os.path.isdir(self.path)
 
+@functools.lru_cache(maxsize=1024)
 def findMountPoint(path):
     if path:
         if not os.path.exists(path):
@@ -338,14 +339,19 @@ def findMountPoint(path):
         if os.path.ismount(path):
             return path
         return findMountPoint(os.path.dirname(path))
-    return "/"
+    return os.sep
 
-@functools.lru_cache(maxsize=1024)
+
+_deviceCache = {}
 def virtualDev(device, path):
-    mp = findMountPoint(path)
-    digest = Util.hashPath(mp)
-    _deviceCache[device] = digest
-    return digest
+    try:
+        return _deviceCache[device]
+    except KeyError:
+        mp = findMountPoint(path)
+        path, mp
+        digest = Util.hashPath(mp)
+        _deviceCache[device] = digest
+        return digest
 
 
 def setEncoder(fmt):
@@ -927,11 +933,6 @@ def mkFileInfo(f, dirname=None):
     if args.skipNoAccess and (not Util.checkPermission(s.st_uid, s.st_gid, mode)):
         return None
 
-    if f.is_dir():
-        dirname = os.path.dirname(pathname)
-    else:
-        dirname = pathname
-
     if stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
         finfo = {
             'name':   name,
@@ -948,7 +949,7 @@ def mkFileInfo(f, dirname=None):
             'gid':    s.st_gid,                 # TODO: Remove
             'user':   getUserName(s.st_uid),
             'group':  getGroupName(s.st_gid),
-            'dev':    virtualDev(s.st_dev, dirname)
+            'dev':    virtualDev(s.st_dev, pathname)
         }
 
         if support_xattr and args.xattr:
@@ -1087,7 +1088,7 @@ def handleAckClone(message):
             (path, files) = cloneContents[finfo]
             if logdirs:
                 logger.log(log.DIRS, "[R]: %s", Util.shortPath(path))
-            sendDirChunks(path, finfo, files)
+            sendDirChunks(path, path, finfo, files)
             del cloneContents[finfo]
         else:
             logger.error("Unable to locate info for %s", str(finfo))
@@ -1128,10 +1129,10 @@ def sendPurge():
     response = sendAndReceive(message)
     checkMessage(response, Protocol.Responses.ACKPRG)
 
-def sendDirChunks(path, inode, files):
+def sendDirChunks(path, fullpath, inode, files):
     """ Chunk the directory into dirslice sized chunks, and send each sequentially """
     (inum, dev) = inode
-    vdev = virtualDev(dev, path)
+    vdev = virtualDev(dev, fullpath)
 
     cPath = crypt.encryptPath(path)
 
@@ -1267,7 +1268,7 @@ def processDirectory(path, top, depth=0, excludes=None):
             else:
                 if logger.isEnabledFor(log.DIRS):
                     logger.log(log.DIRS, "[B]: %s", Util.shortPath(path))
-            sendDirChunks(os.path.relpath(path, top), (s.st_ino, s.st_dev), newFiles)
+            sendDirChunks(os.path.join(os.sep, os.path.relpath(path, top)), path, (s.st_ino, s.st_dev), newFiles)
 
         else:
             # everything is old
@@ -1572,13 +1573,13 @@ def handleResponse(response, doPush=True):
         exceptionLogger.log(e)
         pass
 
-def sendDirEntry(parent, device, files):
+def sendDirEntry(dirInode, dirDev, files):
     # send a fake root directory
     message = {
         'message': Protocol.Commands.DIR,
         'files': files,
         'path' : None,
-        'inode': [parent, device],
+        'inode': [dirInode, dirDev],
         'last' : True
     }
     sendMessage(message)
@@ -1598,12 +1599,13 @@ def splitDirs(x):
     return ret
 
 def createPrefixPath(root, path):
-    """ Create common path directories.  Will be empty, except for path elements to the repested directories. """
-    rPath     = os.path.relpath(path, root)
+    """ Create common path directories.  Will be empty, except for path elements to the requested directories. """
+    rPath     = os.path.join(os.sep, os.path.relpath(path, root))
     logger.debug("Making prefix path for: %s as %s", path, rPath)
     pathDirs  = splitDirs(rPath)
+    pathDirs.pop(0)     # Remove the root directory
     parent    = 0
-    parentDev = virtualDev(0, "/")
+    parentDev = virtualDev(0, os.sep)
     current   = root
     for d in pathDirs:
         dirPath = os.path.join(current, d)
@@ -1611,7 +1613,7 @@ def createPrefixPath(root, path):
         f = mkFileInfo(FakeDirEntry(current, d))
         f['name'] = crypt.encryptName(f['name'])
         if dirPath not in processedDirs:
-            logger.debug("Sending dir entry for: %s", dirPath)
+            logger.debug("Sending dir entry for: %s", current)
             sendDirEntry(parent, parentDev, [f])
             processedDirs.add(dirPath)
         parent    = st.st_ino
