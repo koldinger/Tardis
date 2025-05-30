@@ -274,9 +274,9 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password: ")
         args.password = None
-        (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
+        (tardis, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys)
         password = None
 
         bsets = []

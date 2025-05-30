@@ -712,9 +712,9 @@ class TardisDB:
                   'nameid': self._getNameId(fileInfo['name'])}
         fields.update(fileInfo)
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UserID, GroupID, NLinks) "
                       "VALUES  "
-                      "(:nameid, :backup, :backup, :inode, :deviceid, :parent, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
+                      "(:nameid, :backup, :backup, :inode, :deviceid, :parent, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :userid, :groupid, :nlinks)",
                       fields)
 
     @authenticate

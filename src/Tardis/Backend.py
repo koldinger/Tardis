@@ -148,6 +148,11 @@ class Backend:
         self.lastDirNode = None
         self.lastDirContents = {}
 
+        self.configKeepTime = None
+        self.configPriority = 0
+
+        self.name           = None
+
         self.db: TardisDB.TardisDB = None
 
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
@@ -1263,10 +1268,10 @@ class Backend:
             encrypted   = message.get('encrypted', False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
-        except ValueError:
-            raise InitFailedException("Parsing error on backup message")
+        except ValueError as e:
+            raise InitFailedException("Parsing error on backup message") from e
         except KeyError as e:
-            raise InitFailedException(str(e))
+            raise InitFailedException(str(e)) from e
 
         self.client = client
 

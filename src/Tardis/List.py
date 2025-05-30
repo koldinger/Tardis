@@ -45,7 +45,7 @@ import Tardis
 
 from . import Config, Defaults, TardisDB, Util
 
-#from icecream import ic 
+#from icecream import ic
 #ic.configureOutput(includeContext=True)
 
 columns = None
@@ -239,7 +239,7 @@ def collectDirContents(tardis, dirList, crypt):
         x = tardis.readDirectoryForRange((dinfo['inode'], dinfo['device']), first, last)
         for y in x:
             logger.debug("Processing %s", y['name'])
-            name = Util.asString(crypt.decryptName(y['name'])) if crypt else Util.asString(y['name'])
+            name = Util.asString(crypt.decryptName(y['name']))
             names.add(name)
             for bset in r:
                 if y['firstset'] <= bset['backupset'] <= y['lastset']:

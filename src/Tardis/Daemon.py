@@ -399,7 +399,7 @@ def stopServer():
     logger.info("Stopping server")
     server.shutdown()
 
-def signalTermHandler(signal, frame):
+def signalTermHandler(_sig, _frame):
     logger.info("Caught term signal.  Stopping")
     t = threading.Thread(target=shutdownHandler)
     t.start()
@@ -492,7 +492,6 @@ def main():
             runServer()
         except KeyboardInterrupt:
             logger.warning("Killed by Keyboard")
-            pass
         except Exception as e:
             logger.critical(f"Unable to run server: {e}")
             if args.exceptions:

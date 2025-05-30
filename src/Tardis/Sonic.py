@@ -66,7 +66,7 @@ args: argparse.Namespace
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
     loc = urllib.parse.urlparse(args.repo, scheme='file')
-    path, client = os.path.split(loc.path)
+    _, client = os.path.split(loc.path)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
     if loc.scheme in ['http', 'https', 'tardis']:
         if not allowRemote:
@@ -147,11 +147,11 @@ def setPassword(password):
         eLogger.log(e)
         return 1
 
-def changePassword(crypt, oldpw) :
+def changePassword(crypt, oldPw):
     try:
         #(db, _, crypt) = getDB(oldpw)
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.repo}")
-        (db, _, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
+        #password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {args.repo}")
+        (db, _, crypt, client) = Util.setupDataConnection(args.repo, oldPw, args.keys)
 
         # Get the new password
         try:
@@ -305,15 +305,14 @@ def listBSets(db, crypt, cache):
 _paths = {(0, 0): '/'}
 
 def _encryptName(name, crypt):
-    return crypt.encryptName(name) if crypt else name
+    return crypt.encryptName(name)
 
 @functools.lru_cache(maxsize=1024)
 def _decryptName(name, crypt):
-    return crypt.decryptName(name) if crypt else name
+    return crypt.decryptName(name)
 
 @functools.lru_cache(maxsize=1024)
 def _path(db, crypt, bset, inode):
-    global _paths
     if inode in _paths:
         return _paths[inode]
     fInfo = db.getFileInfoByInode(inode, bset)
@@ -504,7 +503,7 @@ def purge(db, cache):
 
 def getBackupSets(db, backups):
     results = []
-    all = None
+    allSets = None
     for i in backups:
         if m := re.match(r'(\d+)-(\d+)', i):
             lower = int(m.group(1))
@@ -512,9 +511,9 @@ def getBackupSets(db, backups):
             if upper <= lower:
                 raise ValueError(f"Invalid range: {lower}-{upper}")
             r = range(lower, upper+1)
-            if not all:
-                all = list(db.listBackupSets())
-            for b in all:
+            if not allSets:
+                allSets = list(db.listBackupSets())
+            for b in allSets:
                 if b['backupset'] in r:
                     results.append(b)
         else:
@@ -676,8 +675,6 @@ def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
 
     (args, remaining) = Config.parseConfigOptions(parser)
-    c = Config.config
-    t = args.job
 
     # Shared parser
     bsetParser = argparse.ArgumentParser(add_help=False)
@@ -765,7 +762,7 @@ def parseArgs() -> argparse.Namespace:
     cryptoParser = argparse.ArgumentParser(add_help=False, formatter_class=argparse.RawTextHelpFormatter)
     cryptoParser.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
                            help=f"Crypto scheme to use.  0-{TardisCrypto.MAX_CRYPTO_SCHEME}\n" + TardisCrypto.getCryptoNames())
-    
+
     subs = parser.add_subparsers(help="Commands", dest='command')
     subs.add_parser('create',       parents=[common],                                       help='Create a client repository')
     subs.add_parser('setpass',      parents=[common, cryptoParser],                         help='Set a password')
@@ -865,17 +862,16 @@ def main():
             case 'setpass':
                 return setPassword(password)
             case 'chpass':
-                return changePassword(crypt, password)
+                return changePassword(crypt)
 
         # Fall through to here if it didn't match any of the above.
 
         upgrade = args.command == 'upgrade'
 
         try:
-            #(db, cache, crypt) = getDB(password, allowRemote=allowRemote, allowUpgrade=upgrade)
-            (db, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys, allow_upgrade=upgrade)
+            (db, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys, allow_remote=allowRemote, allow_upgrade=upgrade)
 
-            if crypt and args.command != 'keys':
+            if crypt.encrypting() and args.command != 'keys':
                 if args.keys:
                     (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
                 else:
@@ -893,35 +889,38 @@ def main():
         # Dispatch the command
         match args.command:
             case 'keys':
-                return moveKeys(db, crypt)
+                ret =  moveKeys(db, crypt)
             case 'list':
-                return listBSets(db, crypt, cache)
+                ret =  listBSets(db, crypt, cache)
             case 'files':
-                return listFiles(db, crypt)
+                ret =  listFiles(db, crypt)
             case 'info':
-                return bsetInfo(db, crypt)
+                ret =  bsetInfo(db, crypt)
             case 'tag':
-                return doTagging(db, crypt)
+                ret =  doTagging(db, crypt)
             case 'lock':
-                return doLock(db, args.lock)
+                ret =  doLock(db, args.lock)
             case 'purge':
-                return purge(db, cache)
+                ret =  purge(db, cache)
             case 'delete':
-                return deleteBsets(db, cache)
+                ret =  deleteBsets(db, cache)
             case 'priority':
-                return setPriority(db)
+                ret =  setPriority(db)
             case 'rename':
-                return renameSet(db)
+                ret =  renameSet(db)
             case 'getconfig':
-                return getConfig(db)
+                ret =  getConfig(db)
             case 'setconfig':
-                return setConfig(db)
+                ret =  setConfig(db)
             case 'orphans':
-                return removeOrphans(db, cache)
+                ret =  removeOrphans(db, cache)
             case 'sanity':
-                return checkSanity(db, cache, crypt)
+                ret =  checkSanity(db, cache, crypt)
             case 'upgrade':
-                return 0
+                ret =  0
+            case _:
+                ret = 1
+        return ret
     except KeyboardInterrupt:
         pass
     except TardisDB.AuthenticationException:

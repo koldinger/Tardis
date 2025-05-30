@@ -62,7 +62,6 @@ from . import (CacheDir, CompressedBuffer, Connection, Defaults, RemoteDB,
 #ic.configureOutput(includeContext=True)
 #import traceback
 
-
 try:
     import genzshcomp
 except ImportError:
@@ -89,31 +88,31 @@ def fmtSize(num, base=1024, suffixes=None):
 
 @functools.cache
 def getGroupName(gid):
-    group = grp.getgrgid(gid)
-    if group:
-        return group.gr_name
-    return None
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return None
 
 @functools.cache
 def getUserName(uid):
-    user = pwd.getpwuid(uid)
-    if user:
-        return user.pw_name
-    return None
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except KeyError:
+        return None
 
 @functools.cache
 def getGroupId(name):
-    group = grp.getgrnam(name)
-    if group:
-        return group.gr_gid
-    return None
+    try:
+        return grp.getgrnam(name).gr_gid
+    except KeyError:
+        return None
 
 @functools.cache
 def getUserId(name):
-    user = pwd.getpwnam(name)
-    if user:
-        return user.pw_uid
-    return None
+    try:
+        return pwd.getpwnam(name).pw_uid
+    except KeyError:
+        return None
 
 
 # Format time.  If we're less that a year before now, print the time as Jan 12, 02:17, if earlier,
@@ -225,8 +224,7 @@ def findDirInRoot(tardis, bset, path, crypt=None):
     """
     comps = path.split(os.sep)
     comps.pop(0)
-    for i in range(0, len(comps)):
-        name = comps[i]
+    for i, name in enumerate(comps): 
         if crypt:
             name = crypt.encryptName(name)
         info = tardis.getFileInfoByName(name, (0, 0), bset)
@@ -251,9 +249,7 @@ def reducePath(tardis, bset, path, reduceBy, crypt=None):
     return path
 
 def isMagic(path):
-    if ('*' in path) or ('?' in path) or ('[' in path):
-        return True
-    return False
+    return ('*' in path) or ('?' in path) or ('[' in path)
 
 def fullPath(name):
     return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
@@ -325,7 +321,8 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
 # Get the database, cachedir, and crypto object.
 
 def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, allow_remote=True):
-    """ Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem,
+    """
+    Setup a data connection to a client.   Determines the correct way to connect, either via direct filesystem,
     or via TardisRemote (http).
     Returns a 3-tuple, the TardisDB object, the CacheDir object, and the appropriate crypto object
     """
@@ -372,11 +369,12 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
     cryptoScheme = tardis.getConfigValue('CryptoScheme', TardisCrypto.DEF_CRYPTO_SCHEME)
 
     crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
-    if keyFile:
-        (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
-    else:
-        (f, c) = tardis.getKeys()
-    crypt.setKeys(f, c)
+    if crypt.encrypting():
+        if keyFile:
+            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
+        else:
+            (f, c) = tardis.getKeys()
+        crypt.setKeys(f, c)
 
     return tardis, cache, crypt, client
 
@@ -739,11 +737,11 @@ class HelpFormatter(argparse.RawTextHelpFormatter):
 # Argument formatter.  Useful for converting our command line arguments into strings"
 
 class ArgJsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, io.IOBase):
-            if obj == sys.stderr:
+    def default(self, o):
+        if isinstance(o, io.IOBase):
+            if o == sys.stderr:
                 return "<stderr>"
-            if obj == sys.stdout:
+            if o == sys.stdout:
                 return "<stdout>"
             return "<file>"
         return json.JSONEncoder()
@@ -824,14 +822,3 @@ def asString(a, policy='ignore'):
     if isinstance(a, bytes):
         return a.decode('utf-8', policy)
     return str(a)
-
-
-# 'Test' code
-if __name__ == "__main__":
-    p = argparse.ArgumentParser(formatter_class=HelpFormatter)
-
-    p.add_argument("--doit", action=StoreBoolean, help="Yo mama")
-    p.add_argument("-x", action=Toggle, help="Whatever")
-
-    args = p.parse_args()
-    print(args)
