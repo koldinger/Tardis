@@ -55,10 +55,10 @@ class Messages:
             self.stats['bytesRecvd'] += len(msg)
         return msg
 
-    def sendBytes(self, bytes):
+    def sendBytes(self, data):
         if self.stats:
-            self.stats['bytesSent'] += len(bytes)
-        self.socket.sendall(bytes)
+            self.stats['bytesSent'] += len(data)
+        self.socket.sendall(data)
 
     def closeSocket(self):
         if self.socket:
@@ -155,12 +155,12 @@ class TextMessages(Messages):
         self.sendBytes(output)
         self.sendBytes(message)
         if self.stats:
-            self.stats['messagesSent']
+            self.stats['messagesSent'] += 1
 
     def recvMessage(self):
         n = self.receiveBytes(6)
         if self.stats:
-            self.stats['messagesRecvd']
+            self.stats['messagesRecvd'] += 1
         return self.receiveBytes(int(n))
 
 class JsonMessages(TextMessages):
@@ -215,6 +215,7 @@ class ObjectMessages():
         self.inQueue  = inQueue
         self.outQueue = outQueue
         self.timeout  = timeout
+        self.stats = stats
 
     def sendMessage(self, message, compress=False):
         self.outQueue.put(message)

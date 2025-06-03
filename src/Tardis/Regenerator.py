@@ -35,7 +35,7 @@ import tempfile
 
 from . import CompressedBuffer, TardisCrypto, librsync
 
-# from icecream import ic 
+# from icecream import ic
 # ic.configureOutput(includeContext=True)
 
 class RegenerateException(Exception):
@@ -84,8 +84,8 @@ class Regenerator:
                 if authenticate:
                     try:
                         encryptor.verify(digest)
-                    except ValueError:
-                        raise RegenerateException(f"File {filename} did not authenticate.")
+                    except ValueError as e:
+                        raise RegenerateException(f"File {filename} did not authenticate.") from e
             outfile.write(pt)
             rem -= readsize
 

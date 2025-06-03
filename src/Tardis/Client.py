@@ -812,8 +812,7 @@ def handleAckDir(message):
 
     if logger.isEnabledFor(logging.DEBUG):
         path = message['path']
-        if crypt and path:
-            path = crypt.decryptPath(path)
+        path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
     allContent += content

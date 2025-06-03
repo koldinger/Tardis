@@ -65,7 +65,7 @@ def fmtSize(num, base=1024, suffixes=None):
     return (fmt % (num, suffixes[-1])).strip()
 
 
-def _handle_resize(signal, frame):
+def _handle_resize(s, f):
     """
     Process a resize event, and change the width of all the status bars
     Parameters ignored.
@@ -107,6 +107,9 @@ class StatusBar():
         self.formatter = formatter if formatter else StatusBarFormatter()
         self.scheduler = scheduler if scheduler else sched.scheduler()
         self.priority = priority
+
+        self.event = None
+        self.thread = None
 
         (self.width, _) = shutil.get_terminal_size((80, 32))
         _statusBars.append(self)
@@ -175,14 +178,14 @@ class StatusBar():
         self.values.update(values)
 
     def createValues(self, names, initial=None):
-        for i in names:
-            self.values[i] = initial
+        for name in names:
+            self.values[name] = initial
 
-    def processTrailer(self, length, string):
+    def processTrailer(self, length, trailer):
         """
         Process (shorten) the trailer to length, so things can fit.
         """
-        return string[:length]
+        return trailer[:length]
 
     def printStatus(self):
         """
@@ -219,9 +222,9 @@ if __name__ == "__main__":
     from termcolor import colored
 
     myargs = {"files": 0, "delta": 100}
-    fmt = f"{colored('{__elapsed__}', 'yellow')} :: {colored('Files', 'cyan')}: {{files}} {colored('Delta', 'cyan')}: {{delta}}: {{amount!B}} {{mode}} --> "
-    print(fmt)
-    sb = StatusBar(fmt, myargs)
+    template = f"{colored('{__elapsed__}', 'yellow')} :: {colored('Files', 'cyan')}: {{files}} {colored('Delta', 'cyan')}: {{delta}}: {{amount!B}} {{mode}} --> "
+    print(template)
+    sb = StatusBar(template, myargs)
     sb.setValue("mode", "Testing")
     sb.start()
     files = os.listdir(".")

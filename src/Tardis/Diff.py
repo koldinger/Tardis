@@ -43,7 +43,6 @@ import Tardis
 from . import Config, Defaults, Regenerator, TardisDB, Util
 
 logger: logging.Logger
-eLogger: Util.ExceptionLogger
 args: argparse.Namespace
 
 current = Defaults.getDefault('TARDIS_RECENT_SET')
