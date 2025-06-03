@@ -28,22 +28,19 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import argparse
+import difflib
+import logging
 import os
 import os.path
 import sys
-import difflib
-import argparse
-import logging
 import time
 
 import termcolor
 
 import Tardis
-from . import Util
-from . import Regenerator
-from . import Defaults
-from . import Config
-from . import TardisDB
+
+from . import Config, Defaults, Regenerator, TardisDB, Util
 
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
@@ -277,9 +274,9 @@ def main():
             logger.error("Too many backups (%d) specified.  Only one or two allowed", len(args.backup))
             sys.exit(1)
 
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password: ")
         args.password = None
-        (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
+        (tardis, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys)
         password = None
 
         bsets = []

@@ -28,37 +28,32 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import pwd
-import grp
 import argparse
-import uuid
-import logging
-import logging.config
 import configparser
-import socketserver
-import ssl
-import traceback
-import signal
-import threading
-import json
-from datetime import datetime
-
 # For profiling
 import cProfile
+import grp
 import io
+import json
+import logging
+import logging.config
 import pstats
+import pwd
+import signal
+import socketserver
+import ssl
+import sys
+import threading
+import traceback
+import uuid
+from datetime import datetime
 
-import daemonize
 import colorlog
+import daemonize
 
 import Tardis
-from . import Backend
-from . import ConnIdLogAdapter
-from . import Messages
-from . import Util
-from . import Defaults
-from . import Connection
+
+from . import Backend, Connection, ConnIdLogAdapter, Defaults, Messages, Util
 
 DONE    = 0
 CONTENT = 1
@@ -404,7 +399,7 @@ def stopServer():
     logger.info("Stopping server")
     server.shutdown()
 
-def signalTermHandler(signal, frame):
+def signalTermHandler(_sig, _frame):
     logger.info("Caught term signal.  Stopping")
     t = threading.Thread(target=shutdownHandler)
     t.start()
@@ -497,7 +492,6 @@ def main():
             runServer()
         except KeyboardInterrupt:
             logger.warning("Killed by Keyboard")
-            pass
         except Exception as e:
             logger.critical(f"Unable to run server: {e}")
             if args.exceptions:

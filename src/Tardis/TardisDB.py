@@ -28,26 +28,25 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sqlite3
+import base64
+import functools
+import importlib
+import importlib.resources
 import logging
 import os
 import os.path
-import time
+import sqlite3
 import sys
+import time
 import uuid
-import functools
-import importlib
-import base64
-import importlib.resources
 from binascii import hexlify, unhexlify
 from textwrap import dedent
 
 import srp
 
 import Tardis
-from . import ConnIdLogAdapter
-from . import Rotator
-from . import Util
+
+from . import ConnIdLogAdapter, Rotator, Util
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
@@ -75,13 +74,11 @@ class TardisRow(sqlite3.Row):
             return default
 
     def __str__(self):
-        row = ""
-        for i in self.keys():
-            row = row + f"{i}: {self.get(i)}  "
-        return row
+        return str(dict(**self))
+
 
     def __repr__(self):
-        return f"{hex(id(self))} -- {self.__str__()}"
+        return repr(dict(**self))
 
 
 # Utility functions
@@ -715,9 +712,9 @@ class TardisDB:
                   'nameid': self._getNameId(fileInfo['name'])}
         fields.update(fileInfo)
         self._execute("INSERT INTO Files "
-                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UID, GID, UserID, GroupID, NLinks) "
+                      "(NameId, FirstSet, LastSet, Inode, Device, Parent, ParentDev, Dir, Link, MTime, CTime, ATime,  Mode, UserID, GroupID, NLinks) "
                       "VALUES  "
-                      "(:nameid, :backup, :backup, :inode, :deviceid, :parent, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :uid, :gid, :userid, :groupid, :nlinks)",
+                      "(:nameid, :backup, :backup, :inode, :deviceid, :parent, :parentdevid, :dir, :link, :mtime, :ctime, :atime, :mode, :userid, :groupid, :nlinks)",
                       fields)
 
     @authenticate

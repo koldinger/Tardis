@@ -28,28 +28,25 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import os.path
+import argparse
+import base64
+import configparser
+import json
 import logging
 import logging.handlers
-import json
-import argparse
-import configparser
+import os
+import os.path
 import zlib
-import base64
 
 import daemonize
-
-from flask import Flask, Response, session, request, abort, make_response
-from tornado.wsgi import WSGIContainer
+from flask import Flask, Response, abort, make_response, request, session
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
+from tornado.wsgi import WSGIContainer
 
 import Tardis
-from . import TardisDB
-from . import Util
-from . import CacheDir
-from . import Defaults
+
+from . import CacheDir, Defaults, TardisDB, Util
 
 #from icecream import ic 
 #ic.configureOutput(includeContext=True)

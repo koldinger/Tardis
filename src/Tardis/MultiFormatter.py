@@ -30,6 +30,7 @@
 
 import logging
 
+
 class MultiFormatter(logging.Formatter):
     """
     A class to allow different logging levels to have different logging formats

@@ -28,9 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 import sqlite3
 import sys
-import logging
+
 from . import convertutils
 
 version = 4

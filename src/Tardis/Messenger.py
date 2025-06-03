@@ -28,12 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import errno
+import logging
 import queue
 import threading
-import logging
-import errno
 
 from . import StatusBar
+
 
 class Messenger:
     def __init__(self, messages, needsData=lambda _: False, maxsize=1024 * 1024, timeout=None):

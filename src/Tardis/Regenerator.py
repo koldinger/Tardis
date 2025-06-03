@@ -30,12 +30,10 @@
 
 import binascii
 import logging
-import tempfile
 import shutil
+import tempfile
 
-from . import TardisCrypto
-from . import CompressedBuffer
-from . import librsync
+from . import CompressedBuffer, TardisCrypto, librsync
 
 # from icecream import ic 
 # ic.configureOutput(includeContext=True)

@@ -30,34 +30,28 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import os      # for filesystem modes (O_RDONLY, etc)
-import os.path
-import errno   # for error number codes (ENOENT, etc)
-
-import sys
 import argparse
-import tempfile
-import json
 import base64
-import time
-import stat    # for file properties
+import errno  # for error number codes (ENOENT, etc)
 import functools
-import pwd
 import grp
+import json
+import os  # for filesystem modes (O_RDONLY, etc)
+import os.path
+import pwd
+import stat  # for file properties
+import sys
+import tempfile
+import time
 from enum import IntEnum, auto
 
-from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
+from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
+from icecream import ic
 
 import Tardis
-from . import CacheDir
-from . import Regenerator
-from . import Util
-from . import Cache
-from . import Defaults
-from . import TardisDB
-from . import Config
 
-from icecream import ic 
+from . import Cache, CacheDir, Config, Defaults, Regenerator, TardisDB, Util
+
 ic.configureOutput(includeContext=True)
 
 class CacheKeys(IntEnum):

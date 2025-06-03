@@ -28,11 +28,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import zlib
 import bz2
 import lzma
-import lz4.frame 
+import sys
+import zlib
+
+import lz4.frame
 import zstandard as zstd
 
 from . import librsync
@@ -242,6 +243,7 @@ class UncompressedBufferedReader(BufferedReader):
 
 if __name__ == "__main__":
     import time
+
     from . import Util
     print(f"Opening {sys.argv[1]}")
     readsize = 4 * 1024 * 1024

@@ -28,14 +28,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import atexit
+import collections
+import sched
+import shutil
+import signal
+import string
 import threading
 import time
-import signal
-import shutil
-import string
-import atexit
-import sched
-import collections
 
 _ansiClearEol = '\x1b[K'
 _startOfLine = '\r'
@@ -215,6 +215,7 @@ class StatusBar():
 if __name__ == "__main__":
     import os
     import os.path
+
     from termcolor import colored
 
     myargs = {"files": 0, "delta": 100}

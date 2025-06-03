@@ -37,26 +37,17 @@ import os
 import pprint
 import shutil
 import tempfile
-import uuid
 import textwrap
+import uuid
 from datetime import datetime
 from enum import IntEnum
 
-from . import CacheDir
-from . import CompressedBuffer
-from . import ConnIdLogAdapter
-from . import Defaults
-from . import librsync
-from . import Messages
-from . import Regenerator
-from . import TardisCrypto
-from . import TardisDB
-from . import Util
-from . import Protocol
-from . import log
+from . import (CacheDir, CompressedBuffer, ConnIdLogAdapter, Defaults,
+               Messages, Protocol, Regenerator, TardisCrypto, TardisDB, Util,
+               librsync, log)
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0
@@ -153,6 +144,14 @@ class Backend:
         self.forceFull      = False
         self.lastCompleted  = None
         self.maxChain       = 0
+
+        self.lastDirNode = None
+        self.lastDirContents = {}
+
+        self.configKeepTime = None
+        self.configPriority = 0
+
+        self.name           = None
 
         self.db: TardisDB.TardisDB = None
 
@@ -335,9 +334,6 @@ class Backend:
 
         return retVal, basis
 
-    lastDirNode = None
-    lastDirContents = {}
-
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
 
@@ -365,7 +361,11 @@ class Backend:
             dirContents = self.lastDirContents
         else:
             # Lookup the old directory based on the inode
-            oldDir = self.db.getFileInfoByInode(parentInode)
+            if 'path' in data and data['path']:
+                oldDir = self.db.getFileInfoByPath(data['path'])
+            else:
+                oldDir = self.db.getFileInfoByInode(parentInode)
+
             # If found, read that' guys directory
             if oldDir and oldDir['dir'] == 1:
                 # TODO: FIXME: Get actual Device
@@ -1268,10 +1268,10 @@ class Backend:
             encrypted   = message.get('encrypted', False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
-        except ValueError:
-            raise InitFailedException("Parsing error on backup message")
+        except ValueError as e:
+            raise InitFailedException("Parsing error on backup message") from e
         except KeyError as e:
-            raise InitFailedException(str(e))
+            raise InitFailedException(str(e)) from e
 
         self.client = client
 

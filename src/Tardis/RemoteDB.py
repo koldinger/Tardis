@@ -28,22 +28,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging
-import tempfile
-import sys
-import urllib.request
-import urllib.parse
-import urllib.error
-import functools
 import base64
 import errno
-
+import functools
+import logging
+import sys
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from binascii import unhexlify
 
 import requests
 import requests_cache
 
 import Tardis
+
 from . import TardisDB
 
 requests_cache.install_cache(backend='memory', expire_after=30.0)

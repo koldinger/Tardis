@@ -1,7 +1,7 @@
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
-# Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
+# Copyright 2013-2025, Eric Koldinger, All Rights Reserved.
 # kolding@washington.edu
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,9 +27,9 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+import logging
 import sqlite3
 import sys
-import logging
 
 from . import convertutils
 

@@ -28,14 +28,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
+import os.path
 import sqlite3
 import sys
-import os.path
-import logging
-
-from . import convertutils
 
 from Tardis import CacheDir
+
+from . import convertutils
 
 version = 2
 

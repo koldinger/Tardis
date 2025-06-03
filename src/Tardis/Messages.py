@@ -28,12 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import json
 import base64
+import json
 import zlib
 
 import msgpack
 import snappy
+
 
 class Messages:
     def __init__(self, socket, stats=None):
@@ -93,7 +94,8 @@ class BinMessages(Messages):
                 self.compress = snappy.compress
                 self.decompress = snappy.decompress
             case 'none':
-                pass
+                self.compress = None
+                self.decompress = None
             case _:
                 raise Exception(f"Unrecognized compression method: {str(compress)}")
 

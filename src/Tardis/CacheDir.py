@@ -28,13 +28,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import configparser
+import logging
 import os
 import os.path
-import socket
-import logging
 import shutil
-import configparser
-
+import socket
 from functools import reduce
 from pathlib import Path
 
