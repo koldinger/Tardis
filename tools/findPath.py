@@ -74,10 +74,7 @@ def processArgs():
 
     return args
 
-def _decryptName(name, crypt):
-    return crypt.decryptName(name) if crypt else name
-
-functools.cache
+@functools.cache
 def _path(db, crypt, bset, inode):
     #ic(inode, bset)
     if inode == (0, 0):
@@ -87,14 +84,13 @@ def _path(db, crypt, bset, inode):
     if fInfo:
         parent = (fInfo['parent'], fInfo['parentdev'])
         prefix = _path(db, crypt, bset, parent)
-
-        name = _decryptName(fInfo['name'], crypt)
+        name = crypt.decryptName(fInfo['name'], crypt)
         path = os.path.join(prefix, name)
         #_paths[inode] = path
         return path
     return ''
 
-def printFileInfo(checksum, bset, tardis, crypto, quiet):
+def printFileInfo(checksum, bset, tardis, crypt, quiet):
     for finfo in tardis.getFileInfoByChecksum(checksum, bset):
         prevInode = None
         inode = (finfo['inode'], finfo['device'])
@@ -103,9 +99,9 @@ def printFileInfo(checksum, bset, tardis, crypto, quiet):
         prevInode = inode
         actual = finfo['firstset']
         if quiet:
-            print(_path(tardis, crypto, actual, inode))
+            print(_path(tardis, crypt, actual, inode))
         else:
-            print(f"{colored(checksum, 'cyan')} => [{finfo['firstset']:5}, {finfo['lastset']:5}] ({finfo['inode']:5}, {finfo['device']:4})\t{colored(_path(tardis, crypto, actual, inode), 'green')}")
+            print(f"{colored(checksum, 'cyan')} => [{finfo['firstset']:5}, {finfo['lastset']:5}] ({finfo['inode']:5}, {finfo['device']:4})\t{colored(_path(tardis, crypt, actual, inode), 'green')}")
 
 def printChainInfo(checksum, tardis):
     info = tardis.getChecksumInfoChain(checksum)
@@ -115,7 +111,7 @@ def printChainInfo(checksum, tardis):
         x += 1
     print("")
 
-def printParentInfo(checksum, tardis, crypto, bset, quiet, printchain, orig=None):
+def printParentInfo(checksum, tardis, crypt, bset, quiet, printchain, orig=None):
     if orig is None:
         orig = checksum
 
@@ -123,10 +119,10 @@ def printParentInfo(checksum, tardis, crypto, bset, quiet, printchain, orig=None
     for data in parents:
         parent = data[0]
         print(f"---- {colored(orig, 'red')} -> {colored(parent, 'red')}")
-        printFileInfo(parent, bset, tardis, crypto, quiet)
+        printFileInfo(parent, bset, tardis, crypt, quiet)
         if printchain:
             printChainInfo(parent, tardis)
-        printParentInfo(parent, tardis, crypto, bset, quiet, printchain, orig)
+        printParentInfo(parent, tardis, crypt, bset, quiet, printchain, orig)
         print("")
 
 def main():
@@ -136,7 +132,7 @@ def main():
     args = processArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
 
-    tardis, _, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys)
+    tardis, _, crypt, _ = Util.setupDataConnection(args.repo, password, args.keys)
 
     if isinstance(args.backup, str) and args.backup.lower() == 'any':
         bset = None
@@ -161,11 +157,11 @@ def main():
     for i in data:
         cprint(f"---- {i}:", 'yellow')
         try:
-            printFileInfo(i, bset, tardis, crypto, args.quiet)
+            printFileInfo(i, bset, tardis, crypt, args.quiet)
             if args.chain:
                 printChainInfo(i, tardis)
             if args.inchain:
-                printParentInfo(i, tardis, crypto, bset, args.quiet, args.chain)
+                printParentInfo(i, tardis, crypt, bset, args.quiet, args.chain)
 
         except Exception as e:
             print("Caught exception: " + str(e))
