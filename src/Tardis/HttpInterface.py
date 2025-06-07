@@ -569,7 +569,7 @@ def processArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Remote'
-    config = configparser.ConfigParser(configDefaults, default_section='Tardis')
+    config = configparser.ConfigParser(configDefaults, default_section='Tardis', interpolation=configparser.ExtendedInterpolation())
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
