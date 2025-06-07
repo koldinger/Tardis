@@ -45,7 +45,7 @@ configDefaults = {
     'Verbosity':            str(0),
 }
 
-config = configparser.ConfigParser(configDefaults, allow_no_value=True)
+config = configparser.ConfigParser(configDefaults, allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
 job = None
 
 def parseConfigOptions(parser, exit_on_error=True):
