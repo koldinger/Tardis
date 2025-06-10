@@ -33,7 +33,7 @@ python-snappy==0.6.1
 python-utils==3.8.1
 qrcode==7.4.2
 reportlab==4.0.7
-requests==2.32.2
+requests==2.32.4
 requests-cache==1.2.1
 six==1.16.0
 srp==1.0.20
