@@ -46,8 +46,8 @@ from . import (CacheDir, CompressedBuffer, ConnIdLogAdapter, Defaults,
                Messages, Protocol, Regenerator, TardisCrypto, TardisDB, Util,
                librsync, log)
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0
@@ -152,6 +152,8 @@ class Backend:
         self.configPriority = 0
 
         self.name           = None
+        self.tags           = None
+        self.movetag        = False
 
         self.db: TardisDB.TardisDB = None
 
@@ -1267,6 +1269,9 @@ class Backend:
             create      = message.get('create', False)
             encrypted   = message.get('encrypted', False)
 
+            self.tags       = message.get('tags', [])
+            self.movetag    = message.get('movetags', False)
+
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
         except ValueError as e:
             raise InitFailedException("Parsing error on backup message") from e
@@ -1415,6 +1420,17 @@ class Backend:
                 if self.name:
                     self.logger.debug("Changing backupset name to %s.  Priority is %s", self.name, self.configPriority)
                     self.db.setBackupSetName(self.name, self.configPriority)
+
+                if self.tags:
+                    for tag in self.tags:
+                        self.logger.debug("Setting tag : %s %s", tag, self.movetag)
+                        if self.movetag:
+                            if self.db.removeTag(tag):
+                                self.logger.debug("Removed old version of %s", tag)
+                        if not self.db.setTag(tag, True):
+                            self.logger.warning("Could not set tag: %s.   Already exists", tag)
+                            # TODO: Inform the client it happened
+                            # TODO: add a force tag
 
             completed = True
         except (InitFailedException, TardisDB.AuthenticationFailed):
