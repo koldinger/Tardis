@@ -267,27 +267,27 @@ def listBSets(db, crypt, cache):
                 duration = ''
             completed = 'Comp' if bset['completed'] else 'Incomp'
             full      = 'Full' if bset['full'] else 'Delta'
+            tags = [_decryptName(tag, crypt) for tag in db.getTags(bset['backupset'])]
             if bset['backupset'] == last['backupset']:
-                status = current
+                status = ', '.join(tags + [current])
             elif bset['errormsg']:
                 status = bset['errormsg']
             else:
-                status = ''
+                status = ', '.join(tags)
             size = Util.fmtSize(bset['bytesreceived'], suffixes=['', 'KB', 'MB', 'GB', 'TB'])
             locked = '*' if bset['locked'] else ' '
 
             print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
             if args.longinfo:
                 commandLine = getCommandLine(bset['commandline'], regenerator)
-                tags = [_decryptName(tag, crypt) for tag in db.getTags(bset['backupset'])]
                 cVersion = bset['clientversion']
                 sVersion = bset['serverversion']
                 if commandLine:
                     print(f"    Command Line: {commandLine.decode('utf-8')}")
-                if tags:
-                    print(f"    Tags: {','.join(tags)}")
                 if cVersion or sVersion:
                     print(f"    SW Versions: Client: {cVersion} Server {sVersion}")
+                if tags:
+                    print(f"    Tags: {', '.join(tags)}")
                 if tags or commandLine or cVersion or sVersion:
                     print()
 
