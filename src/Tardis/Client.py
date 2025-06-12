@@ -812,8 +812,7 @@ def handleAckDir(message):
 
     if logger.isEnabledFor(logging.DEBUG):
         path = message['path']
-        if crypt and path:
-            path = crypt.decryptPath(path)
+        path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
     allContent += content
@@ -1666,7 +1665,8 @@ def doSrpAuthentication(client, password, response):
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
 
-def startBackup(name, priority, client, force, full=False, create=False, password=None, url = None, version=Tardis.__versionstring__):
+
+def startBackup(client, url, hasPassword):
     global lastTimestamp, crypt, trackOutstanding
     triedAuthentication = False
     crypt = None
@@ -1676,25 +1676,25 @@ def startBackup(name, priority, client, force, full=False, create=False, passwor
             'message'   : Protocol.Commands.BACKUP,
             'host'      : client,
             'encoding'  : encoding,
-            'priority'  : priority,
-            'autoname'  : name is None,
-            'force'     : force,
+            'priority'  : args.priority,
+            'autoname'  : args.name is None,
+            'force'     : args.force,
             'time'      : time.time(),
-            'version'   : version,
-            'full'      : full,
-            'create'    : create,
-            'encrypted' : bool(password)
+            'version'   : Tardis.__versionstring__,
+            'full'      : args.full,
+            'create'    : args.create,
+            'encrypted' : args.create and bool(hasPassword)
     }
-    if name:
-        message['name'] = name
+    if args.name:
+        message['name'] = args.name
 
     # BACKUP { json message }
     resp = sendAndReceive(message)
 
+    password = None
     if resp['status'] in [Protocol.Responses.NEEDKEYS, Protocol.Responses.AUTH]:
-        if password is None:
-            password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=create)
-        if create:
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=args.create)
+        if args.create:
             setCrypto(client, password, args.cryptoScheme or TardisCrypto.DEF_CRYPTO_SCHEME)
 
     if resp['status'] == Protocol.Responses.NEEDKEYS:
@@ -1801,7 +1801,7 @@ def processCommandLine():
     (args, remaining) = parser.parse_known_args()
 
     t = args.job
-    c = configparser.RawConfigParser(configDefaults, allow_no_value=True)
+    c = configparser.ConfigParser(configDefaults, allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
 
     if args.config:
         c.read(args.config)
@@ -2326,7 +2326,8 @@ def main():
         if args.progress:
             statusBar.start()
 
-        startBackup(args.name, args.priority, client, args.force, args.full, args.create, password, args.cryptoScheme, url)
+        hasPassword = args.password or args.passwordfile or args.passwordprog
+        startBackup(client, url, hasPassword)
 
         # Send information about this backup.
         sendConfigInfo(directories)

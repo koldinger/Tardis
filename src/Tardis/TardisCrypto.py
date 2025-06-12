@@ -34,9 +34,9 @@ import hashlib
 import hmac
 import os
 import os.path
-import sys
 from abc import ABC, abstractmethod
 from functools import reduce
+from enum import IntEnum, auto
 
 import Cryptodome.Random
 from Cryptodome.Cipher import AES, ChaCha20_Poly1305
@@ -48,6 +48,13 @@ from . import Defaults
 DEF_CRYPTO_SCHEME = 4
 MAX_CRYPTO_SCHEME = 4
 NO_CRYPTO_SCHEME = 0
+
+class Schemes(IntEnum):
+    NULL = auto()
+    AES_CBC_HMAC__AES_ECB = auto()
+    AES_CBC_HMAC__AES_SIV = auto()
+    AES_GCM__AES_SIV = auto()
+    ChaCha20_Poly1305__AES_SIV = auto()
 
 def getCrypto(scheme, password, client=None):
     """
@@ -263,6 +270,9 @@ class NullCipher():
         return 0
 
 class CryptoScheme(ABC):
+    _cryptoName = ""
+    _cryptoScheme = ""
+
     def getName(self):
         return self._cryptoName
 
@@ -637,8 +647,7 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     def getContentEncryptor(self, iv=None):
         return StreamEncryptor(self.getContentCipher(iv))
 
-
-if __name__ == '__main__':
+def test():
     string = b'abcdefghijknlmnopqrstuvwxyz' + \
              b'ABCDEFGHIJKNLMNOPQRSTUVWXYZ' + \
              b'1234567890!@#$%&*()[]{}-_,.<>'
@@ -663,10 +672,10 @@ if __name__ == '__main__':
             print(f"DigestSize: {e.getDigestSize()}")
             print(f"DigestSize: {d.getDigestSize()}")
 
-            ctext = e.encrypt(string) + e.finish()
-            plaintext = d.decrypt(ctext, True)
+            cText = e.encrypt(string) + e.finish()
+            plainText = d.decrypt(cText, True)
 
-            assert plaintext == string
+            assert plainText == string
             d.verify(e.digest())
 
             print("--- Testing Filename Encryptor ---")
@@ -684,3 +693,6 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Caught exception: {e}")
             print(e)
+
+if __name__ == '__main__':
+    test()

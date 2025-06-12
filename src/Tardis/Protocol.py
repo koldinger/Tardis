@@ -75,4 +75,3 @@ class Responses(UppercaseStrEnum):
     ACKSGR = "SIG"
     NEEDKEYS = auto()
     AUTH = auto()
-

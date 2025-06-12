@@ -53,8 +53,6 @@ class Messenger:
 
         self.exception = None
 
-        self.encode = messages.encode
-
         self.sendEnqueued = 0
         self.pbar = None
 

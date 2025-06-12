@@ -142,20 +142,20 @@ def setAttributes(regenerator, info, outname):
             try:
                 logger.debug("Setting permissions on %s to %o", outname, info['mode'])
                 os.chmod(outname, info['mode'])
-            except Exception:
+            except OSError:
                 logger.warning("Unable to set permissions for %s", outname)
             try:
                 # Change the group, then the owner.
                 # Change the group first, as only root can change owner, and that might fail.
                 os.chown(outname, -1, Util.getGroupId(crypt.decryptName(info['groupname'])))
                 os.chown(outname, Util.getUserId(crypt.decryptName(info['username'])), -1)
-            except Exception:
+            except OSError:
                 logger.warning("Unable to set owner and group of %s", outname)
         if args.settime:
             try:
                 logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
                 os.utime(outname, (info['atime'], info['mtime']))
-            except Exception:
+            except OSError:
                 logger.warning("Unable to set times on %s", outname)
 
         if args.setattrs and 'attr' in info and info['attr']:
@@ -169,7 +169,7 @@ def setAttributes(regenerator, info, outname):
                         x.set(attr, value)
                     except IOError:
                         logger.warning("Unable to set extended attribute %s on %s", attr, outname)
-            except Exception:
+            except IOError:
                 logger.warning("Unable to process extended attributes for %s", outname)
         if args.setacl and 'acl' in info and info['acl']:
             try:

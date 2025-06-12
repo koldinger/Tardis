@@ -48,7 +48,7 @@ import Tardis
 
 from . import CacheDir, Defaults, TardisDB, Util
 
-#from icecream import ic 
+#from icecream import ic
 #ic.configureOutput(includeContext=True)
 
 basedir     = Defaults.getDefault('TARDIS_BASEDIR')
@@ -87,6 +87,7 @@ args = None
 config = None
 
 logger = None
+eLogger = None
 
 def getDB():
     if 'host' not in session:
@@ -568,7 +569,7 @@ def processArgs():
     (args, remaining) = parser.parse_known_args()
 
     t = 'Remote'
-    config = configparser.ConfigParser(configDefaults, default_section='Tardis')
+    config = configparser.ConfigParser(configDefaults, default_section='Tardis', interpolation=configparser.ExtendedInterpolation())
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
@@ -621,13 +622,14 @@ def setupLogging():
 
     handler.setFormatter(fmt)
     log.addHandler(handler)
-    return log
+    excLogger = Util.ExceptionLogger(log, args.exceptions, True)
+    return log, excLogger
 
 def setup():
-    global args, config, logger, allowCompress, allowCache
+    global args, config, logger, eLogger, allowCompress, allowCache
     logging.basicConfig(level=logging.INFO)
     (args, config) = processArgs()
-    logger = setupLogging()
+    logger, eLogger = setupLogging()
     if args.compress:
         allowCompress = True
     if args.cache:
@@ -665,8 +667,7 @@ def tornado():
             daemon.start()
         except Exception as e:
             logger.critical(f"Caught Exception on Daemonize call: {e}")
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
     else:
         try:
             run_server()
@@ -674,8 +675,7 @@ def tornado():
             pass
         except Exception as e:
             logger.critical(f"Unable to run server: {e}")
-            if args.exceptions:
-                logger.exception(e)
+            eLogger.log(e)
 
 if __name__ == "__main__":
     main_flask()

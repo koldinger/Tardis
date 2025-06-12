@@ -33,8 +33,6 @@ import queue
 import socket
 import ssl
 
-import Tardis
-
 from . import Messages, Messenger
 
 protocolVersion = "1.6"
@@ -74,9 +72,9 @@ class Connection:
 
                 self.sock = self.sslCtx.wrap_socket(self.sock, server_side=False, server_hostname=host)
             elif not message:
-                raise Exception("No header string.")
+                raise ConnectionException("No header string.")
             elif message != headerString:
-                raise Exception(f"Unknown protocol: {message}")
+                raise ConnectionException(f"Unknown protocol: {message}")
             resp = { 'encoding': encoding, 'compress': compress }
             self.put(bytes(json.dumps(resp), 'utf8'))
 
@@ -84,14 +82,13 @@ class Connection:
             fields = json.loads(message)
             if fields['status'] != 'OK':
                 raise ConnectionException("Unable to connect")
-        except Exception as e:
+        except ConnectionException as e:
             self.sock.close()
             raise e
 
     def put(self, message):
         self.sock.sendall(message)
         self.stats['messagesSent'] += 1
-        return
 
     def recv(self, n):
         msg = ''
