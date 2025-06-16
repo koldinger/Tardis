@@ -82,7 +82,7 @@ def validateFile(cksum, regen, internal, tardis, crypto, logger, output):
 def main():
     args = parseArgs()
     password = Util.getPassword(args.password, args.passwordfile, args.passwordprog)
-    tardis, cache, crypto = Util.setupDataConnection(args.database, args.client, password, args.keys, args.dbname, args.dbdir)
+    tardis, cache, crypto, _ = Util.setupDataConnection(args.repo, password, args.keys, allow_upgrade=False, allow_remote=False)
     logger = Util.setupLogging(args.verbosity, handler=RichHandler(show_time=False, show_path=False))
 
     regen = Regenerator.Regenerator(cache, tardis, crypto)

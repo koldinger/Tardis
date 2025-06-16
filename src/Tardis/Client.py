@@ -1683,6 +1683,8 @@ def startBackup(client, url, hasPassword):
             'version'   : Tardis.__versionstring__,
             'full'      : args.full,
             'create'    : args.create,
+            'tags'      : args.tags,
+            'movetags'  : args.movetag,
             'encrypted' : args.create and bool(hasPassword)
     }
     if args.name:
@@ -1824,6 +1826,9 @@ def processCommandLine():
     parser.add_argument('--full',                   dest='full', action=argparse.BooleanOptionalAction, default=c.getboolean(t, 'Full'),
                         help='Perform a full backup, with no delta information. ' + _def)
     parser.add_argument('--name',   '-n',           dest='name', default=None,                                          help='Set the backup name.  Leave blank to assign name automatically')
+    parser.add_argument('--tag', '-t',              dest='tags', default=[], action='append', help='Apply this tag to the new backup set, if completed successfully')
+    parser.add_argument('--movetag', '-M',          dest='movetag', default=False, action=argparse.BooleanOptionalAction, help="Move tags if they exist")
+
     parser.add_argument('--create',                 dest='create', default=False, action=argparse.BooleanOptionalAction,             help='Create a new client.')
 
 
