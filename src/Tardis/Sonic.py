@@ -50,8 +50,8 @@ import Tardis
 from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
                TardisDB, Util)
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
@@ -63,6 +63,13 @@ sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoS
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
 args: argparse.Namespace
+
+def parseDateTime(value):
+    cal = parsedatetime.Calendar()
+    dt, success = cal.parse(value)
+    if not success:
+        raise argparse.ArgumentTypeError(f"Couldn't find a valid date in '{value}'")
+    return dt
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
     loc = urllib.parse.urlparse(args.repo, scheme='file')
@@ -257,7 +264,17 @@ def listBSets(db, crypt, cache):
         if args.minpriority:
             sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
 
-        sets = sets[-(args.number):]
+        if args.before:
+            timestamp = time.mktime(args.before)
+            sets = list(filter(lambda x: float(x['starttime']) < timestamp, sets))
+        if args.after:
+            timestamp = time.mktime(args.after)
+            sets = list(filter(lambda x: float(x['starttime']) > timestamp, sets))
+
+        if args.last:
+            sets = sets[-args.last:]
+        elif args.first:
+            sets = sets[:args.first]
 
         for bset in sets:
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
@@ -680,14 +697,15 @@ def parseArgs() -> argparse.Namespace:
     bsetParser = argparse.ArgumentParser(add_help=False)
     bsetgroup = bsetParser.add_mutually_exclusive_group()
     bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
-    bsetgroup.add_argument("--date", "-d",   help="Use last backupset before date", dest='date', default=None)
+    bsetgroup.add_argument("--date", "-d",   type=parseDateTime, help="Use last backupset before date", dest='date', default=None)
 
     purgeParser = argparse.ArgumentParser(add_help=False)
     purgeParser.add_argument('--priority',       dest='priority',   default=0, type=int,                   help='Maximum priority backupset to purge')
     purgeParser.add_argument('--incomplete',     dest='incomplete', default=False, action='store_true',    help='Purge only incomplete backup sets')
+
     bsetgroup = purgeParser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--date", "-d",     dest='date',       default=None,                            help="Purge sets before this date")
-    bsetgroup.add_argument("--backup", "-b",   dest='backup',     default=None,                            help="Purge sets before this set")
+    bsetgroup.add_argument("--date", "-d",     type=parseDateTime, dest='date',       default=None,   help="Purge sets before this date")
+    bsetgroup.add_argument("--backup", "-b",   dest='backup',      default=None,                      help="Purge sets before this set")
 
     deleteParser = argparse.ArgumentParser(add_help=False)
     deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=argparse.BooleanOptionalAction,        help="Delete files in the backupset")
@@ -748,7 +766,13 @@ def parseArgs() -> argparse.Namespace:
     listParser = argparse.ArgumentParser(add_help=False)
     listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=argparse.BooleanOptionalAction,   help='Print long info')
     listParser.add_argument('--minpriority',    dest='minpriority', default=0, type=int,            help='Minimum priority to list')
-    listParser.add_argument('--number', '-n',   dest='number', default=sys.maxsize, type=int,       help='Maximum number to show')
+
+    limitParser = listParser.add_mutually_exclusive_group()
+    limitParser.add_argument('--first',         dest='first', default=None, type=int,       help='Show only the first N backupsets')
+    limitParser.add_argument('--last',          dest='last', default=None, type=int,        help='Show only the last N backupsets')
+
+    listParser.add_argument('--before',         dest='before', type=parseDateTime, default=None, )
+    listParser.add_argument('--after',          dest='after',  type=parseDateTime, default=None, )
 
     lockParser = argparse.ArgumentParser(add_help=False)
     lockGroup = lockParser.add_mutually_exclusive_group()
@@ -801,20 +825,15 @@ def parseArgs() -> argparse.Namespace:
 def getBackupSet(db, backup, date, defaultCurrent=False):
     bInfo = None
     if date:
-        cal = parsedatetime.Calendar()
-        (then, success) = cal.parse(date)
-        if success:
-            timestamp = time.mktime(then)
-            logger.debug("Using time: %s", time.asctime(then))
-            bInfo = db.getBackupSetInfoForTime(timestamp)
-            if bInfo and bInfo['backupset'] != 1:
-                bset = bInfo['backupset']
-                logger.debug("Using backupset: %s %d", bInfo['name'], bInfo['backupset'])
-            else:
-                logger.critical("No backupset at date: %s (%s)", date, time.asctime(then))
-                bInfo = None
+        timestamp = time.mktime(date)
+        logger.debug("Using time: %s", time.asctime(date))
+        bInfo = db.getBackupSetInfoForTime(timestamp)
+        if bInfo and bInfo['backupset'] != 1:
+            bset = bInfo['backupset']
+            logger.debug("Using backupset: %s %d", bInfo['name'], bInfo['backupset'])
         else:
-            logger.critical("Could not parse date string: %s", date)
+            logger.critical("No backupset at date: %s (%s)", date, time.asctime(date))
+            bInfo = None
     elif backup:
         try:
             bset = int(backup)
