@@ -46,13 +46,12 @@ import time
 from enum import IntEnum, auto
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
-from icecream import ic
-
 import Tardis
 
 from . import Cache, CacheDir, Config, Defaults, Regenerator, TardisDB, Util
 
-ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class CacheKeys(IntEnum):
     BackupSetInfo = auto()
