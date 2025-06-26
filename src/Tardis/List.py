@@ -687,7 +687,7 @@ def processArgs():
     parser.add_argument('--times', '-T',    dest='checktimes',  default=False, action=argparse.BooleanOptionalAction,    help='Use file time changes when determining diffs. Default: %(default)s')
     parser.add_argument('--metadata', '-M', dest='checkmeta',   default=False, action=argparse.BooleanOptionalAction,    help='Use any metadata changes when determining diffs.  Default: %(default)s')
     parser.add_argument('--headers',        dest='headers',     default=True,  action=argparse.BooleanOptionalAction,    help='Show headers. Default: %(default)s')
-    parser.add_argument('--colors',         dest='colors',      default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors. Default: %(default)s')
+    parser.add_argument('--colors',         dest='colors',      default=True,  action=argparse.BooleanOptionalAction,   help='Use colors. Default: %(default)s')
     parser.add_argument('--columns',        dest='columns',     type=int, default=None ,                    help='Number of columns to display')
 
     parser.add_argument('--recurse',        dest='recurse',     default=False, action='store_true',         help='List Directories Recurively')
