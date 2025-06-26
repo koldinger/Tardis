@@ -43,7 +43,7 @@ tornado==6.5
 typing==3.7.4.3
 typing_extensions==4.8.0
 url-normalize==1.4.3
-urllib3==2.2.2
+urllib3==2.5.0
 Werkzeug==3.0.6
 xattr==1.0.0
 zstandard==0.22.0
