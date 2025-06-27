@@ -34,15 +34,15 @@ import sys
 from . import Defaults, TardisCrypto
 
 configDefaults = {
-    'Repository':           Defaults.getDefault('TARDIS_REPO'),
-    'Password':             None,
-    'PasswordFile':         Defaults.getDefault('TARDIS_PWFILE'),
-    'PasswordProg':         None,
-    'PasswordTimeout':      Defaults.getDefault('TARDIS_PWTIMEOUT'),
-    'Crypt':                str(True),
-    'KeyFile':              Defaults.getDefault('TARDIS_KEYFILE'),
-    'LogFiles':             None,
-    'Verbosity':            str(0),
+    "Repository":           Defaults.getDefault("TARDIS_REPO"),
+    "Password":             None,
+    "PasswordFile":         Defaults.getDefault("TARDIS_PWFILE"),
+    "PasswordProg":         None,
+    "PasswordTimeout":      Defaults.getDefault("TARDIS_PWTIMEOUT"),
+    "Crypt":                str(True),
+    "KeyFile":              Defaults.getDefault("TARDIS_KEYFILE"),
+    "LogFiles":             None,
+    "Verbosity":            str(0),
 }
 
 config = configparser.ConfigParser(configDefaults, allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
@@ -51,8 +51,8 @@ job = None
 def parseConfigOptions(parser, exit_on_error=True):
     global job
     configGroup = parser.add_argument_group("Configuration File Options")
-    configGroup.add_argument('--config',         dest='config', default=Defaults.getDefault('TARDIS_CONFIG'), const=None,    help='Location of the configuration file.   Default: %(default)s')
-    configGroup.add_argument('--job',            dest='job', default=Defaults.getDefault('TARDIS_JOB'),          help='Job Name within the configuration file.  Default: %(default)s')
+    configGroup.add_argument("--config",         dest="config", default=Defaults.getDefault("TARDIS_CONFIG"), const=None,    help="Location of the configuration file.   Default: %(default)s")
+    configGroup.add_argument("--job",            dest="job", default=Defaults.getDefault("TARDIS_JOB"),          help="Job Name within the configuration file.  Default: %(default)s")
 
     (args, remaining) = parser.parse_known_args()
 
@@ -72,16 +72,16 @@ def parseConfigOptions(parser, exit_on_error=True):
 
 def addCommonOptions(parser):
     dbGroup = parser.add_argument_group("Database specification options")
-    dbGroup.add_argument('--repository', '-R', dest='repo',    default=config.get(job, 'Repository'),               help="Database to use.  Default: %(default)s")
+    dbGroup.add_argument("--repository", "-R", dest="repo",    default=config.get(job, "Repository"),               help="Database to use.  Default: %(default)s")
 
 def addPasswordOptions(parser, addscheme=False):
     passgroup = parser.add_argument_group("Password/Encryption specification options")
     pwgroup = passgroup.add_mutually_exclusive_group()
-    pwgroup.add_argument('--password', '-P',dest='password', default=config.get(job, 'Password'), nargs='?', const=True, help='Encrypt files with this password')
-    pwgroup.add_argument('--password-file', '-F',   dest='passwordfile', default=config.get(job, 'PasswordFile'),  help='Read password from file.  Can be a URL (HTTP/HTTPS or FTP)')
-    pwgroup.add_argument('--password-prog', dest='passwordprog', default=config.get(job, 'PasswordProg'),          help='Use the specified command to generate the password on stdout')
+    pwgroup.add_argument("--password", "-P",dest="password", default=config.get(job, "Password"), nargs="?", const=True, help="Encrypt files with this password")
+    pwgroup.add_argument("--password-file", "-F",   dest="passwordfile", default=config.get(job, "PasswordFile"),  help="Read password from file.  Can be a URL (HTTP/HTTPS or FTP)")
+    pwgroup.add_argument("--password-prog", dest="passwordprog", default=config.get(job, "PasswordProg"),          help="Use the specified command to generate the password on stdout")
 
     if addscheme:
-        passgroup.add_argument('--crypt',      dest='scheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME + 1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
-                               help='Use cryptography scheme\n' + TardisCrypto.getCryptoNames())
-    passgroup.add_argument('--keys',        dest='keys', default=config.get(job, 'KeyFile'),                       help='Load keys from file.')
+        passgroup.add_argument("--crypt",      dest="scheme", type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME + 1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
+                               help="Use cryptography scheme\n" + TardisCrypto.getCryptoNames())
+    passgroup.add_argument("--keys",        dest="keys", default=config.get(job, "KeyFile"),                       help="Load keys from file.")

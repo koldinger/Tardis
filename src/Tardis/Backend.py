@@ -119,7 +119,7 @@ class BackendConfig:
 
     linkBasis       = False
 
-    skip            = Defaults.getDefault('TARDIS_SKIP')
+    skip            = Defaults.getDefault("TARDIS_SKIP")
 
 
 class Backend:
@@ -135,7 +135,7 @@ class Backend:
         self.statPurgedFiles    = 0
         self.statPurgedSets = 0
         self.statCommands   = {}
-        self.address        = ''
+        self.address        = ""
         self.regenerator    = None
         self.basedir        = None
         self.autoPurge      = False
@@ -160,9 +160,9 @@ class Backend:
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
         self.idstr = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
         if logSession:
-            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger('Backend'), {'connid': self.idstr})
+            self.logger = ConnIdLogAdapter.ConnIdLogAdapter(logging.getLogger("Backend"), {"connid": self.idstr})
         else:
-            self.logger = logging.getLogger('Backend')
+            self.logger = logging.getLogger("Backend")
 
         self.logger.debug("Created backend: %s", self.sessionid)
         self.messenger = messenger
@@ -176,7 +176,7 @@ class Backend:
 
     def checkMessage(self, message, expected):
         """ Check that a message is of the expected type.  Throw an exception if not """
-        if not message['message'] == expected:
+        if not message["message"] == expected:
             self.logger.critical(f"Expected {expected} message, received {message['message']}")
             raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
@@ -222,14 +222,14 @@ class Backend:
         name = f["name"]
         inode = f["inode"]
         device = f["dev"]
-        xattr = f.get('xattr', None)
-        acl = f.get('acl', None)
+        xattr = f.get("xattr", None)
+        acl = f.get("acl", None)
         old = dirContents.get(name, None)
 
-        if f['dir']:
+        if f["dir"]:
             if old:
                 if (old["inode"] == inode) and (old["device"] == device) and (old["mtime"] == f["mtime"]):
-                    extends.append(old['rowid'])
+                    extends.append(old["rowid"])
                     #self.db.extendFileRowID(old['rowid'])
                 else:
                     self.db.insertFile(f, parent)
@@ -245,26 +245,26 @@ class Backend:
                 tmp = self.db.getFileFromPartialBackup(f)
                 if tmp:
                     old = tmp
-                    self.logger.debug("Found %s in partial backup set: %d", name, old['lastset'])
+                    self.logger.debug("Found %s in partial backup set: %d", name, old["lastset"])
 
             if old:
                 # Got something.  If the inode, size, and mtime are the same, just keep it
-                fsize = f['size']
-                osize = old['size']
+                fsize = f["size"]
+                osize = old["size"]
 
-                if (old["inode"] == inode) and (old['device'] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
+                if (old["inode"] == inode) and (old["device"] == device) and (osize == fsize) and (old["mtime"] == f["mtime"]):
                     # Just request full content if the old version was a link or dir
-                    if old["checksum"] is not None and not (old['dir'] or old['link']):
-                        if (old['mode'] == f['mode']) and (old['ctime'] == f['ctime']) and (old['xattrs'] == xattr) and (old['acl'] == acl):
+                    if old["checksum"] is not None and not (old["dir"] or old["link"]):
+                        if (old["mode"] == f["mode"]) and (old["ctime"] == f["ctime"]) and (old["xattrs"] == xattr) and (old["acl"] == acl):
                             # nothing has changed, just extend it
-                            extends.append(old['rowid'])
+                            extends.append(old["rowid"])
                             #self.db.extendFileRowID(old['rowid'])
                         else:
                             # Some metadata has changed, so let's insert the new record, and set it's checksum
                             self.db.insertFile(f, parent)
-                            self.db.setChecksum(inode, device, old['checksum'])
+                            self.db.setChecksum(inode, device, old["checksum"])
                             self.setXattrAcl(inode, device, xattr, acl)
-                        if self.full and old['chainlength'] != 0:
+                        if self.full and old["chainlength"] != 0:
                             retVal = FileResponse.REFRESH
                         else:
                             retVal = FileResponse.DONE       # we're done either way
@@ -279,7 +279,7 @@ class Backend:
                     self.setXattrAcl(inode, device, xattr, acl)
                     retVal = FileResponse.CKSUM
                 elif (f["size"] < 4096) or (old["size"] is None) or \
-                     not ((old['size'] * self.deltaPercent) < f['size'] < (old['size'] * (1.0 + self.deltaPercent))) or \
+                     not ((old["size"] * self.deltaPercent) < f["size"] < (old["size"] * (1.0 + self.deltaPercent))) or \
                      ((old["basis"] is not None) and (old["chainlength"]) >= self.maxChain):
                     # Couple conditions that can cause it to always load
                     # File is less than 4K
@@ -298,7 +298,7 @@ class Backend:
                         retVal = FileResponse.CONTENT
                     else:
                         retVal = FileResponse.DELTA
-                        basis = old['checksum']
+                        basis = old["checksum"]
             else:           # if old (i.e., if not old)
                 # Create a new record for this file
                 self.db.insertFile(f, parent)
@@ -313,26 +313,26 @@ class Backend:
                         self.db.setChecksum(inode, device, checksum)
                         retVal = FileResponse.LINKED             # special value, allowing the caller to determine that this was handled as a link
                     else:
-                        retVal = self.checkForSize(f['size'])
+                        retVal = self.checkForSize(f["size"])
                 else:
                     # Check to see if it's been moved or copied
                     # BUG: Don't we need to extend or insert the file here?
                     old = self.db.getFileInfoBySimilar(f)
 
                     if old:
-                        if (old["name"] == f["name"]) and (old["parent"] == parent) and (old['device'] == f['parentdev']):
+                        if (old["name"] == f["name"]) and (old["parent"] == parent) and (old["device"] == f["parentdev"]):
                             # If the name and parent ID are the same, assume it's the same
                             if old["checksum"] is not None:
-                                self.db.setChecksum(inode, device, old['checksum'])
+                                self.db.setChecksum(inode, device, old["checksum"])
                                 retVal = FileResponse.DONE
                             else:
-                                retVal = self.checkForSize(f['size'])
+                                retVal = self.checkForSize(f["size"])
                         else:
                             # otherwise
                             retVal = FileResponse.CKSUM
                     else:
                         # TODO: Lookup based on inode.
-                        retVal = self.checkForSize(f['size'])
+                        retVal = self.checkForSize(f["size"])
 
         return retVal, basis
 
@@ -351,8 +351,8 @@ class Backend:
         # Keep the order
         queues = [done, content, cksum, delta, refresh]
 
-        parentInode = tuple(data['inode'])      # Contains both inode and device in message
-        files = data['files']
+        parentInode = tuple(data["inode"])      # Contains both inode and device in message
+        files = data["files"]
 
         dirContents = {}
         oldDir = None
@@ -363,20 +363,20 @@ class Backend:
             dirContents = self.lastDirContents
         else:
             # Lookup the old directory based on the inode
-            if 'path' in data and data['path']:
-                oldDir = self.db.getFileInfoByPath(data['path'])
+            if data.get("path"):
+                oldDir = self.db.getFileInfoByPath(data["path"])
             else:
                 oldDir = self.db.getFileInfoByInode(parentInode)
 
             # If found, read that' guys directory
-            if oldDir and oldDir['dir'] == 1:
+            if oldDir and oldDir["dir"] == 1:
                 # TODO: FIXME: Get actual Device
-                dirInode = (oldDir['inode'], oldDir['device'])
+                dirInode = (oldDir["inode"], oldDir["device"])
             else:
                 # Otherwise
                 dirInode = parentInode
 
-            dirContents = { i['name']: i for i in self.db.readDirectory(dirInode) }
+            dirContents = { i["name"]: i for i in self.db.readDirectory(dirInode) }
             self.lastDirContents = dirContents
             self.lastDirNode = parentInode
 
@@ -384,8 +384,8 @@ class Backend:
 
         extends = []
         for f in files:
-            fileId = (f['inode'], f['dev'])
-            self.logger.debug('Processing file: %s %s', f['name'], str(fileId))
+            fileId = (f["inode"], f["dev"])
+            self.logger.debug("Processing file: %s %s", f["name"], str(fileId))
             res, basis = self.checkFile(parentInode, f, dirContents, extends)
             # Shortcut for this:
             if res == FileResponse.LINKED:
@@ -397,11 +397,11 @@ class Backend:
             else:
                 queues[res].add(fileId)
 
-            if 'xattr' in f:
-                xattr = f['xattr']
+            if "xattr" in f:
+                xattr = f["xattr"]
                 # Check to see if we have this checksum
                 info = self.db.getChecksumInfo(xattr)
-                if (not info) or (info['size'] == -1):
+                if (not info) or (info["size"] == -1):
                     attrs.add(xattr)
 
         if extends:
@@ -421,36 +421,36 @@ class Backend:
             "content"   : list(content),
             "delta"     : list(delta),
             "refresh"   : list(refresh),
-            "xattrs"    : list(attrs)
+            "xattrs"    : list(attrs),
         }
 
         return (response, True)
 
     def processDirHash(self, message):
-        checksum = message['hash']
-        inode = tuple(message['inode'])
+        checksum = message["hash"]
+        inode = tuple(message["inode"])
         ckinfo = self.db.getChecksumInfo(checksum)
         if ckinfo:
-            cksid = ckinfo['checksumid']
+            cksid = ckinfo["checksumid"]
         else:
-            cksid = self.db.insertChecksum(checksum, encrypted=False, size=message['size'], isFile=False)
+            cksid = self.db.insertChecksum(checksum, encrypted=False, size=message["size"], isFile=False)
             self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         self.db.updateDirChecksum(inode, cksid)
         response = {
             "message" : Protocol.Responses.ACKDHSH,
-            "status"  : "OK"
+            "status"  : "OK",
         }
         return (response, False)
 
     def processManySigsRequest(self, message):
-        inodes = message['inodes']
+        inodes = message["inodes"]
         for i in inodes:
             ((inode, dev), checksum) = i
             self.logger.debug("ProcessManySigRequests: %s %s %s", inode, dev, checksum)
-            self.sendSignature(inode, dev, checksum, message.get('msgid', 0))
+            self.sendSignature(inode, dev, checksum, message.get("msgid", 0))
         response = {
-            'message': Protocol.Commands.SIG,
-            'status' : "DONE"
+            "message": Protocol.Commands.SIG,
+            "status" : "DONE",
         }
         return response, True
 
@@ -458,19 +458,19 @@ class Backend:
         """ Generate and send a signature for a file """
         self.logger.debug("Processing signature request message: %s", str(message))
         ((inode, dev), checksum) = message["inode"]
-        return self.sendSignature(inode, dev, checksum, message.get('msgid', 0))
+        return self.sendSignature(inode, dev, checksum, message.get("msgid", 0))
 
     def sendSignature(self, inode, dev, chksum, msgid):
         response = None
         errmsg = None
-        sig = b''
+        sig = b""
 
         self.logger.debug("Signature requested: %s %s %s", inode, dev, chksum)
         # TODO: Remove this function.  Shouldn't be needed anymore.
         if chksum is None:
             info = self.db.getFileInfoByInode((inode, dev), current=False)
             if info:
-                chksum = info['checksum']
+                chksum = info["checksum"]
             else:
                 self.logger.warning("No Checksum Info available for (%d, %d)", inode, dev)
 
@@ -505,7 +505,7 @@ class Backend:
                     "status": "OK",
                     "encoding": self.messenger.getEncoding(),
                     "checksum": chksum,
-                    "size": len(sig)
+                    "size": len(sig),
                 }
                 self.sendMessage(response)
                 sigio = io.BytesIO(sig)
@@ -521,10 +521,10 @@ class Backend:
                 "message": Protocol.Commands.SIG,
                 "respid" : msgid,
                 "inode": inode,
-                "status": "FAIL"
+                "status": "FAIL",
             }
             if errmsg:
-                response['errmsg'] = errmsg
+                response["errmsg"] = errmsg
         return (response, False)
 
     def processDelta(self, message):
@@ -537,8 +537,8 @@ class Backend:
         size     = message["size"]          # size of the original file, not the content
         (inode, dev)    = message["inode"]
 
-        deltasize = message['deltasize'] if 'deltasize' in message else None
-        encrypted = message.get('encrypted', False)
+        deltasize = message["deltasize"] if "deltasize" in message else None
+        encrypted = message.get("encrypted", False)
 
         savefull = self.config.savefull and not encrypted
         if self.cache.exists(checksum):
@@ -558,7 +558,7 @@ class Backend:
 
         (bytesReceived, status, deltaSize, deltaChecksum, compressed) = Util.receiveData(self.messenger, output)
         self.logger.debug("Data Received: %d %s %d %s %s", bytesReceived, status, deltaSize, deltaChecksum, compressed)
-        if status != 'OK':
+        if status != "OK":
             self.logger.warning("Received invalid status on data reception")
 
         if deltasize is None:
@@ -616,7 +616,7 @@ class Backend:
         flush = size > 1000000
         message = {
             "message": Protocol.Responses.ACKDEL,
-            "status" : "OK"
+            "status" : "OK",
         }
         return (message, flush)
 
@@ -641,8 +641,8 @@ class Backend:
             output.close()
 
         response = {
-            'message': Protocol.Responses.ACKSIG,
-            'status': 'OK'
+            "message": Protocol.Responses.ACKSIG,
+            "status": "OK",
         }
         return (response, False)
 
@@ -659,43 +659,43 @@ class Backend:
             try:
                 # Check to see if the checksum already exists
                 info = self.db.getChecksumInfo(cksum)
-                if info and info['isfile'] and info['size'] >= 0:
+                if info and info["isfile"] and info["size"] >= 0:
                     old = self.db.getFileInfoByInode((inode, dev))
                     # if it does, set the new checksum
                     self.db.setChecksum(inode, dev, cksum)
-                    done.append(f['inode'])
+                    done.append(f["inode"])
                 else:
                     # else, check the old version
                     old = self.db.getFileInfoByInode((inode, dev))
                     # if it exists, and the chainlength is low, add a chain
-                    if old and (old['chainlength'] < self.maxChain):
-                        delta.append((f['inode'], old['checksum']))
+                    if old and (old["chainlength"] < self.maxChain):
+                        delta.append((f["inode"], old["checksum"]))
                     else:
                         # else get the whol thing.
-                        content.append(f['inode'])
+                        content.append(f["inode"])
             except Exception as e:
                 self.logger.error("Could not check checksum for %s: %s", cksum, str(e))
                 self.exceptionLogger.log(e)
-                content.append(f['inode'])
+                content.append(f["inode"])
         message = {
             "message": Protocol.Responses.ACKSUM,
             "status" : "OK",
             "done"   : done,
             "content": content,
-            "delta"  : delta
+            "delta"  : delta,
             }
         return (message, False)
 
     def processMeta(self, message):
         """ Check metadata messages """
-        metadata = message['metadata']
-        encrypted = message.get('encrypted', False)
+        metadata = message["metadata"]
+        encrypted = message.get("encrypted", False)
         done = []
         content = []
         for cksum in metadata:
             try:
                 info = self.db.getChecksumInfo(cksum)
-                if info and info['size'] != -1:
+                if info and info["size"] != -1:
                     done.append(cksum)
                 else:
                     # Insert a placeholder with a negative size
@@ -708,9 +708,9 @@ class Backend:
                 self.exceptionLogger.log(e)
                 content.append(cksum)
         message = {
-            'message': Protocol.Responses.ACKMETA,
-            'content': content,
-            'done': done
+            "message": Protocol.Responses.ACKMETA,
+            "content": content,
+            "done": done,
         }
         return (message, False)
 
@@ -732,7 +732,7 @@ class Backend:
                 with self.cache.open(checksum, "wb") as output:
                     output.write(bytes(d))
                 self.db.updateChecksumFile(
-                    checksum, encrypted, size, compressed=compressed, disksize=len(d)
+                    checksum, encrypted, size, compressed=compressed, disksize=len(d),
                 )
                 self.statNewFiles += 1
                 self.statBytesReceived += len(d)
@@ -743,16 +743,16 @@ class Backend:
         self.logger.debug("Processing purge message: %s", str(message))
         message = message or {}
         prevTime = None
-        if 'time' in message:
-            if message['relative']:
-                prevTime = float(self.db.prevBackupDate) - float(message['time'])
+        if "time" in message:
+            if message["relative"]:
+                prevTime = float(self.db.prevBackupDate) - float(message["time"])
             else:
-                prevTime = float(message['time'])
+                prevTime = float(message["time"])
         elif self.configKeepTime:
             prevTime = float(self.db.prevBackupDate) - float(self.configKeepTime)
 
-        if 'priority' in message:
-            priority = message['priority']
+        if "priority" in message:
+            priority = message["priority"]
         else:
             priority = self.configPriority
 
@@ -771,9 +771,9 @@ class Backend:
         """ Clone an entire directory """
         done = []
         content = []
-        for d in message['clones']:
-            inode = d['inode']
-            device = d['dev']
+        for d in message["clones"]:
+            inode = d["inode"]
+            device = d["dev"]
             inoDev = (inode, device)
             info = self.db.getFileInfoByInode(inoDev, current=False)
 
@@ -783,10 +783,10 @@ class Backend:
                 # has changed, and a directory which is older than the last completed backup is added to the backup.
                 info = self.db.getFileInfoByInodeFromPartial(inoDev)
 
-            if info and info['checksum'] is not None:
+            if info and info["checksum"] is not None:
                 numFiles = self.db.getDirectorySize(inoDev)
                 if numFiles is not None:
-                    if (numFiles == d['numfiles']) and (info['checksum'] == d['cksum']):
+                    if (numFiles == d["numfiles"]) and (info["checksum"] == d["cksum"]):
                         self.db.cloneDir(inoDev)
                         if self.full:
                             numDeltas = self.db.getNumDeltaFilesInDirectory(inoDev, current=False)
@@ -808,7 +808,7 @@ class Backend:
         response = {
             "message" : Protocol.Responses.ACKCLN,
             "done" : done,
-            "content" : content
+            "content" : content,
         }
         return response, True
 
@@ -828,9 +828,9 @@ class Backend:
             tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
             self._sequenceNumber += 1
             self.logger.debug("Sending output to temporary file %s", tempName)
-            output = open(tempName, 'wb')
+            output = open(tempName, "wb")
 
-        encrypted = message.get('encrypted', False)
+        encrypted = message.get("encrypted", False)
 
         try:
             (bytesReceived, status, size, checksum, compressed) = Util.receiveData(self.messenger, output)
@@ -854,15 +854,14 @@ class Backend:
                         self.cache.insert(checksum, tempName)
                         self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                         self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
+                    elif self.full:
+                        self.logger.debug("Replacing existing checksum file for %s", checksum)
+                        self.cache.insert(checksum, tempName)
+                        self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                     else:
-                        if self.full:
-                            self.logger.debug("Replacing existing checksum file for %s", checksum)
-                            self.cache.insert(checksum, tempName)
-                            self.db.updateChecksumFile(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
-                        else:
-                            # Check to make sure it's recorded in the DB.  If not, reinsert
-                            self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
-                            os.remove(tempName)
+                        # Check to make sure it's recorded in the DB.  If not, reinsert
+                        self.logger.debug("Checksum file %s already exists.  Deleting temporary version", checksum)
+                        os.remove(tempName)
                 else:
                     self.cache.insert(checksum, tempName)
                     self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
@@ -871,7 +870,7 @@ class Backend:
                 self.db.insertChecksum(checksum, encrypted, size, compressed=compressed, disksize=bytesReceived)
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
 
-            (inode, dev) = message['inode']
+            (inode, dev) = message["inode"]
 
             self.logger.debug("Setting checksum for inode %d to %s", inode, checksum)
             self.db.setChecksum(inode, dev, checksum)
@@ -887,13 +886,13 @@ class Backend:
         self.statBytesReceived += bytesReceived
 
         response = {
-            'message': Protocol.Responses.ACKCON,
-            'status': 'OK'
+            "message": Protocol.Responses.ACKCON,
+            "status": "OK",
         }
         return (response, False)
 
     def processBatch(self, message):
-        batch = message['batch']
+        batch = message["batch"]
         responses = []
         for mess in batch:
             (response, _) = self.processMessage(mess, transaction=False)
@@ -901,74 +900,74 @@ class Backend:
                 responses.append(response)
 
         response = {
-            'message': Protocol.Responses.ACKBTCH,
-            'responses': responses
+            "message": Protocol.Responses.ACKBTCH,
+            "responses": responses,
         }
         self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
         self.db.commit()
         return (response, True)
 
     def processSetKeys(self, message):
-        filenameKey     = message['filenameKey']
-        contentKey      = message['contentKey']
-        srpSalt         = message['srpSalt']
-        srpVkey         = message['srpVkey']
-        cryptoScheme    = message['cryptoScheme']
+        filenameKey     = message["filenameKey"]
+        contentKey      = message["contentKey"]
+        srpSalt         = message["srpSalt"]
+        srpVkey         = message["srpVkey"]
+        cryptoScheme    = message["cryptoScheme"]
 
         ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-        self.db.setConfigValue('CryptoScheme', cryptoScheme)
+        self.db.setConfigValue("CryptoScheme", cryptoScheme)
         response = {
-            'message': Protocol.Responses.ACKSETKEYS,
-            'response': 'OK' if ret else 'FAIL'
+            "message": Protocol.Responses.ACKSETKEYS,
+            "response": "OK" if ret else "FAIL",
         }
         return (response, True)
 
     def processClientConfig(self, message):
         if self.saveConfig:
-            clientConfig = message['args']
+            clientConfig = message["args"]
             self.logger.debug("Received client config: %s", clientConfig)
             self.db.setClientConfig(clientConfig)
         response = {
-            'message': Protocol.Responses.ACKCLICONFIG,
-            'saved': self.saveConfig
+            "message": Protocol.Responses.ACKCLICONFIG,
+            "saved": self.saveConfig,
         }
         return (response, False)
 
     def processDone(self, _):
         self.done = True
         response = {
-            'message': Protocol.Responses.ACKDONE
+            "message": Protocol.Responses.ACKDONE,
         }
         return (response, True)
 
     def processCommandLine(self, message):
-        cksum = message['hash']
+        cksum = message["hash"]
         self.logger.debug("Received command line")
         ckInfo = self.db.getChecksumInfo(cksum)
         if ckInfo is None:
             self.logger.debug("Inserting command line file")
-            f = self.cache.open(cksum, 'wb')
-            if isinstance(message['line'], bytes):
-                f.write(message['line'])
+            f = self.cache.open(cksum, "wb")
+            if isinstance(message["line"], bytes):
+                f.write(message["line"])
             else:
-                f.write(bytes(message['line'], 'utf8'))
-            cksid = self.db.insertChecksum(cksum, message['encrypted'], size=message['size'], disksize=f.tell())
+                f.write(bytes(message["line"], "utf8"))
+            cksid = self.db.insertChecksum(cksum, message["encrypted"], size=message["size"], disksize=f.tell())
             self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
             f.close()
         else:
-            cksid = ckInfo['checksumid']
+            cksid = ckInfo["checksumid"]
         self.logger.debug("Command Line stored as checksum: %s => %d", cksum, cksid)
         self.db.setCommandLine(cksid)
 
         response = {
-            'message': Protocol.Responses.ACKCMDLN
+            "message": Protocol.Responses.ACKCMDLN,
         }
         return (response, False)
 
     def processMessage(self, message, transaction=True):
         """ Dispatch a message to the correct handlers """
         try:
-            messageType = message['message']
+            messageType = message["message"]
             # Stats
             self.statCommands[messageType] = self.statCommands.get(messageType, 0) + 1
 
@@ -1010,8 +1009,8 @@ class Backend:
                 case _:
                     raise ProtocolError("Unknown message type", messageType)
 
-            if response and 'msgid' in message:
-                response['respid'] = message['msgid']
+            if response and "msgid" in message:
+                response["respid"] = message["msgid"]
             if transaction:
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                 self.db.commit()
@@ -1020,14 +1019,14 @@ class Backend:
         except ProtocolError as e:
             raise ProtocolError(str(e)) from e
         except Exception as e:
-            self.logger.error("Caught exception processing message: %d %s -- %s", message.get('msgid', -1), message.get('message', ''), textwrap.shorten(json.dumps(message), 256, placeholder='...'))
+            self.logger.error("Caught exception processing message: %d %s -- %s", message.get("msgid", -1), message.get("message", ""), textwrap.shorten(json.dumps(message), 256, placeholder="..."))
             self.exceptionLogger.log(e)
             raise ProcessingError(str(e)) from e
 
     def genPaths(self):
         self.logger.debug("Generating paths: %s", self.config.basedir)
         self.basedir    = os.path.join(self.config.basedir, self.client)
-        dbfile          = os.path.join(self.basedir, 'tardis.db')
+        dbfile          = os.path.join(self.basedir, "tardis.db")
         return dbfile
 
     def getCacheDir(self, create):
@@ -1053,7 +1052,7 @@ class Backend:
 
         self.cache = self.getCacheDir(create)
 
-        connid = {'connid': self.idstr}
+        connid = {"connid": self.idstr}
 
         if not os.path.exists(dbfile):
             if not os.path.exists(self.basedir):
@@ -1086,34 +1085,34 @@ class Backend:
 
         if self.config.allowOverrides:
             try:
-                formats     = self.db.getConfigValue('Formats')
-                priorities  = self.db.getConfigValue('Priorities')
-                keepDays    = self.db.getConfigValue('KeepDays')
-                forceFull   = self.db.getConfigValue('ForceFull')
+                formats     = self.db.getConfigValue("Formats")
+                priorities  = self.db.getConfigValue("Priorities")
+                keepDays    = self.db.getConfigValue("KeepDays")
+                forceFull   = self.db.getConfigValue("ForceFull")
 
                 if formats:
                     self.logger.debug("Overriding global name formats: %s", formats)
-                    self.formats        = list(map(str.strip, formats.split(',')))
+                    self.formats        = list(map(str.strip, formats.split(",")))
                 if priorities:
                     self.logger.debug("Overriding global priorities: %s", priorities)
-                    self.priorities     = list(map(int, priorities.split(',')))
+                    self.priorities     = list(map(int, priorities.split(",")))
                 if keepDays:
                     self.logger.debug("Overriding global keep days: %s", keepDays)
-                    self.keep           = list(map(int, keepDays.split(',')))
+                    self.keep           = list(map(int, keepDays.split(",")))
                 if forceFull:
                     self.logger.debug("Overriding global force full: %s", forceFull)
-                    self.forceFull      = list(map(int, forceFull.split(',')))
+                    self.forceFull      = list(map(int, forceFull.split(",")))
 
                 numFormats = len(self.formats)
                 if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
                     self.logger.warning("Client %s has different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
                                         self.client, len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
-                savefull        = self.db.getConfigValue('SaveFull')
-                maxChain        = self.db.getConfigValue('MaxDeltaChain')
-                deltaPercent    = self.db.getConfigValue('MaxChangePercent')
-                autoPurge       = self.db.getConfigValue('AutoPurge')
-                saveConfig      = self.db.getConfigValue('SaveConfig')
+                savefull        = self.db.getConfigValue("SaveFull")
+                maxChain        = self.db.getConfigValue("MaxDeltaChain")
+                deltaPercent    = self.db.getConfigValue("MaxChangePercent")
+                autoPurge       = self.db.getConfigValue("AutoPurge")
+                saveConfig      = self.db.getConfigValue("SaveConfig")
 
                 if savefull is not None:
                     self.logger.debug("Overriding global save full: %s", savefull)
@@ -1138,18 +1137,18 @@ class Backend:
 
         # Check if the previous backup session completed.
         prev = self.db.lastBackupSet(completed=False)
-        if prev['endtime'] is None or checkSession(prev['session']):
+        if prev["endtime"] is None or checkSession(prev["session"]):
             if force:
-                self.logger.warning("Staring session %s while previous backup still running: %s", name, prev['name'])
+                self.logger.warning("Staring session %s while previous backup still running: %s", name, prev["name"])
             else:
-                if checkSession(prev['session']):
+                if checkSession(prev["session"]):
                     raise InitFailedException(f"Previous backup session still running: {prev['name']}.  Run with --force to force starting the new backup")
-                self.logger.warning('Previous session for client %s (%s, %s) did not complete.', self.client, prev['name'], prev['session'])
+                self.logger.warning("Previous session for client %s (%s, %s) did not complete.", self.client, prev["name"], prev["session"])
 
         addSession(self.sessionid, self.client)
 
         # Mark if the last session was completed
-        self.lastCompleted = prev['completed']
+        self.lastCompleted = prev["completed"]
         self.tempdir = os.path.join(self.basedir, "tmp")
         if not os.path.exists(self.tempdir):
             os.makedirs(self.tempdir)
@@ -1178,18 +1177,18 @@ class Backend:
     def doGetKeys(self):
         try:
             response = {
-                "status": Protocol.Responses.NEEDKEYS
+                "status": Protocol.Responses.NEEDKEYS,
             }
             self.sendMessage(response)
 
             resp = self.recvMessage()
             self.checkMessage(resp, "SETKEYS")
 
-            filenameKey  = resp['filenameKey']
-            contentKey   = resp['contentKey']
-            srpSalt      = resp['srpSalt']
-            srpVkey      = resp['srpVkey']
-            cryptoScheme = resp['cryptoScheme']
+            filenameKey  = resp["filenameKey"]
+            contentKey   = resp["contentKey"]
+            srpSalt      = resp["srpSalt"]
+            srpVkey      = resp["srpVkey"]
+            cryptoScheme = resp["cryptoScheme"]
             # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
             return srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme
         except KeyError as e:
@@ -1202,16 +1201,16 @@ class Backend:
         """
         self.logger.debug("Beginning Authentication")
         try:
-            cryptoScheme = self.db._getConfigValue('CryptoScheme', '1')
-            message = {"message": Protocol.Responses.AUTH, "status": "AUTH", 'cryptoScheme': cryptoScheme, "client": self.db.clientId}
+            cryptoScheme = self.db._getConfigValue("CryptoScheme", "1")
+            message = {"message": Protocol.Responses.AUTH, "status": "AUTH", "cryptoScheme": cryptoScheme, "client": self.db.clientId}
             self.sendMessage(message)
             auth1 = self.recvMessage()
-            if auth1['message'] == 'BYE':
+            if auth1["message"] == "BYE":
                 raise TardisDB.AuthenticationFailed("Shutdown during initialization")
 
             self.checkMessage(auth1, Protocol.Commands.AUTH1)
-            name = base64.b64decode(auth1['srpUname'])
-            srpValueA = base64.b64decode(auth1['srpValueA'])
+            name = base64.b64decode(auth1["srpUname"])
+            srpValueA = base64.b64decode(auth1["srpValueA"])
 
             srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
             if srpValueS is None or srpValueB is None:
@@ -1219,30 +1218,30 @@ class Backend:
 
             self.logger.debug("Sending Challenge values")
             message = {
-                'message'   : Protocol.Commands.AUTH1,
-                'status'    : 'OK',
-                'srpValueS' : base64.b64encode(srpValueS),
-                'srpValueB' : base64.b64encode(srpValueB),
-                'respid'    : auth1.get('msgid', 0)
+                "message"   : Protocol.Commands.AUTH1,
+                "status"    : "OK",
+                "srpValueS" : base64.b64encode(srpValueS),
+                "srpValueB" : base64.b64encode(srpValueB),
+                "respid"    : auth1.get("msgid", 0),
             }
             self.sendMessage(message)
 
             auth2 = self.recvMessage()
             self.logger.debug("Received challenge response")
             self.checkMessage(auth2, Protocol.Commands.AUTH2)
-            srpValueM = base64.b64decode(auth2['srpValueM'])
+            srpValueM = base64.b64decode(auth2["srpValueM"])
             srpValueHAMK = self.db.authenticate2(srpValueM)
             message = {
-                'message'       : Protocol.Commands.AUTH2,
-                'status'        : 'OK',
-                'srpValueHAMK'  : base64.b64encode(srpValueHAMK),
-                'respid'        : auth2.get('msgid', 0)
+                "message"       : Protocol.Commands.AUTH2,
+                "status"        : "OK",
+                "srpValueHAMK"  : base64.b64encode(srpValueHAMK),
+                "respid"        : auth2.get("msgid", 0),
             }
             self.logger.debug("Authenticated")
         except TardisDB.AuthenticationFailed as e:
             message = {
-                'status'    : 'AUTHFAIL',
-                'error'     : str(e)
+                "status"    : "AUTHFAIL",
+                "error"     : str(e),
             }
             self.sendMessage(message)
             self.db.close(False)
@@ -1253,24 +1252,24 @@ class Backend:
     def initializeBackup(self):
         try:
             message:dict = self.recvMessage()
-            messType = message['message']
+            messType = message["message"]
             if messType != Protocol.Commands.BACKUP:
                 raise InitFailedException(f"Unknown message type: {messType}")
 
-            client      = message['host']            # TODO: Change at client as well.
-            clienttime  = message['time']
-            version     = message['version']
+            client      = message["host"]            # TODO: Change at client as well.
+            clienttime  = message["time"]
+            version     = message["version"]
 
-            autoname    = message.get('autoname', True)
-            name        = message.get('name', None)
-            full        = message.get('full', False)
-            priority    = message.get('priority', 0)
-            force       = message.get('force', False)
-            create      = message.get('create', False)
-            encrypted   = message.get('encrypted', False)
+            autoname    = message.get("autoname", True)
+            name        = message.get("name")
+            full        = message.get("full", False)
+            priority    = message.get("priority", 0)
+            force       = message.get("force", False)
+            create      = message.get("create", False)
+            encrypted   = message.get("encrypted", False)
 
-            self.tags       = message.get('tags', [])
-            self.movetag    = message.get('movetags', False)
+            self.tags       = message.get("tags", [])
+            self.movetag    = message.get("movetags", False)
 
             self.logger.info("Creating backup for %s: %s (Autoname: %s) %s %s", client, name, str(autoname), version, clienttime)
         except ValueError as e:
@@ -1306,10 +1305,10 @@ class Backend:
                 self.logger.debug("Setting keys into new client DB")
                 self.logger.debug("Setting CryptoScheme %d", cryptoScheme)
                 self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-                self.db.setConfigValue('CryptoScheme', cryptoScheme)
+                self.db.setConfigValue("CryptoScheme", cryptoScheme)
                 keys = None
             else:
-                self.db.setConfigValue('CryptoScheme', TardisCrypto.NO_CRYPTO_SCHEME)
+                self.db.setConfigValue("CryptoScheme", TardisCrypto.NO_CRYPTO_SCHEME)
 
         if self.config.requirePW and not self.db.needsAuthentication():
             raise InitFailedException("Passwords required on this server.  Please add a password (sonic setpass) and encrypt the DB if necessary")
@@ -1318,7 +1317,7 @@ class Backend:
         if self.db.needsAuthentication():
             authResp = self.doSrpAuthentication()
 
-        disabled = self.db.getConfigValue('Disabled')
+        disabled = self.db.getConfigValue("Disabled")
         if disabled is not None and int(disabled) != 0:
             raise InitFailedException(f"Client {client} is currently disabled.")
 
@@ -1359,21 +1358,21 @@ class Backend:
             "prevDate": str(self.db.prevBackupDate),
             "new": newBackup,
             "name": serverName if serverName else name,
-            "clientid": str(self.db.clientId)
+            "clientid": str(self.db.clientId),
         }
 
         if authResp:
             response.update(authResp)
-            filenameKey = self.db.getConfigValue('FilenameKey')
-            contentKey  = self.db.getConfigValue('ContentKey')
+            filenameKey = self.db.getConfigValue("FilenameKey")
+            contentKey  = self.db.getConfigValue("ContentKey")
 
             if (filenameKey is None) ^ (contentKey is None):
                 self.logger.warning("Name Key and Data Key are both not in the same state. FilenameKey: %s  ContentKey: %s", filenameKey, contentKey)
 
             if filenameKey:
-                response['filenameKey'] = filenameKey
+                response["filenameKey"] = filenameKey
             if contentKey:
-                response['contentKey'] = contentKey
+                response["contentKey"] = contentKey
 
         self.sendMessage(response)
 
@@ -1385,8 +1384,8 @@ class Backend:
                 raise Exception("No message received")
 
             if message["message"] == "BYE":
-                if 'error' in message:
-                    raise Exception("Client Error: " + message['error'])
+                if "error" in message:
+                    raise Exception("Client Error: " + message["error"])
                 break
 
             (response, flush) = self.processMessage(message)

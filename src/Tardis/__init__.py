@@ -32,33 +32,32 @@ import os
 import subprocess
 import sys
 
-__version__ = '1.9.1'
+__version__ = "1.9.1"
 v = sys.version_info
 
-__buildversion__ = ''
+__buildversion__ = ""
 __pythonversion__ = f" Python {v.major}.{v.minor}.{v.micro}"
 __versionstring__ = f"{__version__} ({__pythonversion__})"
 
 try:
     parentDir     = os.path.dirname(os.path.realpath(__file__))
-    versionFile   = os.path.join(parentDir, 'tardisversion')
-    __buildversion__ = str(open(versionFile, 'r').readline()).strip()
+    versionFile   = os.path.join(parentDir, "tardisversion")
+    __buildversion__ = str(open(versionFile).readline()).strip()
 except Exception:
     try:
-        __buildversion__ = str(subprocess.check_output(['git', 'describe', '--dirty', '--tags', '--always'], stderr=subprocess.STDOUT).strip(), 'utf-8')
+        __buildversion__ = str(subprocess.check_output(["git", "describe", "--dirty", "--tags", "--always"], stderr=subprocess.STDOUT).strip(), "utf-8")
     except subprocess.CalledProcessError:
         pass
 
 if __buildversion__:
-    __versionstring__ = __version__ + ' (' + str(__buildversion__) + __pythonversion__ + ')'
+    __versionstring__ = __version__ + " (" + str(__buildversion__) + __pythonversion__ + ")"
 
 def check_features():
-    xattr_pkg = 'xattr'
-    acl_pkg   = 'pylibacl'
+    xattr_pkg = "xattr"
+    acl_pkg   = "pylibacl"
     os_info = os.uname()
-    if os_info[0] == 'Linux':
+    if os_info[0] == "Linux":
         return [xattr_pkg, acl_pkg]
-    elif os_info[0] == 'Darwin':
+    if os_info[0] == "Darwin":
         return [xattr_pkg]
-    else:
-        return []
+    return []

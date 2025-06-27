@@ -58,12 +58,12 @@ class NoSuchBackupError(Exception):
         super().__init__(f"{message} {value}")
         self.value = value
 
-current      = Defaults.getDefault('TARDIS_RECENT_SET')
+current      = Defaults.getDefault("TARDIS_RECENT_SET")
 
 # Config keys which can be gotten or set.
-configKeys = ['Formats', 'Priorities', 'KeepDays', 'ForceFull', 'SaveFull', 'MaxDeltaChain', 'MaxChangePercent', 'VacuumInterval', 'AutoPurge', 'Disabled', 'SaveConfig']
+configKeys = ["Formats", "Priorities", "KeepDays", "ForceFull", "SaveFull", "MaxDeltaChain", "MaxChangePercent", "VacuumInterval", "AutoPurge", "Disabled", "SaveConfig"]
 # Extra keys that we print when everything is requested
-sysKeys    = ['ClientID', 'SchemaVersion', 'FilenameKey', 'ContentKey', 'CryptoScheme']
+sysKeys    = ["ClientID", "SchemaVersion", "FilenameKey", "ContentKey", "CryptoScheme"]
 
 logger: logging.Logger
 eLogger: Util.ExceptionLogger
@@ -77,22 +77,22 @@ def parseDateTime(value):
     return dt
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
-    loc = urllib.parse.urlparse(args.repo, scheme='file')
+    loc = urllib.parse.urlparse(args.repo, scheme="file")
     _, client = os.path.split(loc.path)
     # This is basically the same code as in Util.setupDataConnection().  Should consider moving to it.
-    if loc.scheme in ['http', 'https', 'tardis']:
+    if loc.scheme in ["http", "https", "tardis"]:
         if not allowRemote:
             raise Exception("This command cannot be executed remotely.  You must execute it on the server directly.")
         # If no port specified, insert the port
         if loc.port is None:
-            netloc = loc.netloc + ":" + Defaults.getDefault('TARDIS_REMOTE_PORT')
+            netloc = loc.netloc + ":" + Defaults.getDefault("TARDIS_REMOTE_PORT")
             dbLoc = urllib.parse.urlunparse((loc.scheme, netloc, loc.path, loc.params, loc.query, loc.fragment))
         else:
             dbLoc = args.repo
         tardisdb = RemoteDB.RemoteDB(dbLoc, client)
         cache = tardisdb
-    elif loc.scheme == 'file':
-        dbfile = os.path.join(loc.path, 'tardis.db')
+    elif loc.scheme == "file":
+        dbfile = os.path.join(loc.path, "tardis.db")
         if new and os.path.exists(dbfile):
             raise Exception(f"Repository for client {client} already exists.")
 
@@ -139,15 +139,15 @@ def setPassword(password):
         if args.keys:
             db.beginTransaction()
             db.setSrpValues(salt, vkey)
-            db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
-            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+            db.setConfigValue("CryptoScheme", crypt.getCryptoScheme())
+            Util.saveKeys(args.keys, db.getConfigValue("ClientID"), f, c)
             db.commit()
         else:
             db.setKeys(salt, vkey, f, c)
-            db.setConfigValue('CryptoScheme', crypt.getCryptoScheme())
+            db.setConfigValue("CryptoScheme", crypt.getCryptoScheme())
         return 0
     except TardisDB.NotAuthenticated as e:
-        logger.error('Client %s already has a password', args.client)
+        logger.error("Client %s already has a password", args.client)
         eLogger.log(e)
         return 1
     except TardisDB.AuthenticationFailed as e:
@@ -174,12 +174,12 @@ def changePassword(crypt, oldPw):
             eLogger.log(e)
             return -1
 
-        scheme = db.getConfigValue('CryptoScheme', 1)
+        scheme = db.getConfigValue("CryptoScheme", 1)
         crypt2 = TardisCrypto.getCrypto(scheme, newpw, client)
 
         # Load the keys, and insert them into the crypt object, to decyrpt them
         if args.keys:
-            (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+            (f, c) = Util.loadKeys(args.keys, db.getConfigValue("ClientID"))
             # No need to check here, loadKeys() throws exception if nothing set.
         else:
             (f, c) = db.getKeys()
@@ -201,7 +201,7 @@ def changePassword(crypt, oldPw):
         if args.keys:
             db.beginTransaction()
             db.setSrpValues(salt, vkey)
-            Util.saveKeys(args.keys, db.getConfigValue('ClientID'), f, c)
+            Util.saveKeys(args.keys, db.getConfigValue("ClientID"), f, c)
             db.commit()
         else:
             db.setKeys(salt, vkey, f, c)
@@ -216,7 +216,7 @@ def moveKeys(db, _):
         if args.keys is None:
             logger.error("Must specify key file for key manipulation")
             return 1
-        clientId = db.getConfigValue('ClientID')
+        clientId = db.getConfigValue("ClientID")
         salt, vkey = db.getSrpValues()
         #(db, _) = getDB(crypt)
         if args.extract:
@@ -243,7 +243,7 @@ def moveKeys(db, _):
         return 1
     return 0
 
-@functools.lru_cache()
+@functools.lru_cache
 def getCommandLine(commandLineCksum, regenerator):
     if commandLineCksum:
         try:
@@ -267,14 +267,14 @@ def listBSets(db, crypt, cache):
         sets = list(db.listBackupSets())
 
         if args.minpriority:
-            sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
+            sets = list(filter(lambda x: x["priority"] >= args.minpriority, sets))
 
         if args.before:
             timestamp = time.mktime(args.before)
-            sets = list(filter(lambda x: float(x['starttime']) < timestamp, sets))
+            sets = list(filter(lambda x: float(x["starttime"]) < timestamp, sets))
         if args.after:
             timestamp = time.mktime(args.after)
-            sets = list(filter(lambda x: float(x['starttime']) > timestamp, sets))
+            sets = list(filter(lambda x: float(x["starttime"]) > timestamp, sets))
 
         if args.last:
             sets = sets[-args.last:]
@@ -282,28 +282,28 @@ def listBSets(db, crypt, cache):
             sets = sets[:args.first]
 
         for bset in sets:
-            t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset['starttime'])))
-            if bset['endtime'] is not None:
-                duration = str(datetime.timedelta(seconds = (int(float(bset['endtime']) - float(bset['starttime'])))))
+            t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"])))
+            if bset["endtime"] is not None:
+                duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"])))))
             else:
-                duration = ''
-            completed = 'Comp' if bset['completed'] else 'Incomp'
-            full      = 'Full' if bset['full'] else 'Delta'
-            tags = [_decryptName(tag, crypt) for tag in db.getTags(bset['backupset'])]
-            if bset['backupset'] == last['backupset']:
-                status = ', '.join(tags + [current])
-            elif bset['errormsg']:
-                status = bset['errormsg']
+                duration = ""
+            completed = "Comp" if bset["completed"] else "Incomp"
+            full      = "Full" if bset["full"] else "Delta"
+            tags = [_decryptName(tag, crypt) for tag in db.getTags(bset["backupset"])]
+            if bset["backupset"] == last["backupset"]:
+                status = ", ".join(tags + [current])
+            elif bset["errormsg"]:
+                status = bset["errormsg"]
             else:
-                status = ', '.join(tags)
-            size = Util.fmtSize(bset['bytesreceived'], suffixes=['', 'KB', 'MB', 'GB', 'TB'])
-            locked = '*' if bset['locked'] else ' '
+                status = ", ".join(tags)
+            size = Util.fmtSize(bset["bytesreceived"], suffixes=["", "KB", "MB", "GB", "TB"])
+            locked = "*" if bset["locked"] else " "
 
-            print(f.format(bset['name'], bset['backupset'], completed, bset['priority'], full, t, duration, bset['filesfull'] or 0, bset['filesdelta'] or 0, size, locked, status))
+            print(f.format(bset["name"], bset["backupset"], completed, bset["priority"], full, t, duration, bset["filesfull"] or 0, bset["filesdelta"] or 0, size, locked, status))
             if args.longinfo:
-                commandLine = getCommandLine(bset['commandline'], regenerator)
-                cVersion = bset['clientversion']
-                sVersion = bset['serverversion']
+                commandLine = getCommandLine(bset["commandline"], regenerator)
+                cVersion = bset["clientversion"]
+                sVersion = bset["serverversion"]
                 if commandLine:
                     print(f"    Command Line: {commandLine.decode('utf-8')}")
                 if cVersion or sVersion:
@@ -324,7 +324,7 @@ def listBSets(db, crypt, cache):
 
 # cache of paths we've already calculated.
 # the root (0, 0,) is always prepopulated
-_paths = {(0, 0): '/'}
+_paths = {(0, 0): "/"}
 
 def _encryptName(name, crypt):
     return crypt.encryptName(name)
@@ -339,37 +339,37 @@ def _path(db, crypt, bset, inode):
         return _paths[inode]
     fInfo = db.getFileInfoByInode(inode, bset)
     if fInfo:
-        parent = (fInfo['parent'], fInfo['parentdev'])
+        parent = (fInfo["parent"], fInfo["parentdev"])
         prefix = _path(db, crypt, bset, parent)
 
-        name = _decryptName(fInfo['name'], crypt)
+        name = _decryptName(fInfo["name"], crypt)
         path = os.path.join(prefix, name)
         _paths[inode] = path
         return path
-    return '/'
+    return "/"
 
 def humanify(size):
     if size is not None:
         if args.human:
-            size = Util.fmtSize(size, suffixes=['','KB','MB','GB', 'TB', 'PB'])
+            size = Util.fmtSize(size, suffixes=["","KB","MB","GB", "TB", "PB"])
     else:
-        size = ''
+        size = ""
     return size
 
 def listFiles(db, crypt):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
-    lastDir = '/'
+    lastDir = "/"
     lastDirInode = (-1, -1)
-    bset = info['backupset']
+    bset = info["backupset"]
 
     files = db.getNewFiles(bset, args.previous)
 
-    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x['parent'], x['parentdev'])),  _decryptName(x['name'], crypt))):
-        name = _decryptName(fInfo['name'], crypt)
+    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x["parent"], x["parentdev"])),  _decryptName(x["name"], crypt))):
+        name = _decryptName(fInfo["name"], crypt)
 
-        if not args.dirs and fInfo['dir']:
+        if not args.dirs and fInfo["dir"]:
             continue
-        dirInode = (fInfo['parent'], fInfo['parentdev'])
+        dirInode = (fInfo["parent"], fInfo["parentdev"])
         if dirInode == lastDirInode:
             path = lastDir
         else:
@@ -379,63 +379,63 @@ def listFiles(db, crypt):
             if not args.fullname:
                 print(f"{path}:")
         if args.status:
-            status = '[New]   ' if fInfo['chainlength'] == 0 else '[Delta] '
+            status = "[New]   " if fInfo["chainlength"] == 0 else "[Delta] "
         else:
-            status = ''
+            status = ""
         if args.fullname:
             name = os.path.join(path, name)
 
         if args.long:
-            mode  = stat.filemode(fInfo['mode'])
-            group = crypt.decryptName(fInfo['groupname'])
-            owner = crypt.decryptName(fInfo['username'])
-            mtime = Util.formatTime(fInfo['mtime'])
-            size = humanify(fInfo['size'])
-            inode = fInfo['inode']
-            print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
+            mode  = stat.filemode(fInfo["mode"])
+            group = crypt.decryptName(fInfo["groupname"])
+            owner = crypt.decryptName(fInfo["username"])
+            mtime = Util.formatTime(fInfo["mtime"])
+            size = humanify(fInfo["size"])
+            inode = fInfo["inode"]
+            print(f" {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}", end=" ")
             if args.cksums:
-                print(f" {fInfo.get('checksum', '') or '' :32}", end=' ')
+                print(f" {fInfo.get('checksum', '') or '' :32}", end=" ")
             if args.chnlen:
-                print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
+                print(f" {fInfo.get('chainlength', 0) or 0:4}", end=" ")
             if args.inode:
-                print(f" {inode:16}", end=' ')
+                print(f" {inode:16}", end=" ")
             if args.type:
-                print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
+                print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=" ")
             if args.size:
-                size = humanify(fInfo.get('disksize', 0))
-                print(f' {size:9} ', end=' ')
+                size = humanify(fInfo.get("disksize", 0))
+                print(f" {size:9} ", end=" ")
             print(name)
         else:
-            print(f"    {status}", end=' ')
+            print(f"    {status}", end=" ")
             if args.cksums:
-                print(f" {fInfo['checksum'] or '':32s}", end=' ')
+                print(f" {fInfo['checksum'] or '':32s}", end=" ")
             if args.chnlen:
-                print(f" {fInfo['chainlength'] or 0:>4}", end=' ')
+                print(f" {fInfo['chainlength'] or 0:>4}", end=" ")
             if args.inode:
-                print(' %-16s ' % (f"({fInfo['device'] or ''}, {fInfo['inode'] or ''})"), end=' ')
+                print(" %-16s " % (f"({fInfo['device'] or ''}, {fInfo['inode'] or ''})"), end=" ")
             if args.type:
-                print(f" {'Delta' if fInfo['chainlength'] else 'Full':5s}", end=' ')
+                print(f" {'Delta' if fInfo['chainlength'] else 'Full':5s}", end=" ")
             if args.size:
-                size = humanify(fInfo['disksize'])
-                print(f' {size:9} ', end=' ')
+                size = humanify(fInfo["disksize"])
+                print(f" {size:9} ", end=" ")
             print(name)
 
 
 def _bsetInfo(db, crypt, info):
     print(f"Backupset       : {info['name']} ({int(info['backupset'])})")
     print(f"Completed       : {'True' if info['completed'] else 'False'}")
-    t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['starttime'])))
+    t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info["starttime"])))
     print(f"StartTime       : {t}")
-    if info['endtime'] is not None:
-        t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info['endtime'])))
-        duration = str(datetime.timedelta(seconds = (int(float(info['endtime']) - float(info['starttime'])))))
+    if info["endtime"] is not None:
+        t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info["endtime"])))
+        duration = str(datetime.timedelta(seconds = (int(float(info["endtime"]) - float(info["starttime"])))))
         print(f"EndTime         : {t}")
         print(f"Duration        : {duration}")
-    tags = [_decryptName(tag, crypt) for tag in db.getTags(info['backupset'])]
+    tags = [_decryptName(tag, crypt) for tag in db.getTags(info["backupset"])]
     print(f"Tags:           : {','.join(tags)}")
     print(f"SW Versions     : C:{info['clientversion']} S:{info['serverversion']}")
     print(f"Client IP       : {info['clientip']}")
-    details = db.getBackupSetDetails(info['backupset'])
+    details = db.getBackupSetDetails(info["backupset"])
 
     (files, dirs, size, newInfo, endInfo) = details
     print(f"Files           : {files}")
@@ -467,11 +467,11 @@ def bsetInfo(db, crypt):
     if printed:
         print("\n * Purgeable numbers are estimates only")
 
-def confirm(message='Proceed (y/n): '):
+def confirm(message="Proceed (y/n): "):
     if not args.confirm:
         return True
     yesno = input(message).strip().upper()
-    return yesno in ['YES', 'Y']
+    return yesno in ["YES", "Y"]
 
 def doTagging(db, crypt):
     tag = _encryptName(args.tag, crypt)
@@ -479,7 +479,7 @@ def doTagging(db, crypt):
         db.removeTag(tag)
     if not args.remove:
         bset = getBackupSet(db, args.backup, args.date, True)
-        db.setTag(tag, bset['backupset'])
+        db.setTag(tag, bset["backupset"])
     return 0
 
 def doLock(db, lock):
@@ -491,11 +491,11 @@ def doLock(db, lock):
 def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
     if args.incomplete:
-        pSets = db.listPurgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
+        pSets = db.listPurgeIncomplete(args.priority, bset["endtime"], bset["backupset"])
     else:
-        pSets = db.listPurgeSets(args.priority, bset['endtime'], bset['backupset'])
+        pSets = db.listPurgeSets(args.priority, bset["endtime"], bset["backupset"])
 
-    names = [str(x['name']) for x in pSets]
+    names = [str(x["name"]) for x in pSets]
     logger.debug("Names: %s", names)
     if len(names) == 0:
         print("No matching sets")
@@ -506,9 +506,9 @@ def purge(db, cache):
 
     if confirm():
         if args.incomplete:
-            (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
+            (filesDeleted, setsDeleted) = db.purgeIncomplete(args.priority, bset["endtime"], bset["backupset"])
         else:
-            (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset['endtime'], bset['backupset'])
+            (filesDeleted, setsDeleted) = db.purgeSets(args.priority, bset["endtime"], bset["backupset"])
         print(f"Purged {setsDeleted} sets, containing {filesDeleted} files")
         removeOrphans(db, cache)
 
@@ -518,7 +518,7 @@ def getBackupSets(db, backups):
     results = []
     allSets = None
     for i in backups:
-        if m := re.match(r'(\d+)-(\d+)', i):
+        if m := re.match(r"(\d+)-(\d+)", i):
             lower = int(m.group(1))
             upper = int(m.group(2))
             if upper <= lower:
@@ -527,7 +527,7 @@ def getBackupSets(db, backups):
             if not allSets:
                 allSets = list(db.listBackupSets())
             for b in allSets:
-                if b['backupset'] in r:
+                if b["backupset"] in r:
                     results.append(b)
         else:
             bset = getBackupSet(db, i, None)
@@ -546,13 +546,13 @@ def deleteBsets(db, cache):
     if not bsets:
         raise ValueError("No backupsets specified")
 
-    names = [b['name'] for b in bsets]
-    print(f"Sets to be deleted:")
+    names = [b["name"] for b in bsets]
+    print("Sets to be deleted:")
     pprint.pprint(names, compact=True)
     if confirm():
         filesDeleted = 0
         for bset in bsets:
-            filesDeleted += db.deleteBackupSet(bset['backupset'])
+            filesDeleted += db.deleteBackupSet(bset["backupset"])
 
         print(f"Deleted {filesDeleted} files")
         if args.purge:
@@ -561,12 +561,12 @@ def deleteBsets(db, cache):
     return 0
 
 def removeOrphans(db, cache):
-    if hasattr(cache, 'removeOrphans'):
+    if hasattr(cache, "removeOrphans"):
         r = cache.removeOrphans()
         logger.debug("Remove Orphans: %s %s", type(r), r)
-        count = r['count']
-        size = r['size']
-        rounds = r['rounds']
+        count = r["count"]
+        size = r["size"]
+        rounds = r["rounds"]
     else:
         count, size, rounds = Util.removeOrphans(db, cache)
     print(f"Removed {count} orphans, for {Util.fmtSize(size)}, in {rounds} rounds")
@@ -574,7 +574,7 @@ def removeOrphans(db, cache):
 def checkSanity(db, cache, crypt):
     if not isinstance(db, TardisDB.TardisDB):
         print("DB must be on the local system for sanity checking")
-        return
+        return None
 
     try:
         print("Checking backup sanity.   Scanning for files")
@@ -607,15 +607,15 @@ def checkSanity(db, cache, crypt):
 
         for (k, v) in groupings.items():
             match k:
-                case ('',):
+                case ("",):
                     print(f"{v} files with only data (no metadata or signature, often ACL or Xattr)")
-                case ('.meta', '.sig') | ('.meta') | ('.sig'):
+                case (".meta", ".sig") | (".meta") | (".sig"):
                     print(f"{v} files with no data")
-                case ('', '.meta'):
+                case ("", ".meta"):
                     print(f"{v} files without a signature")
-                case ('', '.sig'):
+                case ("", ".sig"):
                     print(f"{v} files without metadata")
-                case ('', '.meta', '.sig'):
+                case ("", ".meta", ".sig"):
                     print(f"{v} fully populated files")
                 case x:
                     print(f"{v} files with unknown files types : {x}")
@@ -666,73 +666,73 @@ def getConfig(db):
         _printConfigKey(db, i)
 
 def setConfig(db):
-    print("Old Value: ", end=' ')
+    print("Old Value: ", end=" ")
     _printConfigKey(db, args.key)
     db.setConfigValue(args.key, args.value)
 
 def setPriority(db):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
-    db.setPriority(info['backupset'], args.priority)
+    db.setPriority(info["backupset"], args.priority)
     return 0
 
 def renameSet(db):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
-    result = db.setBackupSetName(args.newname, info['priority'], info['backupset'])
+    result = db.setBackupSetName(args.newname, info["priority"], info["backupset"])
     if not result:
-        logger.error("Unable to rename %s to %s.  Name already exists", info['name'], args.newname)
+        logger.error("Unable to rename %s to %s.  Name already exists", info["name"], args.newname)
     return result
 
 def parseArgs() -> argparse.Namespace:
     global args
 
-    parser = argparse.ArgumentParser(description='Tardis Sonic Screwdriver Utility Program', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description="Tardis Sonic Screwdriver Utility Program", fromfile_prefix_chars="@", formatter_class=Util.HelpFormatter, add_help=False)
 
     (args, remaining) = Config.parseConfigOptions(parser)
 
     # Shared parser
     bsetParser = argparse.ArgumentParser(add_help=False)
     bsetgroup = bsetParser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest='backup', default=None)
-    bsetgroup.add_argument("--date", "-d",   type=parseDateTime, help="Use last backupset before date", dest='date', default=None)
+    bsetgroup.add_argument("--backup", "-b", help="Backup set to use", dest="backup", default=None)
+    bsetgroup.add_argument("--date", "-d",   type=parseDateTime, help="Use last backupset before date", dest="date", default=None)
 
     purgeParser = argparse.ArgumentParser(add_help=False)
-    purgeParser.add_argument('--priority',       dest='priority',   default=0, type=int,                   help='Maximum priority backupset to purge')
-    purgeParser.add_argument('--incomplete',     dest='incomplete', default=False, action='store_true',    help='Purge only incomplete backup sets')
+    purgeParser.add_argument("--priority",       dest="priority",   default=0, type=int,                   help="Maximum priority backupset to purge")
+    purgeParser.add_argument("--incomplete",     dest="incomplete", default=False, action="store_true",    help="Purge only incomplete backup sets")
 
     bsetgroup = purgeParser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--date", "-d",     type=parseDateTime, dest='date',       default=None,   help="Purge sets before this date")
-    bsetgroup.add_argument("--backup", "-b",   dest='backup',      default=None,                      help="Purge sets before this set")
+    bsetgroup.add_argument("--date", "-d",     type=parseDateTime, dest="date",       default=None,   help="Purge sets before this date")
+    bsetgroup.add_argument("--backup", "-b",   dest="backup",      default=None,                      help="Purge sets before this set")
 
     deleteParser = argparse.ArgumentParser(add_help=False)
-    deleteParser.add_argument("--purge", "-p", dest='purge', default=True, action=argparse.BooleanOptionalAction,        help="Delete files in the backupset")
+    deleteParser.add_argument("--purge", "-p", dest="purge", default=True, action=argparse.BooleanOptionalAction,        help="Delete files in the backupset")
     deleteParser.add_argument("backups", nargs="*", default=None, help="Backup sets to delete")
 
     cnfParser = argparse.ArgumentParser(add_help=False)
-    cnfParser.add_argument('--confirm',          dest='confirm', action=argparse.BooleanOptionalAction, default=True,   help='Confirm deletes and purges')
+    cnfParser.add_argument("--confirm",          dest="confirm", action=argparse.BooleanOptionalAction, default=True,   help="Confirm deletes and purges")
 
     keyParser = argparse.ArgumentParser(add_help=False)
     keyGroup = keyParser.add_mutually_exclusive_group(required=True)
-    keyGroup.add_argument('--extract',          dest='extract', default=False, action='store_true',         help='Extract keys from repository')
-    keyGroup.add_argument('--insert',           dest='insert', default=False, action='store_true',          help='Insert keys from repository')
-    keyParser.add_argument('--delete',          dest='deleteKeys', default=False, action=argparse.BooleanOptionalAction, help='Delete keys from server or repository')
+    keyGroup.add_argument("--extract",          dest="extract", default=False, action="store_true",         help="Extract keys from repository")
+    keyGroup.add_argument("--insert",           dest="insert", default=False, action="store_true",          help="Insert keys from repository")
+    keyParser.add_argument("--delete",          dest="deleteKeys", default=False, action=argparse.BooleanOptionalAction, help="Delete keys from server or repository")
 
     filesParser = argparse.ArgumentParser(add_help=False)
-    filesParser.add_argument('--long', '-l',    dest='long', default=False, action=argparse.BooleanOptionalAction,           help='Long format')
-    filesParser.add_argument('--fullpath', '-f',    dest='fullname', default=False, action=argparse.BooleanOptionalAction,   help='Print full path name in names')
-    filesParser.add_argument('--previous',      dest='previous', default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
-    filesParser.add_argument('--dirs',          dest='dirs', default=False, action=argparse.BooleanOptionalAction,           help='Include directories in list')
-    filesParser.add_argument('--status',        dest='status', default=False, action=argparse.BooleanOptionalAction,         help='Include status (new/delta) in list')
-    filesParser.add_argument('--human', '-H',   dest='human', default=False, action=argparse.BooleanOptionalAction,          help='Print sizes in human readable form')
-    filesParser.add_argument('--checksums', '-c', dest='cksums', default=False, action=argparse.BooleanOptionalAction,       help='Print checksums')
-    filesParser.add_argument('--chainlen', '-L', dest='chnlen', default=False, action=argparse.BooleanOptionalAction,        help='Print chainlengths')
-    filesParser.add_argument('--inode', '-i',   dest='inode', default=False, action=argparse.BooleanOptionalAction,          help='Print inodes')
-    filesParser.add_argument('--type', '-t',    dest='type', default=False, action=argparse.BooleanOptionalAction,           help='Print backup type')
-    filesParser.add_argument('--size', '-s',    dest='size', default=False, action=argparse.BooleanOptionalAction,           help='Print backup size')
+    filesParser.add_argument("--long", "-l",    dest="long", default=False, action=argparse.BooleanOptionalAction,           help="Long format")
+    filesParser.add_argument("--fullpath", "-f",    dest="fullname", default=False, action=argparse.BooleanOptionalAction,   help="Print full path name in names")
+    filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
+    filesParser.add_argument("--dirs",          dest="dirs", default=False, action=argparse.BooleanOptionalAction,           help="Include directories in list")
+    filesParser.add_argument("--status",        dest="status", default=False, action=argparse.BooleanOptionalAction,         help="Include status (new/delta) in list")
+    filesParser.add_argument("--human", "-H",   dest="human", default=False, action=argparse.BooleanOptionalAction,          help="Print sizes in human readable form")
+    filesParser.add_argument("--checksums", "-c", dest="cksums", default=False, action=argparse.BooleanOptionalAction,       help="Print checksums")
+    filesParser.add_argument("--chainlen", "-L", dest="chnlen", default=False, action=argparse.BooleanOptionalAction,        help="Print chainlengths")
+    filesParser.add_argument("--inode", "-i",   dest="inode", default=False, action=argparse.BooleanOptionalAction,          help="Print inodes")
+    filesParser.add_argument("--type", "-t",    dest="type", default=False, action=argparse.BooleanOptionalAction,           help="Print backup type")
+    filesParser.add_argument("--size", "-s",    dest="size", default=False, action=argparse.BooleanOptionalAction,           help="Print backup size")
 
     tagParser = argparse.ArgumentParser(add_help=False)
-    tagParser.add_argument("--tag", "-t",      dest='tag',     default=None, required=True,             help="Set to tag")
-    tagParser.add_argument("--remove", "-r",   dest='remove',  default=False, action='store_true',      help="Remove the tag")
-    tagParser.add_argument("--move", "-m",     dest='move',    default=False, action='store_true',      help="Move the tag")
+    tagParser.add_argument("--tag", "-t",      dest="tag",     default=None, required=True,             help="Set to tag")
+    tagParser.add_argument("--remove", "-r",   dest="remove",  default=False, action="store_true",      help="Remove the tag")
+    tagParser.add_argument("--move", "-m",     dest="move",    default=False, action="store_true",      help="Move the tag")
 
     common = argparse.ArgumentParser(add_help=False)
     Config.addPasswordOptions(common, addscheme=False)
@@ -741,72 +741,72 @@ def parseArgs() -> argparse.Namespace:
     newPassParser = argparse.ArgumentParser(add_help=False)
     newpassgrp = newPassParser.add_argument_group("New Password specification options")
     npwgroup = newpassgrp.add_mutually_exclusive_group()
-    npwgroup.add_argument('--newpassword',      dest='newpw', default=None, nargs='?', const=True,  help='Change to this password')
-    npwgroup.add_argument('--newpassword-file', dest='newpwf', default=None,                        help='Read new password from file')
-    npwgroup.add_argument('--newpassword-prog', dest='newpwp', default=None,                        help='Use the specified command to generate the new password on stdout')
+    npwgroup.add_argument("--newpassword",      dest="newpw", default=None, nargs="?", const=True,  help="Change to this password")
+    npwgroup.add_argument("--newpassword-file", dest="newpwf", default=None,                        help="Read new password from file")
+    npwgroup.add_argument("--newpassword-prog", dest="newpwp", default=None,                        help="Use the specified command to generate the new password on stdout")
 
     configKeyParser = argparse.ArgumentParser(add_help=False)
-    configKeyParser.add_argument('--key',       dest='configKeys', choices=configKeys, action='append',    help='Configuration key to retrieve.  None for all keys')
-    configKeyParser.add_argument('--sys',       dest='sysKeys', default=False, action=argparse.BooleanOptionalAction,   help='List System Keys as well as configurable ones')
+    configKeyParser.add_argument("--key",       dest="configKeys", choices=configKeys, action="append",    help="Configuration key to retrieve.  None for all keys")
+    configKeyParser.add_argument("--sys",       dest="sysKeys", default=False, action=argparse.BooleanOptionalAction,   help="List System Keys as well as configurable ones")
 
     configValueParser = argparse.ArgumentParser(add_help=False)
-    configValueParser.add_argument('--key',     dest='key', choices=configKeys, required=True,      help='Configuration key to set')
-    configValueParser.add_argument('--value',   dest='value', required=True,                        help='Configuration value to access')
+    configValueParser.add_argument("--key",     dest="key", choices=configKeys, required=True,      help="Configuration key to set")
+    configValueParser.add_argument("--value",   dest="value", required=True,                        help="Configuration value to access")
 
     priorityParser = argparse.ArgumentParser(add_help=False)
-    priorityParser.add_argument('--priority',   dest='priority', type=int, required=True,           help='New priority backup set')
+    priorityParser.add_argument("--priority",   dest="priority", type=int, required=True,           help="New priority backup set")
 
     renameParser = argparse.ArgumentParser(add_help=False)
-    renameParser.add_argument('--name',         dest='newname', required=True,                      help='New name')
+    renameParser.add_argument("--name",         dest="newname", required=True,                      help="New name")
 
     listParser = argparse.ArgumentParser(add_help=False)
-    listParser.add_argument('--long', '-l',     dest='longinfo', default=False, action=argparse.BooleanOptionalAction,   help='Print long info')
-    listParser.add_argument('--minpriority',    dest='minpriority', default=0, type=int,            help='Minimum priority to list')
+    listParser.add_argument("--long", "-l",     dest="longinfo", default=False, action=argparse.BooleanOptionalAction,   help="Print long info")
+    listParser.add_argument("--minpriority",    dest="minpriority", default=0, type=int,            help="Minimum priority to list")
 
     limitParser = listParser.add_mutually_exclusive_group()
-    limitParser.add_argument('--first',         dest='first', default=None, type=int,       help='Show only the first N backupsets')
-    limitParser.add_argument('--last',          dest='last', default=None, type=int,        help='Show only the last N backupsets')
+    limitParser.add_argument("--first",         dest="first", default=None, type=int,       help="Show only the first N backupsets")
+    limitParser.add_argument("--last",          dest="last", default=None, type=int,        help="Show only the last N backupsets")
 
-    listParser.add_argument('--before',         dest='before', type=parseDateTime, default=None, )
-    listParser.add_argument('--after',          dest='after',  type=parseDateTime, default=None, )
+    listParser.add_argument("--before",         dest="before", type=parseDateTime, default=None )
+    listParser.add_argument("--after",          dest="after",  type=parseDateTime, default=None )
 
     lockParser = argparse.ArgumentParser(add_help=False)
     lockGroup = lockParser.add_mutually_exclusive_group()
-    lockGroup.add_argument("--lock", "-L",     dest='lock', default=True, action='store_true',      help='Lock the set(s)')
-    lockGroup.add_argument("--unlock", "-U",   dest='lock', default=True, action='store_false',     help='Unlock the set(s)')
+    lockGroup.add_argument("--lock", "-L",     dest="lock", default=True, action="store_true",      help="Lock the set(s)")
+    lockGroup.add_argument("--unlock", "-U",   dest="lock", default=True, action="store_false",     help="Unlock the set(s)")
 
     sanityParser = argparse.ArgumentParser(add_help=False)
-    sanityParser.add_argument("--details", dest='details', default=False, action=argparse.BooleanOptionalAction, help="Print mismatched files")
-    sanityParser.add_argument("--cleanup", dest='cleanup', default=False, action=argparse.BooleanOptionalAction, help="Delete mismatched files")
+    sanityParser.add_argument("--details", dest="details", default=False, action=argparse.BooleanOptionalAction, help="Print mismatched files")
+    sanityParser.add_argument("--cleanup", dest="cleanup", default=False, action=argparse.BooleanOptionalAction, help="Delete mismatched files")
 
     cryptoParser = argparse.ArgumentParser(add_help=False, formatter_class=argparse.RawTextHelpFormatter)
-    cryptoParser.add_argument('--crypt',               dest='cryptoScheme', type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
+    cryptoParser.add_argument("--crypt",               dest="cryptoScheme", type=int, choices=range(TardisCrypto.MAX_CRYPTO_SCHEME+1), default=TardisCrypto.DEF_CRYPTO_SCHEME,
                            help=f"Crypto scheme to use.  0-{TardisCrypto.MAX_CRYPTO_SCHEME}\n" + TardisCrypto.getCryptoNames())
 
-    subs = parser.add_subparsers(help="Commands", dest='command')
-    subs.add_parser('create',       parents=[common],                                       help='Create a client repository')
-    subs.add_parser('setpass',      parents=[common, cryptoParser],                         help='Set a password')
-    subs.add_parser('chpass',       parents=[common, newPassParser],                        help='Change a password')
-    subs.add_parser('keys',         parents=[common, keyParser],                            help='Move keys to/from server and key file')
-    subs.add_parser('list',         parents=[common, listParser],                           help='List backup sets')
-    subs.add_parser('files',        parents=[common, filesParser, bsetParser],              help='List new files in a backup set')
-    subs.add_parser('tag',          parents=[common, tagParser, bsetParser],                help='Add or delete tags on backup sets')
-    subs.add_parser('lock',         parents=[common, lockParser, bsetParser],               help='Lock backup sets')
-    subs.add_parser('info',         parents=[common, bsetParser],                           help='Print info on backup sets')
-    subs.add_parser('purge',        parents=[common, purgeParser, cnfParser],               help='Purge old backup sets')
-    subs.add_parser('delete',       parents=[common, deleteParser, cnfParser],              help='Delete a backup set')
-    subs.add_parser('orphans',      parents=[common],                                       help='Delete orphan files')
-    subs.add_parser('getconfig',    parents=[common, configKeyParser],                      help='Get Config Value')
-    subs.add_parser('setconfig',    parents=[common, configValueParser],                    help='Set Config Value')
-    subs.add_parser('priority',     parents=[common, priorityParser, bsetParser],           help='Set backupset priority')
-    subs.add_parser('rename',       parents=[common, renameParser, bsetParser],             help='Rename a backup set')
-    subs.add_parser('sanity',       parents=[common, sanityParser, cnfParser],              help='Perform a sanity check')
-    subs.add_parser('upgrade',      parents=[common],                                       help='Update the repository schema')
+    subs = parser.add_subparsers(help="Commands", dest="command")
+    subs.add_parser("create",       parents=[common],                                       help="Create a client repository")
+    subs.add_parser("setpass",      parents=[common, cryptoParser],                         help="Set a password")
+    subs.add_parser("chpass",       parents=[common, newPassParser],                        help="Change a password")
+    subs.add_parser("keys",         parents=[common, keyParser],                            help="Move keys to/from server and key file")
+    subs.add_parser("list",         parents=[common, listParser],                           help="List backup sets")
+    subs.add_parser("files",        parents=[common, filesParser, bsetParser],              help="List new files in a backup set")
+    subs.add_parser("tag",          parents=[common, tagParser, bsetParser],                help="Add or delete tags on backup sets")
+    subs.add_parser("lock",         parents=[common, lockParser, bsetParser],               help="Lock backup sets")
+    subs.add_parser("info",         parents=[common, bsetParser],                           help="Print info on backup sets")
+    subs.add_parser("purge",        parents=[common, purgeParser, cnfParser],               help="Purge old backup sets")
+    subs.add_parser("delete",       parents=[common, deleteParser, cnfParser],              help="Delete a backup set")
+    subs.add_parser("orphans",      parents=[common],                                       help="Delete orphan files")
+    subs.add_parser("getconfig",    parents=[common, configKeyParser],                      help="Get Config Value")
+    subs.add_parser("setconfig",    parents=[common, configValueParser],                    help="Set Config Value")
+    subs.add_parser("priority",     parents=[common, priorityParser, bsetParser],           help="Set backupset priority")
+    subs.add_parser("rename",       parents=[common, renameParser, bsetParser],             help="Rename a backup set")
+    subs.add_parser("sanity",       parents=[common, sanityParser, cnfParser],              help="Perform a sanity check")
+    subs.add_parser("upgrade",      parents=[common],                                       help="Update the repository schema")
 
-    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction,   help='Log exception messages')
-    parser.add_argument('--verbose', '-v',      dest='verbose', default=0, action='count', help='Be verbose.  Add before usb command')
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
-    parser.add_argument('--help', '-h',         action='help')
+    parser.add_argument("--exceptions", "-E",   dest="exceptions", default=False, action=argparse.BooleanOptionalAction,   help="Log exception messages")
+    parser.add_argument("--verbose", "-v",      dest="verbose", default=0, action="count", help="Be verbose.  Add before usb command")
+    parser.add_argument("--version",            action="version", version="%(prog)s " + Tardis.__versionstring__,    help="Show the version")
+    parser.add_argument("--help", "-h",         action="help")
 
     Util.addGenCompletions(parser)
 
@@ -824,9 +824,9 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
         timestamp = time.mktime(date)
         logger.debug("Using time: %s", time.asctime(date))
         bInfo = db.getBackupSetInfoForTime(timestamp)
-        if bInfo and bInfo['backupset'] != 1:
-            bset = bInfo['backupset']
-            logger.debug("Using backupset: %s %d", bInfo['name'], bInfo['backupset'])
+        if bInfo and bInfo["backupset"] != 1:
+            bset = bInfo["backupset"]
+            logger.debug("Using backupset: %s %d", bInfo["name"], bInfo["backupset"])
         else:
             raise NoSuchBackupError("No backup for date", date)
     elif backup:
@@ -858,14 +858,14 @@ def main():
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
     # Commands which cannot be executed on remote repository
-    allowRemote = args.command not in ['create', 'upgrade']
+    allowRemote = args.command not in ["create", "upgrade"]
 
     db      = None
     crypt   = None
     cache   = None
     try:
-        confirmPw = args.command in ['setpass', 'create']
-        allowNone = args.command not in ['setpass', 'chpass']
+        confirmPw = args.command in ["setpass", "create"]
+        allowNone = args.command not in ["setpass", "chpass"]
         try:
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password: ", allowNone=allowNone, confirm=confirmPw)
         except Exception as e:
@@ -874,23 +874,23 @@ def main():
             return -1
 
         match args.command:
-            case 'create':
+            case "create":
                 return createClient(password)
-            case 'setpass':
+            case "setpass":
                 return setPassword(password)
-            case 'chpass':
+            case "chpass":
                 return changePassword(crypt)
 
         # Fall through to here if it didn't match any of the above.
 
-        upgrade = args.command == 'upgrade'
+        upgrade = args.command == "upgrade"
 
         try:
             (db, cache, crypt, _) = Util.setupDataConnection(args.repo, password, args.keys, allow_remote=allowRemote, allow_upgrade=upgrade)
 
-            if crypt.encrypting() and args.command != 'keys':
+            if crypt.encrypting() and args.command != "keys":
                 if args.keys:
-                    (f, c) = Util.loadKeys(args.keys, db.getConfigValue('ClientID'))
+                    (f, c) = Util.loadKeys(args.keys, db.getConfigValue("ClientID"))
                 else:
                     (f, c) = db.getKeys()
                 crypt.setKeys(f, c)
@@ -905,35 +905,35 @@ def main():
 
         # Dispatch the command
         match args.command:
-            case 'keys':
+            case "keys":
                 ret =  moveKeys(db, crypt)
-            case 'list':
+            case "list":
                 ret =  listBSets(db, crypt, cache)
-            case 'files':
+            case "files":
                 ret =  listFiles(db, crypt)
-            case 'info':
+            case "info":
                 ret =  bsetInfo(db, crypt)
-            case 'tag':
+            case "tag":
                 ret =  doTagging(db, crypt)
-            case 'lock':
+            case "lock":
                 ret =  doLock(db, args.lock)
-            case 'purge':
+            case "purge":
                 ret =  purge(db, cache)
-            case 'delete':
+            case "delete":
                 ret =  deleteBsets(db, cache)
-            case 'priority':
+            case "priority":
                 ret =  setPriority(db)
-            case 'rename':
+            case "rename":
                 ret =  renameSet(db)
-            case 'getconfig':
+            case "getconfig":
                 ret =  getConfig(db)
-            case 'setconfig':
+            case "setconfig":
                 ret =  setConfig(db)
-            case 'orphans':
+            case "orphans":
                 ret =  removeOrphans(db, cache)
-            case 'sanity':
+            case "sanity":
                 ret =  checkSanity(db, cache, crypt)
-            case 'upgrade':
+            case "upgrade":
                 ret =  0
             case _:
                 ret = 1

@@ -51,27 +51,27 @@ from . import CacheDir, Defaults, TardisDB, Util
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
 
-basedir     = Defaults.getDefault('TARDIS_BASEDIR')
-port        = Defaults.getDefault('TARDIS_REMOTE_PORT')
-configName  = Defaults.getDefault('TARDIS_REMOTE_CONFIG')
-pidFile     = Defaults.getDefault('TARDIS_REMOTE_PIDFILE')
+basedir     = Defaults.getDefault("TARDIS_BASEDIR")
+port        = Defaults.getDefault("TARDIS_REMOTE_PORT")
+configName  = Defaults.getDefault("TARDIS_REMOTE_CONFIG")
+pidFile     = Defaults.getDefault("TARDIS_REMOTE_PIDFILE")
 
 configDefaults = {
-    'Port'              : port,
-    'Basedir'          : basedir,
-    'LogFile'           : '',
-    'LogExceptions'     : str(False),
-    'Verbose'           : '0',
-    'Daemon'            : str(False),
-    'User'              : '',
-    'Group'             : '',
-    'SSL'               : str(False),
-    'CertFile'          : '',
-    'KeyFile'           : '',
-    'PidFile'           : pidFile,
-    'Compress'          : str(True),
-    'AllowCache'        : str(True),
-    'AllowSchemaUpgrades': str(False)
+    "Port"              : port,
+    "Basedir"          : basedir,
+    "LogFile"           : "",
+    "LogExceptions"     : str(False),
+    "Verbose"           : "0",
+    "Daemon"            : str(False),
+    "User"              : "",
+    "Group"             : "",
+    "SSL"               : str(False),
+    "CertFile"          : "",
+    "KeyFile"           : "",
+    "PidFile"           : pidFile,
+    "Compress"          : str(True),
+    "AllowCache"        : str(True),
+    "AllowSchemaUpgrades": str(False),
 }
 
 app = Flask(__name__)
@@ -90,9 +90,9 @@ logger = None
 eLogger = None
 
 def getDB():
-    if 'host' not in session:
+    if "host" not in session:
         abort(401, "Host not in session")
-    host = session['host']
+    host = session["host"]
     try:
         db = dbs[host]
     except KeyError:
@@ -109,7 +109,7 @@ def makeDict(row):
 
 def compressMsg(string, threshold=1024):
     if len(string) > threshold:
-        comp = zlib.compress(bytes(string, 'utf8'))
+        comp = zlib.compress(bytes(string, "utf8"))
         if len(comp) < len(string):
             app.logger.debug("Compressed %d to %d", len(string), len(comp))
             return (comp, True)
@@ -124,12 +124,12 @@ def createResponse(string, compress=True, cacheable=True, dumps=True):
         (data, compressed) = compressMsg(string)
         response = make_response(data)
         if compressed:
-            response.headers['Content-Encoding'] = 'deflate'
+            response.headers["Content-Encoding"] = "deflate"
     else:
         response = make_response(string)
 
     if cacheable and allowCache:
-        response.headers['Cache-Control'] = 'max-age=300'
+        response.headers["Cache-Control"] = "max-age=300"
     app.logger.debug("Response: %s", str(response.headers))
     return response
 
@@ -148,110 +148,109 @@ def handleAuthenticationFailed(error):
     return response
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            host    = request.form['host']
-            dbPath  = os.path.join(args.basedir, host, 'tardis.db')
+            host    = request.form["host"]
+            dbPath  = os.path.join(args.basedir, host, "tardis.db")
             cache   = CacheDir.CacheDir(os.path.join(args.basedir, host), create=False)
-            upgrade = config.getboolean('Remote', 'AllowSchemaUpgrades')
+            upgrade = config.getboolean("Remote", "AllowSchemaUpgrades")
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 
-            session['host']     = host
+            session["host"]     = host
             dbs[host] = tardis
             caches[host] = cache
             if tardis.needsAuthentication():
-                status = 'AUTH'
+                status = "AUTH"
             else:
-                status = 'OK'
+                status = "OK"
             return createResponse({"status": status}, compress=False, cacheable=False)
         except Exception as e:
             app.logger.exception(e)
             abort(401)
     else:
-        return '''
+        return """
         <form action="" method="post">
             <p><input type=text name=host>
             <p><input type=text name=token>
             <p><input type=submit value=Login>
         </form>
-        '''
+        """
 
-@app.route('/needsAuthentication')
+@app.route("/needsAuthentication")
 def needsAuthentication():
     db = getDB()
     resp = db.needsAuthentication()
     return createResponse(resp, compress=False, cacheable=True)
 
-@app.route('/authenticate1', methods=['POST'])
+@app.route("/authenticate1", methods=["POST"])
 def authenticate1():
     db = getDB()
     data = request.form
     app.logger.debug("Authenticate 1: Got data: %s", str(data))
-    srpUname = base64.b64decode(data['srpUname'])
-    srpValueA = base64.b64decode(data['srpValueA'])
+    srpUname = base64.b64decode(data["srpUname"])
+    srpValueA = base64.b64decode(data["srpValueA"])
     srpValueS, srpValueB = db.authenticate1(srpUname, srpValueA)
     resp = {
-        "srpValueS": str(base64.b64encode(srpValueS), 'utf8'), "srpValueB":
-        str(base64.b64encode(srpValueB), 'utf8')
+        "srpValueS": str(base64.b64encode(srpValueS), "utf8"), "srpValueB":
+        str(base64.b64encode(srpValueB), "utf8"),
     }
     return createResponse(resp, compress=False, cacheable=False)
 
-@app.route('/authenticate2', methods=['POST'])
+@app.route("/authenticate2", methods=["POST"])
 def authenticate2():
     db = getDB()
     data = request.form
     app.logger.debug("Authenticate 2: Got data: %s", str(data))
-    srpValueM = base64.b64decode(data['srpValueM'])
+    srpValueM = base64.b64decode(data["srpValueM"])
     srpValueH = db.authenticate2(srpValueM)
     resp = {
         "srpValueH": str(base64.b64encode(srpValueH),
-                         'utf8')
+                         "utf8"),
     }
     return createResponse(resp, compress=False, cacheable=False)
 
-@app.route('/close')
+@app.route("/close")
 def close():
     # remove the username from the session if it's there
-    host = session.pop('host', None)
+    host = session.pop("host", None)
     if host in dbs:
         dbs[host].close()
         del dbs[host]
-    if host in caches:
-        del caches[host]
-    ret = {'status': 'OK'}
+    caches.pop(host, None)
+    ret = {"status": "OK"}
     return createResponse(ret)
 
 # getBackupSetInfo
-@app.route('/getBackupSetInfo/<name>')
+@app.route("/getBackupSetInfo/<name>")
 def getBackupSetInfo(name):
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfo(name)))
 
-@app.route('/getBackupSetInfoById/<int:backupset>')
+@app.route("/getBackupSetInfoById/<int:backupset>")
 def getBackupSetInfoById(backupset):
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoById(backupset)))
 
-@app.route('/getBackupSetInfoByTag/<tag>')
+@app.route("/getBackupSetInfoByTag/<tag>")
 def getBackupSetInfoByTag(tag):
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoByTag(tag)))
 
-@app.route('/getBackupSetDetails/<backupset>')
+@app.route("/getBackupSetDetails/<backupset>")
 def getBackupSetDetails(backupset):
     db = getDB()
     return createResponse(db.getBackupSetDetails(backupset))
 
 # lastBackupSet
-@app.route('/lastBackupSet/<int:completed>')
+@app.route("/lastBackupSet/<int:completed>")
 def lastBackupSet(completed):
     db = getDB()
     return createResponse(makeDict(db.lastBackupSet(bool(completed))))
 
 # listBackupSets
-@app.route('/listBackupSets')
+@app.route("/listBackupSets")
 def listBackupSets():
     db = getDB()
     sets = []
@@ -260,17 +259,17 @@ def listBackupSets():
 
     return createResponse(sets)
 
-@app.route('/getFileInfoByPath/<int:backupset>')
+@app.route("/getFileInfoByPath/<int:backupset>")
 def getFileInfoByPathRoot(backupset):
     return getFileInfoByPath(backupset, "/")
 
 # getFileInfoByPath
-@app.route('/getFileInfoByPath/<int:backupset>/<path:pathname>')
+@app.route("/getFileInfoByPath/<int:backupset>/<path:pathname>")
 def getFileInfoByPath(backupset, pathname):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByPath(str(pathname), backupset)))
 
-@app.route('/getFileInfoForPath/<int:backupset>/<path:pathname>')
+@app.route("/getFileInfoForPath/<int:backupset>/<path:pathname>")
 def getFileInfoForPath(backupset, pathname):
     db = getDB()
     pathinfo = []
@@ -279,7 +278,7 @@ def getFileInfoForPath(backupset, pathname):
     return createResponse(pathinfo)
 
 
-@app.route('/getFileInfoByPathForRange/<int:first>/<int:last>/<path:pathname>')
+@app.route("/getFileInfoByPathForRange/<int:first>/<int:last>/<path:pathname>")
 def getFileInfoByPathForRange(first, last, pathname):
     db = getDB()
     fInfos = []
@@ -288,35 +287,35 @@ def getFileInfoByPathForRange(first, last, pathname):
     return createResponse(fInfos)
 
 # getFileInfoByName
-@app.route('/getFileInfoByName/<int:backupset>/<device>/<int:inode>/<name>')
+@app.route("/getFileInfoByName/<int:backupset>/<device>/<int:inode>/<name>")
 def getFileInfoByName(backupset, device, inode, name):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByName(name, (inode, device), backupset)))
 
 
 # getFileInfoByInode
-@app.route('/getFileInfoByInode/<int:backupset>/<device>/<int:inode>')
+@app.route("/getFileInfoByInode/<int:backupset>/<device>/<int:inode>")
 def getFileInfoByInode(backupset, device, inode):
     db = getDB()
     return createResponse(makeDict(db.getFileInfoByInode((inode, device), backupset)))
 
-@app.route('/getFileInfoByChecksum/<int:backupset>/<checksum>')
+@app.route("/getFileInfoByChecksum/<int:backupset>/<checksum>")
 def getFileInfoByChecksum(backupset, checksum):
     db = getDB()
     return createResponse([makeDict(x) for x in db.getFileInfoByChecksum(checksum, backupset)])
 
 # getNewFiles
-@app.route('/getNewFiles/<int:backupset>/<other>')
+@app.route("/getNewFiles/<int:backupset>/<other>")
 def getNewFiles(backupset, other):
     db = getDB()
     files = []
-    other = other == 'True'
+    other = other == "True"
     for x in db.getNewFiles(backupset, other):
         files.append(makeDict(x))
     return createResponse(files)
 
 # readDirectory
-@app.route('/readDirectory/<int:backupset>/<device>/<int:inode>')
+@app.route("/readDirectory/<int:backupset>/<device>/<int:inode>")
 def readDirectory(backupset, device, inode):
     db = getDB()
     directory = []
@@ -324,7 +323,7 @@ def readDirectory(backupset, device, inode):
         directory.append(makeDict(x))
     return createResponse(directory)
 
-@app.route('/readDirectoryForRange/<device>/<int:inode>/<int:first>/<int:last>')
+@app.route("/readDirectoryForRange/<device>/<int:inode>/<int:first>/<int:last>")
 def readDirectoryForRange(device, inode, first, last):
     db = getDB()
     directory = []
@@ -333,49 +332,49 @@ def readDirectoryForRange(device, inode, first, last):
     return createResponse(directory)
 
 # getChecksumByPath
-@app.route('/getChecksumByPath/<int:backupset>/<path:pathname>')
+@app.route("/getChecksumByPath/<int:backupset>/<path:pathname>")
 def getChecksumByPath(backupset, pathname):
     db = getDB()
     cksum = db.getChecksumByPath(pathname, backupset)
     return createResponse(cksum)
 
 # getChecksumInfo
-@app.route('/getChecksumInfo/<checksum>')
+@app.route("/getChecksumInfo/<checksum>")
 def getChecksumInfo(checksum):
     db = getDB()
     return createResponse(makeDict(db.getChecksumInfo(checksum)))
 
-@app.route('/getChecksumInfoChain/<checksum>')
+@app.route("/getChecksumInfoChain/<checksum>")
 def getChecksumInfoChain(checksum):
     db = getDB()
     return createResponse(list(map(makeDict, db.getChecksumInfoChain(checksum))))
 
-@app.route('/getChecksumInfoChainByPath/<int:backupset>/<path:pathname>')
+@app.route("/getChecksumInfoChainByPath/<int:backupset>/<path:pathname>")
 def getChecksumInfoChainByPath(pathname, backupset):
     db = getDB()
     return createResponse(list(map(makeDict, db.getChecksumInfoChainByPath(pathname, backupset))))
 
-@app.route('/getBackupSetInfoForTime/<float:time>')
+@app.route("/getBackupSetInfoForTime/<float:time>")
 def getBackupSetInfoForTime(time):
     db = getDB()
     return createResponse(makeDict(db.getBackupSetInfoForTime(time)))
 
 # getFirstBackupSet
-@app.route('/getFirstBackupSet/<int:backupset>/<path:pathname>')
+@app.route("/getFirstBackupSet/<int:backupset>/<path:pathname>")
 def getFirstBackupSet(backupset, pathname):
     db = getDB()
-    if not pathname.startswith('/'):
-        pathname = '/' + pathname
+    if not pathname.startswith("/"):
+        pathname = "/" + pathname
     return createResponse(db.getFirstBackupSet(pathname, backupset))
 
 # getChainLength
-@app.route('/getChainLength/<checksum>')
+@app.route("/getChainLength/<checksum>")
 def getChainLength(checksum):
     db = getDB()
     return createResponse(db.getChainLength(checksum))
 
 # getNamesForChecksum
-@app.route('/getNamesForChecksum/<checksum>')
+@app.route("/getNamesForChecksum/<checksum>")
 def getNamesForChecksum(checksum):
     db = getDB()
     return createResponse(db.getNamesForChecksum(checksum))
@@ -393,53 +392,53 @@ def _stream(f):
     finally:
         f.close()
 
-@app.route('/getFileData/<checksum>')
+@app.route("/getFileData/<checksum>")
 def getFileData(checksum):
     db = getDB()
-    host = session['host']
+    host = session["host"]
     cache = caches[host]
     try:
         ckinfo = db.getChecksumInfo(checksum)
         ckfile = cache.open(checksum, "rb")
 
         resp = Response(_stream(ckfile))
-        resp.headers['Content-Length'] = ckinfo['disksize']
-        resp.headers['Content-Type'] = 'application/octet-stream'
+        resp.headers["Content-Length"] = ckinfo["disksize"]
+        resp.headers["Content-Type"] = "application/octet-stream"
         return resp
     except Exception:
         abort(404)
 
-@app.route('/getConfigValue/<name>')
+@app.route("/getConfigValue/<name>")
 def getConfigValue(name):
     db = getDB()
     return createResponse(db.getConfigValue(name))
 
-@app.route('/setConfigValue/<name>/<value>')
+@app.route("/setConfigValue/<name>/<value>")
 def setConfigValue(name, value):
     db = getDB()
     app.logger.info("setConfigValue Invoked: %s %s", name, value)
     return createResponse(db.setConfigValue(name, value))
 
-@app.route('/setPriority/<int:backupset>/<int:priority>')
+@app.route("/setPriority/<int:backupset>/<int:priority>")
 def setPriority(backupset, priority):
     db = getDB()
     app.logger.info("setPriority Invoked: %s %s", backupset, priority)
     return createResponse(db.setPriority(backupset, priority))
 
-@app.route('/setBackupSetName/<int:backupset>/<name>/<int:priority>')
+@app.route("/setBackupSetName/<int:backupset>/<name>/<int:priority>")
 def setBackupSetName(backupset, name, priority):
     db = getDB()
     app.logger.info("setBackupSetName Invoked: %s %s %s", backupset, name, priority)
     return createResponse(db.setBackupSetName(name, priority, backupset))
 
-@app.route('/setKeys', methods=['POST'])
+@app.route("/setKeys", methods=["POST"])
 def setKeys():
     try:
         db = getDB()
-        salt  = request.form.get('Salt')
-        vkey  = request.form.get('SrpVKey')
-        fKey  = request.form.get('FilenameKey')
-        cKey  = request.form.get('ContentKey')
+        salt  = request.form.get("Salt")
+        vkey  = request.form.get("SrpVKey")
+        fKey  = request.form.get("FilenameKey")
+        cKey  = request.form.get("ContentKey")
         if not db.setKeys(base64.b64decode(salt), base64.b64decode(vkey), fKey, cKey):
             raise Exception("Unable to set keys")
         return "OK"
@@ -447,18 +446,18 @@ def setKeys():
         app.logger.exception(e)
         abort(403)
 
-@app.route('/setSrpValues', methods=['POST'])
+@app.route("/setSrpValues", methods=["POST"])
 def setSrpValues():
     try:
         db = getDB()
-        salt = request.form['salt']
-        vkey = request.form['vkey']
+        salt = request.form["salt"]
+        vkey = request.form["vkey"]
         if not db.setSrpValues(salt, vkey):
             raise Exception("Unable to set token")
     except Exception:
         abort(403)
 
-@app.route('/listPurgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
+@app.route("/listPurgeSets/<int:backupset>/<int:priority>/<float:timestamp>")
 def listPurgeSets(backupset, priority, timestamp):
     db = getDB()
     sets = []
@@ -466,134 +465,134 @@ def listPurgeSets(backupset, priority, timestamp):
         sets.append(makeDict(x))
     return createResponse(sets)
 
-@app.route('/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
+@app.route("/listPurgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>")
 def listPurgeIncomplete(backupset, priority, timestamp):
     db = getDB()
     sets = list(map(makeDict, db.listPurgeIncomplete(priority, timestamp, backupset)))
     return createResponse(sets)
 
-@app.route('/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>')
+@app.route("/purgeSets/<int:backupset>/<int:priority>/<float:timestamp>")
 def purgeSets(backupset, priority, timestamp):
     db = getDB()
     return createResponse(db.purgeSets(priority, timestamp, backupset))
 
-@app.route('/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>')
+@app.route("/purgeIncomplete/<int:backupset>/<int:priority>/<float:timestamp>")
 def purgeIncomplete(backupset, priority, timestamp):
     db = getDB()
     return createResponse(db.purgeIncomplete(priority, timestamp, backupset))
 
-@app.route('/deleteBackupSet/<int:backupset>')
+@app.route("/deleteBackupSet/<int:backupset>")
 def deleteBackupSet(backupset):
     db = getDB()
     return createResponse(db.deleteBackupSet(backupset))
 
-@app.route('/listOrphanChecksums/<int:isfile>')
+@app.route("/listOrphanChecksums/<int:isfile>")
 def listOrphanChecksums(isfile):
     db = getDB()
     orphans = list(db.listOrphanChecksums(isfile))
     return createResponse(orphans)
 
-@app.route('/deleteOrphanChecksums/<int:isfile>')
+@app.route("/deleteOrphanChecksums/<int:isfile>")
 def deleteOrphanChecksums(isfile):
     db = getDB()
     return createResponse(db.deleteOrphanChecksums(isfile))
 
-@app.route('/setTag/<int:backupset>/<tag>')
+@app.route("/setTag/<int:backupset>/<tag>")
 def setTags(backupset, tag):
     db = getDB()
     return createResponse(db.setTag(tag, backupset))
 
-@app.route('/removeTag/<tag>')
+@app.route("/removeTag/<tag>")
 def removeTag(tag):
     db = getDB()
     return createResponse(db.removeTag(tag))
 
-@app.route('/getTags/<int:backupset>')
+@app.route("/getTags/<int:backupset>")
 def getTags(backupset):
     db = getDB()
     return createResponse(db.getTags(backupset))
 
-@app.route('/getUsers')
+@app.route("/getUsers")
 def getUsers():
     db = getDB()
     return createResponse(list(map(makeDict, db.getUsers())))
 
-@app.route('/setUserInfo/<int:userId>/<name>')
+@app.route("/setUserInfo/<int:userId>/<name>")
 def setUserInfo(userId, name):
     db = getDB()
     return createResponse(db.setUserInfo(userId, name))
 
-@app.route('/getGroups')
+@app.route("/getGroups")
 def getGroups():
     db = getDB()
     return createResponse(list(map(makeDict, db.getGroups())))
 
-@app.route('/setGroupInfo/<int:groupId>/<name>')
+@app.route("/setGroupInfo/<int:groupId>/<name>")
 def setGroupInfo(groupId, name):
     db = getDB()
     return createResponse(db.setGroupInfo(groupId, name))
 
-@app.route('/setLock/<int:backupset>/<int:lock>')
+@app.route("/setLock/<int:backupset>/<int:lock>")
 def setLock(lock, backupset):
     db = getDB()
     return createResponse(db.setLock(lock, backupset))
 
-@app.route('/beginTransaction')
+@app.route("/beginTransaction")
 def beginTransaction():
     db = getDB()
     return createResponse(db.beginTransaction())
 
-@app.route('/commit')
+@app.route("/commit")
 def commit():
     db = getDB()
     return createResponse(db.commit())
 
 
-@app.route('/removeOrphans')
+@app.route("/removeOrphans")
 def removeOrphans():
     db = getDB()
-    host = session['host']
+    host = session["host"]
     cache = caches[host]
     count, size, rounds = Util.removeOrphans(db, cache)
     j = {
-        'count': count,
-        'size': size,
-        'rounds': rounds,
+        "count": count,
+        "size": size,
+        "rounds": rounds,
     }
     return createResponse(j)
 
 def processArgs():
-    parser = argparse.ArgumentParser(description='Tardis HTTP Data Server', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description="Tardis HTTP Data Server", formatter_class=Util.HelpFormatter, add_help=False)
 
-    parser.add_argument('--config',         dest='config', default=configName, help="Location of the configuration file (Default: %(default)s)")
+    parser.add_argument("--config",         dest="config", default=configName, help="Location of the configuration file (Default: %(default)s)")
     (args, remaining) = parser.parse_known_args()
 
-    t = 'Remote'
-    config = configparser.ConfigParser(configDefaults, default_section='Tardis', interpolation=configparser.ExtendedInterpolation())
+    t = "Remote"
+    config = configparser.ConfigParser(configDefaults, default_section="Tardis", interpolation=configparser.ExtendedInterpolation())
     config.add_section(t)                   # Make it safe for reading other values from.
     config.read(args.config)
 
-    parser.add_argument('--port',               dest='port',            default=config.getint(t, 'Port'), type=int, help='Listen on port (Default: %(default)s)')
-    parser.add_argument('--basedir',            dest='basedir',         default=config.get(t, 'Basedir'), help='Backup Directory (Default: %(default)s)')
-    parser.add_argument('--logfile', '-l',      dest='logfile',         default=config.get(t, 'LogFile'), help='Log to file (Default: %(default)s)')
+    parser.add_argument("--port",               dest="port",            default=config.getint(t, "Port"), type=int, help="Listen on port (Default: %(default)s)")
+    parser.add_argument("--basedir",            dest="basedir",         default=config.get(t, "Basedir"), help="Backup Directory (Default: %(default)s)")
+    parser.add_argument("--logfile", "-l",      dest="logfile",         default=config.get(t, "LogFile"), help="Log to file (Default: %(default)s)")
 
-    parser.add_argument('--verbose', '-v',      dest='verbose',         action='count', default=config.getint(t, 'Verbose'), help='Increase the verbosity (may be repeated)')
-    parser.add_argument('--exceptions',         dest='exceptions',      action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'LogExceptions'), help='Log full exception details')
+    parser.add_argument("--verbose", "-v",      dest="verbose",         action="count", default=config.getint(t, "Verbose"), help="Increase the verbosity (may be repeated)")
+    parser.add_argument("--exceptions",         dest="exceptions",      action=argparse.BooleanOptionalAction, default=config.getboolean(t, "LogExceptions"), help="Log full exception details")
 
-    parser.add_argument('--daemon',             dest='daemon',          action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Daemon'), help='Run as a daemon')
-    parser.add_argument('--user',               dest='user',            default=config.get(t, 'User'), help='Run daemon as user.  Valid only if --daemon is set')
-    parser.add_argument('--group',              dest='group',           default=config.get(t, 'Group'), help='Run daemon as group.  Valid only if --daemon is set')
-    parser.add_argument('--pidfile',            dest='pidfile',         default=config.get(t, 'PidFile'), help='Use this pidfile to indicate running daemon')
+    parser.add_argument("--daemon",             dest="daemon",          action=argparse.BooleanOptionalAction, default=config.getboolean(t, "Daemon"), help="Run as a daemon")
+    parser.add_argument("--user",               dest="user",            default=config.get(t, "User"), help="Run daemon as user.  Valid only if --daemon is set")
+    parser.add_argument("--group",              dest="group",           default=config.get(t, "Group"), help="Run daemon as group.  Valid only if --daemon is set")
+    parser.add_argument("--pidfile",            dest="pidfile",         default=config.get(t, "PidFile"), help="Use this pidfile to indicate running daemon")
 
-    parser.add_argument('--ssl',                dest='ssl',             action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'SSL'), help='Use SSL connections')
-    parser.add_argument('--certfile',           dest='certfile',        default=config.get(t, 'CertFile'), help='Path to certificate file for SSL connections')
-    parser.add_argument('--keyfile',            dest='keyfile',         default=config.get(t, 'KeyFile'), help='Path to key file for SSL connections')
+    parser.add_argument("--ssl",                dest="ssl",             action=argparse.BooleanOptionalAction, default=config.getboolean(t, "SSL"), help="Use SSL connections")
+    parser.add_argument("--certfile",           dest="certfile",        default=config.get(t, "CertFile"), help="Path to certificate file for SSL connections")
+    parser.add_argument("--keyfile",            dest="keyfile",         default=config.get(t, "KeyFile"), help="Path to key file for SSL connections")
 
-    parser.add_argument('--compress',           dest='compress',        action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'Compress'), help='Compress data going out')
-    parser.add_argument('--cache',              dest='cache',           action=argparse.BooleanOptionalAction, default=config.getboolean(t, 'AllowCache'), help='Allow caching')
+    parser.add_argument("--compress",           dest="compress",        action=argparse.BooleanOptionalAction, default=config.getboolean(t, "Compress"), help="Compress data going out")
+    parser.add_argument("--cache",              dest="cache",           action=argparse.BooleanOptionalAction, default=config.getboolean(t, "AllowCache"), help="Allow caching")
 
-    parser.add_argument('--version',            action='version', version='%(prog)s ' + Tardis.__versionstring__,   help='Show the version')
-    parser.add_argument('--help', '-h',         action='help')
+    parser.add_argument("--version",            action="version", version="%(prog)s " + Tardis.__versionstring__,   help="Show the version")
+    parser.add_argument("--help", "-h",         action="help")
 
     Util.addGenCompletions(parser)
 
@@ -603,7 +602,7 @@ def processArgs():
 
 def setupLogging():
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
-    log = logging.getLogger('')
+    log = logging.getLogger("")
 
     verbosity = args.verbose
     loglevel = levels[verbosity] if verbosity < len(levels) else logging.DEBUG
@@ -644,7 +643,7 @@ def run_server():
     if args.ssl:
         sslOptions = {
             "certfile": args.certfile,
-            "keyfile" : args.keyfile
+            "keyfile" : args.keyfile,
         }
 
     logger.info("Tornado server starting: %s", Tardis.__versionstring__)

@@ -61,7 +61,7 @@ class CacheDir:
                 if self.chown:
                     os.chown(self.root, self.user, self.group)
                 if skipFile:
-                    with open(os.path.join(self.root, skipFile), 'a', encoding='utf8'):
+                    with open(os.path.join(self.root, skipFile), "a", encoding="utf8"):
                         pass
             else:
                 raise CacheDirDoesNotExist("CacheDir does not exist: " + root)
@@ -122,7 +122,7 @@ class CacheDir:
                     os.chown(path, self.user, self.group)
 
     def open(self, name, mode, streaming=True):
-        iswrite = mode.startswith('w') or mode.startswith('a')
+        iswrite = mode.startswith("w") or mode.startswith("a")
         if iswrite:
             self.mkdir(name)
         path = self.path(name)
@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
     try:
         c.open(test, "r")
-    except IOError:
+    except OSError:
         print("Caught IOError")
 
     with c.open(test, "w") as fd:
@@ -210,5 +210,5 @@ if __name__ == "__main__":
 
     with c.open(test, "r") as fd:
         for line in fd:
-            print(line, end=' ')
+            print(line, end=" ")
     print(c.exists(test))

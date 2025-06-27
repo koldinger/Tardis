@@ -51,7 +51,7 @@ class ThreadedScheduler(sched.scheduler):
 
 
 if __name__ == "__main__":
-    def print_time(a='default'):
+    def print_time(a="default"):
         print("From print_time", time.time(), a)
 
     x = ThreadedScheduler()

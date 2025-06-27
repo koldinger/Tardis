@@ -44,16 +44,16 @@ class Rotator:
 
     def backup(self, name):
         if os.path.exists(name):
-            with open(name, 'rb') as infile:
+            with open(name, "rb") as infile:
                 newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
                 stat = os.stat(name)
                 if self.compress and stat.st_size >= self.compress:
-                    newname += '.gz'
+                    newname += ".gz"
                     self.logger.debug("Compressing %s to %s", name, newname)
                     outfile = gzip.open(newname, "wb")
                 else:
                     self.logger.debug("Copying %s to %s", name, newname)
-                    outfile = open(newname, 'wb')
+                    outfile = open(newname, "wb")
                 try:
                     shutil.copyfileobj(infile, outfile)
                 finally:
@@ -61,7 +61,7 @@ class Rotator:
 
     def rotate(self, name):
         d, f = os.path.split(os.path.abspath(name))
-        prefix = f + '.'
+        prefix = f + "."
         files = [i for i in os.listdir(d) if i.startswith(prefix)]
         self.logger.debug("Rotating %d files: %s", len(files), str(files))
         files = sorted(files, reverse=True)

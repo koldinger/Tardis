@@ -53,11 +53,11 @@ crypt: TardisCrypto.CryptoScheme
 args: argparse.Namespace
 
 class OwMode(enum.StrEnum):
-    OW_NEVER  = 'never'
-    OW_ALWAYS = 'always'
-    OW_NEWER  = 'newer'
-    OW_OLDER  = 'older'
-    OW_PROMPT = 'ask'
+    OW_NEVER  = "never"
+    OW_ALWAYS = "always"
+    OW_NEWER  = "newer"
+    OW_OLDER  = "older"
+    OW_PROMPT = "ask"
 
 if sys.stdout.isatty():
     owMode = OwMode.OW_PROMPT
@@ -73,7 +73,7 @@ args:argparse.Namespace
 def yesOrNo(x):
     if x:
         x = x.strip().lower()
-        return x[0] == 'y'
+        return x[0] == "y"
     return False
 
 def checkOverwrite(name, info):
@@ -87,7 +87,7 @@ def checkOverwrite(name, info):
                 return yesOrNo(input(f"Overwrite {name} [y/N]: "))
             case OwMode.OW_NEWER | OwMode.OW_OLDER:
                 s = os.lstat(name)
-                if s.st_mtime < info['mtime']:
+                if s.st_mtime < info["mtime"]:
                     # Current version is older
                     return owMode == OwMode.OW_NEWER
                 # Current version is newer
@@ -103,29 +103,29 @@ def doVerifyContents(outname, checksum, digest):
     # should use hmac.compare_digest() here, but it's not working for some reason.  Probably different types
     if not hmac.compare_digest(checksum, digest):
         if outname:
-            if args.verifyaction == 'keep':
-                action = ''
+            if args.verifyaction == "keep":
+                action = ""
                 target = outname
-            elif args.verifyaction == 'rename':
-                target = outname + '-CORRUPT-' + str(digest)
-                action = 'Renaming to ' + target + '.'
+            elif args.verifyaction == "rename":
+                target = outname + "-CORRUPT-" + str(digest)
+                action = "Renaming to " + target + "."
                 try:
                     os.rename(outname, target)
-                except os.error:
+                except OSError:
                     action = "Unable to rename to " + target + ".  File saved as " + outname + "."
-            elif args.verifyaction == 'delete':
-                action = 'Deleting.'
+            elif args.verifyaction == "delete":
+                action = "Deleting."
                 os.unlink(outname)
                 target = None
             else:
                 logger.critical(f"Unknown verify failure action: {args.verifyaction}")
-                action = ''
+                action = ""
                 target = outname
         else:
             target = None
-            action = ''
+            action = ""
         if outname is None:
-            outname = ''
+            outname = ""
         logger.error("File %s did no.  Expected: %s.  Got: %s.  %s",
                      outname, checksum, digest, action)
         return target
@@ -133,47 +133,47 @@ def doVerifyContents(outname, checksum, digest):
 
 def notSame(a, b, string):
     if a == b:
-        return ''
+        return ""
     return string
 
 def setAttributes(regenerator, info, outname):
     if outname:
         if args.setperm:
             try:
-                logger.debug("Setting permissions on %s to %o", outname, info['mode'])
-                os.chmod(outname, info['mode'])
+                logger.debug("Setting permissions on %s to %o", outname, info["mode"])
+                os.chmod(outname, info["mode"])
             except OSError:
                 logger.warning("Unable to set permissions for %s", outname)
             try:
                 # Change the group, then the owner.
                 # Change the group first, as only root can change owner, and that might fail.
-                os.chown(outname, -1, Util.getGroupId(crypt.decryptName(info['groupname'])))
-                os.chown(outname, Util.getUserId(crypt.decryptName(info['username'])), -1)
+                os.chown(outname, -1, Util.getGroupId(crypt.decryptName(info["groupname"])))
+                os.chown(outname, Util.getUserId(crypt.decryptName(info["username"])), -1)
             except OSError:
                 logger.warning("Unable to set owner and group of %s", outname)
         if args.settime:
             try:
-                logger.debug("Setting times on %s to %d %d", outname, info['atime'], info['mtime'])
-                os.utime(outname, (info['atime'], info['mtime']))
+                logger.debug("Setting times on %s to %d %d", outname, info["atime"], info["mtime"])
+                os.utime(outname, (info["atime"], info["mtime"]))
             except OSError:
                 logger.warning("Unable to set times on %s", outname)
 
-        if args.setattrs and 'attr' in info and info['attr']:
+        if args.setattrs and "attr" in info and info["attr"]:
             try:
-                f = regenerator.recoverChecksum(info['attr'], True)
+                f = regenerator.recoverChecksum(info["attr"], True)
                 xattrs = json.loads(f.read())
                 x = xattr.xattr(outname)
                 for attr in xattrs.keys():
                     value = base64.b64decode(xattrs[attr])
                     try:
                         x.set(attr, value)
-                    except IOError:
+                    except OSError:
                         logger.warning("Unable to set extended attribute %s on %s", attr, outname)
-            except IOError:
+            except OSError:
                 logger.warning("Unable to process extended attributes for %s", outname)
-        if args.setacl and 'acl' in info and info['acl']:
+        if args.setacl and "acl" in info and info["acl"]:
             try:
-                f = regenerator.recoverChecksum(info['acl'], True)
+                f = regenerator.recoverChecksum(info["acl"], True)
                 acl = json.loads(f.read())
                 a = posix1e.ACL(text=acl)
                 a.applyto(outname)
@@ -186,13 +186,13 @@ def doRecovery(regenerator, info, authenticate, path, outname):
     myname = outname if outname else "stdout"
     logger.info("Recovering file %s %s", Util.shortPath(path), notSame(path, myname, " => " + Util.shortPath(myname)))
 
-    checksum = info['checksum']
+    checksum = info["checksum"]
     instream = regenerator.recoverChecksum(checksum, authenticate=authenticate)
 
     if instream:
         hasher = crypt.getHash()
 
-        if info['link']:
+        if info["link"]:
             # read and make a link
             instream.seek(0)
             x = instream.read(16 * 1024)
@@ -213,7 +213,7 @@ def doRecovery(regenerator, info, authenticate, path, outname):
                     output.write(x)
                     hasher.update(x)
             except Exception as e:
-                logger.error(f"Unable to read file: {checksum}: {repr(e)}")
+                logger.error(f"Unable to read file: {checksum}: {e!r}")
                 raise
             finally:
                 instream.close()
@@ -233,7 +233,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
     skip = False
 
     try:
-        realname = crypt.decryptName(info['name'])
+        realname = crypt.decryptName(info["name"])
 
         if name:
             # This should only happen only one file specified.
@@ -244,13 +244,13 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
         if outname and not checkOverwrite(outname, info):
             skip = True
             try:
-                logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, '(' + Util.shortPath(outname) + ')'))
+                logger.warning("Skipping existing file: %s %s", Util.shortPath(path), notSame(path, outname, "(" + Util.shortPath(outname) + ")"))
             except Exception:
                 pass
 
         # First, determine if we're in a linking situation
-        if linkDB is not None and info['nlinks'] > 1 and not info['dir']:
-            key = (info['inode'], info['device'])
+        if linkDB is not None and info["nlinks"] > 1 and not info["dir"]:
+            key = (info["inode"], info["device"])
             if key in linkDB:
                 logger.info("Linking %s to %s", outname, linkDB[key])
                 os.link(linkDB[key], outname)
@@ -259,7 +259,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
                 linkDB[key] = outname
 
         # If it's a directory, create the directory, and recursively process it
-        if info['dir']:
+        if info["dir"]:
             if not outname:
                 raise Exception(f"Cannot regenerate directory {path} without outputdir specified")
 
@@ -268,7 +268,7 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
             except Exception:
                 pass
 
-            contents = list(tardis.readDirectory((info['inode'], info['device']), bset))
+            contents = list(tardis.readDirectory((info["inode"], info["device"]), bset))
 
             # Make sure an output directory is specified (really only useful at the top level)
             if not os.path.exists(outname):
@@ -276,18 +276,18 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
             setAttributes(regenerator, info, outname)
 
-            dirInode = (info['inode'], info['device'])
+            dirInode = (info["inode"], info["device"])
             files = []
             dirs = []
             # Get info on each child object
             for i in contents:
-                name = crypt.decryptName(i['name'])
+                name = crypt.decryptName(i["name"])
                 logger.debug("Processing file %s", name)
                 # Get the Info
-                childInfo = tardis.getFileInfoByName(i['name'], dirInode, bset)
+                childInfo = tardis.getFileInfoByName(i["name"], dirInode, bset)
                 logger.debug("Info on %s: %s", name, childInfo)
                 if childInfo:
-                    if childInfo['dir']:
+                    if childInfo["dir"]:
                         dirs.append((name, childInfo))
                     else:
                         files.append((name, childInfo))
@@ -337,13 +337,13 @@ def findLastPath(path, reduce):
     # Search all the sets in backwards order
     bsets = list(tardis.listBackupSets())
     for bset in reversed(bsets):
-        logger.debug("Checking for path %s in %s (%d)", path, bset['name'], bset['backupset'])
-        tmp = Util.reducePath(tardis, bset['backupset'], os.path.abspath(path), reduce, crypt)
+        logger.debug("Checking for path %s in %s (%d)", path, bset["name"], bset["backupset"])
+        tmp = Util.reducePath(tardis, bset["backupset"], os.path.abspath(path), reduce, crypt)
         tmp2 = crypt.encryptPath(tmp)
-        info = tardis.getFileInfoByPath(tmp2, bset['backupset'])
+        info = tardis.getFileInfoByPath(tmp2, bset["backupset"])
         if info:
-            logger.debug("Found %s in backupset %s: %s", path, bset['name'], tmp)
-            return bset['backupset'], tmp, bset['name']
+            logger.debug("Found %s in backupset %s: %s", path, bset["name"], tmp)
+            return bset["backupset"], tmp, bset["name"]
     return (None, None, None)
 
 def recoverName(cksum):
@@ -368,44 +368,44 @@ def mkOutputDir(name):
     return name
 
 def parseArgs():
-    parser = argparse.ArgumentParser(description='Recover Backed Up Files', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description="Recover Backed Up Files", fromfile_prefix_chars="@", formatter_class=Util.HelpFormatter, add_help=False)
 
     (_, remaining) = Config.parseConfigOptions(parser)
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
     parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
-    parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest='cksum', action='store_true', default=False)
+    parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest="cksum", action="store_true", default=False)
 
     bsetgroup = parser.add_mutually_exclusive_group()
-    bsetgroup.add_argument("--backup", "-b", dest='backup', default=Defaults.getDefault('TARDIS_RECENT_SET'), help="Backup set to use.  Default: %(default)s")
-    bsetgroup.add_argument("--date", "-d",   dest='date', default=None, help="Regenerate as of date", )
-    bsetgroup.add_argument("--last", "-l",   dest='last', default=False, action='store_true', help="Regenerate the most recent version of the file")
+    bsetgroup.add_argument("--backup", "-b", dest="backup", default=Defaults.getDefault("TARDIS_RECENT_SET"), help="Backup set to use.  Default: %(default)s")
+    bsetgroup.add_argument("--date", "-d",   dest="date", default=None, help="Regenerate as of date" )
+    bsetgroup.add_argument("--last", "-l",   dest="last", default=False, action="store_true", help="Regenerate the most recent version of the file")
 
-    parser.add_argument('--recurse', '-r',    dest='recurse', default=True, action=argparse.BooleanOptionalAction, help='Recurse directory trees.  Default: %(default)s')
-    parser.add_argument('--recovername',      dest='recovername', default=False, action=argparse.BooleanOptionalAction,    help='Recover the name when recovering a checksum.  Default: %(default)s')
+    parser.add_argument("--recurse", "-r",    dest="recurse", default=True, action=argparse.BooleanOptionalAction, help="Recurse directory trees.  Default: %(default)s")
+    parser.add_argument("--recovername",      dest="recovername", default=False, action=argparse.BooleanOptionalAction,    help="Recover the name when recovering a checksum.  Default: %(default)s")
 
-    parser.add_argument('--authenticate',    dest='auth', default=True, action=argparse.BooleanOptionalAction,    help='Cryptographically authenticate files while regenerating them.  Only for encrypted backups. Default: %(default)s')
-    parser.add_argument('--verify-action',   dest='verifyaction', default='rename', choices=['keep', 'rename', 'delete'], help='Action to take for files that do not verify their checksum.  Default: %(default)s')
+    parser.add_argument("--authenticate",    dest="auth", default=True, action=argparse.BooleanOptionalAction,    help="Cryptographically authenticate files while regenerating them.  Only for encrypted backups. Default: %(default)s")
+    parser.add_argument("--verify-action",   dest="verifyaction", default="rename", choices=["keep", "rename", "delete"], help="Action to take for files that do not verify their checksum.  Default: %(default)s")
 
-    parser.add_argument('--reduce-path',     dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
+    parser.add_argument("--reduce-path",     dest="reduce",  default=0, const=sys.maxsize, type=int, nargs="?",   metavar="N",
                         help='Reduce path by N directories.  No value for "smart" reduction')
-    parser.add_argument('--set-times',       dest='settime', default=True, action=argparse.BooleanOptionalAction,      help='Set file times to match original file. Default: %(default)s')
-    parser.add_argument('--set-perms',       dest='setperm', default=True, action=argparse.BooleanOptionalAction,      help='Set file owner and permisions to match original file. Default: %(default)s')
-    parser.add_argument('--set-attrs',       dest='setattrs', default=True, action=argparse.BooleanOptionalAction,     help='Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s')
-    parser.add_argument('--set-acl',         dest='setacl', default=True, action=argparse.BooleanOptionalAction,       help='Set file access control lists to match the original file. Default: %(default)s')
-    parser.add_argument('--overwrite', '-O', dest='overwrite', default=owModeDefault, const='always', nargs='?',
+    parser.add_argument("--set-times",       dest="settime", default=True, action=argparse.BooleanOptionalAction,      help="Set file times to match original file. Default: %(default)s")
+    parser.add_argument("--set-perms",       dest="setperm", default=True, action=argparse.BooleanOptionalAction,      help="Set file owner and permisions to match original file. Default: %(default)s")
+    parser.add_argument("--set-attrs",       dest="setattrs", default=True, action=argparse.BooleanOptionalAction,     help="Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s")
+    parser.add_argument("--set-acl",         dest="setacl", default=True, action=argparse.BooleanOptionalAction,       help="Set file access control lists to match the original file. Default: %(default)s")
+    parser.add_argument("--overwrite", "-O", dest="overwrite", default=owModeDefault, const="always", nargs="?",
                         choices=list(map(str, OwMode)),
-                        help='Mode for handling existing files. Default: %(default)s')
+                        help="Mode for handling existing files. Default: %(default)s")
 
-    parser.add_argument('--hardlinks',       dest='hardlinks',   default=True,   action=argparse.BooleanOptionalAction,   help='Create hardlinks of multiple copies of same inode created. Default: %(default)s')
+    parser.add_argument("--hardlinks",       dest="hardlinks",   default=True,   action=argparse.BooleanOptionalAction,   help="Create hardlinks of multiple copies of same inode created. Default: %(default)s")
 
-    parser.add_argument('--exceptions', '-E',   dest='exceptions', default=False, action=argparse.BooleanOptionalAction, help="Log full exception data")
-    parser.add_argument('--verbose', '-v',   dest='verbose', action='count', default=0, help='Increase the verbosity')
-    parser.add_argument('--version',         action='version', version='%(prog)s ' + Tardis.__versionstring__,    help='Show the version')
-    parser.add_argument('--help', '-h',      action='help')
+    parser.add_argument("--exceptions", "-E",   dest="exceptions", default=False, action=argparse.BooleanOptionalAction, help="Log full exception data")
+    parser.add_argument("--verbose", "-v",   dest="verbose", action="count", default=0, help="Increase the verbosity")
+    parser.add_argument("--version",         action="version", version="%(prog)s " + Tardis.__versionstring__,    help="Show the version")
+    parser.add_argument("--help", "-h",      action="help")
 
-    parser.add_argument('files', nargs='+', default=None, help="List of files to regenerate")
+    parser.add_argument("files", nargs="+", default=None, help="List of files to regenerate")
 
     Util.addGenCompletions(parser)
 
@@ -485,7 +485,7 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
                         hasher.update(x)
                         output.write(x)
                 except Exception as e:
-                    logger.error(f"Unable to read file: {i}: {repr(e)}")
+                    logger.error(f"Unable to read file: {i}: {e!r}")
                     raise
                 finally:
                     f.close()
@@ -515,9 +515,9 @@ def calculateBackupSet():
             timestamp = time.mktime(then)
             logger.info("Using time: %s", time.asctime(then))
             bsetInfo = tardis.getBackupSetInfoForTime(timestamp)
-            if bsetInfo and bsetInfo['backupset'] != 1:
-                bset = bsetInfo['backupset']
-                logger.debug("Using backupset: %s %d", bsetInfo['name'], bsetInfo['backupset'])
+            if bsetInfo and bsetInfo["backupset"] != 1:
+                bset = bsetInfo["backupset"]
+                logger.debug("Using backupset: %s %d", bsetInfo["name"], bsetInfo["backupset"])
             else:
                 logger.critical("No backupset at date: %s (%s)", args.date, time.asctime(then))
                 raise ValueError(time.asctime(then))
@@ -527,7 +527,7 @@ def calculateBackupSet():
     elif args.backup:
         bsetInfo = Util.getBackupSet(tardis, args.backup)
         if bsetInfo:
-            bset = bsetInfo['backupset']
+            bset = bsetInfo["backupset"]
         else:
             logger.critical("No backupset at for name: %s", args.backup)
             raise ValueError(args.backup)
@@ -541,7 +541,7 @@ def main():
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
 
     try:
-        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password: ")
+        password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt="Password: ")
         args.password = None
         (tardis, cache, crypt, client) = Util.setupDataConnection(args.repo, password, args.keys)
 
