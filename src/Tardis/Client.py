@@ -1759,7 +1759,7 @@ def startBackup(client, url, hasPassword):
         crypt.setKeys(f, c)
 
     if args.stats or args.report != 'none':
-        logger.log(log.STATS, f"Name: {backupName} Repository: {url} Session: {sessionid}")
+        logger.log(log.STATS, f"Name: {backupName} Repository: {url}")
 
     trackOutstanding = True
 
