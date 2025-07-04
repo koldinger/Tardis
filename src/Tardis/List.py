@@ -208,7 +208,7 @@ def collectDirContents(tardis, dirList, crypt):
     """
 
     contents = {}
-    for (x, y) in dirList:
+    for (x, _) in dirList:
         contents[x["backupset"]] = {}
     names = set()
     ranges = []
@@ -221,10 +221,9 @@ def collectDirContents(tardis, dirList, crypt):
         d = dirHash.setdefault(bset["backupset"])
         # If we don't have an entry here, the range ends.
         # OR if the inode is different from the previous
-        if prev and ((not d) or (prev["inode"] != d["inode"]) or (prev["device"] != d["device"])):
-            if dirRange:
-                ranges.append(dirRange)
-                dirRange = []
+        if prev and ((not d) or (prev["inode"] != d["inode"]) or (prev["device"] != d["device"])) and dirRange:
+            ranges.append(dirRange)
+            dirRange = []
         if d:
             dirRange.append(bset)
         prev = d
@@ -541,13 +540,7 @@ def pruneBackupSetsByDateRange(tardis):
             startTime = time.mktime(then)
             startSet = tardis.getBackupSetInfoForTime(startTime)
 
-            if startSet:
-                # Get the backupset, then add 1.  Backupset will be the LAST backupset before
-                # the start time, so 1 larger should be the first backupset after that.
-                # I think
-                startRange=startSet["backupset"] + 1
-            else:
-                startRange = 0
+            startRange = startSet["backupset"] + 1 if startSet else 0
         else:
             doprint(f"Invalid time: {daterange[0]}", color=colors["error"], eol=True)
             sys.exit(1)
@@ -560,10 +553,7 @@ def pruneBackupSetsByDateRange(tardis):
         if success:
             endTime = time.mktime(then)
             endSet = tardis.getBackupSetInfoForTime(endTime)
-            if endSet:
-                endRange = endSet["backupset"]
-            else:
-                endRange = sys.maxsize
+            endRange = endSet["backupset"] if endSet else sys.maxsize
         else:
             doprint(f"Invalid time: {daterange[1]}", color=colors["error"], eol=True)
             sys.exit(1)
