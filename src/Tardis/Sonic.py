@@ -62,7 +62,7 @@ class NoSuchBackupError(Exception):
         super().__init__(f"{message} {value}")
         self.value = value
 
-current      = Text(Defaults.getDefault('TARDIS_RECENT_SET'), "green")
+current      = Text(Defaults.getDefault("TARDIS_RECENT_SET"), "green")
 
 # Config keys which can be gotten or set.
 configKeys = ["Formats", "Priorities", "KeepDays", "ForceFull", "SaveFull", "MaxDeltaChain", "MaxChangePercent", "VacuumInterval", "AutoPurge", "Disabled", "SaveConfig"]
@@ -77,7 +77,7 @@ def parseDateTime(value):
     cal = parsedatetime.Calendar()
     dt, success = cal.parse(value)
     if not success:
-        raise argparse.ArgumentTypeError(f"Couldn't find a valid date in '{value}'")
+        raise argparse.ArgumentTypeError(f"Couldn"t find a valid date in "{value}"")
     return dt
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
@@ -193,7 +193,7 @@ def changePassword(crypt, oldPw):
         crypt.setKeys(f, c)
 
         # Grab the keys from one crypt object.
-        # Need to do this because getKeys/setKeys assumes they're encrypted, and we need the raw
+        # Need to do this because getKeys/setKeys assumes they"re encrypted, and we need the raw
         # versions
         crypt2._filenameKey = crypt._filenameKey
         crypt2._contentKey  = crypt._contentKey
@@ -264,14 +264,14 @@ def getBSets(db):
 
     # Filter the sets
     if args.minpriority:
-        sets = list(filter(lambda x: x['priority'] >= args.minpriority, sets))
+        sets = list(filter(lambda x: x["priority"] >= args.minpriority, sets))
 
     if args.before:
         timestamp = time.mktime(args.before)
-        sets = list(filter(lambda x: float(x['starttime']) < timestamp, sets))
+        sets = list(filter(lambda x: float(x["starttime"]) < timestamp, sets))
     if args.after:
         timestamp = time.mktime(args.after)
-        sets = list(filter(lambda x: float(x['starttime']) > timestamp, sets))
+        sets = list(filter(lambda x: float(x["starttime"]) > timestamp, sets))
 
     if args.last:
         sets = sets[-args.last:]
@@ -314,8 +314,8 @@ def listBSets(db, crypt, cache):
                 duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"])))))
             else:
                 duration = ""
-            completed = Text("Comp", "green") if bset['"ompleted"] else Text("Incomp", "red")
-            full      = 'Full' if bset['full'] else 'Delta'
+            completed = Text("Comp", "green") if bset[""ompleted"] else Text("Incomp", "red")
+            full      = "Full" if bset["full"] else "Delta"
             tags = [Text(_decryptName(tag, crypt)) for tag in db.getTags(bset["backupset"])]
             if bset["backupset"] == last["backupset"]:
                 status = c.join(tags + [current])
@@ -338,7 +338,7 @@ def listBSets(db, crypt, cache):
                 if cVersion or sVersion:
                     print(f"    SW Versions: Client: {cVersion} Server {sVersion}")
                 if tags:
-                    print(f"    Tags: {', '.join(tags)}")
+                    print(f"    Tags: {", ".join(tags)}")
                 if tags or commandLine or cVersion or sVersion:
                     print()
         print(table)
@@ -352,7 +352,7 @@ def listBSets(db, crypt, cache):
         return 1
     return 0
 
-# cache of paths we've already calculated.
+# cache of paths we"ve already calculated.
 # the root (0, 0,) is always prepopulated
 _paths = {(0, 0): "/"}
 
@@ -397,91 +397,86 @@ def listFiles(db, crypt):
 
     details = args.cksums or args.chnlen or args.inode or args.type or args.size
 
-    tab = Table(box=None, show_header=False)
 
+    # Partiion the files into directories
     dirs = collections.defaultdict(list)
     for f in files:
-        dirs[(f['parent'], f['parentdev'])].append(f)
+        dirs[(f["parent"], f["parentdev"])].append(f)
 
-    ic(dirs)
+    for d in sorted(dirs.keys(), key=lambda x: _path(db, crypt, bset, x)):
+        path = _path(db, crypt, bset, d)
+        files = dirs[d]
 
+        # Build table
+        tab = Table(box=None, show_header=False)
+        for fInfo in sorted(files, key=lambda x: _decryptName(x["name"], crypt)):
+            name = _decryptName(fInfo["name"], crypt)
 
-    for fInfo in sorted(files, key=lambda x: (_path(db, crypt, bset, (x["parent"], x["parentdev"])),  _decryptName(x["name"], crypt))):
-        name = _decryptName(fInfo["name"], crypt)
+            if not args.dirs and fInfo["dir"]:
+                continue
 
-        if not args.dirs and fInfo["dir"]:
-            continue
-        dirInode = (fInfo["parent"], fInfo["parentdev"])
-        if dirInode == lastDirInode:
-            path = lastDir
-        else:
-            path = _path(db, crypt, bset, dirInode)
-            lastDirInode = dirInode
-            lastDir = path
-            if not args.fullname:
-                print(tab)
-                tab = Table(box=None, show_header=False)
-                print(Text(f"{path}:", "green"))
+            if args.status:
+                status = Text("[New]", "green") if fInfo["chainlength"] == 0 else Text("[Delta] ", "yellow")
+            else:
+                status = ""
 
-        if args.status:
-            status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
-        else:
-            status = ""
-        if args.fullname:
-            name = os.path.join(path, name)
+            if args.fullname:
+                name = os.path.join(path, name)
 
-        if args.long:
-            mode  = stat.filemode(fInfo['mode'])
-            group = crypt.decryptName(fInfo['groupname'])
-            owner = crypt.decryptName(fInfo['username'])
-            mtime = Util.formatTime(fInfo['mtime'])
-            size = humanify(fInfo['size'])
-            inode = fInfo['inode']
-            #print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
-            row = [status, mode, owner, group, str(size), mtime]
-            if args.cksums:
-                #print(f" {fInfo.get('checksum', '') or '' :32}", end=' ')
-                row.append(fInfo.get("checksum", ""))
-            if args.chnlen:
-                #print(f" {fInfo.get('chainlength', 0) or 0:4}", end=' ')
-                row.append(str(fInfo.get('chainlength', 0)))
-            if args.inode:
-                #print(f" {inode:16}", end=' ')
-                row.append(str(inode))
-            if args.type:
-                #print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
-                row.append("Delta" if fInfo.get("chainlength", 0) else "Full")
-            if args.size:
-                #size = humanify(fInfo.get('disksize', 0))
-                #print(f' {size:9} ', end=' ')
-                row.append(humanify(fInfo.get('disksize', 0)))
-            row.append(Text(name, "green"))
-        else:
-            row = [status]
-            if args.cksums:
-                #print(f" {fInfo['checksum'] or '':32s}", end=' ')
-                row.append(fInfo.get('checksum', ''))
-            if args.chnlen:
-                # print(f" {fInfo['chainlength'] or 0:>4}", end=' ')
-                row.append(str(fInfo.get('chainlength', 0)))
-            if args.inode:
-                #print(' %-16s ' % (f"({fInfo['device'] or ''}, {fInfo['inode'] or ''})"), end=' ')
-                row.append(f"({fInfo.get('device', '')}, {fInfo.get('inode', '')})")
-            if args.type:
-                # print(f" {'Delta' if fInfo['chainlength'] else 'Full':5s}", end=' ')
-                row.append('Delta' if fInfo['chainlength'] else 'Full')
-            if args.size:
-                #size = humanify(fInfo['disksize'])
-                #print(f' {size:9} ', end=' ')
-                row.append(humanify(fInfo['size']))
-            row.append(name)
-        tab.add_row(*row)
-    print(tab)
+            if args.long:
+                mode  = stat.filemode(fInfo["mode"])
+                group = crypt.decryptName(fInfo["groupname"])
+                owner = crypt.decryptName(fInfo["username"])
+                mtime = Util.formatTime(fInfo["mtime"])
+                size = humanify(fInfo["size"])
+                inode = fInfo["inode"]
+                #print(f" {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}", end=" ")
+                row = [status, mode, owner, group, str(size), mtime]
+                if args.cksums:
+                    row.append(fInfo["checksum"] or "")
+                if args.chnlen:
+                    row.append(str(fInfo["chainlength"] or 0))
+                if args.inode:
+                    #print(f" {inode:16}", end=" ")
+                    row.append(str(inode))
+                if args.type:
+                    #print(f" {"Delta" if fInfo.get("chainlength", 0) else "Full":5} " , end=" ")
+                    row.append("Delta" if fInfo.get("chainlength", 0) else "Full")
+                if args.size:
+                    #size = humanify(fInfo.get("disksize", 0))
+                    #print(f" {size:9} ", end=" ")
+                    row.append(humanify(fInfo.get("disksize", 0)))
+                row.append(Text(name, "green"))
+            else:
+                row = [status]
+                if args.cksums:
+                    #print(f" {fInfo["checksum"] or "":32s}", end=" ")
+                    row.append(fInfo.get("checksum", ""))
+                if args.chnlen:
+                    # print(f" {fInfo["chainlength"] or 0:>4}", end=" ")
+                    row.append(str(fInfo.get("chainlength", 0)))
+                if args.inode:
+                    #print(" %-16s " % (f"({fInfo["device"] or ""}, {fInfo["inode"] or ""})"), end=" ")
+                    row.append(f"({fInfo.get("device", "")}, {fInfo.get("inode", "")})")
+                if args.type:
+                    # print(f" {"Delta" if fInfo["chainlength"] else "Full":5s}", end=" ")
+                    row.append("Delta" if fInfo["chainlength"] else "Full")
+                if args.size:
+                    #size = humanify(fInfo["disksize"])
+                    #print(f" {size:9} ", end=" ")
+                    row.append(humanify(fInfo["size"]))
+                row.append(name)
+            tab.add_row(*row)
+        # Print the table if it"s not empty
+        if tab.rows:
+            # Print the direcotry payth
+            print(Text(path, "bright_blue"), ":")
+            print(tab)
 
 
 def _bsetInfo(db, crypt, info):
-    print(f"Backupset       : {info['name']} ({int(info['backupset'])})")
-    print(f"Completed       : {'True' if info['completed'] else 'False'}")
+    print(f"Backupset       : {info["name"]} ({int(info["backupset"])})")
+    print(f"Completed       : {"True" if info["completed"] else "False"}")
     t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(info["starttime"])))
     print(f"StartTime       : {t}")
     if info["endtime"] is not None:
@@ -490,9 +485,9 @@ def _bsetInfo(db, crypt, info):
         print(f"EndTime         : {t}")
         print(f"Duration        : {duration}")
     tags = [_decryptName(tag, crypt) for tag in db.getTags(info["backupset"])]
-    print(f"Tags:           : {','.join(tags)}")
-    print(f"SW Versions     : C:{info['clientversion']} S:{info['serverversion']}")
-    print(f"Client IP       : {info['clientip']}")
+    print(f"Tags:           : {",".join(tags)}")
+    print(f"SW Versions     : C:{info["clientversion"]} S:{info["serverversion"]}")
+    print(f"Client IP       : {info["clientip"]}")
     details = db.getBackupSetDetails(info["backupset"])
 
     (files, dirs, size, newInfo, endInfo) = details
@@ -542,8 +537,8 @@ def doTagging(db, crypt):
 
 def doLock(db, lock):
     bset = getBackupSet(db, args.backup, args.date, True)
-    logger.info("Locking set %s", bset['name'])
-    db.setLock(lock, bset['backupset'])
+    logger.info("Locking set %s", bset["name"])
+    db.setLock(lock, bset["backupset"])
     return 0
 
 def purge(db, cache):
@@ -648,7 +643,7 @@ def checkSanity(db, cache, crypt):
         for i in cachefiles:
             filesets[i.stem].append(i.suffix)
 
-        # Compare the sets, using set arithmetic.   Anything in the first that's not in the second is left.
+        # Compare the sets, using set arithmetic.   Anything in the first that"s not in the second is left.
         # Go both ways, to get ones in the DB, and ones in the cache.
         inCache = sorted(list(cacheNames - checksums))
         inDB    = sorted(list(checksums - cacheNames))
@@ -659,8 +654,8 @@ def checkSanity(db, cache, crypt):
             k = tuple(sorted(i))
             groupings[k] += 1
 
-        print(f"{len(inCache)} files in the store which don't have a matching DB entry")
-        print(f"{len(inDB)} files in the DB which don't have a matching store entry")
+        print(f"{len(inCache)} files in the store which don"t have a matching DB entry")
+        print(f"{len(inDB)} files in the DB which don"t have a matching store entry")
 
 
         for (k, v) in groupings.items():
@@ -678,7 +673,7 @@ def checkSanity(db, cache, crypt):
                 case x:
                     print(f"{v} files with unknown files types : {x}")
 
-        # If we found something, let's talk about it.
+        # If we found something, let"s talk about it.
         if inCache or inDB:
             if args.details:
                 if inCache:
@@ -777,7 +772,7 @@ def parseArgs() -> argparse.Namespace:
     filesParser = argparse.ArgumentParser(add_help=False)
     filesParser.add_argument("--long", "-l",    dest="long", default=False, action=argparse.BooleanOptionalAction,           help="Long format")
     filesParser.add_argument("--fullpath", "-f",    dest="fullname", default=False, action=argparse.BooleanOptionalAction,   help="Print full path name in names")
-    filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
+    filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren"t added here")
     filesParser.add_argument("--dirs",          dest="dirs", default=False, action=argparse.BooleanOptionalAction,           help="Include directories in list")
     filesParser.add_argument("--status",        dest="status", default=False, action=argparse.BooleanOptionalAction,         help="Include status (new/delta) in list")
     filesParser.add_argument("--human", "-H",   dest="human", default=False, action=argparse.BooleanOptionalAction,          help="Print sizes in human readable form")
@@ -939,7 +934,7 @@ def main():
             case "chpass":
                 return changePassword(crypt)
 
-        # Fall through to here if it didn't match any of the above.
+        # Fall through to here if it didn"t match any of the above.
 
         upgrade = args.command == "upgrade"
 
