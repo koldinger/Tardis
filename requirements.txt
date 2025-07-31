@@ -2,13 +2,11 @@ aadict==0.2.3
 asset==0.6.13
 attrs==23.1.0
 binaryornot==0.4.4
-blinker==1.7.0
 cattrs==23.2.2
 certifi==2024.7.4
 cffi==1.16.0
 chardet==5.2.0
 charset-normalizer==3.3.2
-click==8.1.7
 colorlog==6.7.0
 daemonize==2.5.0
 Flask==3.0.0
@@ -35,7 +33,6 @@ qrcode==7.4.2
 reportlab==4.0.7
 requests==2.32.4
 requests-cache==1.2.1
-six==1.16.0
 srp==1.0.20
 StrEnum==0.4.15
 termcolor==2.3.0
