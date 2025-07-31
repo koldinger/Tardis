@@ -420,7 +420,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     numFound = len([i for i in fInfos if fInfos[i] is not None])
 
     # Print the header
-    if args.headers or (numFound == 0) or args.recent or not first:
+    if args.headers or (numFound == 0) or not first:
         color = colors['header'] if first else colors['name']
         doprint(fmt % filename, color)
         if numFound == 0:
