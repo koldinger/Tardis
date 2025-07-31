@@ -50,6 +50,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import colorlog
 import parsedatetime
@@ -142,6 +143,8 @@ def shortPath(path, width=80):
     Compress a path to only show the last elements if it's wider than specified.
     Replaces early elements with ".../"
     """
+    # Convert to astring.
+    path = str(path)
 
     # If we're already short enough, just return what we have
     if not path or len(path) < width:
@@ -248,10 +251,10 @@ def isMagic(path):
     return ('*' in path) or ('?' in path) or ('[' in path)
 
 def fullPath(name):
-    return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
+    return Path(os.path.expandvars(name)).resolve()
 
 def hashPath(path):
-    return hashlib.md5(bytes(path, 'utf8')).hexdigest()
+    return hashlib.md5(bytes(str(path), 'utf8')).hexdigest()
 
 """
 Retrieve a password.
