@@ -53,6 +53,11 @@ from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
 from icecream import ic
 ic.configureOutput(includeContext=True)
 
+class NoSuchBackupError(Exception):
+    def __init__(self, message, value):
+        super().__init__(f"{message} {value}")
+        self.value = value
+
 current      = Defaults.getDefault('TARDIS_RECENT_SET')
 
 # Config keys which can be gotten or set.
@@ -449,9 +454,8 @@ def bsetInfo(db, crypt):
     printed = False
     if args.backup or args.date:
         info = getBackupSet(db, args.backup, args.date)
-        if info:
-            _bsetInfo(db, crypt, info)
-            printed = True
+        _bsetInfo(db, crypt, info)
+        printed = True
     else:
         first = True
         for info in db.listBackupSets():
@@ -480,20 +484,12 @@ def doTagging(db, crypt):
 
 def doLock(db, lock):
     bset = getBackupSet(db, args.backup, args.date, True)
-    if bset is None:
-        logger.error("No backup set found for %s", bset)
-        sys.exit(1)
-
     logger.info("Locking set %s", bset['name'])
     db.setLock(lock, bset['backupset'])
     return 0
 
 def purge(db, cache):
     bset = getBackupSet(db, args.backup, args.date, True)
-    if bset is None:
-        logger.error("No backup set found")
-        sys.exit(1)
-    # List the sets we're going to delete
     if args.incomplete:
         pSets = db.listPurgeIncomplete(args.priority, bset['endtime'], bset['backupset'])
     else:
@@ -832,8 +828,7 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
             bset = bInfo['backupset']
             logger.debug("Using backupset: %s %d", bInfo['name'], bInfo['backupset'])
         else:
-            logger.critical("No backupset at date: %s (%s)", date, time.asctime(date))
-            bInfo = None
+            raise NoSuchBackupError("No backup for date", date)
     elif backup:
         try:
             bset = int(backup)
@@ -847,10 +842,13 @@ def getBackupSet(db, backup, date, defaultCurrent=False):
                 bInfo = db.getBackupSetInfo(backup)
                 if not bInfo:
                     bInfo = db.getBackupSetInfoByTag(backup)
-            if not bInfo:
-                logger.critical("No backupset at for name: %s", backup)
+        if not bInfo:
+            raise NoSuchBackupError("No backupset for", backup)
     elif defaultCurrent:
         bInfo = db.lastBackupSet()
+        if not bInfo:
+            raise NoSuchBackupError("No Current backupset", "")
+
     return bInfo
 
 def main():
@@ -945,6 +943,9 @@ def main():
     except TardisDB.AuthenticationException:
         logger.error("Authentication failed.  Bad password")
         sys.exit(1)
+    except NoSuchBackupError as e:
+        logger.error(str(e))
+        sys.exit(2)
     except Exception as e:
         logger.error("Caught exception: %s", str(e))
         eLogger.log(e)
