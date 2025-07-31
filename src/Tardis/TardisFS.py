@@ -47,8 +47,9 @@ from enum import IntEnum, auto
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 import Tardis
+from Tardis.RemoteDB import RemoteDB
 
-from . import Cache, CacheDir, Config, Defaults, Regenerator, TardisDB, Util
+from . import Cache, CacheDir, Config, Defaults, RemoteDB, Regenerator, TardisDB, Util
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
@@ -462,6 +463,11 @@ class TardisFS(LoggingMixIn, Operations):
             return dict((key, getattr(fs, key)) for key in (
                 'f_bavail', 'f_bfree', 'f_blocks', 'f_bsize', 'f_favail',
                 'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
+        elif isinstance(self.cacheDir, RemoteDB.RemoteDB):
+            return dict((key, 1024) for key in (
+                'f_bavail', 'f_bfree', 'f_blocks', 'f_bsize', 'f_favail',
+                'f_ffree', 'f_files', 'f_flag', 'f_frsize', 'f_namemax'))
+
         raise FuseOSError(errno.EINVAL)
 
     def symlink(self, target, source):
