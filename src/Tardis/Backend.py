@@ -46,8 +46,8 @@ from . import (CacheDir, CompressedBuffer, ConnIdLogAdapter, Defaults,
                Messages, Protocol, Regenerator, TardisCrypto, TardisDB, Util,
                librsync, log)
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class FileResponse(IntEnum):
     DONE    = 0

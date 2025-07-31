@@ -58,10 +58,6 @@ import srp
 from . import (CacheDir, CompressedBuffer, Connection, Defaults, RemoteDB,
                TardisCrypto, TardisDB)
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
-#import traceback
-
 try:
     import genzshcomp
 except ImportError:
