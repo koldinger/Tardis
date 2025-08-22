@@ -65,12 +65,12 @@ setup(  name                    = 'Tardis-Backup',
         platforms               = "Posix; MacOS X",
         include_package_data    = True,
         zip_safe                = False,
-        install_requires = ['msgpack>=1.0',   'daemonize',      'parsedatetime', 'pycryptodomex>=3.8.0',
-                            'termcolor',      'passwordmeter',  'python-snappy', 'zstandard',
-                            'srp',            'pid',            'python-magic',  'urllib3',         'binaryornot',     
-                            'colorlog',       'reportlab',      'qrcode',        'fusepy',
-                            'requests_cache', 'requests',       'flask',         'tornado',         'zstandard',
-                            'lz4',            'StrEnum']
+        install_requires = ['msgpack>=1.0',   'daemonize',      'parsedatetime', 'pycryptodomex',
+                            'termcolor',      'python-snappy',  'zstandard',     'srp',
+                            'pid',            'python-magic',   'colorlog',      'reportlab',
+                            'qrcode',         'fusepy',         'requests_cache','requests',
+                            'flask',          'tornado',        'zstandard',     'lz4',
+                            'StrEnum']
                            + add_pkgs,
         package_dir = {'': 'src'},
         package_data = {
