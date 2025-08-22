@@ -50,7 +50,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 import colorlog
 import parsedatetime
@@ -251,7 +250,7 @@ def isMagic(path):
     return ('*' in path) or ('?' in path) or ('[' in path)
 
 def fullPath(name):
-    return Path(os.path.expandvars(name)).resolve()
+    return os.path.expanduser(os.path.expandvars(name))
 
 def hashPath(path):
     return hashlib.md5(bytes(str(path), 'utf8')).hexdigest()
