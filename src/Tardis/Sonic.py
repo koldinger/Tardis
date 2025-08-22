@@ -50,8 +50,8 @@ import Tardis
 from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
                TardisDB, Util)
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 class NoSuchBackupError(Exception):
     def __init__(self, message, value):
