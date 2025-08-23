@@ -44,11 +44,10 @@ class RegenerateException(Exception):
 class Regenerator:
     errors = 0
 
-    def __init__(self, cache, db, crypt: TardisCrypto.CryptoScheme, tempdir="/tmp"):
+    def __init__(self, cache, db, crypt: TardisCrypto.CryptoScheme):
         self.logger = logging.getLogger("Regenerator")
         self.cacheDir = cache
         self.db = db
-        self.tempdir = tempdir
         self.crypt = crypt
 
     def decryptFile(self, filename, size, authenticate=True):
@@ -135,10 +134,12 @@ class Regenerator:
                     patchfile = temp
                 try:
                     output = librsync.patch(basis, patchfile)
-                    return output
                 except librsync.LibrsyncError as e:
-                    self.logger.error("Recovering checksum: %s : %s", cksum, e)
-                    raise RegenerateException(f"Checksum: {cksum}: Error: {e}") from e
+                    msg = f"Checksum: {cksum}: Error: {e}"
+                    self.logger.error(msg)
+                    raise RegenerateException(msg) from e
+                else:
+                    return output
             else:
                 if cksInfo["encrypted"]:
                     output =  self.decryptFile(cksum, cksInfo["disksize"], authenticate)

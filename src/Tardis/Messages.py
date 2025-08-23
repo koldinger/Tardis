@@ -97,7 +97,7 @@ class BinMessages(Messages):
                 self.compress = None
                 self.decompress = None
             case _:
-                raise Exception(f"Unrecognized compression method: {compress!s}")
+                raise ValueError(f"Unrecognized compression method: {compress!s}")
 
         self.sendstream = None
         self.recvstream = None

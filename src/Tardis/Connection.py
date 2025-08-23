@@ -39,11 +39,12 @@ protocolVersion = "1.6"
 headerString    = "TARDIS " + protocolVersion
 sslHeaderString = headerString + "/SSL"
 
-class ConnectionException(Exception):
+class ConnectionError(Exception):
     pass
 
 class Connection:
-    """ Root class for handling connections to the tardis server """
+    """ Root class for handling connections to the tardis server. """
+
     def __init__(self, host, port, encoding, compress, timeout, validate):
         self.stats = { "messagesRecvd": 0, "messagesSent" : 0, "bytesRecvd": 0, "bytesSent": 0 }
 
@@ -72,17 +73,17 @@ class Connection:
 
                 self.sock = self.sslCtx.wrap_socket(self.sock, server_side=False, server_hostname=host)
             elif not message:
-                raise ConnectionException("No header string.")
+                raise ConnectionError("No header string.")
             elif message != headerString:
-                raise ConnectionException(f"Unknown protocol: {message}")
+                raise ConnectionError(f"Unknown protocol: {message}")
             resp = { "encoding": encoding, "compress": compress }
             self.put(bytes(json.dumps(resp), "utf8"))
 
             message = self.sock.recv(256).strip()
             fields = json.loads(message)
             if fields["status"] != "OK":
-                raise ConnectionException("Unable to connect")
-        except ConnectionException as e:
+                raise ConnectionError("Unable to connect")
+        except ConnectionError as e:
             self.sock.close()
             raise e
 
@@ -117,7 +118,7 @@ class ProtocolConnection(Connection):
         self.sender.sendMessage(message, compress)
         self.stats["messagesSent"] += 1
 
-    def receive(self, wait):
+    def receive(self, _wait):
         message = self.sender.recvMessage()
         self.stats["messagesRecvd"] += 1
         return message
@@ -128,9 +129,8 @@ class ProtocolConnection(Connection):
             message["error"] = error
         try:
             self.send(message)
-        except Exception:
-            pass
-        super().close()
+        finally:
+            super().close()
 
     def encode(self, string):
         return self.sender.encode(string)

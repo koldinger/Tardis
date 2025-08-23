@@ -273,6 +273,8 @@ class CryptoScheme(ABC):
     _cryptoName = ""
     _cryptoScheme = ""
 
+    ivLength = 0
+
     def getName(self):
         return self._cryptoName
 

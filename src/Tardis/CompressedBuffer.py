@@ -52,9 +52,6 @@ class _NullCompressor:
     def flush(self):
         return None
 
-_zstdCtxC = zstd.ZstdCompressor(level=5)
-_zstdCtxD = zstd.ZstdDecompressor()
-
 class Lz4Compressor:
     def __init__(self):
         self.compressor = lz4.frame.LZ4FrameCompressor()
@@ -70,7 +67,7 @@ class Lz4Compressor:
         return self.compressor.flush()
 
 _compressors = {
-                 "zstd": (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
+                 "zstd": (zstd.ZstdCompressor(level=5).compressobj, zstd.ZstdDecompressor().decompressobj, {}),
                  "zlib": (zlib.compressobj, zlib.decompressobj, {}),
                  "bzip": (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
                  "lzma": (lzma.LZMACompressor, lzma.LZMADecompressor, {}),

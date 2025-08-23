@@ -61,6 +61,12 @@ class AuthenticationFailed(AuthenticationException):
 class NotAuthenticated(AuthenticationException):
     pass
 
+class BackupExistsError(Exception):
+    pass
+
+class DBVersionException(Exception):
+    pass
+
 # Subclass the Row object to add a "get" operation.
 # Allows it t
 
@@ -94,9 +100,9 @@ def authenticate(func):
 
 _fileInfoFields = dedent(
     """
-    N1.Name AS name, Inode AS inode, D1.VirtualID AS device, Dir AS dir, Link AS link, 
-    Parent AS parent, D2.VirtualID AS parentdev, Files.RowId AS rowid, C1.Size AS size, 
-    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks, 
+    N1.Name AS name, Inode AS inode, D1.VirtualID AS device, Dir AS dir, Link AS link,
+    Parent AS parent, D2.VirtualID AS parentdev, Files.RowId AS rowid, C1.Size AS size,
+    MTime AS mtime, CTime AS ctime, ATime AS atime, Mode AS mode, NLinks AS nlinks,
     FirstSet AS firstset, LastSet AS lastset,
     C1.Checksum AS checksum, C1.ChainLength AS chainlength, C1.DiskSize AS disksize,
     C2.Checksum AS xattrs,
@@ -113,7 +119,7 @@ _fileInfoJoin = dedent(
     LEFT OUTER JOIN Checksums AS C2 ON Files.XattrId = C2.ChecksumId
     LEFT OUTER JOIN Checksums AS C3 ON Files.AclId = C3.ChecksumId
     JOIN Users USING (UserID)
-    JOIN Groups USING (GroupID) 
+    JOIN Groups USING (GroupID)
     JOIN Devices D1 ON Files.Device = D1.DeviceID
     JOIN Devices D2 ON Files.ParentDev = D2.DeviceID
     JOIN Names N2 ON Users.NameID = N2.NameID
@@ -141,7 +147,7 @@ _checksumInfoFields = dedent(
 _schemaVersion = 23
 
 def _splitpath(path):
-    """ Split a path into chunks, recursively """
+    """ Split a path into chunks, recursively. """
     (head, tail) = os.path.split(path)
     return _splitpath(head) + [tail] if head and head != path else [head or tail]
 
@@ -264,8 +270,9 @@ class TardisDB:
                 self.logger.warning("Schema version mismatch: Upgrading.  Database %s is %d:  Expected %d.", self.dbfile, int(version), _schemaVersion)
                 self.upgradeSchema(version)
             else:
-                self.logger.error("Schema version mismatch: Database %s is %d:  Expected %d.   Please convert", self.dbfile, int(version), _schemaVersion)
-                raise Exception(f"Schema version mismatch: Database {self.dbfile} is {version}:  Expected {_schemaVersion}.   Please convert")
+                errmsg = f"Schema version mismatch: Database {self.dbfile} is {version}:  Expected {_schemaVersion}.   Please convert"
+                self.logger.error(errmsg)
+                raise DBVersionException(errmsg)
 
         if self.prevSet:
             f = self.getBackupSetInfo(self.prevSet)
@@ -367,9 +374,9 @@ class TardisDB:
                     "serversessionid": serverID,
                     "serverversion": (Tardis.__buildversion__ or Tardis.__version__),
                 })
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as e:
             self.logger.critical(f"Backupset {name} already exists")
-            raise Exception(f"Backupset {name} already exists")
+            raise BackupExistsError(f"Backupset {name} already exists") from e
 
         self.currBackupSet = c.lastrowid
 
@@ -428,7 +435,7 @@ class TardisDB:
         backupset = self._bset(current)
         (inode, device) = parent
         device = self._getDeviceId(device)
-        self.logger.debug(f"Looking up file by name {name} {parent} {backupset}")
+        #self.logger.debug("Looking up file by name %s %s %s", name, parent, backupset)
         row = self._executeWithResult(
                   "SELECT " +
                   _fileInfoFields + _fileInfoJoin +
@@ -461,9 +468,8 @@ class TardisDB:
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
                 parent = (info["inode"], info["device"])
-                if permchecker:
-                    if not permchecker(info["user"], info["group"], info["mode"]):
-                        raise Exception("File permission denied: " + name)
+                if permchecker and not permchecker(info["user"], info["group"], info["mode"]):
+                    raise PermissionError("File permission denied: " + name)
             else:
                 break
         return info
@@ -679,8 +685,8 @@ class TardisDB:
 
     @functools.lru_cache
     def _getDeviceId(self, virtualDevice):
-        if not isinstance(virtualDevice, str):
-            raise Exception(f"Invalid argument type {type(virtualDevice)} {virtualDevice}")
+        #if not isinstance(virtualDevice, str):
+        #raise Exception(f"Invalid argument type {type(virtualDevice)} {virtualDevice}")
         row = self._executeWithResult("SELECT DeviceID FROM Devices WHERE VirtualID = :virtualDev", {"virtualDev": virtualDevice})
         if row:
             deviceId = row[0]
@@ -750,7 +756,7 @@ class TardisDB:
     def extendFileRowIDs(self, rowids, current=True):
         """ extend a set of files based on a list of rowid's """
         current = self._bset(current)
-        self.conn.executemany("UPDATE Files SET LASTSET = :lastset WHERE RowID = :rowid", map(lambda x: {"lastset": current, "rowid": x}, rowids))
+        self.conn.executemany("UPDATE Files SET LASTSET = :lastset WHERE RowID = :rowid", [{"lastset": current, "rowid": x} for x in rowids])
 
     @authenticate
     def extendFileInode(self, parent, inode, old=False, current=True):
@@ -799,15 +805,12 @@ class TardisDB:
         self.logger.debug("Inserting checksum file: %s -- %d bytes, Compressed %s", checksum, size, str(compressed))
         added = self._bset(current)
 
-        if basis is None:
-            chainlength = 0
-        else:
-            chainlength = self.getChainLength(basis) + 1
+        chainlength = 0 if basis is None else self.getChainLength(basis) + 1
 
-        c =self._execute("INSERT INTO CheckSums (CheckSum,  Size,  Basis,  Encrypted,  DeltaSize,  Compressed,  DiskSize,  ChainLength,  Added,  IsFile) "
-                            "VALUES                (:checksum, :size, :basis, :encrypted, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
-                            {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
-                             "compressed": str(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
+        c = self._execute("INSERT INTO CheckSums (CheckSum,  Size,  Basis,  Encrypted,  DeltaSize,  Compressed,  DiskSize,  ChainLength,  Added,  IsFile) "
+                          "VALUES                (:checksum, :size, :basis, :encrypted, :deltasize, :compressed, :disksize, :chainlength, :added, :isfile)",
+                          {"checksum": checksum, "size": size, "basis": basis, "encrypted": encrypted, "deltasize": deltasize,
+                           "compressed": str(compressed), "disksize": disksize, "chainlength": chainlength, "added": added, "isfile": int(isFile)})
         return c.lastrowid
 
     @authenticate

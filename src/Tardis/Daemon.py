@@ -124,19 +124,20 @@ class ProtocolError(Exception):
     pass
 
 class TardisServerHandler(socketserver.BaseRequestHandler):
-    full    = False
-    statNewFiles = 0
-    statUpdFiles = 0
-    statBytesReceived = 0
-    statPurgedFiles = 0
-    statPurgedSets = 0
-    statCommands = {}
-    address = ""
-    basedir = None
-    autoPurge = False
-    saveConfig = False
-    forceFull = False
-    lastCompleted = None
+    def __init__(self):
+        self.full = False
+        self.statNewFiles = 0
+        self.statUpdFiles = 0
+        self.statBytesReceived = 0
+        self.statPurgedFiles = 0
+        self.statPurgedSets = 0
+        self.statCommands = {}
+        self.address = ""
+        self.basedir = None
+        self.autoPurge = False
+        self.saveConfig = False
+        self.forceFull = False
+        self.lastCompleted = None
 
     def setup(self):
         if self.client_address:
@@ -155,8 +156,8 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
     def handle(self):
         started = False
         completed = False
-        starttime = datetime.now()
-        endtime = starttime         # just to keep pylint happy
+        starttime = datetime.now(tz=None)
+        endtime = starttime         # justoduyt to keep pylint happy
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -217,7 +218,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
                 self.logger.info("Purged Sets and File:     %d %d", backend.statPurgedSets, backend.statPurgedFiles)
                 self.logger.info("Removed Orphans           %d (%s)", orphansRemoved, Util.fmtSize(orphanSize))
 
-            self.logger.info("Session from %s {%s} Ending: %s: %s", backend.client, self.sessionid, str(completed), str(datetime.now() - starttime))
+            self.logger.info("Session from %s {%s} Ending: %s: %s", backend.client, self.sessionid, str(completed), str(datetime.now(tz=None) - starttime))
 
 class TardisServer:
     # HACK.  Operate on an object, but not in the class.

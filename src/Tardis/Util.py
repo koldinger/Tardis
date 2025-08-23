@@ -50,6 +50,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import colorlog
 import parsedatetime
@@ -116,10 +117,8 @@ def getUserId(name):
 _now = time.time()
 _yearago = _now - (365 * 24 * 3600)
 def formatTime(then):
-    if then > _yearago:
-        fmt = "%b %d %H:%M"
-    else:
-        fmt = "%b %d, %Y"
+    fmt = "%b %d %H:%M" if then > _yearago else "%b %d, %Y"
+
     return time.strftime(fmt, time.localtime(then))
 
 # Strip comments from input lines.
@@ -168,7 +167,7 @@ def shortPath(path, width=80):
         length = min(len(retPath), width) - 5
         retPath   = main[0:(length // 2) - 1] + "..." + main[-(length // 2) + 1:]
         if suffix:
-            retPath = ".".join([retPath, suffix])
+            retPath = f"{retPath}.{suffix}"
 
     # Build it up backwards from the end
     while len(retPath) < width:
@@ -177,9 +176,9 @@ def shortPath(path, width=80):
             break
         if len(tail) + len(os.sep) + len(retPath) > width:
             break
-        retPath = os.path.join(tail, retPath)
+        retPath = f"{tail}/{retPath}"
 
-    return "..." + os.sep + retPath
+    return f".../{retPath}"
 
 def accumulateStat(stats, name, amount=1):
     if stats:
@@ -214,7 +213,7 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout, handler=
 
 # Functions for reducing a path.
 
-def findDirInRoot(tardis, bset, path, crypt=None):
+def findDirInRoot(tardis, bset, path, crypt):
     """
     Find a directory which exists in the root directory
     Return the number of components which must be removed to have a directory in
@@ -223,9 +222,8 @@ def findDirInRoot(tardis, bset, path, crypt=None):
     comps = path.split(os.sep)
     comps.pop(0)
     for i, name in enumerate(comps):
-        if crypt:
-            name = crypt.encryptName(name)
-        info = tardis.getFileInfoByName(name, (0, 0), bset)
+        cname = crypt.encryptName(name)
+        info = tardis.getFileInfoByName(cname, (0, 0), bset)
         if info and info["dir"] == 1:
             return i
     return None
@@ -265,7 +263,7 @@ If the string is True or empty (''), it will use the getpass function to prompt 
 terminal.
 """
 def _readWithTimeout(prompt, timeout):
-    def _interuptPassword(signum, frame):
+    def _interuptPassword(_signum, _frame):
         print("\nTimeout")
         raise Exception("Password read timedout")
 
@@ -279,11 +277,15 @@ def _readWithTimeout(prompt, timeout):
         signal.signal(signal.SIGALRM, previous)
     return password.rstrip()
 
-def getPassword(password, pwurl, pwprog, prompt="Password: ", allowNone=True, confirm=False, timeout=Defaults.getDefault("TARDIS_PWTIMEOUT")):
+def getPassword(password, pwurl, pwprog, prompt="Password: ", allowNone=True, confirm=False, timeout=0):
+    timeout = timeout or int(Defaults.getDefault("TARDIS_PWTIMEOUT"))
     methods = 0
-    if password: methods += 1
-    if pwurl:    methods += 1
-    if pwprog:   methods += 1
+    if password:
+        methods += 1
+    if pwurl:
+        methods += 1
+    if pwprog:
+        methods += 1
 
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
@@ -293,10 +295,10 @@ def getPassword(password, pwurl, pwprog, prompt="Password: ", allowNone=True, co
         password = True
 
     if password is True or password == "":
-        password = _readWithTimeout(prompt, int(timeout))
+        password = _readWithTimeout(prompt, timeout)
         password = password.rstrip()       # Delete trailing characters
         if confirm:
-            pw2 = _readWithTimeout("Confirm password:", int(timeout))
+            pw2 = _readWithTimeout("Confirm password:", timeout)
             if password != pw2:
                 raise Exception("Passwords don't match")
 
@@ -339,7 +341,7 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
             # If no port specified, insert the port
             port = Defaults.getDefault("TARDIS_REMOTE_PORT") if loc.port is None else loc.port
             netloc = f"{loc.netloc}:{port}"
-            # FIXME: Needs client in path
+
             dbLoc = urllib.parse.urlunparse((scheme, netloc, "", loc.params, loc.query, loc.fragment))
             # get the RemoteURL object
             logger.debug("==> %s %s", dbLoc, client)
@@ -347,7 +349,7 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
             cache = tardis
         case "file" | "":
             logger.debug("Creating direct connection to %s", dataLoc)
-            cache = CacheDir.CacheDir(loc.path, create=False)
+            cache = CacheDir.CacheDir(Path(loc.path), create=False)
             dbPath = os.path.join(loc.path, "tardis.db")
             tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
         case _:
@@ -361,7 +363,7 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
     if needsAuth:
         authenticate(tardis, client, password)
     elif password:
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
     # Password specified, so create the crypto unit
     cryptoScheme = tardis.getConfigValue("CryptoScheme", TardisCrypto.DEF_CRYPTO_SCHEME)
@@ -386,14 +388,14 @@ def authenticate(db, client, password):
     M = usr.process_challenge(s, B)
 
     if M is None:
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
     HAMK = db.authenticate2(M)
 
     usr.verify_session(HAMK)
 
     if not usr.authenticated():
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
 
 def getBackupSet(db, bset):
@@ -507,10 +509,8 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
     sig = None
 
     start = time.time()
-    if progress:
-        # Set the chunksize
-        if progressPeriod % chunksize != 0:
-            progressPeriod -= progressPeriod % chunksize
+    if progress and progressPeriod % chunksize != 0:
+        progressPeriod -= progressPeriod % chunksize
 
     if compress:
         stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature, compressor=compress)
@@ -522,19 +522,16 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
             sender.sendMessage(encrypt.iv)
             accumulateStat(stats, "dataSent", len(encrypt.iv))
         for chunk, eof in _chunks(stream, chunksize):
-            if chunk:
-                data = encrypt.encrypt(chunk)
-            else:
-                data = b""
+            data = encrypt.encrypt(chunk) if chunk else b""
+
             if eof:
                 data += encrypt.finish()
             if data:
                 sender.sendMessage(data)
                 accumulateStat(stats, "dataSent", len(data))
                 size += len(data)
-                if progress:
-                    if (size % progressPeriod) == 0:
-                        progress()
+                if progress and size % progressPeriod == 0:
+                    progress()
         digest = encrypt.digest()
         if digest:
             sender.sendMessage(digest)
@@ -658,8 +655,8 @@ def loadKeys(name, client):
         contentKey =  _updateLen(config.get(client, "ContentKey"), 32)
         nameKey    =  _updateLen(config.get(client, "FilenameKey"), 32)
         return (nameKey, contentKey)
-    except configparser.NoOptionError:
-        raise Exception("No keys available for client " + client)
+    except configparser.NoOptionError as e:
+        raise Exception("No keys available for client " + client) from e
 
 def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
     def _addOrDelete(config, client, key, value):
@@ -704,7 +701,7 @@ def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis
         with cache.open(metaName, "w") as f:
             f.write(metaStr)
             f.write("\n")
-    except Exception as e:
+    except OSError as e:
         logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
 
 class GenShellCompletions(argparse.Action):

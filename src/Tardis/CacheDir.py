@@ -30,11 +30,8 @@
 
 import configparser
 import logging
-import os
-import os.path
 import shutil
 import socket
-from functools import reduce
 from pathlib import Path
 
 from . import Defaults
@@ -49,112 +46,92 @@ PARTS       = "parts"
 CONFIGFILE  = ".cachedir"
 
 class CacheDir:
-    def __init__(self, root, parts=2, partsize=2, create=True, user=None, group=None, skipFile=Defaults.getDefault("TARDIS_SKIP")):
-        self.root = os.path.abspath(root)
-        self.user  = user if user else -1
-        self.group = group if group else -1
-        self.chown = user or group
+    def __init__(self, root: Path, parts=2, partsize=2, create=True, skipFile=None):
+        self.root = root.absolute()
+        self.skipFile = skipFile or Defaults.getDefault("TARDIS_SKIP")
 
-        if not os.path.isdir(self.root):
+        if not self.root.is_dir():
             if create:
-                os.makedirs(self.root)
-                if self.chown:
-                    os.chown(self.root, self.user, self.group)
+                self.root.mkdir(parents=True)
                 if skipFile:
-                    with open(os.path.join(self.root, skipFile), "a", encoding="utf8"):
-                        pass
+                    Path(self.root, self.skipFile).touch()
             else:
-                raise CacheDirDoesNotExist("CacheDir does not exist: " + root)
+                raise CacheDirDoesNotExist(f"CacheDir does not exist: {root}")
 
         # Read a config file if it exists, create it if not
         defaults = {"parts": str(parts), "partsize": str(partsize) }
         section = "CacheDir"
 
-        configFile = os.path.join(self.root, CONFIGFILE)
+        config_file = Path(self.root, CONFIGFILE)
         config = configparser.ConfigParser(defaults)
         config.add_section(section)
-        config.read(configFile)
+        config.read(config_file)
 
-        try:
-            self.parts = int(config.get(section, PARTS))
-            self.partsize = int(config.get(section, PARTSIZE))
-        except ValueError:
-            logger.error("Invalid configuration.  Using defaults")
-            self.parts    = defaults[PARTS]
-            self.partsize = defaults[PARTSIZE]
+        self.parts    = config.getint(section, PARTS)
+        self.partsize = config.getint(section, PARTSIZE)
 
-        config.set(section, PARTS,    str(self.parts))
-        config.set(section, PARTSIZE, str(self.partsize))
         if create:
+            config.set(section, PARTS,    str(self.parts))
+            config.set(section, PARTSIZE, str(self.partsize))
             try:
-                with open(configFile, "w", encoding="utf8") as f:
+                with config_file.open("w", encoding="utf8") as f:
                     config.write(f)
             except Exception as e:
-                logger.warning("Could not write configpration file: %s: %s", configFile, str(e))
+                logger.warning("Could not write configpration file: %s: %s", config_file, str(e))
 
     def comps(self, name):
         return [name[(i * self.partsize):((i + 1) * self.partsize)] for i in range(0, self.parts)]
 
     def dirPath(self, name):
-        return reduce(os.path.join, self.comps(name), self.root)
+        return Path(self.root, *self.comps(name))
+
 
     def path(self, name):
-        return os.path.join(self.dirPath(name), name)
+        return Path(self.dirPath(name), name)
 
     def exists(self, name):
-        return os.path.lexists(self.path(name))
+        return self.path(name).exists()
 
     def size(self, name):
         try:
-            s = os.stat(self.path(name))
-            return s.st_size
+            return self.path(name).stat().st_size
         except Exception:
             return 0
 
     def mkdir(self, name):
         directory = self.dirPath(name)
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
-            if self.chown:
-                path = self.root
-                for i in self.comps(name):
-                    path = os.path.join(path, i)
-                    os.chown(path, self.user, self.group)
+        if not directory.is_dir():
+            directory.mkdir(parents=True)
 
     def open(self, name, mode, streaming=True):
-        iswrite = mode.startswith("w") or mode.startswith("a")
-        if iswrite:
+        if mode.startswith(("w", "a")):
             self.mkdir(name)
         path = self.path(name)
         f = open(path, mode)
-        if iswrite and self.chown:
-            os.fchown(f.fileno(), self.user, self.group)
         return f
 
     def insert(self, name, source, link=False):
         self.mkdir(name)
         path = self.path(name)
         if link:
-            os.link(source, path)
+            source.hardlink_to(path)
         else:
             shutil.move(source, path)
-        if self.chown:
-            os.chown(path, self.user, self.group)
 
     def link(self, source, dest, soft=True):
         self.mkdir(dest)
         dstpath = self.path(dest)
         if soft:
-            srcpath = os.path.relpath(self.path(source), self.dirPath(dest))
-            os.symlink(srcpath, dstpath)
+            srcpath = self.path(source).relative_to(self.dirPath(dest), walk_up=True)
+            dstpath.hardlink_to(srcpath)
         else:
             srcpath = self.path(source)
-            os.link(srcpath, dstpath)
+            dstpath.hardlink_to(srcpath)
         return True
 
     def remove(self, name):
         try:
-            os.remove(self.path(name))
+            self.path(name).unlink()
             return True
         except OSError:
             return False
@@ -169,7 +146,7 @@ class CacheDir:
     def move(self, oldname, newname):
         try:
             self.mkdir(newname)
-            os.rename(self.path(oldname), self.path(newname))
+            shutil.move(self.path(oldname), self.path(newname))
             return True
         except OSError:
             return False
@@ -192,7 +169,7 @@ class CacheDir:
 
 if __name__ == "__main__":
     test = "abcdefghijklmnop"
-    testPath = os.path.join("cache", socket.gethostname())
+    testPath = Path("cache", socket.gethostname())
     c = CacheDir(testPath, 4, 2, True)
     print(c.comps(test))
     print(c.dirPath(test))

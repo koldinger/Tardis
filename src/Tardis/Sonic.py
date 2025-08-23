@@ -41,6 +41,7 @@ import stat
 import sys
 import time
 import urllib.parse
+from pathlib import Path
 
 import parsedatetime
 import srp
@@ -96,7 +97,7 @@ def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=Fals
         if new and os.path.exists(dbfile):
             raise Exception(f"Repository for client {client} already exists.")
 
-        cache = CacheDir.CacheDir(loc.path, 2, 2, create=new)
+        cache = CacheDir.CacheDir(Path(loc.path), 2, 2, create=new)
         tardisdb = TardisDB.TardisDB(dbfile, backup=False, initialize=create, allow_upgrade=allowUpgrade)
     else:
         raise Exception(f"Unrecognized scheme: {loc.scheme}")

@@ -80,7 +80,7 @@ class Messenger:
         except BaseException as e:
             self.sendlogger.exception("Caught an exception sending message %s", mesg)
             self.exception = e
-            raise e
+            raise
 
     def _receiver(self):
         self.recvlogger.debug("Receiver starting")
@@ -106,7 +106,7 @@ class Messenger:
             if not self.stopped:
                 self.recvQ.put(e)
             self.exception = e
-            raise e
+            raise
 
     def sendMessage(self, message, compress=True):
         if self.exception:
@@ -176,5 +176,5 @@ if __name__ == "__main__":
     for i in range(0, 20):
         m.sendMessage({"value": i})
 
-    for i in range(0, 20):
+    for _ in range(0, 20):
         print(m.recvMessage(wait=True))

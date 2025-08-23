@@ -76,6 +76,7 @@ import Tardis
 from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
                MultiFormatter, Protocol, StatusBar, TardisCrypto,
                ThreadedScheduler, Util, librsync, log)
+import contextlib
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
@@ -346,7 +347,6 @@ def virtualDev(device, path):
         return _deviceCache[device]
     except KeyError:
         mp = findMountPoint(path)
-        path, mp
         digest = Util.hashPath(mp)
         _deviceCache[device] = digest
         return digest
@@ -359,7 +359,7 @@ def fs_encode(val) -> bytes:
 
 def checkMessage(message, expected):
     """ Check that a message is of the expected type.  Throw an exception if not """
-    if not message["message"] == expected:
+    if message["message"] != expected:
         logger.critical(f"Expected {expected} message, received {message['message']}")
         raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
@@ -492,7 +492,7 @@ def processDelta(inode, cksum):
         path = crypt.encryptPath(pathname)
         message = {
             "message" : "SGR",
-            "inode" : tuple([inode, cksum]),        # FIXME: TODO: Break out checksum into it's own field.
+            "inode" : (inode, cksum),        # FIXME: TODO: Break out checksum into it's own field.
             "path"  : path,
         }
         sendMessage(message)
@@ -762,10 +762,7 @@ def handleAckMeta(response):
         message["data"].append(chunk)
 
     for cks in done:
-        try:
-            metaCache.pop(cks)
-        except KeyError:
-            logger.warning("Metadata value for hash %s not found", cks)
+        metaCache.pop(cks, None)
 
     sendMessage(message)
 
@@ -786,10 +783,8 @@ def sendDirHash(inode):
     }
 
     sendMessage(message)
-    try:
+    with contextlib.suppress(KeyError):
         del dirHashes[i]
-    except KeyError:
-        pass
         # This kindof isn't an error.   The BatchMessages call can cause the sendDirHashes to be sent again, which ends up deleteing
         # the message before it's deleted here.
 
@@ -829,8 +824,7 @@ def pushFiles():
 
     for i in [tuple(x) for x in allContent]:
         try:
-            if logger.isEnabledFor(log.FILES):
-                logFileInfo(i, "N")
+            logFileInfo(i, "N")
             sendContent(i, "New")
             processed.append(i)
         except Exception as e:
@@ -838,9 +832,8 @@ def pushFiles():
             exceptionLogger.log(e)
 
     for i in [tuple(x) for x in allRefresh]:
-        if logger.isEnabledFor(log.FILES):
-            logFileInfo(i, "R")
         try:
+            logFileInfo(i, "R")
             sendContent(i, "Full")
             processed.append(i)
         except Exception as e:
@@ -854,14 +847,10 @@ def pushFiles():
         # If doing a full backup, send the full file, else just a delta.
         try:
             if args.full:
-                if logger.isEnabledFor(log.FILES):
-                    logFileInfo(inode, "N")
+                logFileInfo(inode, "N")
                 sendContent(inode, "Full")
             else:
-                if logger.isEnabledFor(log.FILES):
-                    (_, name) = inodeDB.get(inode)
-                    if name:
-                        logger.log(log.FILES, "[D]: %s", Util.shortPath(name))
+                logFileInfo(inode, "D")
                 processDelta(inode, basis)
         except Exception as e:
             logger.error("Unable to backup %s: %s ", str(i), str(e))
@@ -1121,10 +1110,8 @@ def sendDirChunks(path, fullpath, inode, files):
         "inode"  : (inum, vdev),
     }
 
-    chunkNum = 0
-    for x in range(0, len(files), args.dirslice):
-        logger.debug("---- Generating chunk %d ----", chunkNum)
-        chunkNum += 1
+    for cnum, x in enumerate(range(0, len(files), args.dirslice)):
+        logger.debug("---- Generating chunk %d ----", cnum)
         chunk = files[x : x + args.dirslice]
 
         # Encrypt the names before sending them out
@@ -1218,7 +1205,7 @@ def processDirectory(path, top, depth=0, excludes=None):
                 newFiles = [f for f in files if max(f["ctime"], f["mtime"]) >= lastTimestamp]
                 oldFiles = [f for f in files if max(f["ctime"], f["mtime"]) < lastTimestamp]
             else:
-                maxTime = max(map(lambda x: max(x["ctime"], x["mtime"]), files))
+                maxTime = max(max(x["ctime"], x["mtime"]) for x in files)
                 if maxTime < lastTimestamp:
                     oldFiles = files
                     newFiles = []
@@ -1349,7 +1336,7 @@ def setPurgeValues():
             if success:
                 purgeTime = time.mktime(then)
             else:
-                raise Exception(f"Could not parse --keep-time argument: {args.purgetime} ")
+                raise Exception(f"Could not parse --keep-time argument: {args.purgetime}")
 
 
 def mkExcludePattern(pattern):
@@ -1370,7 +1357,7 @@ def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
     try:
         with open(name) as f:
-            excludes = map(lambda x: mkExcludePattern(x.rstrip("\n")), f.readlines())
+            excludes = (mkExcludePattern(x.rstrip("\n")) for x in f.readlines())
         return set(excludes)
     except (OSError, FileNotFoundError):
         return set()
@@ -1562,10 +1549,7 @@ def splitDirs(x):
         ret = splitDirs(root)
         ret.append(rest)
     elif root:
-        if root == "/":
-            ret = [root]
-        else:
-            ret = splitDirs(root)
+        ret = [root] if root == "/" else splitDirs(root)
     else:
         ret = [rest]
     return ret
@@ -1601,8 +1585,6 @@ def setCrypto(client, password, version):
 
 def doSendKeys(client, password):
     """ Set up cryptography system, and send the generated keys """
-    assert crypt
-    assert srpUsr
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1690,7 +1672,7 @@ def startBackup(client, url, hasPassword):
         message["name"] = args.name
 
     # BACKUP { json message }
-    resp = sendAndReceive(message)
+    resp: dict = sendAndReceive(message)
 
     password = None
     if resp["status"] in [Protocol.Responses.NEEDKEYS, Protocol.Responses.AUTH]:
@@ -1727,10 +1709,6 @@ def startBackup(client, url, hasPassword):
     if not crypt:
         crypt = TardisCrypto.getCrypto(TardisCrypto.NO_CRYPTO_SCHEME, None, client)
 
-    # Set up the encryption, if needed.
-    ### TODO
-    (f, c) = (None, None)
-
     if newBackup:
         # if new DB, generate new keys, and save them appropriately.
         if password:
@@ -1755,6 +1733,9 @@ def startBackup(client, url, hasPassword):
             logger.critical("Unable to load keyfile: %s", args.keys)
             sys.exit(1)
         crypt.setKeys(f, c)
+    else:
+        (f, c) = (None, None)
+
 
     if args.stats or args.report != "none":
         logger.log(log.STATS, f"Name: {backupName} Repository: {url} Session: {sessionid}")
@@ -1951,7 +1932,6 @@ def checkURL():
                 raise InitFailedException(f"Invalid URL: no client specified: {urlInfo.path})")
             if urlInfo.params or urlInfo.query:
                 raise InitFailedException(f"Invalid URL: no params or query info accepted: {args.repo}")
-
             if parts[0] != "/":
                 raise InitFailedException(f"Invalid path for remote access: {urlInfo.path}: {args.repo}")
 
@@ -2071,8 +2051,8 @@ def printStats(starttime, endtime):
     if (stats["denied"] or stats["gone"]):
         logger.log(log.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
 
-    logger.log(log.STATS, f"Wait Times:   {datetime.timedelta(0, waittime)!s}")
-    logger.log(log.STATS, f"Sending Time: {datetime.timedelta(0, Util._transmissionTime)!s}")
+    # logger.log(log.STATS, f"Wait Times:   {datetime.timedelta(0, waittime)!s}")
+    # logger.log(log.STATS, f"Sending Time: {datetime.timedelta(0, Util._transmissionTime)!s}")
 
 def printReport(repFormat):
     lastDir = None
@@ -2133,7 +2113,7 @@ def lockRun(location: str):
         pidfile.create()
     except pid.PidFileError as e:
         exceptionLogger.log(e)
-        raise Exception(f"Tardis already running: {e}") from e
+        raise Exception("Tardis already running: {e}") from e
     except Exception as e:
         exceptionLogger.log(e)
         raise
@@ -2277,7 +2257,7 @@ def sendConfigInfo(directories):
 def main():
     global args, conn, messenger, verbosity, statusBar
 
-    starttime = datetime.datetime.now()
+    starttime = datetime.datetime.now(tz=datetime.timezone.utc)
 
     # Read the command line arguments.
     (args, config, jobname) = processCommandLine()
@@ -2363,7 +2343,7 @@ def main():
             logger.info("Waiting for server to complete")
             backendThread.join()        # Should I do communicate?
 
-    endtime = datetime.datetime.now()
+    endtime = datetime.datetime.now(tz=datetime.timezone.utc)
 
     if args.progress:
         statusBar.shutdown()

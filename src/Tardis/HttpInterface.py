@@ -35,8 +35,8 @@ import json
 import logging
 import logging.handlers
 import os
-import os.path
 import zlib
+from pathlib import Path
 
 import daemonize
 from flask import Flask, Response, abort, make_response, request, session
@@ -153,21 +153,18 @@ def login():
     if request.method == "POST":
         try:
             host    = request.form["host"]
-            dbPath  = os.path.join(args.basedir, host, "tardis.db")
-            cache   = CacheDir.CacheDir(os.path.join(args.basedir, host), create=False)
+            dbPath  = Path(args.basedir, host, "tardis.db")
+            cache   = CacheDir.CacheDir(Path(args.basedir, host), create=False)
             upgrade = config.getboolean("Remote", "AllowSchemaUpgrades")
             tardis  = TardisDB.TardisDB(dbPath, allow_upgrade=upgrade)
 
             session["host"]     = host
             dbs[host] = tardis
             caches[host] = cache
-            if tardis.needsAuthentication():
-                status = "AUTH"
-            else:
-                status = "OK"
+            status = "AUTH" if tardis.needsAuthentication() else "OK"
             return createResponse({"status": status}, compress=False, cacheable=False)
-        except Exception as e:
-            app.logger.exception(e)
+        except Exception:
+            app.logger.exception("Login failed")
             abort(401)
     else:
         return """
@@ -387,8 +384,8 @@ def _stream(f):
         while r:
             yield r
             r = f.read(_blocksize)
-    except Exception as e:
-        app.logger.exception(e)
+    except OSError:
+        app.logger.exception("Unable to read stream")
     finally:
         f.close()
 
@@ -404,9 +401,10 @@ def getFileData(checksum):
         resp = Response(_stream(ckfile))
         resp.headers["Content-Length"] = ckinfo["disksize"]
         resp.headers["Content-Type"] = "application/octet-stream"
-        return resp
     except Exception:
         abort(404)
+    else:
+        return resp
 
 @app.route("/getConfigValue/<name>")
 def getConfigValue(name):
@@ -442,8 +440,8 @@ def setKeys():
         if not db.setKeys(base64.b64decode(salt), base64.b64decode(vkey), fKey, cKey):
             raise Exception("Unable to set keys")
         return "OK"
-    except Exception as e:
-        app.logger.exception(e)
+    except Exception:
+        app.logger.exception("Unable to set keys")
         abort(403)
 
 @app.route("/setSrpValues", methods=["POST"])

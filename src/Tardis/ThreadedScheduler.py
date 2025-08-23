@@ -46,9 +46,8 @@ class ThreadedScheduler(sched.scheduler):
         while not self.empty():
             try:
                 self.cancel(self.queue[0])
-            except:
+            except ValueError:
                 pass
-
 
 if __name__ == "__main__":
     def print_time(a="default"):

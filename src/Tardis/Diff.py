@@ -105,8 +105,8 @@ def setcolor(line):
 
     return color
 
-def isBinary(lines, numLines = 128):
-    # TODO Fixme.  binaryornot doesn't seem to work for binary strings.
+def isBinary(_lines, _numLines = 128):
+    # TODO: Fixme:  binaryornot doesn't seem to work for binary strings.
     #lineNo = 0
     #numLines = min(numLines, len(lines))
     #while lineNo < numLines:
@@ -135,8 +135,8 @@ def runDiff(f1, f2, name, then, now):
         return
 
     # Convert the binary blobs to strings so that
-    l1 = list(map(lambda x: x.decode("utf8", "backslashreplace"), l1))
-    l2 = list(map(lambda x: x.decode("utf8", "backslashreplace"), l2))
+    l1 = [x.decode("utf8", "backslashreplace") for x in l1]
+    l2 = [x.decode("utf8", "backslashreplace") for x in l2]
 
     if args.ndiff:
         diffs = difflib.ndiff(l1, l2)

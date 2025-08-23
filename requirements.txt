@@ -20,6 +20,7 @@ pycparser==2.22
 pycryptodomex==3.23.0
 pylibacl==0.7.3
 pypng==0.20220715.0
+python-librsync @ git+https://github.com/koldinger/python-librsync.git
 python-magic==0.4.27
 python-snappy==0.7.3
 python-utils==3.9.1

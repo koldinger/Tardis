@@ -65,7 +65,7 @@ def fmtSize(num, base=1024, suffixes=None):
     return (fmt % (num, suffixes[-1])).strip()
 
 
-def _handle_resize(s, f):
+def _handle_resize(_s, _f):
     """
     Process a resize event, and change the width of all the status bars
     Parameters ignored.
@@ -74,6 +74,8 @@ def _handle_resize(s, f):
     for sbar in _statusBars:
         sbar.setWidth(width)
 
+SECS_HOUR = 3600
+
 class StatusBarFormatter(string.Formatter):
     def __init__(self):
         self.starttime = time.time()
@@ -81,7 +83,7 @@ class StatusBarFormatter(string.Formatter):
     def get_field(self, field_name, args, kwargs):
         if field_name == "__elapsed__":
             seconds = time.time() - self.starttime
-            if seconds > 3600:
+            if seconds > SECS_HOUR:
                 return (time.strftime("%H:%M:%S", time.gmtime(seconds)), field_name)
             return (time.strftime("%M:%S", time.gmtime(seconds)), field_name)
         return super().get_field(field_name, args, kwargs)
@@ -203,7 +205,7 @@ class StatusBar:
 
         try:
             print(output + _ansiClearEol + _startOfLine + _hideCursor, end="", flush=True)
-        except Exception:
+        except:
             print(_ansiClearEol + _startOfLine, end="", flush=True)
 
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)

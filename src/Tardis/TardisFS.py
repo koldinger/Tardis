@@ -1,4 +1,3 @@
-#! /usr/bin/python
 # vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # Tardis: A Backup System
@@ -96,7 +95,7 @@ class TardisFS(LoggingMixIn, Operations):
 
     rootVId = Util.hashPath("/")
 
-    def __init__(self, db, cache, crypto, args):
+    def __init__(self, db, cache, crypto, _args):
         self.cacheDir = cache
         self.crypt = crypto
         self.tardis = db
@@ -204,7 +203,7 @@ class TardisFS(LoggingMixIn, Operations):
             return uInfo.pw_uid
         return -1
 
-    def getattr(self, path, fh=None):
+    def getattr(self, path, _fh=None):
         """
         - st_mode (protection bits)
         - st_ino (inode number)
@@ -298,7 +297,7 @@ class TardisFS(LoggingMixIn, Operations):
         logger.debug("File not found: %s", path)
         raise FuseOSError(errno.ENOENT)
 
-    def readdir(self, path, fh):
+    def readdir(self, path, _fh):
         parent = None
 
         path = self.fsEncodeName(path)
@@ -334,26 +333,29 @@ class TardisFS(LoggingMixIn, Operations):
         # Now, return each entry in the list.
         yield from dirents
 
-    def chmod(self, path, mode):
+    def chmod(self, _path, _mode):
         raise FuseOSError(errno.EROFS)
 
-    def chown(self, path, uid, gid):
+    def chown(self, _path, _uid, _gid):
         raise FuseOSError(errno.EROFS)
 
-    def fsync(self, path, datasync, fh):
+    def fsync(self, _path, _datasync, _fh):
         raise FuseOSError(errno.EROFS)
 
-    def link(self, target, source):
+    def link(self, _target, _source):
         raise FuseOSError(errno.EROFS)
 
-    def mkdir(self, path, mode):
+    def mkdir(self, _path, _mode):
         raise FuseOSError(errno.EROFS)
 
-    def mknod(self, path, mode, dev):
+    def mknod(self, _path, _mode, _dev):
         raise FuseOSError(errno.EROFS)
 
     def open(self, path, flags):
         path = self.fsEncodeName(path)
+
+        if flags[0] != "r":
+            raise FuseOSError(errno.EROFS)
 
         depth = getDepth(path)  # depth of path, zero-based from root
 
@@ -399,7 +401,7 @@ class TardisFS(LoggingMixIn, Operations):
         # Otherwise.....
         raise FuseOSError(errno.ENOENT)
 
-    def read(self, path, size, offset, fh):
+    def read(self, path, size, offset, _fh):
         path = self.fsEncodeName(path)
         f = self.files[path]["file"]
         if f:
@@ -439,7 +441,7 @@ class TardisFS(LoggingMixIn, Operations):
                 return link
         raise FuseOSError(errno.ENOENT)
 
-    def release(self, path, fh):
+    def release(self, path, _fh):
         path = self.fsEncodeName(path)
 
         if self.files[path]:
@@ -450,36 +452,38 @@ class TardisFS(LoggingMixIn, Operations):
             return 0
         raise FuseOSError(errno.EINVAL)
 
-    def rename(self, old, new):
+    def rename(self, _old, _new):
         raise FuseOSError(errno.EROFS)
 
-    def rmdir(self, path):
+    def rmdir(self, _path):
         raise FuseOSError(errno.EROFS)
 
-    def statfs(self, path):
+    def statfs(self, _path):
         if isinstance(self.cacheDir, CacheDir.CacheDir):
             fs = os.statvfs(self.cacheDir.root)
 
-            return dict((key, getattr(fs, key)) for key in (
-                "f_bavail", "f_bfree", "f_blocks", "f_bsize", "f_favail",
-                "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax"))
+            return {(key, getattr(fs, key)) for key in (
+                    "f_bavail", "f_bfree", "f_blocks", "f_bsize", "f_favail",
+                    "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax")
+                   }
         elif isinstance(self.cacheDir, RemoteDB.RemoteDB):
-            return dict((key, 1024) for key in (
-                "f_bavail", "f_bfree", "f_blocks", "f_bsize", "f_favail",
-                "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax"))
+            return {(key, 1024) for key in (
+                    "f_avail", "f_bfree", "f_blocks", "f_bsize", "f_favail",
+                    "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax")
+                   }
 
         raise FuseOSError(errno.EINVAL)
 
-    def symlink(self, target, source):
+    def symlink(self, _target, _source):
         raise FuseOSError(errno.EROFS)
 
-    def truncate(self, path, length, fh):
+    def truncate(self, _path, _length, _fh):
         raise FuseOSError(errno.EROFS)
 
-    def unlink(self, path):
+    def unlink(self, _path):
         raise FuseOSError(errno.EROFS)
 
-    def write(self, path, data, offset, fh):
+    def write(self, _path, _data, _offset, _fh):
         raise FuseOSError(errno.EROFS)
 
     # Map extrenal attribute names for the top level directories to backupset info names

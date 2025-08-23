@@ -41,6 +41,7 @@ import textwrap
 import uuid
 from datetime import datetime
 from enum import IntEnum
+from pathlib import Path
 
 from . import (CacheDir, CompressedBuffer, ConnIdLogAdapter, Defaults,
                Messages, Protocol, Regenerator, TardisCrypto, TardisDB, Util,
@@ -1025,8 +1026,8 @@ class Backend:
 
     def genPaths(self):
         self.logger.debug("Generating paths: %s", self.config.basedir)
-        self.basedir    = os.path.join(self.config.basedir, self.client)
-        dbfile          = os.path.join(self.basedir, "tardis.db")
+        self.basedir    = Path(self.config.basedir, self.client)
+        dbfile          = Path(self.basedir, "tardis.db")
         return dbfile
 
     def getCacheDir(self, create):
@@ -1034,8 +1035,6 @@ class Backend:
             self.logger.debug("Using cache dir: %s", self.basedir)
             return CacheDir.CacheDir(self.basedir, 1, 2,
                                      create=(self.config.allowNew and create),
-                                     user=self.config.user,
-                                     group=self.config.group,
                                      skipFile=self.config.skip)
         except CacheDir.CacheDirDoesNotExist as exc:
             if not self.config.allowNew:
