@@ -1008,11 +1008,10 @@ def getDirContents(dirname, dirstat, excludes=None):
                         Util.accumulateStat(stats, "backed", fInfo["size"])
 
                     if stat.S_ISDIR(mode):
-                        sub = os.path.join(dirname, f)
-                        if sub in excludeDirs:
-                            logger.debug("%s excluded.  Skipping", sub)
+                        if f.path in excludeDirs:
+                            logger.debug("%s excluded.  Skipping", f.path)
                             continue
-                        subdirs.append(sub)
+                        subdirs.append(f.path)
 
                     files.append(fInfo)
             except OSError as e:
