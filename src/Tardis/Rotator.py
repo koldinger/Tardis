@@ -30,10 +30,9 @@
 
 import gzip
 import logging
-import os
-import os.path
 import shutil
 import time
+from pathlib import Path
 
 
 class Rotator:
@@ -42,31 +41,33 @@ class Rotator:
         self.rotations = rotations
         self.compress = compress
 
-    def backup(self, name):
-        if os.path.exists(name):
-            with open(name, 'rb') as infile:
-                newname = name + "." +  time.strftime("%Y%m%d-%H%M%S")
-                stat = os.stat(name)
+    def backup(self, name: Path):
+        if name.exists():
+            with name.open("rb") as infile:
+                newname = Path(f"{name.name}.{time.strftime('%Y%m%d-%H%M%S')}")
+                stat = name.stat()
                 if self.compress and stat.st_size >= self.compress:
-                    newname += '.gz'
+                    newname = Path(f"{newname}.gz")
                     self.logger.debug("Compressing %s to %s", name, newname)
                     outfile = gzip.open(newname, "wb")
                 else:
                     self.logger.debug("Copying %s to %s", name, newname)
-                    outfile = open(newname, 'wb')
+                    outfile = newname.open("wb")
                 try:
                     shutil.copyfileobj(infile, outfile)
                 finally:
                     outfile.close()
 
-    def rotate(self, name):
-        d, f = os.path.split(os.path.abspath(name))
-        prefix = f + '.'
-        files = [i for i in os.listdir(d) if i.startswith(prefix)]
+    def rotate(self, path: Path):
+        path = path.absolute()
+        d = path.parent
+        f = path.name
+        prefix = f + "."
+        files = [i for i in d.iterdir() if i.name.startswith(prefix)]
         self.logger.debug("Rotating %d files: %s", len(files), str(files))
         files = sorted(files, reverse=True)
         toDelete = files[self.rotations:]
         for i in toDelete:
-            name = os.path.join(d, i)
+            name = d / i
             self.logger.debug("Deleting %s", name)
-            os.remove(name)
+            name.unlink()

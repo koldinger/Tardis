@@ -37,10 +37,10 @@ import string
 import threading
 import time
 
-_ansiClearEol = '\x1b[K'
-_startOfLine = '\r'
-_hideCursor = '\x1b[?25l'
-_showCursor = '\x1b[?25h'
+_ansiClearEol = "\x1b[K"
+_startOfLine = "\r"
+_hideCursor = "\x1b[?25l"
+_showCursor = "\x1b[?25h"
 _statusBars = []
 
 def fmtSize(num, base=1024, suffixes=None):
@@ -52,9 +52,9 @@ def fmtSize(num, base=1024, suffixes=None):
     formats:    list of formats for each value
     """
     if num is None:
-        return 'None'
+        return "None"
     if suffixes is None:
-        suffixes = ['bytes','KB','MB','GB', 'TB', 'PB', 'EB']
+        suffixes = ["bytes","KB","MB","GB", "TB", "PB", "EB"]
     fmt = "%d %s"
     num = float(num)
     for x in suffixes[:-1]:
@@ -65,7 +65,7 @@ def fmtSize(num, base=1024, suffixes=None):
     return (fmt % (num, suffixes[-1])).strip()
 
 
-def _handle_resize(s, f):
+def _handle_resize(_s, _f):
     """
     Process a resize event, and change the width of all the status bars
     Parameters ignored.
@@ -74,6 +74,8 @@ def _handle_resize(s, f):
     for sbar in _statusBars:
         sbar.setWidth(width)
 
+SECS_HOUR = 3600
+
 class StatusBarFormatter(string.Formatter):
     def __init__(self):
         self.starttime = time.time()
@@ -81,7 +83,7 @@ class StatusBarFormatter(string.Formatter):
     def get_field(self, field_name, args, kwargs):
         if field_name == "__elapsed__":
             seconds = time.time() - self.starttime
-            if seconds > 3600:
+            if seconds > SECS_HOUR:
                 return (time.strftime("%H:%M:%S", time.gmtime(seconds)), field_name)
             return (time.strftime("%M:%S", time.gmtime(seconds)), field_name)
         return super().get_field(field_name, args, kwargs)
@@ -93,9 +95,9 @@ class StatusBarFormatter(string.Formatter):
         return super().convert_field(value, conversion)
 
 def resetCursor():
-    print(_showCursor, end='')
+    print(_showCursor, end="")
 
-class StatusBar():
+class StatusBar:
     def __init__(self, base, live=None, formatter=None, delay=0.25, scheduler=None, priority=10):
         if live is None:
             live = {}
@@ -193,7 +195,7 @@ class StatusBar():
         Normally only handled by running thread, not meant to be called externally
         """
         try:
-            output = self.formatter.format(self.base, **{**self.live, **self.values}).encode('utf8', 'backslashreplace').decode('utf8')
+            output = self.formatter.format(self.base, **{**self.live, **self.values}).encode("utf8", "backslashreplace").decode("utf8")
             if self.trailer:
                 output += self.processTrailer(self.width - 2 - len(output), self.trailer)
         except KeyError as k:
@@ -202,9 +204,9 @@ class StatusBar():
             output = "Error generating status message: " + str(e)
 
         try:
-            print(output + _ansiClearEol + _startOfLine + _hideCursor, end='', flush=True)
-        except Exception:
-            print(_ansiClearEol + _startOfLine, end='', flush=True)
+            print(output + _ansiClearEol + _startOfLine + _hideCursor, end="", flush=True)
+        except:
+            print(_ansiClearEol + _startOfLine, end="", flush=True)
 
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
 
@@ -212,7 +214,7 @@ class StatusBar():
         """
         Clear the status bar area.   Should only be used after a stop
         """
-        print(_showCursor + _startOfLine + _ansiClearEol, end='')
+        print(_showCursor + _startOfLine + _ansiClearEol, end="")
 
 
 if __name__ == "__main__":

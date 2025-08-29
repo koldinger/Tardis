@@ -46,12 +46,11 @@ class ThreadedScheduler(sched.scheduler):
         while not self.empty():
             try:
                 self.cancel(self.queue[0])
-            except:
+            except ValueError:
                 pass
 
-
 if __name__ == "__main__":
-    def print_time(a='default'):
+    def print_time(a="default"):
         print("From print_time", time.time(), a)
 
     x = ThreadedScheduler()

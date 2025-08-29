@@ -32,41 +32,41 @@ import configparser
 import os
 import os.path
 
-SECTION = 'Tardis'
+SECTION = "Tardis"
 
 _defaults = {
-    'TARDIS_BASEDIR'        : '/srv/tardis',
-    'TARDIS_REPO'           : '',
-    'TARDIS_CONFIG'         : '',
-    'TARDIS_JOB'            : SECTION,
-    'TARDIS_EXCLUDES'       : '.tardis-excludes',
-    'TARDIS_LOCAL_EXCLUDES' : '.tardis-local-excludes',
-    'TARDIS_GLOBAL_EXCLUDES': '/etc/tardis/excludes',
-    'TARDIS_SKIP'           : '.tardis-skip',
-    'TARDIS_TIMEOUT'        : '300',
-    'TARDIS_DAEMON_CONFIG'  : '',
-    'TARDIS_LOCAL_CONFIG'   : '',
-    'TARDIS_PWTIMEOUT'      : '120',
-    'TARDIS_PIDFILE'        : '/var/run/tardisd.pid',
-    'TARDIS_JOURNAL'        : 'tardis.journal.gz',
-    'TARDIS_SEND_CONFIG'    : 'true',
-    'TARDIS_PORT'           : '7420',
-    'TARDIS_REMOTE_PORT'    : '7430',
-    'TARDIS_REMOTE_CONFIG'  : '/etc/tardis/tardisremote.cfg',
-    'TARDIS_REMOTE_PIDFILE' : '/var/run/tardisremote.pid',
-    'TARDIS_LS_COLORS'      : "gone=yellow:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=yellow:details=white:error=red,,bold:default=white",
-    'TARDIS_NOCOMPRESS'     : '',
-    'TARDIS_RECENT_SET'     : 'Current',
-    'TARDIS_DEFAULTS'       : '/etc/tardis/system.defaults',
-    'TARDIS_PWFILE'         : '',
-    'TARDIS_KEYFILE'        : '',
-    'TARDIS_VALIDATE_CERTS' : 'false',          # TODO: Fix this, once we get it working
+    "TARDIS_BASEDIR"        : "/srv/tardis",
+    "TARDIS_REPO"           : "",
+    "TARDIS_CONFIG"         : "",
+    "TARDIS_JOB"            : SECTION,
+    "TARDIS_EXCLUDES"       : ".tardis-excludes",
+    "TARDIS_LOCAL_EXCLUDES" : ".tardis-local-excludes",
+    "TARDIS_GLOBAL_EXCLUDES": "/etc/tardis/excludes",
+    "TARDIS_SKIP"           : ".tardis-skip",
+    "TARDIS_TIMEOUT"        : "300",
+    "TARDIS_DAEMON_CONFIG"  : "",
+    "TARDIS_LOCAL_CONFIG"   : "",
+    "TARDIS_PWTIMEOUT"      : "120",
+    "TARDIS_PIDFILE"        : "/var/run/tardisd.pid",
+    "TARDIS_JOURNAL"        : "tardis.journal.gz",
+    "TARDIS_SEND_CONFIG"    : "true",
+    "TARDIS_PORT"           : "7420",
+    "TARDIS_REMOTE_PORT"    : "7430",
+    "TARDIS_REMOTE_CONFIG"  : "/etc/tardis/tardisremote.cfg",
+    "TARDIS_REMOTE_PIDFILE" : "/var/run/tardisremote.pid",
+    "TARDIS_LS_COLORS"      : "gone=yellow:changed=cyan:full=cyan,,bold:moved=blue:header=green:name=yellow:details=white:error=red,,bold:default=white",
+    "TARDIS_NOCOMPRESS"     : "",
+    "TARDIS_RECENT_SET"     : "Current",
+    "TARDIS_DEFAULTS"       : "/etc/tardis/system.defaults",
+    "TARDIS_PWFILE"         : "",
+    "TARDIS_KEYFILE"        : "",
+    "TARDIS_VALIDATE_CERTS" : "false",          # TODO: Fix this, once we get it working
 }
 
 try:
-    _default_file = os.environ['TARDIS_DEFAULTS']
+    _default_file = os.environ["TARDIS_DEFAULTS"]
 except KeyError:
-    _default_file = _defaults['TARDIS_DEFAULTS']
+    _default_file = _defaults["TARDIS_DEFAULTS"]
 
 _parser = configparser.ConfigParser(_defaults)
 _parser.add_section(SECTION)                       # Keep it happy later.

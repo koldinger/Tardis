@@ -88,9 +88,9 @@ def getCryptoNames(scheme=None):
 
     names = []
     for s in schemes:
-        crypto = getCrypto(s, 'client', 'password')
+        crypto = getCrypto(s, "client", "password")
         names.append(f"{s}: {crypto.getName()}")
-    return '\n'.join(names)
+    return "\n".join(names)
 
 class HasherMixin:
     def __init__(self, cipher, hasher):
@@ -156,8 +156,8 @@ class BlockEncryptor:
             ret = self.cipher.encrypt(data)
             if ret:
                 return ret
-            return b''
-        return b''
+            return b""
+        return b""
 
     def decrypt(self, data, last=False):
         if self.done:
@@ -175,7 +175,7 @@ class BlockEncryptor:
                 self.done = True
                 output = unpad(output, self.cipher.block_size)
             return output
-        return b''
+        return b""
 
     def finish(self):
         if self.done:
@@ -184,7 +184,7 @@ class BlockEncryptor:
         if self.prev:
             padded = pad(self.prev, self.cipher.block_size)
         else:
-            padded = pad(b'', self.cipher.block_size)
+            padded = pad(b"", self.cipher.block_size)
         return self.cipher.encrypt(padded)
 
     def digest(self):
@@ -222,7 +222,7 @@ class StreamEncryptor:
         return self.cipher.decrypt(data)
 
     def finish(self):
-        return b''
+        return b""
 
     def digest(self):
         return self.cipher.digest()
@@ -236,7 +236,7 @@ class StreamEncryptor:
 
 class NullEncryptor:
     def __init__(self):
-        self.iv = b''
+        self.iv = b""
 
     def encrypt(self, data):
         return data
@@ -245,15 +245,15 @@ class NullEncryptor:
         return data
 
     def finish(self):
-        return b''
+        return b""
 
     def digest(self):
-        return b''
+        return b""
 
     def verify(self, tag):
         pass
 
-class NullCipher():
+class NullCipher:
     def encrypt(self, data):
         return data
 
@@ -261,10 +261,10 @@ class NullCipher():
         return data
 
     def finish(self):
-        return b''
+        return b""
 
     def digest(self):
-        return b''
+        return b""
 
     def getDigestSize(self):
         return 0
@@ -272,6 +272,8 @@ class NullCipher():
 class CryptoScheme(ABC):
     _cryptoName = ""
     _cryptoScheme = ""
+
+    ivLength = 0
 
     def getName(self):
         return self._cryptoName
@@ -348,8 +350,8 @@ class Crypto_Null(CryptoScheme):
     An encryption scheme which does nothing, always returns the given text when asked to encrypt or decrypt
     Works as the basis for other encryption schemes.
     """
-    _cryptoScheme = '0'
-    _cryptoName   = 'None'
+    _cryptoScheme = "0"
+    _cryptoName   = "None"
     _contentKey  = None
     _filenameKey = None
     _keyKey      = None
@@ -357,7 +359,7 @@ class Crypto_Null(CryptoScheme):
     _filenameEnc = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
-    _altchars    = b'#@'
+    _altchars    = b"#@"
 
     ivLength    = 0
 
@@ -378,7 +380,7 @@ class Crypto_Null(CryptoScheme):
 
     def decryptName(self, name):
         if isinstance(name, bytes):
-            return name.decode('utf8')
+            return name.decode("utf8")
         return name
 
     def getHash(self, func=hashlib.md5):
@@ -423,8 +425,8 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     No authentication of key values.
     For backwards compatibility only.
     """
-    _cryptoScheme = '1'
-    _cryptoName   = 'AES-CBC-HMAC/AES-ECB/PBKDF2'
+    _cryptoScheme = "1"
+    _cryptoName   = "AES-CBC-HMAC/AES-ECB/PBKDF2"
     _contentKey  = None
     _filenameKey = None
     _keyKey      = None
@@ -432,18 +434,18 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     _filenameEnc = None
     _blocksize   = AES.block_size
     _keysize     = AES.key_size[-1]                                              # last (largest) acceptable _keysize
-    _altchars    = b'#@'
+    _altchars    = b"#@"
 
     ivLength    = _blocksize
 
     def __init__(self, password, client=None):
         self._random = Cryptodome.Random.new()
         if client is None:
-            client = Defaults.getDefault('TARDIS_CLIENT')
+            client = Defaults.getDefault("TARDIS_CLIENT")
         if client is None:
             raise ValueError("No client set for encryption")
 
-        self.client = bytes(client, 'utf8')
+        self.client = bytes(client, "utf8")
         self.salt = hashlib.sha256(self.client).digest()
         keys = self.genKeyKey(password)
         self._keyKey     = keys[0:self._keysize]                                      # First 256 bit key
@@ -472,7 +474,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         if length is None:
             length = len(data)
         padVal = self._blocksize - (length % self._blocksize)
-        data += bytes(chr(padVal) * padVal, 'utf8')
+        data += bytes(chr(padVal) * padVal, "utf8")
         return data
 
     def unpad(self, data):
@@ -490,12 +492,12 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         remainder = len(x) % self._blocksize
         if remainder == 0:
             return x
-        return x + (self._blocksize - remainder) * b'\0'
+        return x + (self._blocksize - remainder) * b"\0"
 
     def encryptPath(self, path):
         rooted = False
         comps = path.split(os.sep)
-        if comps[0] == '':
+        if comps[0] == "":
             rooted = True
             comps.pop(0)
         enccomps = [self.encryptName(x) for x in comps]
@@ -507,7 +509,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     def decryptPath(self, path):
         rooted = False
         comps = path.split(os.sep)
-        if comps[0] == '':
+        if comps[0] == "":
             rooted = True
             comps.pop(0)
         enccomps = [self.decryptName(x) for x in comps]
@@ -517,11 +519,11 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
         return encpath
 
     def encryptName(self, name):
-        n = self.padzero(bytes(name, 'utf8'))
-        return str(base64.b64encode(self._filenameEnc.encrypt(n), self._altchars), 'utf8')
+        n = self.padzero(bytes(name, "utf8"))
+        return str(base64.b64encode(self._filenameEnc.encrypt(n), self._altchars), "utf8")
 
     def decryptName(self, name):
-        return str(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)), 'utf8').rstrip('\0')
+        return str(self._filenameEnc.decrypt(base64.b64decode(name, self._altchars)), "utf8").rstrip("\0")
 
     def genKeys(self):
         self._contentKey  = self._random.read(self._keysize)
@@ -537,8 +539,8 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     def getKeys(self):
         if self._filenameKey and self._contentKey:
             cipher = AES.new(self._keyKey, AES.MODE_ECB)
-            _contentKey  = str(base64.b64encode(cipher.encrypt(self._contentKey)), 'utf8')
-            _filenameKey = str(base64.b64encode(cipher.encrypt(self._filenameKey)), 'utf8')
+            _contentKey  = str(base64.b64encode(cipher.encrypt(self._contentKey)), "utf8")
+            _filenameKey = str(base64.b64encode(cipher.encrypt(self._filenameKey)), "utf8")
             return (_filenameKey, _contentKey)
         return (None, None)
 
@@ -551,8 +553,8 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     those formerly using Crypto_AES_CBC_HMAC__AES_ECB), AES-128 SIV encryption and authentication is used.
     Uses AES-128 SIV encryption and validation on the keys.
     """
-    _cryptoScheme = '2'
-    _cryptoName   = 'AES-CBC-HMAC/AES-SIV/scrypt'
+    _cryptoScheme = "2"
+    _cryptoName   = "AES-CBC-HMAC/AES-SIV/scrypt"
 
     def __init__(self, password, client=None):
         super().__init__(password, client)
@@ -563,25 +565,25 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     def _encryptSIV(self, key, value, name=None):
         cipher = AES.new(key, AES.MODE_SIV)
         if name:
-            cipher.update(name.encode('utf8'))
+            cipher.update(name.encode("utf8"))
         (ctext, tag) = cipher.encrypt_and_digest(value)
         return ctext + tag
 
     def _decryptSIV(self, key, value, name=None):
         cipher = AES.new(key, AES.MODE_SIV)
         if name:
-            cipher.update(name.encode('utf8'))
+            cipher.update(name.encode("utf8"))
 
         ctext = value[0:-cipher.block_size]
         tag   = value[-cipher.block_size:]
         return cipher.decrypt_and_verify(ctext, tag)
 
     def encryptName(self, name):
-        encrypted = self._encryptSIV(self._filenameKey, name.encode('utf8'))
-        return base64.b64encode(encrypted, self._altchars).decode('utf8')
+        encrypted = self._encryptSIV(self._filenameKey, name.encode("utf8"))
+        return base64.b64encode(encrypted, self._altchars).decode("utf8")
 
     def decryptName(self, name):
-        return self._decryptSIV(self._filenameKey, base64.b64decode(name, self._altchars)).decode('utf8')
+        return self._decryptSIV(self._filenameKey, base64.b64decode(name, self._altchars)).decode("utf8")
 
     def genKeys(self):
         self._contentKey  = self._random.read(self._keysize)
@@ -595,12 +597,12 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
             self._contentKey   = self._decryptSIV(self._keyKey, ckey, "ContentKey")
             self._filenameKey  = self._decryptSIV(self._keyKey, fkey, "FilenameKey")
         except ValueError as e:
-            raise ValueError(f"Keys failed to authenticate: {str(e)}") from e
+            raise ValueError(f"Keys failed to authenticate: {e!s}") from e
 
     def getKeys(self):
         if self._filenameKey and self._contentKey:
-            _contentKey  = str(base64.b64encode(self._encryptSIV(self._keyKey, self._contentKey, "ContentKey")), 'utf8')
-            _filenameKey = str(base64.b64encode(self._encryptSIV(self._keyKey, self._filenameKey, "FilenameKey")), 'utf8')
+            _contentKey  = str(base64.b64encode(self._encryptSIV(self._keyKey, self._contentKey, "ContentKey")), "utf8")
+            _filenameKey = str(base64.b64encode(self._encryptSIV(self._keyKey, self._filenameKey, "FilenameKey")), "utf8")
             return (_filenameKey, _contentKey)
 
         return (None, None)
@@ -612,8 +614,8 @@ class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Still uses AES-256 GCM for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
-    _cryptoScheme = '3'
-    _cryptoName   = 'AES-GCM/AES-SIV/scrypt'
+    _cryptoScheme = "3"
+    _cryptoName   = "AES-GCM/AES-SIV/scrypt"
 
     def __init__(self, password, client=None):
         super().__init__(password, client)
@@ -633,8 +635,8 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Uses ChaCha20/Poly1305  for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
-    _cryptoScheme = '4'
-    _cryptoName   = 'ChaCha20-Poly1305/AES-SIV/scrypt'
+    _cryptoScheme = "4"
+    _cryptoName   = "ChaCha20-Poly1305/AES-SIV/scrypt"
 
     ivLength    = 12
 
@@ -648,12 +650,12 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
         return StreamEncryptor(self.getContentCipher(iv))
 
 def test():
-    string = b'abcdefghijknlmnopqrstuvwxyz' + \
-             b'ABCDEFGHIJKNLMNOPQRSTUVWXYZ' + \
-             b'1234567890!@#$%&*()[]{}-_,.<>'
+    string = b"abcdefghijknlmnopqrstuvwxyz" + \
+             b"ABCDEFGHIJKNLMNOPQRSTUVWXYZ" + \
+             b"1234567890!@#$%&*()[]{}-_,.<>"
 
-    path = '/srv/home/kolding/this is a/test.onlyATest/X'
-    fname = 'test.only1234'
+    path = "/srv/home/kolding/this is a/test.onlyATest/X"
+    fname = "test.only1234"
 
     print(getCryptoNames())
     print(getCryptoNames(3))
@@ -661,7 +663,7 @@ def test():
     for i in range(0, 5):
         print(f"\nTesting {i}")
         try:
-            c = getCrypto(i, 'PassWordXYZ123')
+            c = getCrypto(i, "PassWordXYZ123")
             print(f"Type: {c.getName()}")
             c.genKeys()
 
@@ -694,5 +696,5 @@ def test():
             print(f"Caught exception: {e}")
             print(e)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()

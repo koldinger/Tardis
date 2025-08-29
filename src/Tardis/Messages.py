@@ -46,18 +46,18 @@ class Messages:
         bytes_recd = 0
         while bytes_recd < n:
             chunk = self.socket.recv(min(n - bytes_recd, 2048))
-            if chunk == b'':
+            if chunk == b"":
                 raise RuntimeError("socket connection broken")
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
-        msg = b''.join(chunks)
+        msg = b"".join(chunks)
         if self.stats:
-            self.stats['bytesRecvd'] += len(msg)
+            self.stats["bytesRecvd"] += len(msg)
         return msg
 
     def sendBytes(self, data):
         if self.stats:
-            self.stats['bytesSent'] += len(data)
+            self.stats["bytesSent"] += len(data)
         self.socket.sendall(data)
 
     def closeSocket(self):
@@ -80,24 +80,24 @@ class zlibCompressor:
         return message
 
 class BinMessages(Messages):
-    def __init__(self, socket, stats=None, compress='none'):
+    def __init__(self, socket, stats=None, compress="none"):
         Messages.__init__(self, socket, stats)
         match compress:
-            case 'zlib-stream':
+            case "zlib-stream":
                 self.compressor = zlibCompressor()
                 self.compress = self.compressor.compress
                 self.decompress = self.compressor.decompress
-            case 'zlib':
+            case "zlib":
                 self.compress = zlib.compress
                 self.decompress = zlib.decompress
-            case 'snappy':
+            case "snappy":
                 self.compress = snappy.compress
                 self.decompress = snappy.decompress
-            case 'none':
+            case "none":
                 self.compress = None
                 self.decompress = None
             case _:
-                raise Exception(f"Unrecognized compression method: {str(compress)}")
+                raise ValueError(f"Unrecognized compression method: {compress!s}")
 
         self.sendstream = None
         self.recvstream = None
@@ -122,7 +122,7 @@ class BinMessages(Messages):
         self.sendBytes(message)
         self.sent += 1
         if self.stats:
-            self.stats['messagesSent'] += 1
+            self.stats["messagesSent"] += 1
         if self.sendstream:
             self.sendstream.write(lBytes)
             self.sendstream.write(message)
@@ -137,7 +137,7 @@ class BinMessages(Messages):
         data = self.receiveBytes(n)
         self.received += 1
         if self.stats:
-            self.stats['messagesRecvd'] += 1
+            self.stats["messagesRecvd"] += 1
         if comp:
             data = self.decompress(bytes(data))
         if self.recvstream:
@@ -155,12 +155,12 @@ class TextMessages(Messages):
         self.sendBytes(output)
         self.sendBytes(message)
         if self.stats:
-            self.stats['messagesSent'] += 1
+            self.stats["messagesSent"] += 1
 
     def recvMessage(self):
         n = self.receiveBytes(6)
         if self.stats:
-            self.stats['messagesRecvd'] += 1
+            self.stats["messagesRecvd"] += 1
         return self.receiveBytes(int(n))
 
 class JsonMessages(TextMessages):
@@ -210,7 +210,7 @@ class MsgPackMessages(BinMessages):
     def getEncoding(self):
         return "bin"
 
-class ObjectMessages():
+class ObjectMessages:
     def __init__(self, inQueue, outQueue, stats=None, compress=True, timeout=None):
         self.inQueue  = inQueue
         self.outQueue = outQueue

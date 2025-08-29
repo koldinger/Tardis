@@ -52,9 +52,6 @@ class _NullCompressor:
     def flush(self):
         return None
 
-_zstdCtxC = zstd.ZstdCompressor(level=5)
-_zstdCtxD = zstd.ZstdDecompressor()
-
 class Lz4Compressor:
     def __init__(self):
         self.compressor = lz4.frame.LZ4FrameCompressor()
@@ -64,34 +61,33 @@ class Lz4Compressor:
         if self.first:
             self.first = False
             return self.compressor.begin() + self.compressor.compress(buffer)
-        else:
-            return self.compressor.compress(buffer)
+        return self.compressor.compress(buffer)
 
     def flush(self):
         return self.compressor.flush()
 
 _compressors = {
-                 'zstd': (_zstdCtxC.compressobj, _zstdCtxD.decompressobj, {}),
-                 'zlib': (zlib.compressobj, zlib.decompressobj, {}),
-                 'bzip': (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
-                 'lzma': (lzma.LZMACompressor, lzma.LZMADecompressor, {}),
-                 'lz4' : (Lz4Compressor, lz4.frame.LZ4FrameDecompressor, {}),
-                 'none': (_NullCompressor, _NullCompressor, {})
+                 "zstd": (zstd.ZstdCompressor(level=5).compressobj, zstd.ZstdDecompressor().decompressobj, {}),
+                 "zlib": (zlib.compressobj, zlib.decompressobj, {}),
+                 "bzip": (bz2.BZ2Compressor, bz2.BZ2Decompressor, {}),
+                 "lzma": (lzma.LZMACompressor, lzma.LZMADecompressor, {}),
+                 "lz4" : (Lz4Compressor, lz4.frame.LZ4FrameDecompressor, {}),
+                 "none": (_NullCompressor, _NullCompressor, {}),
                }
 
 # Pick a selected compressor or decompressor
 def _updateAlg(alg):
-    if alg in [None, 0, 'None', False]:
-        alg = 'none'
-    if alg in [1, 'True', True]:
-        alg = 'zlib'
+    if alg in [None, 0, "None", False]:
+        alg = "none"
+    if alg in [1, "True", True]:
+        alg = "zlib"
     return alg
 
-def getCompressor(alg='zlib'):
+def getCompressor(alg="zlib"):
     alg = _updateAlg(alg)
     return _compressors[alg][0](**(_compressors[alg][2]))
 
-def getDecompressor(alg='zlib'):
+def getDecompressor(alg="zlib"):
     alg = _updateAlg(alg)
     return _compressors[alg][1]()
 
@@ -120,7 +116,7 @@ class BufferedReader:
         return buf
 
     def read(self, size=0x7fffffffffffffff):
-        out = b''
+        out = b""
         left = size
         while len(out) < size:
             if (not self.buffer) or (len(self.buffer) == 0):
@@ -154,7 +150,7 @@ class BufferedReader:
         return False
 
 class CompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor='zlib'):
+    def __init__(self, stream, chunksize=_defaultChunksize, hasher=None, threshold=0.80, signature=False, compressor="zlib"):
         super().__init__(stream, chunksize=chunksize, hasher=hasher, signature=signature)
         self.compressed = 0
         self.uncompressed = 0
@@ -163,8 +159,8 @@ class CompressedBufferedReader(BufferedReader):
         self.compressor = getCompressor(compressor)
 
     def _get(self):
-        ret = b''
-        uncomp = b''
+        ret = b""
+        uncomp = b""
         if self.stream:
             while not ret:
                 buf = self.stream.read(self.chunksize)
@@ -215,7 +211,7 @@ class CompressedBufferedReader(BufferedReader):
         return self.compressor is not None
 
 class UncompressedBufferedReader(BufferedReader):
-    def __init__(self, stream, chunksize=_defaultChunksize, compressor='zlib'):
+    def __init__(self, stream, chunksize=_defaultChunksize, compressor="zlib"):
         super().__init__(stream, chunksize=chunksize)
         self.compressed = 0.0
         self.uncompressed = 0.0
@@ -230,7 +226,7 @@ class UncompressedBufferedReader(BufferedReader):
                     try:
                         ret = self.compressor.flush()
                     except AttributeError:
-                        ret = ''
+                        ret = ""
                     if ret:
                         self.uncompressed = self.uncompressed + len(ret)
                     self.stream = None
@@ -248,7 +244,7 @@ if __name__ == "__main__":
     print(f"Opening {sys.argv[1]}")
     readsize = 4 * 1024 * 1024
     for c in getCompressors():
-        print(f"{c} => ", end='', flush=True)
+        print(f"{c} => ", end="", flush=True)
         start = time.time()
         x = CompressedBufferedReader(open(sys.argv[1], "rb"), compressor=c)
         try:
@@ -259,4 +255,4 @@ if __name__ == "__main__":
             duration = end - start
             print(f"{x.origsize()} ({Util.fmtSize(x.origsize())})  -- {x.compsize()} ({Util.fmtSize(x.compsize())})  -- {x.ratio():.2%} {duration:3.3f}  {(x.origsize() / (1024 * 1024) / duration):2.2f} MB/s :: {x.checksum()}")
         except Exception as e:
-            print(f"Caught exception: {str(e)}")
+            print(f"Caught exception: {e!s}")

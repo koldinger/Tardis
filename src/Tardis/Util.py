@@ -50,6 +50,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import colorlog
 import parsedatetime
@@ -66,14 +67,14 @@ except ImportError:
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
 
-logger = logging.getLogger('UTIL')
+logger = logging.getLogger("UTIL")
 
 def fmtSize(num, base=1024, suffixes=None):
     if suffixes is None:
-        suffixes = ['bytes','KB','MB','GB', 'TB', 'PB', 'EB']
+        suffixes = ["bytes","KB","MB","GB", "TB", "PB", "EB"]
     fmt = "%d %s"
     if num is None:
-        return 'None'
+        return "None"
     num = float(num)
     for x in suffixes[:-1]:
         if -base < num < base:
@@ -116,23 +117,21 @@ def getUserId(name):
 _now = time.time()
 _yearago = _now - (365 * 24 * 3600)
 def formatTime(then):
-    if then > _yearago:
-        fmt = '%b %d %H:%M'
-    else:
-        fmt = '%b %d, %Y'
+    fmt = "%b %d %H:%M" if then > _yearago else "%b %d, %Y"
+
     return time.strftime(fmt, time.localtime(then))
 
 # Strip comments from input lines.
 def stripComments(line):
-    return line.partition('#')[0].strip()
+    return line.partition("#")[0].strip()
 
 # Convert a string to an integer
 def parseInt(x):
-    if x.startswith('0x'):
+    if x.startswith("0x"):
         return int(x[2:], 16)
-    if x.startswith('0o'):
+    if x.startswith("0o"):
         return int(x[2:], 8)
-    if x.startswith('0'):
+    if x.startswith("0"):
         return int(x[1:], 8)
     return int(x)
 
@@ -142,6 +141,8 @@ def shortPath(path, width=80):
     Compress a path to only show the last elements if it's wider than specified.
     Replaces early elements with ".../"
     """
+    # Convert to astring.
+    path = str(path)
 
     # If we're already short enough, just return what we have
     if not path or len(path) < width:
@@ -157,16 +158,16 @@ def shortPath(path, width=80):
     # If so, put a "..." in the middle of the filename
     # retPath is the current file at this point
     if len(retPath) > width:
-        namecomps = retPath.rsplit('.', 1)
+        namecomps = retPath.rsplit(".", 1)
         if len(namecomps) == 2:
             main, suffix = namecomps
         else:
             main = namecomps[0]
-            suffix = ''
+            suffix = ""
         length = min(len(retPath), width) - 5
         retPath   = main[0:(length // 2) - 1] + "..." + main[-(length // 2) + 1:]
         if suffix:
-            retPath = '.'.join([retPath, suffix])
+            retPath = f"{retPath}.{suffix}"
 
     # Build it up backwards from the end
     while len(retPath) < width:
@@ -175,9 +176,9 @@ def shortPath(path, width=80):
             break
         if len(tail) + len(os.sep) + len(retPath) > width:
             break
-        retPath = os.path.join(tail, retPath)
+        retPath = f"{tail}/{retPath}"
 
-    return "..." + os.sep + retPath
+    return f".../{retPath}"
 
 def accumulateStat(stats, name, amount=1):
     if stats:
@@ -196,7 +197,7 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout, handler=
             fmt = "%(log_color)s%(levelname)s%(reset)s : %(message)s"
 
     colors = colorlog.default_log_colors.copy()
-    colors.update({ 'DEBUG': 'green' })
+    colors.update({ "DEBUG": "green" })
 
     if not handler:
         handler = logging.StreamHandler()
@@ -212,7 +213,7 @@ def setupLogging(verbosity=1, levels=None, fmt=None, stream=sys.stdout, handler=
 
 # Functions for reducing a path.
 
-def findDirInRoot(tardis, bset, path, crypt=None):
+def findDirInRoot(tardis, bset, path, crypt):
     """
     Find a directory which exists in the root directory
     Return the number of components which must be removed to have a directory in
@@ -220,11 +221,10 @@ def findDirInRoot(tardis, bset, path, crypt=None):
     """
     comps = path.split(os.sep)
     comps.pop(0)
-    for i, name in enumerate(comps): 
-        if crypt:
-            name = crypt.encryptName(name)
-        info = tardis.getFileInfoByName(name, (0, 0), bset)
-        if info and info['dir'] == 1:
+    for i, name in enumerate(comps):
+        cname = crypt.encryptName(name)
+        info = tardis.getFileInfoByName(cname, (0, 0), bset)
+        if info and info["dir"] == 1:
             return i
     return None
 
@@ -245,13 +245,13 @@ def reducePath(tardis, bset, path, reduceBy, crypt=None):
     return path
 
 def isMagic(path):
-    return ('*' in path) or ('?' in path) or ('[' in path)
+    return ("*" in path) or ("?" in path) or ("[" in path)
 
 def fullPath(name):
-    return os.path.realpath(os.path.expanduser(os.path.expandvars(name)))
+    return os.path.expanduser(os.path.expandvars(name))
 
 def hashPath(path):
-    return hashlib.md5(bytes(path, 'utf8')).hexdigest()
+    return hashlib.md5(bytes(str(path), 'utf8')).hexdigest()
 
 """
 Retrieve a password.
@@ -263,7 +263,7 @@ If the string is True or empty (''), it will use the getpass function to prompt 
 terminal.
 """
 def _readWithTimeout(prompt, timeout):
-    def _interuptPassword(signum, frame):
+    def _interuptPassword(_signum, _frame):
         print("\nTimeout")
         raise Exception("Password read timedout")
 
@@ -277,11 +277,15 @@ def _readWithTimeout(prompt, timeout):
         signal.signal(signal.SIGALRM, previous)
     return password.rstrip()
 
-def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, confirm=False, timeout=Defaults.getDefault('TARDIS_PWTIMEOUT')):
+def getPassword(password, pwurl, pwprog, prompt="Password: ", allowNone=True, confirm=False, timeout=0):
+    timeout = timeout or int(Defaults.getDefault("TARDIS_PWTIMEOUT"))
     methods = 0
-    if password: methods += 1
-    if pwurl:    methods += 1
-    if pwprog:   methods += 1
+    if password:
+        methods += 1
+    if pwurl:
+        methods += 1
+    if pwprog:
+        methods += 1
 
     if methods > 1:
         raise Exception("Cannot specify more than one password retrieval mechanism")
@@ -290,24 +294,24 @@ def getPassword(password, pwurl, pwprog, prompt='Password: ', allowNone=True, co
         # Nothing specified, and it wants a value.  Set password to True to fetch
         password = True
 
-    if password is True or password == '':
-        password = _readWithTimeout(prompt, int(timeout))
+    if password is True or password == "":
+        password = _readWithTimeout(prompt, timeout)
         password = password.rstrip()       # Delete trailing characters
         if confirm:
-            pw2 = _readWithTimeout("Confirm password:", int(timeout))
+            pw2 = _readWithTimeout("Confirm password:", timeout)
             if password != pw2:
                 raise Exception("Passwords don't match")
 
     if pwurl:
-        loc = urllib.parse.urlunparse(urllib.parse.urlparse(pwurl, scheme='file'))
+        loc = urllib.parse.urlunparse(urllib.parse.urlparse(pwurl, scheme="file"))
         pwf = urllib.request.urlopen(loc)
-        password = pwf.readline().rstrip().decode('utf8')
+        password = pwf.readline().rstrip().decode("utf8")
         pwf.close()
 
     if pwprog:
         a = shlex.split(pwprog)
         output = subprocess.check_output(a)
-        password = output.split('\n', maxsplit=1)[0].rstrip()
+        password = output.split("\n", maxsplit=1)[0].rstrip()
 
     if not allowNone and not password:
         raise Exception("Password required")
@@ -325,27 +329,27 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
     logger.debug("Connection requested for %s", dataLoc)
     crypt = None
 
-    loc = urllib.parse.urlparse(dataLoc, scheme='file')
+    loc = urllib.parse.urlparse(dataLoc, scheme="file")
     #_, client = os.path.split(loc.path)
     client = os.path.split(loc.path)[1]
     match loc.scheme:
-        case 'http' | 'https' | 'tardis':
+        case "http" | "https" | "tardis":
             if not allow_remote:
                 raise Exception("Remote Connections not allowed")
 
-            scheme = 'http' if loc.scheme == 'tardis' else loc.scheme
+            scheme = "http" if loc.scheme == "tardis" else loc.scheme
             # If no port specified, insert the port
-            port = Defaults.getDefault('TARDIS_REMOTE_PORT') if loc.port is None else loc.port
+            port = Defaults.getDefault("TARDIS_REMOTE_PORT") if loc.port is None else loc.port
             netloc = f"{loc.netloc}:{port}"
-            # FIXME: Needs client in path
-            dbLoc = urllib.parse.urlunparse((scheme, netloc, '', loc.params, loc.query, loc.fragment))
+
+            dbLoc = urllib.parse.urlunparse((scheme, netloc, "", loc.params, loc.query, loc.fragment))
             # get the RemoteURL object
             logger.debug("==> %s %s", dbLoc, client)
             tardis = RemoteDB.RemoteDB(dbLoc, client)
             cache = tardis
-        case 'file' | '':
+        case "file" | "":
             logger.debug("Creating direct connection to %s", dataLoc)
-            cache = CacheDir.CacheDir(loc.path, create=False)
+            cache = CacheDir.CacheDir(Path(loc.path), create=False)
             dbPath = os.path.join(loc.path, "tardis.db")
             tardis = TardisDB.TardisDB(dbPath, allow_upgrade=allow_upgrade)
         case _:
@@ -359,15 +363,15 @@ def setupDataConnection(dataLoc, password, keyFile=None, allow_upgrade=False, al
     if needsAuth:
         authenticate(tardis, client, password)
     elif password:
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
     # Password specified, so create the crypto unit
-    cryptoScheme = tardis.getConfigValue('CryptoScheme', TardisCrypto.DEF_CRYPTO_SCHEME)
+    cryptoScheme = tardis.getConfigValue("CryptoScheme", TardisCrypto.DEF_CRYPTO_SCHEME)
 
     crypt = TardisCrypto.getCrypto(cryptoScheme, password, client)
     if crypt.encrypting():
         if keyFile:
-            (f, c) = loadKeys(keyFile, tardis.getConfigValue('ClientID'))
+            (f, c) = loadKeys(keyFile, tardis.getConfigValue("ClientID"))
         else:
             (f, c) = tardis.getKeys()
         crypt.setKeys(f, c)
@@ -384,14 +388,14 @@ def authenticate(db, client, password):
     M = usr.process_challenge(s, B)
 
     if M is None:
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
     HAMK = db.authenticate2(M)
 
     usr.verify_session(HAMK)
 
     if not usr.authenticated():
-        raise TardisDB.AuthenticationFailed()
+        raise TardisDB.AuthenticationFailed
 
 
 def getBackupSet(db, bset):
@@ -402,7 +406,7 @@ def getBackupSet(db, bset):
         bsetInfo = db.getBackupSetInfoById(bset)
     except ValueError:
         # Else, let's look it up based on name
-        if bset == Defaults.getDefault('TARDIS_RECENT_SET') or bset == '' or bset is None:
+        if bset == Defaults.getDefault("TARDIS_RECENT_SET") or bset == "" or bset is None:
             bsetInfo = db.lastBackupSet()
         else:
             bsetInfo = db.getBackupSetInfo(bset)
@@ -416,9 +420,9 @@ def getBackupSet(db, bset):
                 timestamp = time.mktime(then)
                 logger.debug("Using time: %s", time.asctime(then))
                 bsetInfo = db.getBackupSetInfoForTime(timestamp)
-                if bsetInfo and bsetInfo['backupset'] != 1:
-                    bset = bsetInfo['backupset']
-                    logger.debug("Using backupset: %s %d for %s", bsetInfo['name'], bsetInfo['backupset'], bset)
+                if bsetInfo and bsetInfo["backupset"] != 1:
+                    bset = bsetInfo["backupset"]
+                    logger.debug("Using backupset: %s %d for %s", bsetInfo["name"], bsetInfo["backupset"], bset)
                 else:
                     # Weed out the ".Initial" set
                     logger.critical("No backupset at date: %s (%s)", bset, time.asctime(then))
@@ -476,8 +480,8 @@ def removeOrphans(db, cache):
 # Data transmission functions
 
 def _chunks(stream, chunksize):
-    last = b''
-    for chunk in iter(functools.partial(stream.read, chunksize), b''):
+    last = b""
+    for chunk in iter(functools.partial(stream.read, chunksize), b""):
         if last:
             yield (last, False)
         last = chunk
@@ -505,10 +509,8 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
     sig = None
 
     start = time.time()
-    if progress:
-        # Set the chunksize
-        if progressPeriod % chunksize != 0:
-            progressPeriod -= progressPeriod % chunksize
+    if progress and progressPeriod % chunksize != 0:
+        progressPeriod -= progressPeriod % chunksize
 
     if compress:
         stream = CompressedBuffer.CompressedBufferedReader(data, hasher=hasher, signature=signature, compressor=compress)
@@ -518,35 +520,32 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
     try:
         if encrypt.iv:
             sender.sendMessage(encrypt.iv)
-            accumulateStat(stats, 'dataSent', len(encrypt.iv))
+            accumulateStat(stats, "dataSent", len(encrypt.iv))
         for chunk, eof in _chunks(stream, chunksize):
-            if chunk:
-                data = encrypt.encrypt(chunk)
-            else:
-                data = b''
+            data = encrypt.encrypt(chunk) if chunk else b""
+
             if eof:
                 data += encrypt.finish()
             if data:
                 sender.sendMessage(data)
-                accumulateStat(stats, 'dataSent', len(data))
+                accumulateStat(stats, "dataSent", len(data))
                 size += len(data)
-                if progress:
-                    if (size % progressPeriod) == 0:
-                        progress()
+                if progress and size % progressPeriod == 0:
+                    progress()
         digest = encrypt.digest()
         if digest:
             sender.sendMessage(digest)
-            accumulateStat(stats, 'dataSent', len(digest))
+            accumulateStat(stats, "dataSent", len(digest))
 
     except Exception as e:
         status = "Fail"
         raise e
     finally:
-        sender.sendMessage(b'')     # 0 length chunk, indicate end of data
+        sender.sendMessage(b"")     # 0 length chunk, indicate end of data
         compressed = compress if stream.isCompressed() else "None"
         size = stream.size()
 
-        accumulateStat(stats, 'dataBacked', size)
+        accumulateStat(stats, "dataBacked", size)
 
         message = { "chunk": "done", "size": size, "status": status, "compressed": compressed }
         if hasher:
@@ -579,9 +578,9 @@ def receiveData(receiver, output, log=None):
     while chunk := receiver.recvMessage():
         if log:
             if isinstance(chunk, bytearray):
-                log.write(f"{str(chunk[0:64])}\n")
+                log.write(f"{chunk[0:64]!s}\n")
             else:
-                log.write(pprint.pformat(chunk, width=250, compact=True) + '\n')
+                log.write(pprint.pformat(chunk, width=250, compact=True) + "\n")
         if chunk is None:
             logger.error("Received NONE when data expected")
         bytesReceived += len(chunk)
@@ -594,10 +593,10 @@ def receiveData(receiver, output, log=None):
     chunk = receiver.recvMessage()
     if chunk is None:
         logger.error("Received NONE when message expected")
-    status = chunk['status']
-    size   = chunk['size']
-    checksum = chunk.get('checksum', None)
-    compressed = chunk.get('compressed', False)
+    status = chunk["status"]
+    size   = chunk["size"]
+    checksum = chunk.get("checksum", None)
+    compressed = chunk.get("compressed", False)
 
     if log:
         log.write(f"Received {size} bytes in {numchunks} chunks\n")
@@ -642,22 +641,22 @@ def _updateLen(value, length):
         if len(res) > length:
             res = base64.b64encode(res[0:length])
         else:
-            res = base64.b64encode(res + '\0' * (length - len(res)))
+            res = base64.b64encode(res + "\0" * (length - len(res)))
     else:
         res = value
     return res
 
 def loadKeys(name, client):
-    config = configparser.ConfigParser({'ContentKey': None, 'FilenameKey': None}, allow_no_value=True)
+    config = configparser.ConfigParser({"ContentKey": None, "FilenameKey": None}, allow_no_value=True)
     client = str(client)
     config.add_section(client)
     config.read(fullPath(name))
     try:
-        contentKey =  _updateLen(config.get(client, 'ContentKey'), 32)
-        nameKey    =  _updateLen(config.get(client, 'FilenameKey'), 32)
+        contentKey =  _updateLen(config.get(client, "ContentKey"), 32)
+        nameKey    =  _updateLen(config.get(client, "FilenameKey"), 32)
         return (nameKey, contentKey)
-    except configparser.NoOptionError:
-        raise Exception("No keys available for client " + client)
+    except configparser.NoOptionError as e:
+        raise Exception("No keys available for client " + client) from e
 
 def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
     def _addOrDelete(config, client, key, value):
@@ -670,19 +669,19 @@ def saveKeys(name, client, nameKey, contentKey, srpSalt=None, srpVKey=None):
     config.add_section(client)
     config.read(name)
 
-    _addOrDelete(config, client, 'ContentKey', contentKey)
-    _addOrDelete(config, client, 'FilenameKey', nameKey)
-    _addOrDelete(config, client, 'SRPSalt', srpSalt)
-    _addOrDelete(config, client, 'SRPVkey', srpVKey)
+    _addOrDelete(config, client, "ContentKey", contentKey)
+    _addOrDelete(config, client, "FilenameKey", nameKey)
+    _addOrDelete(config, client, "SRPSalt", srpSalt)
+    _addOrDelete(config, client, "SRPVkey", srpVKey)
 
-    with open(name, 'w') as configfile:
+    with open(name, "w") as configfile:
         config.write(configfile)
 
 def mkKeyString(client, nameKey, contentKey):
     config = configparser.ConfigParser()
     config.add_section(client)
-    config.set(client, 'ContentKey', contentKey)
-    config.set(client, 'FilenameKey', nameKey)
+    config.set(client, "ContentKey", contentKey)
+    config.set(client, "FilenameKey", nameKey)
     x = io.StringIO()
     config.write(x)
     return x.getvalue()
@@ -691,18 +690,18 @@ def mkKeyString(client, nameKey, contentKey):
 ### Create a metadata file for file.
 ###
 def recordMetaData(cache, checksum, size, compressed, encrypted, disksize, basis=None, logger=None):
-    metaName = checksum + '.meta'
-    metaData = {'checksum': checksum, 'compressed': bool(compressed), 'encrypted': bool(encrypted), 'size': size, 'disksize': disksize }
+    metaName = checksum + ".meta"
+    metaData = {"checksum": checksum, "compressed": bool(compressed), "encrypted": bool(encrypted), "size": size, "disksize": disksize }
     if basis:
-        metaData['basis'] = basis
+        metaData["basis"] = basis
     metaStr = json.dumps(metaData)
     logger.debug("Storing metadata for %s: %s", checksum, metaStr)
 
     try:
-        with cache.open(metaName, 'w') as f:
+        with cache.open(metaName, "w") as f:
             f.write(metaStr)
-            f.write('\n')
-    except Exception as e:
+            f.write("\n")
+    except OSError as e:
         logger.warning("Could not write metadata file for %s: %s: %s", checksum, metaName, str(e))
 
 class GenShellCompletions(argparse.Action):
@@ -711,20 +710,20 @@ class GenShellCompletions(argparse.Action):
     """
     def __call__(self, parser, namespace, values, option_string=None):
         path = os.path.split(sys.argv[0])[1]
-        c = genzshcomp.CompletionGenerator(path, parser, parser_type='argparse', output_format=values)
+        c = genzshcomp.CompletionGenerator(path, parser, parser_type="argparse", output_format=values)
         print(c.get())
         sys.exit(0)
 
 def addGenCompletions(parser):
     if genzshcomp:
-        parser.add_argument('--gencompletions',  dest='gencomps',    default=None, const='zsh', nargs='?', choices=['bash', 'zsh', 'list'], help=argparse.SUPPRESS, action=GenShellCompletions)
+        parser.add_argument("--gencompletions",  dest="gencomps",    default=None, const="zsh", nargs="?", choices=["bash", "zsh", "list"], help=argparse.SUPPRESS, action=GenShellCompletions)
 
 # Help formatter to handle the StoreBoolean options.
 # Only handles overriding the basic HelpFormatter class.
 
 class HelpFormatter(argparse.RawTextHelpFormatter):
     def _format_action_invocation(self, action):
-        if hasattr(action, 'help_option'):
+        if hasattr(action, "help_option"):
             ret = action.help_option
         else:
             ret = super()._format_action_invocation(action)
@@ -753,7 +752,7 @@ class ClearingStreamHandler(logging.StreamHandler):
         self.clearLines = os.isatty(stream.fileno())
 
     def emit(self, record):
-        _ansiClearEol = '\x1b[K'
+        _ansiClearEol = "\x1b[K"
 
         if self.clearLines:
             self.stream.write(_ansiClearEol)
@@ -790,7 +789,7 @@ _hashMagic = (0xffeeddcc).to_bytes(length=4, signed=False)
 def hashDir(crypt, files, decrypt=False):
     """ Generate the hash of the filenames, and the number of files, so we can confirm that the contents are the same """
     if decrypt:
-        filenames = sorted(map(crypt.decryptName,[x['name'] for x in files]))
+        filenames = sorted(map(crypt.decryptName,[x["name"] for x in files]))
     else:
         filenames = sorted([x["name"] for x in files])
 
@@ -804,17 +803,17 @@ def hashDir(crypt, files, decrypt=False):
     m.update(z)
     for f in filenames:
         # For each entry, hash the name, and a null character
-        m.update(bytes(f, 'utf8', 'xmlcharrefreplace'))
-        m.update(b'\0')
+        m.update(bytes(f, "utf8", "xmlcharrefreplace"))
+        m.update(b"\0")
     m.update(z)
     # Again, Insert "magic" number to help prevent collisions
     m.update(_hashMagic)
     return (m.hexdigest(), len(filenames))
 
 
-def asString(a, policy='ignore'):
+def asString(a, policy="ignore"):
     if isinstance(a, str):
         return a
     if isinstance(a, bytes):
-        return a.decode('utf-8', policy)
+        return a.decode("utf-8", policy)
     return str(a)

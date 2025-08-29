@@ -34,7 +34,7 @@ import time
 
 
 class Cache:
-    def __init__(self, size, timeout, name='Cache'):
+    def __init__(self, size, timeout, name="Cache"):
         self.size = size
         self.timeout = timeout
         self.cache = collections.OrderedDict()

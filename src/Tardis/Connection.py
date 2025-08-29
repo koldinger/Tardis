@@ -39,13 +39,14 @@ protocolVersion = "1.6"
 headerString    = "TARDIS " + protocolVersion
 sslHeaderString = headerString + "/SSL"
 
-class ConnectionException(Exception):
+class ConnectionError(Exception):
     pass
 
 class Connection:
-    """ Root class for handling connections to the tardis server """
+    """ Root class for handling connections to the tardis server. """
+
     def __init__(self, host, port, encoding, compress, timeout, validate):
-        self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
+        self.stats = { "messagesRecvd": 0, "messagesSent" : 0, "bytesRecvd": 0, "bytesSent": 0 }
 
         # Create and open the socket
         if host:
@@ -62,7 +63,7 @@ class Connection:
 
         try:
             # Receive a string.  TARDIS proto=1.5
-            message = str(self.sock.recv(32).strip(), 'utf8')
+            message = str(self.sock.recv(32).strip(), "utf8")
             if message == sslHeaderString:
                 # Overwrite self.sock
                 self.sslCtx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -72,36 +73,36 @@ class Connection:
 
                 self.sock = self.sslCtx.wrap_socket(self.sock, server_side=False, server_hostname=host)
             elif not message:
-                raise ConnectionException("No header string.")
+                raise ConnectionError("No header string.")
             elif message != headerString:
-                raise ConnectionException(f"Unknown protocol: {message}")
-            resp = { 'encoding': encoding, 'compress': compress }
-            self.put(bytes(json.dumps(resp), 'utf8'))
+                raise ConnectionError(f"Unknown protocol: {message}")
+            resp = { "encoding": encoding, "compress": compress }
+            self.put(bytes(json.dumps(resp), "utf8"))
 
             message = self.sock.recv(256).strip()
             fields = json.loads(message)
-            if fields['status'] != 'OK':
-                raise ConnectionException("Unable to connect")
-        except ConnectionException as e:
+            if fields["status"] != "OK":
+                raise ConnectionError("Unable to connect")
+        except ConnectionError as e:
             self.sock.close()
             raise e
 
     def put(self, message):
         self.sock.sendall(message)
-        self.stats['messagesSent'] += 1
+        self.stats["messagesSent"] += 1
 
     def recv(self, n):
-        msg = ''
+        msg = ""
         while len(msg) < n:
             chunk = self.sock.recv(n-len(msg))
-            if chunk == '':
+            if chunk == "":
                 raise RuntimeError("socket connection broken")
             msg = msg + chunk
         return msg
 
     def get(self, size):
         message = self.sock.recv(size).strip()
-        self.stats['messagesRecvd'] += 1
+        self.stats["messagesRecvd"] += 1
         return message
 
     def close(self):
@@ -115,11 +116,11 @@ class ProtocolConnection(Connection):
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
-        self.stats['messagesSent'] += 1
+        self.stats["messagesSent"] += 1
 
-    def receive(self, wait):
+    def receive(self, _wait):
         message = self.sender.recvMessage()
-        self.stats['messagesRecvd'] += 1
+        self.stats["messagesRecvd"] += 1
         return message
 
     def close(self, error=None):
@@ -128,9 +129,8 @@ class ProtocolConnection(Connection):
             message["error"] = error
         try:
             self.send(message)
-        except Exception:
-            pass
-        super().close()
+        finally:
+            super().close()
 
     def encode(self, string):
         return self.sender.encode(string)
@@ -140,7 +140,7 @@ class ProtocolConnection(Connection):
 
 class MsgPackConnection(ProtocolConnection):
     def __init__(self, host, port, compress, timeout, validate):
-        ProtocolConnection.__init__(self, host, port, 'MSGP', compress, timeout, validate)
+        ProtocolConnection.__init__(self, host, port, "MSGP", compress, timeout, validate)
         # Really, cons this up in the connection, but it needs access to the sock parameter, so.....
         self.sender = Messages.MsgPackMessages(self.sock, stats=self.stats, compress=compress)
 
@@ -152,7 +152,7 @@ class QueuedMsgPackConnection(MsgPackConnection):
 
 class DirectConnection:
     def __init__(self, timeout):
-        self.stats = { 'messagesRecvd': 0, 'messagesSent' : 0, 'bytesRecvd': 0, 'bytesSent': 0 }
+        self.stats = { "messagesRecvd": 0, "messagesSent" : 0, "bytesRecvd": 0, "bytesSent": 0 }
         self.timeout = timeout
         self.toClientQueue = queue.SimpleQueue()
         self.toServerQueue = queue.SimpleQueue()
@@ -161,19 +161,19 @@ class DirectConnection:
         self.sender = self.clientMessages
 
         self.stats = {
-            'messagesRecvd': 0,
-            'messagesSent' : 0,
-            'bytesRecvd': 0,
-            'bytesSent': 0
+            "messagesRecvd": 0,
+            "messagesSent" : 0,
+            "bytesRecvd": 0,
+            "bytesSent": 0,
         }
 
     def send(self, message, compress=True):
         self.sender.sendMessage(message, compress)
-        self.stats['messagesSent'] += 1
+        self.stats["messagesSent"] += 1
 
     def receive(self):
         message = self.sender.recvMessage()
-        self.stats['messagesRecvd'] += 1
+        self.stats["messagesRecvd"] += 1
         return message
 
     def close(self, error=None):
@@ -210,5 +210,5 @@ if __name__ == "__main__":
 
     conn.send({"a" : 1})
     print(server.recvMessage())
-    server.sendMessage({"b": 2, "c": ['a', 'b', 'c']})
+    server.sendMessage({"b": 2, "c": ["a", "b", "c"]})
     print(conn.receive())

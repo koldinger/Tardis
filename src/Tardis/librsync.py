@@ -30,21 +30,21 @@ import syslog
 import tempfile
 from functools import wraps
 
-if os.name == 'posix':
-    path = ctypes.util.find_library('rsync')
+if os.name == "posix":
+    path = ctypes.util.find_library("rsync")
     if path is None:
-        raise ImportError('Could not find librsync, make sure it is installed')
+        raise ImportError("Could not find librsync, make sure it is installed")
     try:
         _librsync = ctypes.cdll.LoadLibrary(path)
     except OSError:
         raise ImportError(f'Could not load librsync at "{path}"')
-elif os.name == 'nt':
+elif os.name == "nt":
     try:
         _librsync = ctypes.cdll.librsync
     except:
-        raise ImportError('Could not load librsync, make sure it is installed')
+        raise ImportError("Could not load librsync, make sure it is installed")
 else:
-    raise NotImplementedError('Librsync is not supported on your platform')
+    raise NotImplementedError("Librsync is not supported on your platform")
 
 
 MAX_SPOOL = 1024 ** 2 * 5
@@ -72,12 +72,12 @@ RS_BLAKE2_SIG_MAGIC     = 0x72730137      # r s \1 7
 # librsync.h: rs_buffers_s
 class Buffer(ctypes.Structure):
     _fields_ = [
-        ('next_in', ctypes.c_char_p),
-        ('avail_in', ctypes.c_size_t),
-        ('eof_in', ctypes.c_int),
+        ("next_in", ctypes.c_char_p),
+        ("avail_in", ctypes.c_size_t),
+        ("eof_in", ctypes.c_int),
 
-        ('next_out', ctypes.c_char_p),
-        ('avail_out', ctypes.c_size_t),
+        ("next_out", ctypes.c_char_p),
+        ("avail_out", ctypes.c_size_t),
     ]
 
 # char const *rs_strerror(rs_result r);
@@ -86,7 +86,7 @@ _librsync.rs_strerror.argtypes = (ctypes.c_int, )
 
 # rs_job_t *rs_sig_begin(size_t new_block_len, size_t strong_sum_len);
 _librsync.rs_sig_begin.restype = ctypes.c_void_p
-_librsync.rs_sig_begin.argtypes = (ctypes.c_size_t, ctypes.c_size_t, ctypes.c_int, )
+_librsync.rs_sig_begin.argtypes = (ctypes.c_size_t, ctypes.c_size_t, ctypes.c_int )
 
 # rs_job_t *rs_loadsig_begin(rs_signature_t **);
 _librsync.rs_loadsig_begin.restype = ctypes.c_void_p
@@ -98,7 +98,7 @@ _librsync.rs_delta_begin.argtypes = (ctypes.c_void_p, )
 
 # rs_job_t *rs_patch_begin(rs_copy_cb *, void *copy_arg);
 _librsync.rs_patch_begin.restype = ctypes.c_void_p
-_librsync.rs_patch_begin.argtypes = (ctypes.c_void_p, ctypes.c_void_p, )
+_librsync.rs_patch_begin.argtypes = (ctypes.c_void_p, ctypes.c_void_p )
 
 # rs_result rs_build_hash_table(rs_signature_t* sums);
 _librsync.rs_build_hash_table.restype = ctypes.c_size_t
@@ -106,7 +106,7 @@ _librsync.rs_build_hash_table.argtypes = (ctypes.c_void_p, )
 
 # rs_result rs_job_iter(rs_job_t *, rs_buffers_t *);
 _librsync.rs_job_iter.restype = ctypes.c_int
-_librsync.rs_job_iter.argtypes = (ctypes.c_void_p, ctypes.c_void_p, )
+_librsync.rs_job_iter.argtypes = (ctypes.c_void_p, ctypes.c_void_p )
 
 # void rs_trace_set_level(rs_loglevel level);
 _librsync.rs_trace_set_level.restype = None
@@ -135,8 +135,8 @@ def seekable(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         s = args[0]
-        assert callable(getattr(s, 'seek', None)), 'Must provide seekable ' \
-            'file-like object'
+        assert callable(getattr(s, "seek", None)), "Must provide seekable " \
+            "file-like object"
         return f(*args, **kwargs)
     return wrapper
 
@@ -164,7 +164,7 @@ def _execute(job, f, o=None):
             o.write(out.raw[:RS_JOB_BLOCKSIZE - buff.avail_out])
         if r == RS_DONE:
             break
-        elif r != RS_BLOCKED:
+        if r != RS_BLOCKED:
             raise LibrsyncError(r)
         if buff.avail_in > 0:
             # There is data left in the input buffer, librsync did not consume
@@ -172,7 +172,7 @@ def _execute(job, f, o=None):
             # next read. It would be better to simply tack data to the end of
             # this buffer, but that is very difficult in Python.
             f.seek(f.tell() - buff.avail_in)
-    if o and callable(getattr(o, 'seek', None)):
+    if o and callable(getattr(o, "seek", None)):
         # As a matter of convenience, rewind the output file.
         o.seek(0)
     return o
@@ -190,7 +190,7 @@ def signature(f, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC
     optional `block_size` parameter.
     """
     if s is None:
-        s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
+        s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode="wb+")
     job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN, magic)
     try:
         _execute(job, f, s)
@@ -207,7 +207,7 @@ def delta(f, s, d=None):
     objects.
     """
     if d is None:
-        d = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
+        d = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode="wb+")
     sig = ctypes.c_void_p()
     try:
         job = _librsync.rs_loadsig_begin(ctypes.byref(sig))
@@ -237,7 +237,7 @@ def patch(f, d, o=None):
     required to be seekable.
     """
     if o is None:
-        o = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
+        o = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode="wb+")
 
     @patch_callback
     def read_cb(opaque, pos, length, buff):
@@ -265,7 +265,7 @@ Licensing terms as above
 class SignatureJob:
     def __init__(self, s=None, block_size=RS_DEFAULT_BLOCK_LEN, magic=RS_MD4_SIG_MAGIC):
         if s is None:
-            s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode='wb+')
+            s = tempfile.SpooledTemporaryFile(max_size=MAX_SPOOL, mode="wb+")
         job = _librsync.rs_sig_begin(block_size, RS_DEFAULT_STRONG_LEN, magic)
         self.output = s
         self.job = job
@@ -276,7 +276,7 @@ class SignatureJob:
     def step(self, data):
         # Make sure we have something
         if data is None:
-            data = ''
+            data = ""
 
         buff = self.buff
         out = self.out
@@ -298,14 +298,14 @@ class SignatureJob:
                 self.output.write(out.raw[:RS_JOB_BLOCKSIZE - buff.avail_out])
             if r == RS_DONE:
                 return True
-            elif r != RS_BLOCKED:
+            if r != RS_BLOCKED:
                 raise LibrsyncError(r)
             if buff.avail_in == 0:
                 # break out if nothing left in the input buffer
                 break
 
     def sigfile(self):
-        if self.output and callable(getattr(self.output, 'seek', None)):
+        if self.output and callable(getattr(self.output, "seek", None)):
             # As a matter of convenience, rewind the output file.
             self.output.seek(0)
         return self.output

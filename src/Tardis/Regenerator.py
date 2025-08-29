@@ -44,16 +44,15 @@ class RegenerateException(Exception):
 class Regenerator:
     errors = 0
 
-    def __init__(self, cache, db, crypt: TardisCrypto.CryptoScheme, tempdir="/tmp"):
+    def __init__(self, cache, db, crypt: TardisCrypto.CryptoScheme):
         self.logger = logging.getLogger("Regenerator")
         self.cacheDir = cache
         self.db = db
-        self.tempdir = tempdir
         self.crypt = crypt
 
     def decryptFile(self, filename, size, authenticate=True):
         self.logger.debug("Decrypting %s", filename)
-        infile = self.cacheDir.open(filename, 'rb')
+        infile = self.cacheDir.open(filename, "rb")
 
         # Get the IV, if it's not specified.
         iv = infile.read(self.crypt.ivLength)
@@ -71,7 +70,7 @@ class Regenerator:
         blocksize = 64 * 1024
         last = False
         while rem > 0:
-            readsize = blocksize if rem > blocksize else rem
+            readsize = min(rem, blocksize)
             if rem <= blocksize:
                 last = True
             ct = infile.read(readsize)
@@ -100,8 +99,8 @@ class Regenerator:
 
         if chain:
             cksInfo = chain.pop(0)
-            if cksInfo['checksum'] != cksum:
-                self.logger.error("Unexpected checksum: %s.  Expected: %s", cksInfo['checksum'], cksum)
+            if cksInfo["checksum"] != cksum:
+                self.logger.error("Unexpected checksum: %s.  Expected: %s", cksInfo["checksum"], cksum)
                 return None
         else:
             cksInfo = self.db.getChecksumInfo(cksum)
@@ -111,44 +110,46 @@ class Regenerator:
             return None
 
         try:
-            if not cksInfo['isfile']:
+            if not cksInfo["isfile"]:
                 raise RegenerateException(f"{cksum} is not a file")
 
-            if cksInfo['basis']:
+            if cksInfo["basis"]:
                 if basisFile:
                     basis = basisFile
                     basis.seek(0)
                 else:
-                    basis = self.recoverChecksum(cksInfo['basis'], authenticate, chain)
+                    basis = self.recoverChecksum(cksInfo["basis"], authenticate, chain)
 
-                if cksInfo['encrypted']:
-                    patchfile = self.decryptFile(cksum, cksInfo['disksize'], authenticate)
+                if cksInfo["encrypted"]:
+                    patchfile = self.decryptFile(cksum, cksInfo["disksize"], authenticate)
                 else:
-                    patchfile = self.cacheDir.open(cksum, 'rb')
+                    patchfile = self.cacheDir.open(cksum, "rb")
 
-                if cksInfo['compressed']:
+                if cksInfo["compressed"]:
                     self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
-                    buf = CompressedBuffer.UncompressedBufferedReader(patchfile, compressor=cksInfo['compressed'])
+                    buf = CompressedBuffer.UncompressedBufferedReader(patchfile, compressor=cksInfo["compressed"])
                     shutil.copyfileobj(buf, temp)
                     temp.seek(0)
                     patchfile = temp
                 try:
                     output = librsync.patch(basis, patchfile)
-                    return output
                 except librsync.LibrsyncError as e:
-                    self.logger.error("Recovering checksum: %s : %s", cksum, e)
-                    raise RegenerateException(f"Checksum: {cksum}: Error: {e}") from e
+                    msg = f"Checksum: {cksum}: Error: {e}"
+                    self.logger.error(msg)
+                    raise RegenerateException(msg) from e
+                else:
+                    return output
             else:
-                if cksInfo['encrypted']:
-                    output =  self.decryptFile(cksum, cksInfo['disksize'], authenticate)
+                if cksInfo["encrypted"]:
+                    output =  self.decryptFile(cksum, cksInfo["disksize"], authenticate)
                 else:
                     output =  self.cacheDir.open(cksum, "rb", streaming=False)
 
-                if cksInfo['compressed'] is not None and cksInfo['compressed'].lower() != 'none':
+                if cksInfo["compressed"] is not None and cksInfo["compressed"].lower() != "none":
                     self.logger.debug("Uncompressing %s", cksum)
                     temp = tempfile.TemporaryFile()
-                    buf = CompressedBuffer.UncompressedBufferedReader(output, compressor=cksInfo['compressed'])
+                    buf = CompressedBuffer.UncompressedBufferedReader(output, compressor=cksInfo["compressed"])
                     shutil.copyfileobj(buf, temp)
                     temp.seek(0)
                     output = temp
@@ -157,7 +158,7 @@ class Regenerator:
 
         except RegenerateException:
             raise
-        except (OSError, IOError) as e:
+        except OSError as e:
             self.logger.error("Unable to recover checksum: %s: %s", cksum, e)
             raise
         except Exception as e:
@@ -172,7 +173,7 @@ class Regenerator:
         try:
             chain = self.db.getChecksumInfoChainByPath(name, bset, permchecker=permchecker)
             if chain:
-                cksum = chain[0]['checksum']
+                cksum = chain[0]["checksum"]
                 return self.recoverChecksum(cksum, authenticate, chain)
             self.logger.error("Could not locate file: %s ", name)
             return None

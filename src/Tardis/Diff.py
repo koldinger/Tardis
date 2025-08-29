@@ -45,39 +45,39 @@ from . import Config, Defaults, Regenerator, TardisDB, Util
 logger: logging.Logger
 args: argparse.Namespace
 
-current = Defaults.getDefault('TARDIS_RECENT_SET')
+current = Defaults.getDefault("TARDIS_RECENT_SET")
 
 def parseArgs():
     isatty = os.isatty(sys.stdout.fileno())
 
-    parser = argparse.ArgumentParser(description='Diff files between current and a Tardis backup, or multiple Tardis versions', fromfile_prefix_chars='@', formatter_class=Util.HelpFormatter, add_help=False)
+    parser = argparse.ArgumentParser(description="Diff files between current and a Tardis backup, or multiple Tardis versions", fromfile_prefix_chars="@", formatter_class=Util.HelpFormatter, add_help=False)
     (args, remaining) = Config.parseConfigOptions(parser)
 
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
-    parser.add_argument("--backup", '-b',   nargs='+', dest='backup', default=[current], help="Backup set(s) to use (Default: %(default)s)")
+    parser.add_argument("--backup", "-b",   nargs="+", dest="backup", default=[current], help="Backup set(s) to use (Default: %(default)s)")
 
-    parser.add_argument('--color',                  dest='color',   default=isatty, action=argparse.BooleanOptionalAction,   help='Use colors')
+    parser.add_argument("--color",                  dest="color",   default=isatty, action=argparse.BooleanOptionalAction,   help="Use colors")
 
     diffgroup = parser.add_mutually_exclusive_group()
-    diffgroup.add_argument('--unified', '-u',  dest='unified', type=int, default=0, nargs='?', const=3,         help='Generate unified diff')
-    diffgroup.add_argument('--context', '-c',  dest='context', type=int, default=5, nargs='?', const=5,         help='Generate context diff')
-    diffgroup.add_argument('--ndiff', '-n',    dest='ndiff',   default=False, action='store_true',              help='Generate NDiff style diff')
+    diffgroup.add_argument("--unified", "-u",  dest="unified", type=int, default=0, nargs="?", const=3,         help="Generate unified diff")
+    diffgroup.add_argument("--context", "-c",  dest="context", type=int, default=5, nargs="?", const=5,         help="Generate context diff")
+    diffgroup.add_argument("--ndiff", "-n",    dest="ndiff",   default=False, action="store_true",              help="Generate NDiff style diff")
 
-    parser.add_argument('--reduce-path',       dest='reduce',  default=0, const=sys.maxsize, type=int, nargs='?',   metavar='N',
+    parser.add_argument("--reduce-path",       dest="reduce",  default=0, const=sys.maxsize, type=int, nargs="?",   metavar="N",
                         help='Reduce path by N directories.  No value for "smart" reduction')
 
-    parser.add_argument('--binary', '-B',   dest='binary', default=False, action=argparse.BooleanOptionalAction, help='Print differences in binary files.  Default: %(default)s')
-    parser.add_argument('--recurse', '-r',  dest='recurse', default=False, action=argparse.BooleanOptionalAction, help='Recurse into directories.  Default: %(default)s')
-    parser.add_argument('--list', '-l',     dest='list', default=False, action=argparse.BooleanOptionalAction, help='Only list files that differ.  Do not show diffs.  Default: %(default)s')
+    parser.add_argument("--binary", "-B",   dest="binary", default=False, action=argparse.BooleanOptionalAction, help="Print differences in binary files.  Default: %(default)s")
+    parser.add_argument("--recurse", "-r",  dest="recurse", default=False, action=argparse.BooleanOptionalAction, help="Recurse into directories.  Default: %(default)s")
+    parser.add_argument("--list", "-l",     dest="list", default=False, action=argparse.BooleanOptionalAction, help="Only list files that differ.  Do not show diffs.  Default: %(default)s")
 
-    parser.add_argument('--exceptions', '-E', default=False, action=argparse.BooleanOptionalAction, dest='exceptions', help="Log full exception data")
-    parser.add_argument('--verbose', '-v',  action='count', dest='verbose', default=0, help='Increase the verbosity')
-    parser.add_argument('--version',        action='version', version='%(prog)s ' + Tardis.__versionstring__, help='Show the version')
-    parser.add_argument('--help', '-h',     action='help')
+    parser.add_argument("--exceptions", "-E", default=False, action=argparse.BooleanOptionalAction, dest="exceptions", help="Log full exception data")
+    parser.add_argument("--verbose", "-v",  action="count", dest="verbose", default=0, help="Increase the verbosity")
+    parser.add_argument("--version",        action="version", version="%(prog)s " + Tardis.__versionstring__, help="Show the version")
+    parser.add_argument("--help", "-h",     action="help")
 
-    parser.add_argument('files',            nargs='+', default=None,                 help="File to diff")
+    parser.add_argument("files",            nargs="+", default=None,                 help="File to diff")
 
     Util.addGenCompletions(parser)
     args = parser.parse_args(remaining)
@@ -88,25 +88,25 @@ def setcolor(line):
     if args.color:
         if line:
             c = line[0]
-            if c == '-':
-                color = 'red'
-            elif c == '+':
-                color = 'green'
-            elif c in ['!', '@']:
-                color = 'yellow'
-            elif c in ['?', '*']:
-                color = 'cyan'
+            if c == "-":
+                color = "red"
+            elif c == "+":
+                color = "green"
+            elif c in ["!", "@"]:
+                color = "yellow"
+            elif c in ["?", "*"]:
+                color = "cyan"
             else:
-                color = 'white'
+                color = "white"
         else:
-            color = 'white'
+            color = "white"
     else:
-        color = 'white'
+        color = "white"
 
     return color
 
-def isBinary(lines, numLines = 128):
-    # TODO Fixme.  binaryornot doesn't seem to work for binary strings.
+def isBinary(_lines, _numLines = 128):
+    # TODO: Fixme:  binaryornot doesn't seem to work for binary strings.
     #lineNo = 0
     #numLines = min(numLines, len(lines))
     #while lineNo < numLines:
@@ -124,19 +124,19 @@ def runDiff(f1, f2, name, then, now):
 
     # If we only want to list files, just see if the
     if args.list and l1 != l2:
-        color = 'yellow' if args.color else None
-        termcolor.cprint(f'File {name} (versions {then} and {now}) differs.', color)
+        color = "yellow" if args.color else None
+        termcolor.cprint(f"File {name} (versions {then} and {now}) differs.", color)
         return
 
     if not args.binary and (isBinary(l1) or isBinary(l2)):
         if l1 != l2:
-            color = 'yellow' if args.color else None
-            termcolor.cprint(f'Binary file {name} (versions {then} and {now}) differs.', color)
+            color = "yellow" if args.color else None
+            termcolor.cprint(f"Binary file {name} (versions {then} and {now}) differs.", color)
         return
 
     # Convert the binary blobs to strings so that
-    l1 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l1))
-    l2 = list(map(lambda x: x.decode('utf8', 'backslashreplace'), l2))
+    l1 = [x.decode("utf8", "backslashreplace") for x in l1]
+    l2 = [x.decode("utf8", "backslashreplace") for x in l2]
 
     if args.ndiff:
         diffs = difflib.ndiff(l1, l2)
@@ -158,35 +158,35 @@ def getFileInfo(path, bset, tardis, crypt, reducePath):
 def diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then, recurse=True):
     logger.info("Diffing directory: %s", path)
     # Collect the first directory contents
-    (info1, _) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+    (info1, _) = getFileInfo(path, bsets[0]["backupset"], tardis, crypt, reducePath)
     if not info1:
         logger.error("No data available for %s", path)
         return
 
-    entries1 = tardis.readDirectory((info1['inode'], info1['device']), bsets[0]['backupset'])
-    names1 = ([x['name'] for x in entries1])
+    entries1 = tardis.readDirectory((info1["inode"], info1["device"]), bsets[0]["backupset"])
+    names1 = ([x["name"] for x in entries1])
     if crypt:
         names1 = list(map(crypt.decryptName, names1))
     names1 = sorted(names1)
 
     if bsets[1]:
-        (info2, _) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
-        entries2 = tardis.readDirectory((info2['inode'], info2['device']), bsets[1]['backupset'])
-        names2 = [x['name'] for x in entries2]
+        (info2, _) = getFileInfo(path, bsets[1]["backupset"], tardis, crypt, reducePath)
+        entries2 = tardis.readDirectory((info2["inode"], info2["device"]), bsets[1]["backupset"])
+        names2 = [x["name"] for x in entries2]
         if crypt:
             names2 = list(map(crypt.decryptName, names2))
-        names2 = [x.encode('utf-8') for x in names2]
+        names2 = [x.encode("utf-8") for x in names2]
         names2 = sorted(names2)
-        otherName = bsets[1]['name']
+        otherName = bsets[1]["name"]
     else:
         names2 = sorted(os.listdir(path))
-        otherName = 'filesystem'
+        otherName = "filesystem"
 
-    missing = 'red' if args.color else 'white'
+    missing = "red" if args.color else "white"
 
     for i in names1:
         if i in names2:
-            logger.info('Diffing %s', os.path.join(path, i))
+            logger.info("Diffing %s", os.path.join(path, i))
             diffFile(os.path.join(path, i), regenerator, bsets, tardis, crypt, reducePath, True, now, then)
         else:
             termcolor.cprint(f"{os.path.join(path, i)} in {bsets[0]['name']}, not in {otherName}", missing)
@@ -205,21 +205,21 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
 
     try:
         # Process the first file
-        (info1, p1) = getFileInfo(path, bsets[0]['backupset'], tardis, crypt, reducePath)
+        (info1, p1) = getFileInfo(path, bsets[0]["backupset"], tardis, crypt, reducePath)
         if info1:
-            dir1 = info1['dir']
+            dir1 = info1["dir"]
         else:
-            logger.error("%s does not exist in backupset %s", path, bsets[0]['name'])
+            logger.error("%s does not exist in backupset %s", path, bsets[0]["name"])
             return
 
         if bsets[1] is not None:
             #  if bsets[1], then we're looking into two in the backup.
             #  Process the second one
-            (info2, p2) = getFileInfo(path, bsets[1]['backupset'], tardis, crypt, reducePath)
+            (info2, p2) = getFileInfo(path, bsets[1]["backupset"], tardis, crypt, reducePath)
             if info2:
-                dir2 = info1['dir']
+                dir2 = info1["dir"]
             else:
-                logger.error("%s does not exist in backupset %s", path, bsets[1]['name'])
+                logger.error("%s does not exist in backupset %s", path, bsets[1]["name"])
                 return
         else:
             dir2 = os.path.isdir(path)
@@ -233,23 +233,23 @@ def diffFile(fName, regenerator, bsets, tardis, crypt, reducePath, recurse, now,
             if args.recurse:
                 diffDir(path, regenerator, bsets, tardis, crypt, reducePath, now, then)
             return
-        logger.debug("Recovering %d %s", bsets[0]['backupset'], path)
-        f1 = regenerator.recoverChecksum(info1['checksum'])
+        logger.debug("Recovering %d %s", bsets[0]["backupset"], path)
+        f1 = regenerator.recoverChecksum(info1["checksum"])
         if not f1:
-            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]['name'], bsets[0]['backupset'])
+            logger.error("Could not open %s (%s) in backupset %s (%d)", path, p1, bsets[0]["name"], bsets[0]["backupset"])
             return
 
         if bsets[1] is not None:
-            logger.debug("Recovering %d %s", bsets[1]['backupset'], path)
-            f2 = regenerator.recoverChecksum(info2['checksum'])
+            logger.debug("Recovering %d %s", bsets[1]["backupset"], path)
+            f2 = regenerator.recoverChecksum(info2["checksum"])
             if not f2:
-                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]['name'], bsets[1]['backupset'])
+                logger.error("Could not open %s (%s) in backupset %s (%d)", path, p2, bsets[1]["name"], bsets[1]["backupset"])
                 return
         else:
             logger.debug("Opening %s", path)
             try:
                 f2 = open(path, "rb")
-            except IOError as e:
+            except OSError as e:
                 logger.error("Could not open %s: %s", path, str(e))
                 return
 
@@ -283,7 +283,7 @@ def main():
             bset = Util.getBackupSet(tardis, i)
             if bset:
                 logger.debug("Got backupset %s", str(bset))
-                logger.debug("backupset: %s", bset['backupset'])
+                logger.debug("backupset: %s", bset["backupset"])
                 bsets.append(bset)
             else:
                 sys.exit(1)
@@ -292,20 +292,20 @@ def main():
             bsets.append(None)
 
         r = Regenerator.Regenerator(cache, tardis, crypt)
-        then = time.asctime(time.localtime(float(bsets[0]['starttime']))) + '  (' + bsets[0]['name'] + ')'
+        then = time.asctime(time.localtime(float(bsets[0]["starttime"]))) + "  (" + bsets[0]["name"] + ")"
         if bsets[1]:
-            now = time.asctime(time.localtime(float(bsets[1]['starttime']))) + '  (' + bsets[1]['name'] + ')'
+            now = time.asctime(time.localtime(float(bsets[1]["starttime"]))) + "  (" + bsets[1]["name"] + ")"
         else:
-            now = time.asctime() + '  (filesystem)'
+            now = time.asctime() + "  (filesystem)"
 
         for f in args.files:
             if bsets[1] is None and os.path.isdir(f):
                 diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
             else:
-                (i0, _) = getFileInfo(os.path.abspath(f), bsets[0]['backupset'], tardis, crypt, args.reduce)
-                if i0 and i0['dir']:
-                    (i1, _) = getFileInfo(os.path.abspath(f), bsets[1]['backupset'], tardis, crypt, args.reduce)
-                    if i1 and i1['dir']:
+                (i0, _) = getFileInfo(os.path.abspath(f), bsets[0]["backupset"], tardis, crypt, args.reduce)
+                if i0 and i0["dir"]:
+                    (i1, _) = getFileInfo(os.path.abspath(f), bsets[1]["backupset"], tardis, crypt, args.reduce)
+                    if i1 and i1["dir"]:
                         diffDir(os.path.abspath(f), r, bsets, tardis, crypt, args.reduce, now, then, recurse=args.recurse)
                         continue
                 diffFile(f, r, bsets, tardis, crypt, args.reduce, args.recurse, now, then)
