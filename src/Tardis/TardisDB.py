@@ -147,9 +147,8 @@ _checksumInfoFields = dedent(
 _schemaVersion = 23
 
 def _splitpath(path):
-    """ Split a path into chunks, recursively. """
-    (head, tail) = os.path.split(path)
-    return _splitpath(head) + [tail] if head and head != path else [head or tail]
+    """ Split a path into chunks """"
+    return path.split(os.sep)
 
 def _fetchEm(cursor):
     while batch := cursor.fetchmany(10000):
@@ -170,7 +169,7 @@ class TardisDB:
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbfile)
-        self.dbfile = dbfile
+        self.dbfile = str(dbfile)
         self.chunksize = chunksize
         self.prevSet = prevSet
         self.allow_upgrade = allow_upgrade
@@ -463,7 +462,7 @@ class TardisDB:
 
         # Walk the path
         for name in _splitpath(path):
-            if name == "/":
+            if name in ["/", ""]:
                 continue
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
@@ -487,7 +486,7 @@ class TardisDB:
         parent = (0, 0)         # Root directory value
         info = None
         for name in _splitpath(path):
-            if name == "/":
+            if name in ["/", ""]:
                 continue
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
