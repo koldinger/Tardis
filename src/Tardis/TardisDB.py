@@ -40,6 +40,7 @@ import sys
 import time
 import uuid
 from binascii import hexlify, unhexlify
+from pathlib import Path
 from textwrap import dedent
 
 import srp
@@ -147,7 +148,7 @@ _checksumInfoFields = dedent(
 _schemaVersion = 23
 
 def _splitpath(path):
-    """ Split a path into chunks """"
+    """ Split a path into chunks """
     return path.split(os.sep)
 
 def _fetchEm(cursor):
@@ -1112,12 +1113,13 @@ class TardisDB:
             if backup:
                 # Attempt to save the keys away
                 backupName = self.dbfile + ".keys"
+                backupPath = Path(backupName)
                 r = Rotator.Rotator(rotations=0)
-                r.backup(backupName)
-                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode("utf8"), base64.b64encode(vkey).decode("utf8"))
+                r.backup(backupPath)
+                Util.saveKeys(backupPath, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode("utf8"), base64.b64encode(vkey).decode("utf8"))
             self.commit()
             if backup:
-                r.rotate(backupName)
+                r.rotate(backupPath)
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)
