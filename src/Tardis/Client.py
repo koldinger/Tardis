@@ -1547,15 +1547,8 @@ def sendDirEntry(dirInode, dirDev, files):
     sendMessage(message)
 
 def splitDirs(x):
-    root, rest = os.path.split(x)
-    if root and rest:
-        ret = splitDirs(root)
-        ret.append(rest)
-    elif root:
-        ret = [root] if root == "/" else splitDirs(root)
-    else:
-        ret = [rest]
-    return ret
+    # pathlib: x.Parts()
+    return x.split(os.sep)
 
 def createPrefixPath(root, path):
     """ Create common path directories.  Will be empty, except for path elements to the requested directories. """

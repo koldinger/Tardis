@@ -40,6 +40,7 @@ import sys
 import time
 import uuid
 from binascii import hexlify, unhexlify
+from pathlib import Path
 from textwrap import dedent
 
 import srp
@@ -147,9 +148,8 @@ _checksumInfoFields = dedent(
 _schemaVersion = 23
 
 def _splitpath(path):
-    """ Split a path into chunks, recursively. """
-    (head, tail) = os.path.split(path)
-    return _splitpath(head) + [tail] if head and head != path else [head or tail]
+    """ Split a path into chunks """
+    return path.split(os.sep)
 
 def _fetchEm(cursor):
     while batch := cursor.fetchmany(10000):
@@ -170,7 +170,7 @@ class TardisDB:
         """ Initialize the connection to a per-machine Tardis Database"""
         self.logger  = logging.getLogger("DB")
         self.logger.debug("Initializing connection to %s", dbfile)
-        self.dbfile = dbfile
+        self.dbfile = str(dbfile)
         self.chunksize = chunksize
         self.prevSet = prevSet
         self.allow_upgrade = allow_upgrade
@@ -463,7 +463,7 @@ class TardisDB:
 
         # Walk the path
         for name in _splitpath(path):
-            if name == "/":
+            if name in ["/", ""]:
                 continue
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
@@ -487,7 +487,7 @@ class TardisDB:
         parent = (0, 0)         # Root directory value
         info = None
         for name in _splitpath(path):
-            if name == "/":
+            if name in ["/", ""]:
                 continue
             info = self.getFileInfoByName(name, parent, backupset)
             if info:
@@ -1113,12 +1113,13 @@ class TardisDB:
             if backup:
                 # Attempt to save the keys away
                 backupName = self.dbfile + ".keys"
+                backupPath = Path(backupName)
                 r = Rotator.Rotator(rotations=0)
-                r.backup(backupName)
-                Util.saveKeys(backupName, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode("utf8"), base64.b64encode(vkey).decode("utf8"))
+                r.backup(backupPath)
+                Util.saveKeys(backupPath, self.clientId, filenameKey, contentKey, base64.b64encode(salt).decode("utf8"), base64.b64encode(vkey).decode("utf8"))
             self.commit()
             if backup:
-                r.rotate(backupName)
+                r.rotate(backupPath)
             return True
         except Exception as e:
             self.logger.error("Setkeys failed: %s", e)

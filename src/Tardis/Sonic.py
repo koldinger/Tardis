@@ -77,7 +77,7 @@ def parseDateTime(value):
     cal = parsedatetime.Calendar()
     dt, success = cal.parse(value)
     if not success:
-        raise argparse.ArgumentTypeError(f"Couldn"t find a valid date in "{value}"")
+        raise argparse.ArgumentTypeError(f"Couldn"t find a valid date in "{value}")
     return dt
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
@@ -314,7 +314,7 @@ def listBSets(db, crypt, cache):
                 duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"])))))
             else:
                 duration = ""
-            completed = Text("Comp", "green") if bset[""ompleted"] else Text("Incomp", "red")
+            completed = Text("Comp", "green") if bset["completed"] else Text("Incomp", "red")
             full      = "Full" if bset["full"] else "Delta"
             tags = [Text(_decryptName(tag, crypt)) for tag in db.getTags(bset["backupset"])]
             if bset["backupset"] == last["backupset"]:
