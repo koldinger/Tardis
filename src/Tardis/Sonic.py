@@ -77,7 +77,7 @@ def parseDateTime(value):
     cal = parsedatetime.Calendar()
     dt, success = cal.parse(value)
     if not success:
-        raise argparse.ArgumentTypeError(f"Couldn"t find a valid date in "{value}"")
+        raise argparse.ArgumentTypeError(f"Couldn't find a valid date in '{value}'")
     return dt
 
 def getDB(password, new=False, allowRemote=True, allowUpgrade=False, create=False):
@@ -314,7 +314,7 @@ def listBSets(db, crypt, cache):
                 duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"])))))
             else:
                 duration = ""
-            completed = Text("Comp", "green") if bset[""ompleted"] else Text("Incomp", "red")
+            completed = Text("Comp", "green") if bset["completed"] else Text("Incomp", "red")
             full      = "Full" if bset["full"] else "Delta"
             tags = [Text(_decryptName(tag, crypt)) for tag in db.getTags(bset["backupset"])]
             if bset["backupset"] == last["backupset"]:
@@ -654,8 +654,8 @@ def checkSanity(db, cache, crypt):
             k = tuple(sorted(i))
             groupings[k] += 1
 
-        print(f"{len(inCache)} files in the store which don"t have a matching DB entry")
-        print(f"{len(inDB)} files in the DB which don"t have a matching store entry")
+        print(f"{len(inCache)} files in the store which don't have a matching DB entry")
+        print(f"{len(inDB)} files in the DB which don't have a matching store entry")
 
 
         for (k, v) in groupings.items():
@@ -772,7 +772,7 @@ def parseArgs() -> argparse.Namespace:
     filesParser = argparse.ArgumentParser(add_help=False)
     filesParser.add_argument("--long", "-l",    dest="long", default=False, action=argparse.BooleanOptionalAction,           help="Long format")
     filesParser.add_argument("--fullpath", "-f",    dest="fullname", default=False, action=argparse.BooleanOptionalAction,   help="Print full path name in names")
-    filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren"t added here")
+    filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
     filesParser.add_argument("--dirs",          dest="dirs", default=False, action=argparse.BooleanOptionalAction,           help="Include directories in list")
     filesParser.add_argument("--status",        dest="status", default=False, action=argparse.BooleanOptionalAction,         help="Include status (new/delta) in list")
     filesParser.add_argument("--human", "-H",   dest="human", default=False, action=argparse.BooleanOptionalAction,          help="Print sizes in human readable form")
@@ -934,7 +934,7 @@ def main():
             case "chpass":
                 return changePassword(crypt)
 
-        # Fall through to here if it didn"t match any of the above.
+        # Fall through to here if it didn't match any of the above.
 
         upgrade = args.command == "upgrade"
 
