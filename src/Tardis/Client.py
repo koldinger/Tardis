@@ -1136,7 +1136,11 @@ def makeMetaMessage():
 statusBar: StatusBar.StatusBar | None = None
 
 def initProgressBar(scheduler):
-    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | {mode} ", stats, scheduler=scheduler)
+    # sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | {mode} ", stats, scheduler=scheduler)
+    sbar = ShortPathStatusBar(
+       "[green]{__elapsed__}[/green] | [green]Dirs[/green]: {dirs} | [green]Files[/green]: {files} | [bold blue]Full[/bold blue]: {new} | [bold blue]Delta[/bold blue]: {delta} | "
+       "[cyan]Data[/cyan]: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | [green]{mode}[/green] ",
+       stats, scheduler=scheduler)
     sbar.setValue("mode", "")
     sbar.createValues(["waiting", "sendQ", "recvQ"], 0)
     sbar.setTrailer("")
