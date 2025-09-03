@@ -1136,7 +1136,11 @@ def makeMetaMessage():
 statusBar: StatusBar.StatusBar | None = None
 
 def initProgressBar(scheduler):
-    sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | {mode} ", stats, scheduler=scheduler)
+    # sbar = ShortPathStatusBar("{__elapsed__} | Dirs: {dirs} | Files: {files} | Full: {new} | Delta: {delta} | Data: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | {mode} ", stats, scheduler=scheduler)
+    sbar = ShortPathStatusBar(
+       "[green]{__elapsed__}[/green] | [green]Dirs[/green]: {dirs} | [green]Files[/green]: {files} | [bold blue]Full[/bold blue]: {new} | [bold blue]Delta[/bold blue]: {delta} | "
+       "[cyan]Data[/cyan]: {dataSent!B} | {waiting} ({sendQ}, {recvQ}) | [green]{mode}[/green] ",
+       stats, scheduler=scheduler)
     sbar.setValue("mode", "")
     sbar.createValues(["waiting", "sendQ", "recvQ"], 0)
     sbar.setTrailer("")
@@ -1543,15 +1547,8 @@ def sendDirEntry(dirInode, dirDev, files):
     sendMessage(message)
 
 def splitDirs(x):
-    root, rest = os.path.split(x)
-    if root and rest:
-        ret = splitDirs(root)
-        ret.append(rest)
-    elif root:
-        ret = [root] if root == "/" else splitDirs(root)
-    else:
-        ret = [rest]
-    return ret
+    # pathlib: x.Parts()
+    return x.split(os.sep)
 
 def createPrefixPath(root, path):
     """ Create common path directories.  Will be empty, except for path elements to the requested directories. """

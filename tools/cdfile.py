@@ -32,13 +32,15 @@
 import argparse
 import logging
 
+from pathlib import Path
+
 from Tardis import CacheDir, Util
 
 logging.basicConfig()
 
 
 parser = argparse.ArgumentParser(description="Generate file paths in a cache dir directory", add_help=True)
-parser.add_argument('--base', '-b', dest='base', default='.', help='Base CacheDir directory')
+parser.add_argument('--base', '-b', dest='base', default='.', type=Path, help='Base CacheDir directory')
 parser.add_argument('--dir', '-d', dest='dir', default=False, action='store_true', help='Directory portion only')
 parser.add_argument('files', nargs='*', help='List of files to print')
 

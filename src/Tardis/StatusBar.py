@@ -37,11 +37,16 @@ import string
 import threading
 import time
 
+from rich import print as rprint
+from rich.text import Text
+
 _ansiClearEol = "\x1b[K"
 _startOfLine = "\r"
 _hideCursor = "\x1b[?25l"
 _showCursor = "\x1b[?25h"
 _statusBars = []
+
+_resetLine = _ansiClearEol + _startOfLine + _hideCursor
 
 def fmtSize(num, base=1024, suffixes=None):
     """
@@ -195,17 +200,17 @@ class StatusBar:
         Normally only handled by running thread, not meant to be called externally
         """
         try:
-            output = self.formatter.format(self.base, **{**self.live, **self.values}).encode("utf8", "backslashreplace").decode("utf8")
+            output = Text.from_markup(self.formatter.format(self.base, **{**self.live, **self.values}).encode("utf8", "backslashreplace").decode("utf8"))
             if self.trailer:
-                output += self.processTrailer(self.width - 2 - len(output), self.trailer)
+                output += Text.from_markup(self.processTrailer(self.width - 2 - len(output), self.trailer))
         except KeyError as k:
             output = "Error generating status message: Missing value for " + str(k)
         except Exception as e:
             output = "Error generating status message: " + str(e)
 
         try:
-            print(output + _ansiClearEol + _startOfLine + _hideCursor, end="", flush=True)
-        except:
+            rprint(output, end=_resetLine, flush=True)
+        except Exception as e:
             print(_ansiClearEol + _startOfLine, end="", flush=True)
 
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
@@ -214,17 +219,15 @@ class StatusBar:
         """
         Clear the status bar area.   Should only be used after a stop
         """
-        print(_showCursor + _startOfLine + _ansiClearEol, end="")
+        print("", end=_showCursor + _startOfLine + _ansiClearEol)
 
 
 if __name__ == "__main__":
     import os
     import os.path
 
-    from termcolor import colored
-
     myargs = {"files": 0, "delta": 100}
-    template = f"{colored('{__elapsed__}', 'yellow')} :: {colored('Files', 'cyan')}: {{files}} {colored('Delta', 'cyan')}: {{delta}}: {{amount!B}} {{mode}} --> "
+    template = "[yellow]{__elapsed__}[/yellow] :: [cyan]Files[/cyan]: {files} [cyan]Delta[/cyan] {delta}: {amount!B} {mode} --> "
     print(template)
     sb = StatusBar(template, myargs)
     sb.setValue("mode", "Testing")
@@ -235,7 +238,7 @@ if __name__ == "__main__":
         myargs["files"] = i
         myargs["delta"] = int(i / 3)
         sb.setTrailer(os.path.realpath(files[i % len(files)]))
-        sb.setValue("mode", colored("Running", "red") if i % 2 == 0 else colored("Walking", "green"))
+        sb.setValue("mode", "[red] Running [/red]" if i % 2 == 0 else "[green] Walking[/green]")
         sb.setValue("amount", i * 1000000)
     sb.shutdown()
     print("All done")
