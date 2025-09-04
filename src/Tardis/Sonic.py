@@ -45,7 +45,8 @@ from pathlib import Path
 
 import parsedatetime
 import srp
-from rich.table import Table
+from rich.columns import Columns
+from rich.table import Table, Column
 from rich.text import Text
 from rich import print
 
@@ -54,8 +55,8 @@ import Tardis
 from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
                TardisDB, Util)
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 class NoSuchBackupError(Exception):
     def __init__(self, message, value):
@@ -310,13 +311,13 @@ def listBSets(db, crypt, cache):
 
         for bset in sets:
             t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"])))
-            if bset["endtime"] is not None:
-                duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"])))))
-            else:
-                duration = ""
+            duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"]))))) if bset["endtime"] is not None else ""
+
             completed = Text("Comp", "green") if bset["completed"] else Text("Incomp", "red")
+            name = Text(bset["name"], "green") if bset["completed"] else Text(bset["name"], "yellow")
             full      = "Full" if bset["full"] else "Delta"
             tags = [Text(_decryptName(tag, crypt)) for tag in db.getTags(bset["backupset"])]
+
             if bset["backupset"] == last["backupset"]:
                 status = c.join(tags + [current])
             elif bset["errormsg"]:
@@ -327,7 +328,7 @@ def listBSets(db, crypt, cache):
             locked = "*" if bset["locked"] else " "
 
             #print(f.format(bset["name"], bset["backupset"], completed, bset["priority"], full, t, duration, bset["filesfull"] or 0, bset["filesdelta"] or 0, size, locked, status))
-            table.add_row(bset["name"], str(bset["backupset"]), completed, str(bset["priority"]), full, t, duration, str(bset["filesfull"] or 0), str(bset["filesdelta"] or 0), size, str(locked), status)
+            table.add_row(name, str(bset["backupset"]), completed, str(bset["priority"]), full, t, duration, str(bset["filesfull"] or 0), str(bset["filesdelta"] or 0), size, str(locked), status)
 
             if args.longinfo:
                 commandLine = getCommandLine(bset["commandline"], regenerator)
@@ -386,92 +387,137 @@ def humanify(size: int) -> str:
         size = ""
     return str(size)
 
+def makeHeaderLong(db, crypt):
+    userLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getUsers()))
+    groupLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getGroups()))
+    ic(userLen, groupLen)
+    headers = []
+    if args.status:
+        headers.append(Column("Status", width=8))
+    headers.extend([
+        "Mode",
+        Column("Owner", width=userLen),
+        Column("Group", width=groupLen),
+        Column("Size", justify="right", min_width=6),
+        Column("Time", min_width=8)
+    ])
+
+    if args.cksums:
+        headers.append(Column("Checksum", min_width=16))
+    if args.chnlen:
+        headers.append(Column("Chain", width=3))
+    if args.inode:
+        #print(f" {inode:16}", end=' ')
+        headers.append(Column("Inode", min_width=5))
+    if args.type:
+        #print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
+        headers.append("Type")
+    if args.size:
+        #size = humanify(fInfo.get('disksize', 0))
+        #print(f' {size:9} ', end=' ')
+        headers.append(Column("Size", justify="right", min_width=6))
+    headers.append("Name")
+    return headers
+
+def makeRowLong(fInfo, name, crypt):
+    row = []
+    mode  = stat.filemode(fInfo['mode'])
+    group = crypt.decryptName(fInfo['groupname'])
+    owner = crypt.decryptName(fInfo['username'])
+    mtime = Util.formatTime(fInfo['mtime'])
+    size = humanify(fInfo['size'])
+    inode = fInfo['inode']
+
+    if args.status:
+        status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
+        row.append(status)
+
+    #print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
+    row.extend([mode, owner, group, str(size), mtime])
+    if args.cksums:
+        row.append(fInfo["checksum"] or "")
+    if args.chnlen:
+        row.append(str(fInfo['chainlength'] or 0))
+    if args.inode:
+        #print(f" {inode:16}", end=' ')
+        row.append(str(inode))
+    if args.type:
+        #print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
+        row.append("Delta" if fInfo.get("chainlength", 0) else "Full")
+    if args.size:
+        #size = humanify(fInfo.get('disksize', 0))
+        #print(f' {size:9} ', end=' ')
+        row.append(humanify(fInfo.get('disksize', 0)))
+    row.append(Text(name, "green"))
+    return row
+
+def makeRowDetails(fInfo, name):
+    if args.status:
+        status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
+    else:
+        status = ''
+
+    row = [status]
+    if args.cksums:
+        row.append(fInfo.get('checksum', ''))
+    if args.chnlen:
+        row.append(str(fInfo.get('chainlength', 0)))
+    if args.inode:
+        row.append(f"({fInfo.get('device', '')}, {fInfo.get('inode', '')})")
+    if args.type:
+        row.append('Delta' if fInfo['chainlength'] else 'Full')
+    if args.size:
+        row.append(humanify(fInfo['size']))
+    row.append(name)
+    return row
+
 def listFiles(db, crypt):
     info = getBackupSet(db, args.backup, args.date, defaultCurrent=True)
     bset = info["backupset"]
 
-    lastDir = "/"
-    lastDirInode = (-1, -1)
-
     files = db.getNewFiles(bset, args.previous)
+    if not args.dirs:
+        files = filter(lambda x: not bool(x['dir']), files)
 
-    details = args.cksums or args.chnlen or args.inode or args.type or args.size
-
+    details = args.status or args.cksums or args.chnlen or args.inode or args.type or args.size
 
     # Partiion the files into directories
     dirs = collections.defaultdict(list)
     for f in files:
         dirs[(f["parent"], f["parentdev"])].append(f)
 
+    if args.long or details:
+        headers = makeHeaderLong(db, crypt)
+
     for d in sorted(dirs.keys(), key=lambda x: _path(db, crypt, bset, x)):
         path = _path(db, crypt, bset, d)
         files = dirs[d]
 
         # Build table
-        tab = Table(box=None, show_header=False)
-        for fInfo in sorted(files, key=lambda x: _decryptName(x["name"], crypt)):
-            name = _decryptName(fInfo["name"], crypt)
+        if args.long or details:
+            tab = Table(*headers, box=None, show_header=False)
+            for fInfo in sorted(files, key=lambda x: _decryptName(x["name"], crypt)):
+                name = _decryptName(fInfo["name"], crypt)
 
-            if not args.dirs and fInfo["dir"]:
-                continue
+                if args.fullname:
+                    name = os.path.join(path, name)
 
-            if args.status:
-                status = Text("[New]", "green") if fInfo["chainlength"] == 0 else Text("[Delta] ", "yellow")
-            else:
-                status = ""
-
-            if args.fullname:
-                name = os.path.join(path, name)
-
-            if args.long:
-                mode  = stat.filemode(fInfo["mode"])
-                group = crypt.decryptName(fInfo["groupname"])
-                owner = crypt.decryptName(fInfo["username"])
-                mtime = Util.formatTime(fInfo["mtime"])
-                size = humanify(fInfo["size"])
-                inode = fInfo["inode"]
-                #print(f" {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}", end=" ")
-                row = [status, mode, owner, group, str(size), mtime]
-                if args.cksums:
-                    row.append(fInfo["checksum"] or "")
-                if args.chnlen:
-                    row.append(str(fInfo["chainlength"] or 0))
-                if args.inode:
-                    #print(f" {inode:16}", end=" ")
-                    row.append(str(inode))
-                if args.type:
-                    #print(f" {"Delta" if fInfo.get("chainlength", 0) else "Full":5} " , end=" ")
-                    row.append("Delta" if fInfo.get("chainlength", 0) else "Full")
-                if args.size:
-                    #size = humanify(fInfo.get("disksize", 0))
-                    #print(f" {size:9} ", end=" ")
-                    row.append(humanify(fInfo.get("disksize", 0)))
-                row.append(Text(name, "green"))
-            else:
-                row = [status]
-                if args.cksums:
-                    #print(f" {fInfo["checksum"] or "":32s}", end=" ")
-                    row.append(fInfo.get("checksum", ""))
-                if args.chnlen:
-                    # print(f" {fInfo["chainlength"] or 0:>4}", end=" ")
-                    row.append(str(fInfo.get("chainlength", 0)))
-                if args.inode:
-                    #print(" %-16s " % (f"({fInfo["device"] or ""}, {fInfo["inode"] or ""})"), end=" ")
-                    row.append(f"({fInfo.get("device", "")}, {fInfo.get("inode", "")})")
-                if args.type:
-                    # print(f" {"Delta" if fInfo["chainlength"] else "Full":5s}", end=" ")
-                    row.append("Delta" if fInfo["chainlength"] else "Full")
-                if args.size:
-                    #size = humanify(fInfo["disksize"])
-                    #print(f" {size:9} ", end=" ")
-                    row.append(humanify(fInfo["size"]))
-                row.append(name)
-            tab.add_row(*row)
-        # Print the table if it"s not empty
-        if tab.rows:
-            # Print the direcotry payth
-            print(Text(path, "bright_blue"), ":")
-            print(tab)
+                if args.long:
+                    row = makeRowLong(fInfo, name, crypt)
+                else:
+                    row = makeRowDetails(fInfo, name)
+                tab.add_row(*row)
+            # Print the table if it's not empty
+            if tab.rows:
+                # Print the direcotry payth
+                print(Text(path, "bright_blue") + ":")
+                print(tab)
+        else:
+            names = [_decryptName(i["name"], crypt) for i in files]
+            if names:
+                tab = Columns(map(Text, sorted(names)), padding=(0,2), pad_edge=True)
+                print(Text(path, "bright_blue") + ":")
+                print(tab)
 
 
 def _bsetInfo(db, crypt, info):
@@ -774,7 +820,7 @@ def parseArgs() -> argparse.Namespace:
     filesParser.add_argument("--fullpath", "-f",    dest="fullname", default=False, action=argparse.BooleanOptionalAction,   help="Print full path name in names")
     filesParser.add_argument("--previous",      dest="previous", default=False, action=argparse.BooleanOptionalAction,       help="Include files that first appear in the set, but weren't added here")
     filesParser.add_argument("--dirs",          dest="dirs", default=False, action=argparse.BooleanOptionalAction,           help="Include directories in list")
-    filesParser.add_argument("--status",        dest="status", default=False, action=argparse.BooleanOptionalAction,         help="Include status (new/delta) in list")
+    filesParser.add_argument("--status", "-S",  dest="status", default=False, action=argparse.BooleanOptionalAction,         help="Include status (new/delta) in list")
     filesParser.add_argument("--human", "-H",   dest="human", default=False, action=argparse.BooleanOptionalAction,          help="Print sizes in human readable form")
     filesParser.add_argument("--checksums", "-c", dest="cksums", default=False, action=argparse.BooleanOptionalAction,       help="Print checksums")
     filesParser.add_argument("--chainlen", "-L", dest="chnlen", default=False, action=argparse.BooleanOptionalAction,        help="Print chainlengths")
