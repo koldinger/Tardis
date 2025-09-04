@@ -70,6 +70,7 @@ import magic
 import parsedatetime
 import pid
 import srp
+from termcolor import colored
 
 import Tardis
 
@@ -78,8 +79,8 @@ from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
                ThreadedScheduler, Util, librsync, log)
 import contextlib
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 # ic.disable()
 
 faulthandler.register(signal.SIGUSR1)
@@ -1732,8 +1733,8 @@ def startBackup(client, url, hasPassword):
     else:
         (f, c) = (None, None)
 
-    if args.stats or args.report != 'none':
-        logger.log(log.STATS, f"Name: {backupName} Repository: {url}")
+    if args.stats or args.report != "none":
+        logger.log(log.STATS, f"{colored('Name:', 'green')} {backupName} {colored('Repository', 'green')}: {url}")
 
     trackOutstanding = True
 
@@ -2031,17 +2032,19 @@ def setupLogging(logfiles, verbosity, logExceptions):
     return logger
 
 def printStats(starttime, endtime):
+    grn = lambda x: colored(x, "green")
+
     connstats = conn.getStats()
 
     duration = endtime - starttime
     duration = datetime.timedelta(duration.days, duration.seconds, duration.seconds - (duration.seconds % 100000))          # Truncate the microseconds
 
-    logger.log(log.STATS, f"Runtime:          {duration}")
-    logger.log(log.STATS, f"Backed Up:        Dirs: {stats['dirs']:,}  Files: {stats['files']:,}  Links: {stats['links']:,}  Total Size: {Util.fmtSize(stats['backed'])}")
-    logger.log(log.STATS, f"Files Sent:       Full: {stats['new']:,}  Deltas: {stats['delta']:,}")
-    logger.log(log.STATS, f"Data Sent:        Sent: {Util.fmtSize(stats['dataSent'])}   Backed: {Util.fmtSize(stats['dataBacked'])}")
-    logger.log(log.STATS, f"Messages:         Sent: {connstats['messagesSent']:,} ({Util.fmtSize(connstats['bytesSent'])}) Received: {connstats['messagesRecvd']:,} ({Util.fmtSize(connstats['bytesRecvd'])})")
-    logger.log(log.STATS, f"Data Sent:        {Util.fmtSize(stats['dataSent'])}")
+    logger.log(log.STATS, f"{grn('Runtime')}:          {duration}")
+    logger.log(log.STATS, f"{grn('Backed Up')}:        Dirs: {stats['dirs']:,}  Files: {stats['files']:,}  Links: {stats['links']:,}  Total Size: {Util.fmtSize(stats['backed'])}")
+    logger.log(log.STATS, f"{grn('Files Sent')}:       Full: {stats['new']:,}  Deltas: {stats['delta']:,}")
+    logger.log(log.STATS, f"{grn('Data Sent')}:        Sent: {Util.fmtSize(stats['dataSent'])}   Backed: {Util.fmtSize(stats['dataBacked'])}")
+    logger.log(log.STATS, f"{grn('Messages')}:         Sent: {connstats['messagesSent']:,} ({Util.fmtSize(connstats['bytesSent'])}) Received: {connstats['messagesRecvd']:,} ({Util.fmtSize(connstats['bytesRecvd'])})")
+    logger.log(log.STATS, f"{grn('Data Sent')}:        {Util.fmtSize(stats['dataSent'])}")
 
     if (stats["denied"] or stats["gone"]):
         logger.log(log.STATS, f"Files Not Sent:   Disappeared: {stats['gone']:,}  Permission Denied: {stats['denied']:,}")
@@ -2056,18 +2059,24 @@ def printReport(repFormat):
     deltas   = 0
     dataSize = 0
     logger.log(log.STATS, "")
+    grn = lambda x: colored(x, "green")
+    ylw = lambda x: colored(x, "yellow")
+    red = lambda x: colored(x, "red")
+    cyn = lambda x: colored(x, "cyan")
+    ic(len(grn('a')), len(red('a')), len(ylw('a')))
+    ic(grn('a'), red('a'), ylw('a'))
     if report:
         length = functools.reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
 
         filefmts = ["", "KB", "MB", "GB", "TB", "PB"]
         dirfmts  = ["B", "KB", "MB", "GB", "TB", "PB"]
-        fmt  = f"%-{length + 4}s %-6s %-10s %-10s"
-        fmt2 = f"  %-{length}s   %-6s %-10s %-10s"
-        fmt3 = f"  %-{length}s   %-6s %-10s"
+        fmt  = f"%-{length + 12}s %-6s %-10s %-10s"
+        fmt2 = f"  %-{length+4}s   %-6s %-10s %-10s"
+        fmt3 = f"  %-{length+4}s   %-6s %-10s"
         fmt4 = "  %d files (%d full, %d delta, %s)"
 
-        logger.log(log.STATS, fmt, "FileName", "Type", "Size", "Sig Size")
+        logger.log(log.STATS, fmt, grn("FileName"), grn("Type"), grn("Size"), grn("Sig Size"))
         logger.log(log.STATS, fmt, "-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)
         for i in sorted(report):
             r = report[i]
@@ -2079,7 +2088,7 @@ def printReport(repFormat):
                 numFiles = 0
                 deltas = 0
                 dataSize = 0
-                logger.log(log.STATS, "%s:", Util.shortPath(d, 80))
+                logger.log(log.STATS, "%s:", cyn(Util.shortPath(d, 80)))
                 lastDir = d
 
             numFiles += 1
