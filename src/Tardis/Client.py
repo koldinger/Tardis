@@ -79,8 +79,8 @@ from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
                ThreadedScheduler, Util, librsync, log)
 import contextlib
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 # ic.disable()
 
 faulthandler.register(signal.SIGUSR1)
@@ -2063,8 +2063,6 @@ def printReport(repFormat):
     ylw = lambda x: colored(x, "yellow")
     red = lambda x: colored(x, "red")
     cyn = lambda x: colored(x, "cyan")
-    ic(len(grn('a')), len(red('a')), len(ylw('a')))
-    ic(grn('a'), red('a'), ylw('a'))
     if report:
         length = functools.reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
