@@ -32,6 +32,7 @@ import argparse
 import base64
 import concurrent.futures
 import configparser
+import contextlib
 import datetime
 import errno
 import faulthandler
@@ -64,6 +65,7 @@ import uuid
 from binascii import hexlify
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from enum import StrEnum, auto
 
 import colorlog
 import magic
@@ -74,13 +76,12 @@ from termcolor import colored
 
 import Tardis
 
-from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
-               MultiFormatter, Protocol, StatusBar, TardisCrypto,
+from . import (Backend, CompressedBuffer, Connection, Defaults, Messages,
+               Messenger, MultiFormatter, Protocol, StatusBar, TardisCrypto,
                ThreadedScheduler, Util, librsync, log)
-import contextlib
 
 # from icecream import ic
-# ic.configureOutput(includeContext=True)
+#ic.configureOutput(includeContext=True)
 # ic.disable()
 
 faulthandler.register(signal.SIGUSR1)
@@ -100,9 +101,17 @@ local_config = Defaults.getDefault("TARDIS_LOCAL_CONFIG")
 if not os.path.exists(local_config):
     local_config = Defaults.getDefault("TARDIS_DAEMON_CONFIG")
 
-basePathChoices = ["none", "common", "full"]
 msgCompressionChoices = ["none", "zlib", "zlib-stream", "snappy"]
-reportChoices = ["all", "dirs", "none"]
+
+class BasePathChoices(StrEnum):
+    NONE = auto()
+    COMMON = auto()
+    FULL = auto()
+
+class ReportChoices(StrEnum):
+    ALL = auto()
+    DIRS = auto()
+    NONE = auto()
 
 configDefaults = {
     # Remote Socket connectionk params
@@ -121,7 +130,7 @@ configDefaults = {
     "CompressMin":          str(4096),
     "NoCompressFile":       Defaults.getDefault("TARDIS_NOCOMPRESS"),
     "NoCompress":           "",
-    "CompressMsgs":         "none",
+    "CompressMsgs":         None,
     "Purge":                str(False),
     "IgnoreCVS":            str(False),
     "SkipCaches":           str(False),
@@ -1747,12 +1756,12 @@ def checkConfig(c, t):
     elif comp not in CompressedBuffer.getCompressors():
         c.set(t, "CompressData", "none")
 
-    if c.get(t, "BasePath") not in basePathChoices:
-        c.set(t, "BasePath", basePathChoices[0])
-    if c.get(t, "CompressMsgs") not in msgCompressionChoices:
-        c.set(t, "CompressMsgs", msgCompressionChoices[0])
-    if c.get(t, "Report") not in reportChoices:
-        c.set(t, "Report", reportChoices[0])
+    if c.get(t, "BasePath") not in BasePathChoices:
+        c.set(t, "BasePath", BasePathChoices.FULL)
+    if c.get(t, "CompressMsgs") not in Messages.MsgCompAlgs:
+        c.set(t, "CompressMsgs", None)
+    if c.get(t, "Report") not in ReportChoices:
+        c.set(t, "Report", ReportChoices.all)
 
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
@@ -1839,7 +1848,7 @@ def processCommandLine():
     parser.add_argument("--maxdepth", "-d",     dest="maxdepth", type=int, default=0,                                   help="Maximum depth to search")
     parser.add_argument("--crossdevice",        dest="crossdev", action=argparse.BooleanOptionalAction, default=False,               help="Cross devices. " + _def)
 
-    parser.add_argument("--basepath",           dest="basepath", default="full", choices=["none", "common", "full"],    help="Select style of root path handling " + _def)
+    parser.add_argument("--basepath",           dest="basepath", default=BasePathChoices.FULL, choices=BasePathChoices,    help="Select style of root path handling " + _def)
 
     excgrp = parser.add_argument_group("Exclusion options", "Options for handling exclusions")
     excgrp.add_argument("--cvs-ignore",                 dest="cvs", default=c.getboolean(t, "IgnoreCVS"), action=argparse.BooleanOptionalAction,
@@ -1893,10 +1902,13 @@ def processCommandLine():
     prggroup.add_argument("--keep-hours",       dest="purgehours", type=int, default=None,          help="Number of hours to keep")
     prggroup.add_argument("--keep-time",        dest="purgetime", default=None,                     help="Purge before this time.  Format: YYYY/MM/DD:hh:mm")
 
-    parser.add_argument("--stats",              action=argparse.BooleanOptionalAction, dest="stats", default=c.getboolean(t, "Stats") or interactive,
+    repgroup = parser.add_argument_group("Reporting Options")
+    repgroup.add_argument("--stats",              action=argparse.BooleanOptionalAction, dest="stats", default=c.getboolean(t, "Stats") or interactive,
                         help="Print stats about the transfer.  Default=%(default)s")
-    parser.add_argument("--report",             dest="report", choices=["all", "dirs", "none"], const="all", default=c.get(t, "Report"), nargs="?",
+    repgroup.add_argument("--report",             dest="report", type=ReportChoices, choices=ReportChoices, const=ReportChoices.ALL, default=c.get(t, "Report"), nargs="?",
                         help="Print a report on all files or directories transferred.  " + _def)
+    repgroup.add_argument("--limitdirs",        dest="limitdirs", type=str, nargs="*", default=[], help="Only list summaries of dirs that match replimitdirs.  " + _def)
+
     parser.add_argument("--verbose", "-v",      dest="verbose", action="count", default=c.getint(t, "Verbosity"),
                         help="Increase the verbosity")
     parser.add_argument("--progress",           dest="progress", default=interactive, action=argparse.BooleanOptionalAction,               help="Show a one-line progress bar.")
@@ -2052,7 +2064,7 @@ def printStats(starttime, endtime):
     # logger.log(log.STATS, f"Wait Times:   {datetime.timedelta(0, waittime)!s}")
     # logger.log(log.STATS, f"Sending Time: {datetime.timedelta(0, Util._transmissionTime)!s}")
 
-def printReport(repFormat):
+def printReport(repFormat, limitdirs):
     lastDir = None
     length = 0
     numFiles = 0
@@ -2063,6 +2075,7 @@ def printReport(repFormat):
     ylw = lambda x: colored(x, "yellow")
     red = lambda x: colored(x, "red")
     cyn = lambda x: colored(x, "cyan")
+
     if report:
         length = functools.reduce(max, list(map(len, [x[1] for x in report])))
         length = max(length, 50)
@@ -2076,9 +2089,10 @@ def printReport(repFormat):
 
         logger.log(log.STATS, fmt, grn("FileName"), grn("Type"), grn("Size"), grn("Sig Size"))
         logger.log(log.STATS, fmt, "-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)
-        for i in sorted(report):
-            r = report[i]
-            (d, f) = i
+
+        for k, v in sorted(report.items()):
+            (d, f) = k
+            r = report[k]
 
             if d != lastDir:
                 if repFormat == "dirs" and lastDir:
@@ -2086,7 +2100,7 @@ def printReport(repFormat):
                 numFiles = 0
                 deltas = 0
                 dataSize = 0
-                logger.log(log.STATS, "%s:", cyn(Util.shortPath(d, 80)))
+                logger.log(log.STATS, "%s:", Util.shortPath(d, 80))
                 lastDir = d
 
             numFiles += 1
@@ -2094,13 +2108,20 @@ def printReport(repFormat):
                 deltas += 1
             dataSize += r["size"]
 
-            if repFormat == "all" or repFormat is True:
+            if repFormat == ReportChoices.ALL or repFormat is True:
                 if r["sigsize"]:
                     logger.log(log.STATS, fmt2, f, r["type"], Util.fmtSize(r["size"], suffixes=filefmts), Util.fmtSize(r["sigsize"], suffixes=filefmts))
                 else:
                     logger.log(log.STATS, fmt3, f, r["type"], Util.fmtSize(r["size"], suffixes=filefmts))
-        if repFormat == "dirs" and lastDir:
+
+        if repFormat == ReportChoices.DIRS and lastDir:
             logger.log(log.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
+
+            if repFormat == ReportChoices.ALL:
+                if v["sigsize"]:
+                    logger.log(log.STATS, fmt2, f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts))
+                else:
+                    logger.log(log.STATS, fmt3, f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts))
     else:
         logger.log(log.STATS, "No files backed up")
 
@@ -2353,8 +2374,8 @@ def main():
     # Print stats and files report
     if args.stats:
         printStats(starttime, endtime)
-    if args.report != "none":
-        printReport(args.report)
+    if args.report != ReportChoices.NONE:
+        printReport(args.report, args.limitdirs)
 
     print()
 
