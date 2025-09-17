@@ -80,10 +80,6 @@ from . import (Backend, CompressedBuffer, Connection, Defaults, Messages,
                Messenger, MultiFormatter, Protocol, StatusBar, TardisCrypto,
                ThreadedScheduler, Util, librsync, log)
 
-# from icecream import ic
-#ic.configureOutput(includeContext=True)
-# ic.disable()
-
 faulthandler.register(signal.SIGUSR1)
 
 features = Tardis.check_features()
@@ -146,6 +142,7 @@ configDefaults = {
     "Verbosity":            str(0),
     "Stats":                str(False),
     "Report":               "none",
+    "SummarizeDirs":        "",
     "BasePath":             "",
     "Directories":          ".",
     # Backend parameters
@@ -617,7 +614,7 @@ def processSig(inode, sigfile, oldchksum):
                     }
                     # Convert to Unicode, and normalize any characters, so lengths become reasonable
                     name = unicodedata.normalize("NFD", pathname)
-                    report[os.path.split(name)] = x
+                    report[os.path.split(os.path.abspath(name))] = x
                 logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, sent, sigsize)
             else:
                 if logger.isEnabledFor(logging.DEBUG):
@@ -730,7 +727,7 @@ def sendContent(inode, reportType):
                     "size": size,
                     "sigsize": sigsize,
                 }
-                report[os.path.split(pathname)] = repInfo
+                report[os.path.split(os.path.abspath(pathname))] = repInfo
             logger.debug("Completed %s -- Checksum %s -- %s bytes, %s signature bytes", Util.shortPath(pathname), checksum, size, sigsize)
     except KeyError as e:
         logger.error("SendContent: No inode entry for %s", inode)
@@ -1761,7 +1758,7 @@ def checkConfig(c, t):
     if c.get(t, "CompressMsgs") not in Messages.MsgCompAlgs:
         c.set(t, "CompressMsgs", None)
     if c.get(t, "Report") not in ReportChoices:
-        c.set(t, "Report", ReportChoices.all)
+        c.set(t, "Report", ReportChoices.ALL)
 
 def processCommandLine():
     """ Do the command line thing.  Register arguments.  Parse it. """
@@ -1907,7 +1904,7 @@ def processCommandLine():
                         help="Print stats about the transfer.  Default=%(default)s")
     repgroup.add_argument("--report",             dest="report", type=ReportChoices, choices=ReportChoices, const=ReportChoices.ALL, default=c.get(t, "Report"), nargs="?",
                         help="Print a report on all files or directories transferred.  " + _def)
-    repgroup.add_argument("--limitdirs",        dest="limitdirs", type=str, nargs="*", default=[], help="Only list summaries of dirs that match replimitdirs.  " + _def)
+    repgroup.add_argument("--sumdirs",        dest="sumdirs", type=str, nargs="*", default=c.get(t, "SummarizeDirs", fallback="").split(" "), help="Only list summaries of dirs that match" + _def)
 
     parser.add_argument("--verbose", "-v",      dest="verbose", action="count", default=c.getint(t, "Verbosity"),
                         help="Increase the verbosity")
@@ -1916,7 +1913,6 @@ def processCommandLine():
     parser.add_argument("--exclusive",          dest="exclusive", action=argparse.BooleanOptionalAction, default=True, help="Make sure the client only runs one job at a time. " + _def)
     parser.add_argument("--exceptions", "-E",   dest="exceptions", default=False, action=argparse.BooleanOptionalAction, help="Log full exception details")
     parser.add_argument("--logtime",            dest="logtime", default=False, action=argparse.BooleanOptionalAction, help="Log time")
-    parser.add_argument("--logcolor",           dest="logcolor", default=True, action=argparse.BooleanOptionalAction, help="Generate colored logs")
 
     parser.add_argument("--version",            action="version", version="%(prog)s " + Tardis.__versionstring__, help="Show the version")
     parser.add_argument("--help", "-h",         action="help")
@@ -1998,13 +1994,16 @@ def setupLogging(logfiles, verbosity, logExceptions):
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
 
+    files = []
     # Generate a handler and formatter for each logfile
     for logfile in logfiles:
         if isinstance(logfile, str):
             if logfile == ":STDERR:":
+                files.append(sys.stderr)
                 isatty = os.isatty(sys.stderr.fileno())
                 handler = Util.ClearingStreamHandler(sys.stderr)
             elif logfile == ":STDOUT:":
+                files.append(sys.stdout)
                 isatty = os.isatty(sys.stdout.fileno())
                 handler = Util.ClearingStreamHandler(sys.stdout)
             else:
@@ -2013,16 +2012,18 @@ def setupLogging(logfiles, verbosity, logExceptions):
                 # Check that the file is writable
                 try:
                     handler = logging.handlers.WatchedFileHandler(path)
+                    files.append(open(path, "w"))
                 except:
                     logging.basicConfig()
                     logger = logging.getLogger()
                     logger.critical(f"Unable to log to {path}")
                     raise
         else:
+            files.append(logfile)
             isatty = os.isatty(logfile.fileno())
             handler = Util.ClearingStreamHandler(logfile)
 
-        if isatty and args.logcolor:
+        if isatty:
             formatter = MultiFormatter.MultiFormatter(default_fmt=cDefaultFmt, formats=formats, baseclass=colorlog.ColoredFormatter, log_colors=colors, reset=True)
         else:
             formatter = MultiFormatter.MultiFormatter(default_fmt=defaultFmt, formats=formats)
@@ -2040,8 +2041,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
     # Mark if we're logging exceptions
     exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
 
-    # Create a special logger just for messages
-    return logger
+    return files
 
 def printStats(starttime, endtime):
     grn = lambda x: colored(x, "green")
@@ -2065,12 +2065,12 @@ def printStats(starttime, endtime):
     # logger.log(log.STATS, f"Sending Time: {datetime.timedelta(0, Util._transmissionTime)!s}")
 
 def printReport(repFormat, limitdirs):
-    lastDir = None
     length = 0
     numFiles = 0
     deltas   = 0
     dataSize = 0
     logger.log(log.STATS, "")
+
     grn = lambda x: colored(x, "green")
     ylw = lambda x: colored(x, "yellow")
     red = lambda x: colored(x, "red")
@@ -2087,41 +2087,52 @@ def printReport(repFormat, limitdirs):
         fmt3 = f"  %-{length+4}s   %-6s %-10s"
         fmt4 = "  %d files (%d full, %d delta, %s)"
 
-        logger.log(log.STATS, fmt, grn("FileName"), grn("Type"), grn("Size"), grn("Sig Size"))
-        logger.log(log.STATS, fmt, "-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)
+        logger.log(log.STATS, grn(fmt % ("FileName", "Type", "Size", "Sig Size")))
+        logger.log(log.STATS, grn(fmt % ("-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)))
+
+        # Set limiting true if we're in DIRS mode, or if in all mode, we'll handle it dynamically.
+        sumDir = None
+        lastDir = None
 
         for k, v in sorted(report.items()):
             (d, f) = k
-            r = report[k]
+            d = os.path.abspath(d)
 
-            if d != lastDir:
-                if repFormat == "dirs" and lastDir:
-                    logger.log(log.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
-                numFiles = 0
-                deltas = 0
-                dataSize = 0
-                logger.log(log.STATS, "%s:", Util.shortPath(d, 80))
+            if sumDir:
+                endSection = not os.path.samefile(os.path.commonpath([sumDir, d]), sumDir)
+            else:
+                endSection = d != lastDir
+
+            if endSection:
+                if (repFormat == ReportChoices.DIRS and lastDir) or sumDir:
+                    logger.log(log.STATS, fmt4 % (numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts)))
+                numFiles = deltas = dataSize = 0
+                logger.log(log.STATS, "%s" % cyn(Util.shortPath(d, 80)))
                 lastDir = d
+                sumDir = None
+
+            if not sumDir and os.path.basename(d) in limitdirs:
+                sumDir = d
 
             numFiles += 1
-            if r["type"] == "Delta":
+            if v["type"] == "Delta":
                 deltas += 1
-            dataSize += r["size"]
+            dataSize += v["size"]
 
-            if repFormat == ReportChoices.ALL or repFormat is True:
-                if r["sigsize"]:
-                    logger.log(log.STATS, fmt2, f, r["type"], Util.fmtSize(r["size"], suffixes=filefmts), Util.fmtSize(r["sigsize"], suffixes=filefmts))
-                else:
-                    logger.log(log.STATS, fmt3, f, r["type"], Util.fmtSize(r["size"], suffixes=filefmts))
-
-        if repFormat == ReportChoices.DIRS and lastDir:
-            logger.log(log.STATS, fmt4, numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts))
-
-            if repFormat == ReportChoices.ALL:
+            if not sumDir and (repFormat == ReportChoices.ALL or repFormat is True):
                 if v["sigsize"]:
-                    logger.log(log.STATS, fmt2, f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts))
+                    logger.log(log.STATS, fmt2 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts)))
                 else:
-                    logger.log(log.STATS, fmt3, f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts))
+                    logger.log(log.STATS, fmt3 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts)))
+
+        if repFormat == ReportChoices.DIRS and lastDir or sumDir:
+            logger.log(log.STATS, fmt4 % (numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts)))
+
+            if repFormat == ReportChoices.ALL and not sumDir:
+                if v["sigsize"]:
+                    logger.log(log.STATS, fmt2 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts)))
+                else:
+                    print(fmt3 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts)))
     else:
         logger.log(log.STATS, "No files backed up")
 
@@ -2293,7 +2304,7 @@ def main():
     # Set up logging
     verbosity = args.verbose or 0
     try:
-        setupLogging(args.logfiles, verbosity, args.exceptions)
+        logfiles = setupLogging(args.logfiles, verbosity, args.exceptions)
         # determine mode:
     except Exception as e:
         logger.critical(e)
@@ -2375,7 +2386,7 @@ def main():
     if args.stats:
         printStats(starttime, endtime)
     if args.report != ReportChoices.NONE:
-        printReport(args.report, args.limitdirs)
+        printReport(args.report, args.sumdirs)
 
     print()
 
