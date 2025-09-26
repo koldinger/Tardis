@@ -31,10 +31,17 @@
 import base64
 import json
 import zlib
+from enum import StrEnum, auto
 
 import msgpack
 import snappy
 
+
+class MsgCompAlgs(StrEnum):
+    none = auto()
+    zlib = auto()
+    zlibs = auto()
+    snappy = auto()
 
 class Messages:
     def __init__(self, socket, stats=None):
@@ -80,20 +87,20 @@ class zlibCompressor:
         return message
 
 class BinMessages(Messages):
-    def __init__(self, socket, stats=None, compress="none"):
+    def __init__(self, socket, stats=None, compress=MsgCompAlgs.none):
         Messages.__init__(self, socket, stats)
         match compress:
-            case "zlib-stream":
+            case MsgCompAlgs.zlibs:
                 self.compressor = zlibCompressor()
                 self.compress = self.compressor.compress
                 self.decompress = self.compressor.decompress
-            case "zlib":
+            case MsgCompAlgs.zlib:
                 self.compress = zlib.compress
                 self.decompress = zlib.decompress
-            case "snappy":
+            case MsgCompAlgs.snappy:
                 self.compress = snappy.compress
                 self.decompress = snappy.decompress
-            case "none":
+            case MsgCompAlgs.none | None:
                 self.compress = None
                 self.decompress = None
             case _:
