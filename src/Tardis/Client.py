@@ -32,6 +32,7 @@ import argparse
 import base64
 import concurrent.futures
 import configparser
+import contextlib
 import datetime
 import errno
 import faulthandler
@@ -76,7 +77,6 @@ import Tardis
 from . import (Backend, CompressedBuffer, Connection, Defaults, Messenger,
                MultiFormatter, Protocol, StatusBar, TardisCrypto,
                ThreadedScheduler, Util, librsync, log)
-import contextlib
 
 # from icecream import ic
 # ic.configureOutput(includeContext=True)
