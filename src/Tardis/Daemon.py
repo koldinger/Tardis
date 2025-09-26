@@ -48,6 +48,9 @@ import traceback
 import uuid
 from datetime import datetime
 
+from rich.traceback import install
+install(show_locals=True)
+
 import colorlog
 import daemonize
 
@@ -124,7 +127,7 @@ class ProtocolError(Exception):
     pass
 
 class TardisServerHandler(socketserver.BaseRequestHandler):
-    def __init__(self):
+    def setup(self):
         self.full = False
         self.statNewFiles = 0
         self.statUpdFiles = 0
@@ -139,7 +142,6 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         self.forceFull = False
         self.lastCompleted = None
 
-    def setup(self):
         if self.client_address:
             self.address = self.client_address[0]
         else:
