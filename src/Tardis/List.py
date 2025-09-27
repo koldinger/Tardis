@@ -45,8 +45,8 @@ import Tardis
 
 from . import Config, Defaults, TardisDB, Util
 
-#from icecream import ic
-#ic.configureOutput(includeContext=True)
+from icecream import ic
+ic.configureOutput(includeContext=True)
 
 columns = None
 columnfmt = None
@@ -269,7 +269,7 @@ The actual work of printing the data.
 """
 def printit(info, name, color, gone, crypt):
     global column
-    fsize = chnlen = inode = cksum = annotation = ""
+    fsize = dsksize = chnlen = inode = cksum = annotation = ""
     mode = group = owner = mtime = nlinks = ""
 
     if args.annotate and info is not None:
@@ -298,6 +298,11 @@ def printit(info, name, color, gone, crypt):
                 fsize = f"{Util.fmtSize(info['size'], suffixes=['','KB','MB','GB', 'TB', 'PB']):8}"
             else:
                 fsize = f"{int(info['size']):8}"
+        if args.deltasize and info.get("basis", None):
+            if args.human:
+                dsksize = f"{Util.fmtSize(info['disksize'], suffixes=['','KB','MB','GB', 'TB', 'PB']):8}"
+            else:
+                dsksize = f"{int(info['disksize']):8}"
 
         mode = stat.filemode(info["mode"])
         group = crypt.decryptName(info.get("groupname", ""))
@@ -319,6 +324,8 @@ def printit(info, name, color, gone, crypt):
             doprint(f"  {mode:9} {nlinks:3} {owner:8} {group:8} {size:8} {mtime:12} ", color=colors["details"])
             if args.size:
                 doprint(f" {fsize:8} ")
+            if args.deltasize:
+                doprint(f" {dsksize:8} ")
             if args.inode:
                 doprint(f" {inode:8} ")
             if args.cksums:
@@ -326,10 +333,12 @@ def printit(info, name, color, gone, crypt):
             if args.chnlen:
                 doprint(f" {chnlen:<3} ")
             doprint(f"{name}", color, eol=True)
-    elif args.cksums or args.chnlen or args.inode or args.size:
+    elif args.cksums or args.chnlen or args.inode or args.size or args.deltasize:
         doprint(columnfmt % name, color)
         if args.size:
             doprint(f" {fsize}", color=colors["details"])
+        if args.deltasize:
+            doprint(f" {dsksize}", color=colors["details"])
         if args.inode:
             doprint(f" {inode}", color=colors["details"])
         if args.cksums:
@@ -664,6 +673,7 @@ def processArgs():
     parser.add_argument("--reverse", "-r",  dest="reverse",     default=False, action="store_true",         help="Reverse the sort order")
     parser.add_argument("--annotate", "-f", dest="annotate",    default=False, action="store_true",         help="Annotate files based on type.")
     parser.add_argument("--size", "-s",     dest="size",        default=False, action="store_true",         help="Show file sizes")
+    parser.add_argument("--dsize", "-D",    dest="deltasize",   default=False, action="store_true",         help="Show delta sizes")
     parser.add_argument("--human", "-H",    dest="human",       default=False, action="store_true",         help="Format sizes for easy reading")
     parser.add_argument("--dirinfo", "-d",  dest="dirinfo",     default=False, action="store_true",         help="List directories, but not their contents")
     parser.add_argument("--checksums", "-c",dest="cksums",      default=False, action="store_true",         help="Print checksums.")
