@@ -45,18 +45,18 @@ from pathlib import Path
 
 import parsedatetime
 import srp
-from rich.columns import Columns
-from rich.table import Table, Column
-from rich.text import Text
 from rich import print
+from rich.columns import Columns
+from rich.table import Column, Table
+from rich.text import Text
 
 import Tardis
 
 from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
                TardisDB, Util)
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+##from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 class NoSuchBackupError(Exception):
     def __init__(self, message, value):
@@ -390,7 +390,6 @@ def humanify(size: int) -> str:
 def makeHeaderLong(db, crypt):
     userLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getUsers()))
     groupLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getGroups()))
-    ic(userLen, groupLen)
     headers = []
     if args.status:
         headers.append(Column("Status", width=8))
