@@ -45,8 +45,8 @@ import Tardis
 
 from . import Config, Defaults, TardisDB, Util
 
-from icecream import ic
-ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
 
 columns = None
 columnfmt = None
