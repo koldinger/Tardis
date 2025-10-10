@@ -1998,16 +1998,13 @@ def setupLogging(logfiles, verbosity, logExceptions):
     if len(logfiles) == 0:
         logfiles.append(sys.stderr)
 
-    files = []
     # Generate a handler and formatter for each logfile
     for logfile in logfiles:
         if isinstance(logfile, str):
             if logfile == ":STDERR:":
-                files.append(sys.stderr)
                 isatty = os.isatty(sys.stderr.fileno())
                 handler = Util.ClearingStreamHandler(sys.stderr)
             elif logfile == ":STDOUT:":
-                files.append(sys.stdout)
                 isatty = os.isatty(sys.stdout.fileno())
                 handler = Util.ClearingStreamHandler(sys.stdout)
             else:
@@ -2016,14 +2013,12 @@ def setupLogging(logfiles, verbosity, logExceptions):
                 # Check that the file is writable
                 try:
                     handler = logging.handlers.WatchedFileHandler(path)
-                    files.append(open(path, "w"))
                 except:
                     logging.basicConfig()
                     logger = logging.getLogger()
                     logger.critical(f"Unable to log to {path}")
                     raise
         else:
-            files.append(logfile)
             isatty = os.isatty(logfile.fileno())
             handler = Util.ClearingStreamHandler(logfile)
 
@@ -2044,8 +2039,6 @@ def setupLogging(logfiles, verbosity, logExceptions):
 
     # Mark if we're logging exceptions
     exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
-
-    return files
 
 def printStats(starttime, endtime):
     grn = lambda x: colored(x, "green")
@@ -2308,7 +2301,7 @@ def main():
     # Set up logging
     verbosity = args.verbose or 0
     try:
-        logfiles = setupLogging(args.logfiles, verbosity, args.exceptions)
+        setupLogging(args.logfiles, verbosity, args.exceptions)
         # determine mode:
     except Exception as e:
         logger.critical(e)
