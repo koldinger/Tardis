@@ -16,3 +16,10 @@ repos:
     hooks:
     - id: isort
       name: isort (python)
+-   repo: local
+    hooks:
+    - id: debug-statements-thirdparty
+      name: Third Party Debug
+      language: system
+      entry: ./hooks/debug-statements-thirdparty-hook.py
+      types: [python]
