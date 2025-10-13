@@ -64,7 +64,7 @@ import urllib.parse
 import uuid
 from binascii import hexlify
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum, auto
 
 import colorlog
@@ -95,13 +95,11 @@ if support_xattr:
 if support_acl:
     import posix1e
 
-globalExcludeFile   = Defaults.getDefault("TARDIS_GLOBAL_EXCLUDES")
+global_exclude_file   = Defaults.getDefault("TARDIS_GLOBAL_EXCLUDES")
 
 local_config = Defaults.getDefault("TARDIS_LOCAL_CONFIG")
 if not os.path.exists(local_config):
     local_config = Defaults.getDefault("TARDIS_DAEMON_CONFIG")
-
-msgCompressionChoices = ["none", "zlib", "zlib-stream", "snappy"]
 
 class BasePathChoices(StrEnum):
     NONE = auto()
@@ -113,7 +111,7 @@ class ReportChoices(StrEnum):
     DIRS = auto()
     NONE = auto()
 
-configDefaults = {
+config_defaults = {
     # Remote Socket connectionk params
     "Repository":           Defaults.getDefault("TARDIS_REPO"),
     "Force":                str(False),
@@ -170,17 +168,17 @@ configDefaults = {
     "RequirePassword":      str(False),
 }
 
-excludeDirs         = []
+exclude_dirs         = []
 
 encoding            = None
 
 systemencoding      = sys.getfilesystemencoding()
 
 
-purgePriority       = None
-purgeTime           = None
+purge_priority      = None
+purge_time          = None
 
-excludeFile         = ""
+exclude_file        = ""
 cvsExcludes         = ["RCS", "SCCS", "CVS", "CVS.adm", "RCSLOG", "cvslog.*", "tags", "TAGS", ".make.state", ".nse_depinfo",
                        "*~", "#*", ".#*", ",*", "_$*", "*$", "*.old", "*.bak", "*.BAK", "*.orig", "*.rej", ".del-*", "*.a",
                        "*.olb", "*.o", "*.obj", "*.so", "*.exe", "*.Z", "*.elc", "*.ln", "core", ".*.swp", ".*.swo",
@@ -191,23 +189,23 @@ conn:       Connection.ProtocolConnection
 messenger:  Messenger.Messenger
 args:       argparse.Namespace
 
-directoryQueue      = deque()
+dir_queue           = deque()
 
-cloneDirs           = []
-cloneContents       = {}
+clone_dirs          = []
+clone_contents      = {}
 # A cache of metadata.  Since many files can have the same metadata, we check that
 # that we haven't sent it yet.
-metaCache           = {}
+meta_cache          = {}
 # When we encounter new metadata, keep it here until we flush it to the server.
 newmeta             = []
 
-noCompTypes         = []
+nocompress_types         = []
 
 crypt: TardisCrypto.CryptoScheme
 logger: logging.Logger
-exceptionLogger: Util.ExceptionLogger
+exc_logger: Util.ExceptionLogger
 
-srpUsr              = None
+srp_user            = None
 
 lastTimestamp       = None
 
@@ -224,19 +222,16 @@ stats = { "dirs": 0, "files": 0, "links": 0, "backed": 0, "dataSent": 0, "dataBa
 
 report = {}
 
+@dataclass
 class InodeEntry:
-    """
-    Dataclass to hold inodes, so we can determine which files they correspond to
-    """
-    def __init__(self):
-        self.paths = []
-        self.numEntries = 0
-        self.finfo = None
+    """ Dataclass to hold inodes, so we can determine to which files they correspond. """
+
+    paths: list[str] = field(default_factory=list)
+    numEntries: int = 0
+    finfo: dict = None
 
 class InodeDB:
-    """
-    Database of inodes that we currently care about.
-    """
+    """ Database of inodes that we currently care about. """
 
     def __init__(self):
         self.db = defaultdict(InodeEntry)
@@ -276,9 +271,8 @@ def getInodeDBName(inode):
     return "Unknown"
 
 class CustomArgumentParser(argparse.ArgumentParser):
-    """
-    A custom argument parser to nicely handle argument files, and strip out any blank lines or commented lines
-    """
+    """ A custom argument parser to nicely handle argument files, and strip out any blank lines or commented lines. """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -291,26 +285,19 @@ class CustomArgumentParser(argparse.ArgumentParser):
             yield arg
 
 class ShortPathStatusBar(StatusBar.StatusBar):
-    """
-    Extend the status bar class so that it shorten's pathnames into a pathname field
-    """
+    """ Extend the status bar class so that it shorten's pathnames into a pathname field. """
+
     def processTrailer(self, length, string):
         return Util.shortPath(string, length)
 
 class ProtocolError(Exception):
-    """
-    Communications protocol error
-    """
+    """ Communications protocol error. """
 
 class AuthenticationFailed(Exception):
-    """
-    Authentication failure
-    """
+    """ Authentication failure. """
 
 class InitFailedException(Exception):
-    """
-    Initialization error
-    """
+    """ Initialization error. """
 
 class ExitRecursionException(Exception):
     def __init__(self, rootException):
@@ -352,14 +339,14 @@ def findMountPoint(path):
     return os.sep
 
 
-_deviceCache = {}
+_device_cache = {}
 def virtualDev(device, path):
     try:
-        return _deviceCache[device]
+        return _device_cache[device]
     except KeyError:
         mp = findMountPoint(path)
         digest = Util.hashPath(mp)
-        _deviceCache[device] = digest
+        _device_cache[device] = digest
         return digest
 
 def fs_encode(val) -> bytes:
@@ -375,10 +362,10 @@ def checkMessage(message, expected):
         raise ProtocolError(f"Expected {expected} message, received {message['message']}")
 
 def filelist(dirname, excludes, skipfile):
-    """ List the files in a directory, except those that match something in a set of patterns """
+    """ List the files in a directory, except those that match something in a set of patterns. """
     if excludes:
-        excludeObj = compileExcludes(excludes)
-        files = itertools.filterfalse(lambda x: excludeObj.match(x.path), os.scandir(dirname))
+        exclude_pat = compileExcludes(excludes)
+        files = itertools.filterfalse(lambda x: exclude_pat.match(x.path), os.scandir(dirname))
     else:
         files = os.scandir(dirname)
 
@@ -388,12 +375,12 @@ def filelist(dirname, excludes, skipfile):
             continue
         yield f
 
-def msgInfo(resp=None):
-    if resp is None:
-        resp = currentResponse
-    respId = resp["respid"]
-    respType = resp["message"]
-    return (respId, respType)
+def msgInfo(response: dict|None=None):
+    if response is None:
+        response = currentResponse
+    response_id = response["respid"]
+    response_type = response["message"]
+    return (response_id, response_type)
 
 pool = concurrent.futures.ThreadPoolExecutor()
 
@@ -421,21 +408,21 @@ def genChecksum(inode):
                     # files.append({ "inode": inode, "checksum": checksum })
             except OSError as e:
                 logger.error("Unable to generate checksum for %s: %s", pathname, str(e))
-                exceptionLogger.log(e)
+                exc_logger.log(e)
                 # TODO: Add an error response?
     except KeyError as e:
-        (rId, rType) = msgInfo()
-        logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s)", str(inode), rId, rType)
-        exceptionLogger.log(e)
+        (response_id, response_type) = msgInfo()
+        logger.error("Unable to process checksum for %s, not found in inodeDB (%s, %s)", str(inode), response_id, response_type)
+        exc_logger.log(e)
     except FileNotFoundError as e:
         logger.error("Unable to stat %s.  File not found", pathname)
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         # TODO: Add an error response?
 
     return inode, checksum
 
 def processChecksums(inodes):
-    """ Generate checksums for requested checksum files """
+    """ Generate checksums for requested checksum files and send a CKS message. """
     files = []
     jobs = pool.map(genChecksum, inodes)
     for job in jobs:
@@ -509,7 +496,7 @@ def processDelta(inode, cksum):
         sendMessage(message)
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", str(inode))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
 def handleSig(response):
     inode = tuple(response["inode"])
@@ -570,12 +557,12 @@ def processSig(inode, sigfile, oldchksum):
             except librsync.LibrsyncError as e:
                 logger.error("Unable able to generate delta stuffs for %s: %s", pathname, str(e))
                 logger.error("Cksum: %s -- size %s", oldchksum, sigfile.tell())
-                exceptionLogger.log(e)
+                exc_logger.log(e)
                 sendContent(inode, "Full")
                 return
             except Exception as e:
                 logger.warning("Unable to process signature.  Sending full file: %s: %s", pathname, str(e))
-                exceptionLogger.log(e)
+                exc_logger.log(e)
                 sendContent(inode, "Full")
                 return
             finally:
@@ -629,11 +616,10 @@ def processSig(inode, sigfile, oldchksum):
     except KeyError as e:
         logger.error("ProcessDelta: No inode entry for %s", inode)
         logger.debug(repr(traceback.format_stack()))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
 def sendContent(inode, reportType):
     """ Send the content of a file.  Compress and encrypt, as specified by the options. """
-
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("SendContent: %s %s %s", inode, reportType, getInodeDBName(inode))
     try:
@@ -684,10 +670,10 @@ def sendContent(inode, reportType):
             try:
                 compress = args.compress if (args.compress and (filesize > args.mincompsize)) else None
                 # Check if it's a file type we don't want to compress
-                if compress and noCompTypes:
+                if compress and nocompress_types:
                     mimeType = magic.from_buffer(data.read(128), mime=True)
                     data.seek(0)
-                    if mimeType in noCompTypes:
+                    if mimeType in nocompress_types:
                         logger.debug("Not compressing %s.  Type %s", pathname, mimeType)
                         compress = False
                 makeSig = crypt.encrypting() or args.signature
@@ -717,7 +703,7 @@ def sendContent(inode, reportType):
                                                     log=args.logmessages)
             except Exception as e:
                 logger.error("Caught exception during sending of data in %s: %s", pathname, e)
-                exceptionLogger.log(e)
+                exc_logger.log(e)
             finally:
                 if data:
                     data.close()
@@ -736,7 +722,7 @@ def sendContent(inode, reportType):
     except KeyError as e:
         logger.error("SendContent: No inode entry for %s", inode)
         logger.debug(repr(traceback.format_stack()))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
 def handleAckMeta(response):
     checkMessage(response, Protocol.Responses.ACKMETA)
@@ -750,7 +736,7 @@ def handleAckMeta(response):
     }
 
     for cks in content:
-        data = fs_encode(metaCache[cks])
+        data = fs_encode(meta_cache[cks])
         sz = len(data)
         logger.debug("Sending meta data chunk: %s -- %s", cks, data)
         compress = args.compress if (args.compress and (len(data) > args.mincompsize)) else None
@@ -773,7 +759,7 @@ def handleAckMeta(response):
         message["data"].append(chunk)
 
     for cks in done:
-        metaCache.pop(cks, None)
+        meta_cache.pop(cks, None)
 
     sendMessage(message)
 
@@ -840,7 +826,7 @@ def pushFiles():
             processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
-            exceptionLogger.log(e)
+            exc_logger.log(e)
 
     for i in [tuple(x) for x in allRefresh]:
         try:
@@ -849,7 +835,7 @@ def pushFiles():
             processed.append(i)
         except Exception as e:
             logger.error("Unable to backup %s: %s", str(i), str(e))
-            exceptionLogger.log(e)
+            exc_logger.log(e)
 
     logger.debug("Ready to send delta's for %d files: %s", len(allDelta), str(allDelta))
     for i, basis in [tuple(x) for x in allDelta]:
@@ -865,7 +851,7 @@ def pushFiles():
                 processDelta(inode, basis)
         except Exception as e:
             logger.error("Unable to backup %s: %s ", str(i), str(e))
-            exceptionLogger.log(e)
+            exc_logger.log(e)
 
     # clear it out
     for i in processed:
@@ -897,7 +883,7 @@ def addMeta(meta):
     m = crypt.getHash()
     m.update(bytes(meta, "utf8"))
     digest = m.hexdigest()
-    metaCache[digest] = meta
+    meta_cache[digest] = meta
     newmeta.append(digest)
     return digest
 
@@ -975,7 +961,7 @@ def getUserName(uid):
         name = pwd.getpwuid(uid).pw_name
     except KeyError as e:
         logger.warning("Unable to retrieve user name for UID %d", uid)
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         name = str(uid)
     return crypt.encryptName(name)
 
@@ -985,14 +971,15 @@ def getGroupName(gid):
         name = grp.getgrgid(gid).gr_name
     except KeyError as e:
         logger.warning("Unable to retrieve group name for GID %d", gid)
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         name = str(gid)
     return crypt.encryptName(name)
 
 def getDirContents(dirname, dirstat, excludes=None):
-    """ Read a directory, load any new exclusions, delete the excluded files, and return a list
-        of the files, a list of sub directories, and the new list of excluded patterns """
-
+    """
+    Read a directory, load any new exclusions, delete the excluded files, and return a list
+    of the files, a list of sub directories, and the new list of excluded patterns
+    """
     excludes = excludes or set()
     Util.accumulateStat(stats, "dirs")
     device = virtualDev(dirstat.st_dev, dirname)
@@ -1019,7 +1006,7 @@ def getDirContents(dirname, dirstat, excludes=None):
                         Util.accumulateStat(stats, "backed", fInfo["size"])
 
                     if stat.S_ISDIR(mode):
-                        if f.path in excludeDirs:
+                        if f.path in exclude_dirs:
                             logger.debug("%s excluded.  Skipping", f.path)
                             continue
                         subdirs.append(f.path)
@@ -1030,7 +1017,7 @@ def getDirContents(dirname, dirstat, excludes=None):
             except Exception as e:
                 # Is this necessary?  Fold into above?
                 logger.error("Error processing %s: %s", os.path.join(dirname, f), str(e))
-                exceptionLogger.log(e)
+                exc_logger.log(e)
     except OSError as e:
         logger.error("Error reading directory %s: %s", dir, str(e))
 
@@ -1048,12 +1035,12 @@ def handleAckClone(message):
     # Purge out what hasn't changed
     for i in done:
         inode = tuple(i)
-        if inode in cloneContents:
-            (path, files) = cloneContents[inode]
+        if inode in clone_contents:
+            (path, files) = clone_contents[inode]
             for f in files:
                 key = (f["inode"], f["dev"])
                 inodeDB.delete(key)
-            del cloneContents[inode]
+            del clone_contents[inode]
         else:
             logger.error("Unable to locate info for %s", inode)
         # And the directory.
@@ -1062,22 +1049,22 @@ def handleAckClone(message):
     # Process the directories that have changed
     for i in content:
         finfo = tuple(i)
-        if finfo in cloneContents:
-            (path, files) = cloneContents[finfo]
+        if finfo in clone_contents:
+            (path, files) = clone_contents[finfo]
             if logdirs:
                 logger.log(log.DIRS, "[R]: %s", Util.shortPath(path))
             sendDirChunks(path, path, finfo, files)
-            del cloneContents[finfo]
+            del clone_contents[finfo]
         else:
             logger.error("Unable to locate info for %s", str(finfo))
 
 def makeCloneMessage():
-    global cloneDirs
+    global clone_dirs
     message = {
         "message": Protocol.Commands.CLN,
-        "clones": cloneDirs,
+        "clones": clone_dirs,
     }
-    cloneDirs = []
+    clone_dirs = []
     return message
 
 def sendClones():
@@ -1085,8 +1072,8 @@ def sendClones():
     sendMessage(message)
 
 def flushClones():
-    if cloneDirs:
-        logger.debug("Flushing %d clones", len(cloneDirs))
+    if clone_dirs:
+        logger.debug("Flushing %d clones", len(clone_dirs))
         sendClones()
 
 def sendPurge():
@@ -1095,12 +1082,12 @@ def sendPurge():
         "message": Protocol.Commands.PRG,
     }
     relative = args.purgetime is not None
-    if purgePriority:
-        message["priority"] = purgePriority
+    if purge_priority:
+        message["priority"] = purge_priority
 
-    if purgeTime:
+    if purge_time:
         message.update({
-            "time": purgeTime,
+            "time": purge_time,
             "relative": relative,
         })
 
@@ -1184,7 +1171,7 @@ def processDirectory(path, top, depth=0, excludes=None):
         # Mark that we've processed it before attempting to determine if we actually should
         processedDirs.add(path)
 
-        if path in excludeDirs:
+        if path in exclude_dirs:
             logger.debug("%s excluded.  Skipping", path)
             return
 
@@ -1205,7 +1192,7 @@ def processDirectory(path, top, depth=0, excludes=None):
                         return
             except Exception as e:
                 logger.warning("Could not read %s.  Backing up directory %s", os.path.join(path, "CACHEDIR.TAG"), path)
-                exceptionLogger.log(e)
+                exc_logger.log(e)
 
         (files, subdirs, subexcludes) = getDirContents(path, s, excludes)
 
@@ -1260,15 +1247,15 @@ def processDirectory(path, top, depth=0, excludes=None):
             # Process the sub directories
             for subdir in sorted(subdirs):
                 dirJob = DirectoryJob(subdir, top, newdepth, subexcludes)
-                directoryQueue.appendleft(dirJob)
+                dir_queue.appendleft(dirJob)
     except OSError as e:
         logger.error("Error handling directory: %s: %s", path, str(e))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         raise ExitRecursionException(e) from e
     except Exception as e:
         # TODO: Clean this up
         logger.error("Error handling directory: %s: %s", path, str(e))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         raise ExitRecursionException(e) from e
 
 def processTopLevelDirs(rootdir, directories, excludes):
@@ -1287,15 +1274,15 @@ def processTopLevelDirs(rootdir, directories, excludes):
             sendDirEntry(0, 0, [f])
         # And run the directory
         dirJob = DirectoryJob(directory, root, args.maxdepth, excludes)
-        directoryQueue.append(dirJob)
+        dir_queue.append(dirJob)
 
 def runBackup():
     try:
-        while directoryQueue:
+        while dir_queue:
             while response := receiveMessage(wait=False):
                 handleResponse(response)
 
-            dirJob = directoryQueue.popleft()
+            dirJob = dir_queue.popleft()
             processDirectory(dirJob.subdir, dirJob.top, dirJob.newdepth, dirJob.subexcludes)
 
         while outstandingMessages:
@@ -1312,7 +1299,7 @@ def runBackup():
         logger.debug("Done with directory traversal")
     except Exception as e:
         logger.error(e)
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
 def cloneDir(inode, device, files, path, info=None):
     """ Send a clone message, containing the hash of the filenames, and the number of files """
@@ -1329,26 +1316,26 @@ def cloneDir(inode, device, files, path, info=None):
         "numfiles": s,
         "cksum": h,
     }
-    cloneDirs.append(message)
-    cloneContents[(inode, device)] = (path, files)
-    if len(cloneDirs) >= args.clones:
+    clone_dirs.append(message)
+    clone_contents[(inode, device)] = (path, files)
+    if len(clone_dirs) >= args.clones:
         flushClones()
 
 def setPurgeValues():
-    global purgeTime, purgePriority
+    global purge_time, purge_priority
     if args.purge:
-        purgePriority = args.priority
+        purge_priority = args.priority
         if args.purgeprior:
-            purgePriority = args.purgeprior
+            purge_priority = args.purgeprior
         if args.purgedays:
-            purgeTime = args.purgedays * 3600 * 24
+            purge_time = args.purgedays * 3600 * 24
         if args.purgehours:
-            purgeTime = args.purgehours * 3600
+            purge_time = args.purgehours * 3600
         if args.purgetime:
             cal = parsedatetime.Calendar()
             (then, success) = cal.parse(args.purgetime)
             if success:
-                purgeTime = time.mktime(then)
+                purge_time = time.mktime(then)
             else:
                 raise Exception(f"Could not parse --keep-time argument: {args.purgetime}")
 
@@ -1380,7 +1367,7 @@ def loadExcludeFile(name):
 def loadExcludes():
     globalExcludes = set()
     if not args.ignoreglobalexcludes:
-        globalExcludes = globalExcludes.union(loadExcludeFile(globalExcludeFile))
+        globalExcludes = globalExcludes.union(loadExcludeFile(global_exclude_file))
     if args.cvs:
         globalExcludes = globalExcludes.union(map(mkExcludePattern, cvsExcludes))
     if args.excludes:
@@ -1392,10 +1379,10 @@ def loadExcludes():
 
 def loadExcludedDirs():
     if args.excludedirs is not None:
-        excludeDirs.extend(list(map(Util.fullPath, args.excludedirs)))
+        exclude_dirs.extend(list(map(Util.fullPath, args.excludedirs)))
 
 def loadNoCompressTypes():
-    global noCompTypes
+    global nocompress_types
 
     # If no compression types are specified, load the list
     types = []
@@ -1409,8 +1396,8 @@ def loadNoCompressTypes():
             logger.error("Could not load nocompress types list from: %s", i)
             raise e
     types = types + args.nocompress
-    noCompTypes = set(types)
-    logger.debug("Types to ignore: %s", sorted(noCompTypes))
+    nocompress_types = set(types)
+    logger.debug("Types to ignore: %s", sorted(nocompress_types))
 
 def calculateDirectories() -> tuple[list, str | None]:
     # Calculate the base directories
@@ -1536,7 +1523,7 @@ def handleResponse(response, doPush=True):
         logger.error("Error handling response %s %s: %s", response.get("msgid"), response.get("message"), e)
         logger.exception("Exception: ", exc_info=e)
         logger.error(pprint.pformat(response, width=150, depth=5, compact=True))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
     # Clear the "outstandingMessage" marker for this job
     try:
@@ -1544,7 +1531,7 @@ def handleResponse(response, doPush=True):
         setOutstanding(outstandingMessages)
     except Exception as e:
         logger.error("Exception processing message (%s, %s): %s", response.get("respid", "Unknown"), response.get("message", "None"), str(e))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
 
 def sendDirEntry(dirInode, dirDev, files):
     # send a fake root directory
@@ -1584,11 +1571,10 @@ def createPrefixPath(root, path):
         current   = dirPath
 
 def setCrypto(client, password, version):
-    global srpUsr, crypt
-    srpUsr = srp.User(client, password)
+    global srp_user, crypt
+    srp_user = srp.User(client, password)
     crypt = TardisCrypto.getCrypto(version, password, client)
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
-    return password
 
 def doSendKeys(client, password):
     """ Set up cryptography system, and send the generated keys """
@@ -1612,7 +1598,7 @@ def doSrpAuthentication(client, password, response):
     try:
         setCrypto(client, password, response["cryptoScheme"])
 
-        srpUname, srpValueA = srpUsr.start_authentication()
+        srpUname, srpValueA = srp_user.start_authentication()
         logger.debug("Starting Authentication: %s, %s", srpUname, hexlify(srpValueA))
         message = {
             "message": Protocol.Commands.AUTH1,
@@ -1629,7 +1615,7 @@ def doSrpAuthentication(client, password, response):
 
         logger.debug("Received Challenge : %s, %s", hexlify(srpValueS), hexlify(srpValueB))
 
-        srpValueM = srpUsr.process_challenge(srpValueS, srpValueB)
+        srpValueM = srp_user.process_challenge(srpValueS, srpValueB)
 
         if srpValueM is None:
             raise AuthenticationFailed("Authentication Failed")
@@ -1647,14 +1633,14 @@ def doSrpAuthentication(client, password, response):
         if resp["status"] != "OK":
             raise Exception(resp["error"])
         srpHamk = base64.b64decode(resp["srpValueHAMK"])
-        srpUsr.verify_session(srpHamk)
+        srp_user.verify_session(srpHamk)
         return resp
     except KeyError as e:
         logger.error("Key not found %s", str(e))
         raise AuthenticationFailed("response incomplete")
 
 
-def startBackup(client, url, hasPassword):
+def startBackup(client, url, has_passwd):
     global lastTimestamp, crypt, trackOutstanding
     triedAuthentication = False
     crypt = None
@@ -1673,7 +1659,7 @@ def startBackup(client, url, hasPassword):
             "create"    : args.create,
             "tags"      : args.tags,
             "movetags"  : args.movetag,
-            "encrypted" : args.create and bool(hasPassword),
+            "encrypted" : args.create and bool(has_passwd),
     }
     if args.name:
         message["name"] = args.name
@@ -1788,7 +1774,7 @@ def processCommandLine():
     (args, remaining) = parser.parse_known_args()
 
     t = args.job
-    c = configparser.ConfigParser(configDefaults, allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
+    c = configparser.ConfigParser(config_defaults, allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
 
     if args.config:
         c.read(args.config)
@@ -1965,8 +1951,8 @@ def checkURL():
     logger.debug("Canonical URL: %s - %s", url, info)
     return url, client, info
 
-def setupLogging(logfiles, verbosity, logExceptions):
-    global logger, exceptionLogger
+def setupLogging(logfiles, verbosity, logExceptions, logtime):
+    global logger, exc_logger
 
     # Define a couple custom logging levels
 
@@ -1984,15 +1970,15 @@ def setupLogging(logfiles, verbosity, logExceptions):
         "DEBUG": "green",
     })
 
-    msgOnlyFmt = "%(message)s"
-    if args.logtime:
-        formats = { log.STATS: msgOnlyFmt }
-        defaultFmt = "%(asctime)s %(levelname)s: %(message)s"
-        cDefaultFmt = "%(asctime)s %(log_color)s%(levelname)s%(reset)s: %(message)s"
+    msg_only_fmt = "%(message)s"
+    if logtime:
+        formats = { log.STATS: msg_only_fmt }
+        default_fmt = "%(asctime)s %(levelname)s: %(message)s"
+        default_fmt_color = "%(asctime)s %(log_color)s%(levelname)s%(reset)s: %(message)s"
     else:
-        formats = { logging.INFO: msgOnlyFmt, log.STATS: msgOnlyFmt }
-        defaultFmt = "%(name)s %(levelname)s: %(message)s"
-        cDefaultFmt = "%(name)s %(log_color)s%(levelname)s%(reset)s: %(message)s"
+        formats = { logging.INFO: msg_only_fmt, log.STATS: msg_only_fmt }
+        default_fmt = "%(name)s %(levelname)s: %(message)s"
+        default_fmt_color = "%(name)s %(log_color)s%(levelname)s%(reset)s: %(message)s"
 
     # If no log file specified, log to stderr
     if len(logfiles) == 0:
@@ -2023,9 +2009,9 @@ def setupLogging(logfiles, verbosity, logExceptions):
             handler = Util.ClearingStreamHandler(logfile)
 
         if isatty:
-            formatter = MultiFormatter.MultiFormatter(default_fmt=cDefaultFmt, formats=formats, baseclass=colorlog.ColoredFormatter, log_colors=colors, reset=True)
+            formatter = MultiFormatter.MultiFormatter(default_fmt=default_fmt_color, formats=formats, baseclass=colorlog.ColoredFormatter, log_colors=colors, reset=True)
         else:
-            formatter = MultiFormatter.MultiFormatter(default_fmt=defaultFmt, formats=formats)
+            formatter = MultiFormatter.MultiFormatter(default_fmt=default_fmt, formats=formats)
 
         handler.setFormatter(formatter)
         logging.root.addHandler(handler)
@@ -2038,7 +2024,7 @@ def setupLogging(logfiles, verbosity, logExceptions):
     logging.root.setLevel(loglevel)
 
     # Mark if we're logging exceptions
-    exceptionLogger = Util.ExceptionLogger(logger, logExceptions, True)
+    exc_logger = Util.ExceptionLogger(logger, logExceptions, True)
 
 def printStats(starttime, endtime):
     grn = lambda x: colored(x, "green")
@@ -2063,14 +2049,12 @@ def printStats(starttime, endtime):
 
 def printReport(repFormat, limitdirs):
     length = 0
-    numFiles = 0
+    numfiles = 0
     deltas   = 0
-    dataSize = 0
+    datasize = 0
     logger.log(log.STATS, "")
 
     grn = lambda x: colored(x, "green")
-    ylw = lambda x: colored(x, "yellow")
-    red = lambda x: colored(x, "red")
     cyn = lambda x: colored(x, "cyan")
 
     if report:
@@ -2088,44 +2072,44 @@ def printReport(repFormat, limitdirs):
         logger.log(log.STATS, grn(fmt % ("-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)))
 
         # Set limiting true if we're in DIRS mode, or if in all mode, we'll handle it dynamically.
-        sumDir = None
-        lastDir = None
+        summary_dir = None
+        last_dir = None
 
         for k, v in sorted(report.items()):
             (d, f) = k
             d = os.path.abspath(d)
 
-            if sumDir:
-                endSection = not os.path.samefile(os.path.commonpath([sumDir, d]), sumDir)
+            if summary_dir:
+                endSection = not os.path.samefile(os.path.commonpath([summary_dir, d]), summary_dir)
             else:
-                endSection = d != lastDir
+                endSection = d != last_dir
 
             if endSection:
-                if (repFormat == ReportChoices.DIRS and lastDir) or sumDir:
-                    logger.log(log.STATS, fmt4 % (numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts)))
-                numFiles = deltas = dataSize = 0
+                if (repFormat == ReportChoices.DIRS and last_dir) or summary_dir:
+                    logger.log(log.STATS, fmt4 % (numfiles, numfiles - deltas, deltas, Util.fmtSize(datasize, suffixes=dirfmts)))
+                numfiles = deltas = datasize = 0
                 logger.log(log.STATS, "%s" % cyn(Util.shortPath(d, 80)))
-                lastDir = d
-                sumDir = None
+                last_dir = d
+                summary_dir = None
 
-            if not sumDir and os.path.basename(d) in limitdirs:
-                sumDir = d
+            if not summary_dir and os.path.basename(d) in limitdirs:
+                summary_dir = d
 
-            numFiles += 1
+            numfiles += 1
             if v["type"] == "Delta":
                 deltas += 1
-            dataSize += v["size"]
+            datasize += v["size"]
 
-            if not sumDir and (repFormat == ReportChoices.ALL or repFormat is True):
+            if not summary_dir and (repFormat == ReportChoices.ALL or repFormat is True):
                 if v["sigsize"]:
                     logger.log(log.STATS, fmt2 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts)))
                 else:
                     logger.log(log.STATS, fmt3 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts)))
 
-        if repFormat == ReportChoices.DIRS and lastDir or sumDir:
-            logger.log(log.STATS, fmt4 % (numFiles, numFiles - deltas, deltas, Util.fmtSize(dataSize, suffixes=dirfmts)))
+        if (repFormat == ReportChoices.DIRS and last_dir) or summary_dir:
+            logger.log(log.STATS, fmt4 % (numfiles, numfiles - deltas, deltas, Util.fmtSize(datasize, suffixes=dirfmts)))
 
-            if repFormat == ReportChoices.ALL and not sumDir:
+            if repFormat == ReportChoices.ALL and not summary_dir:
                 if v["sigsize"]:
                     logger.log(log.STATS, fmt2 % (f, v["type"], Util.fmtSize(v["size"], suffixes=filefmts), Util.fmtSize(v["sigsize"], suffixes=filefmts)))
                 else:
@@ -2137,16 +2121,16 @@ def printReport(repFormat, limitdirs):
 def lockRun(location: str):
     # Create our own pidfile path.  We do this in /tmp rather than /var/run as tardis may not be run by
     # the superuser (ie, can't write to /var/run)
-    lockName = "tardis_" + hashlib.md5(location.encode()).hexdigest()
-    pidfile = pid.PidFile(piddir=tempfile.gettempdir(), pidname=lockName)
+    pidname = "tardis_" + hashlib.md5(location.encode()).hexdigest()
+    pidfile = pid.PidFile(piddir=tempfile.gettempdir(), pidname=pidname)
 
     try:
         pidfile.create()
     except pid.PidFileError as e:
-        exceptionLogger.log(e)
-        raise Exception("Tardis already running: {e}") from e
+        exc_logger.log(e)
+        raise Exception("Tardis already running") from e
     except Exception as e:
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         raise
     return pidfile
 
@@ -2190,12 +2174,12 @@ def mkBackendConfig(config, jobname, dbLoc):
 def runBackend(config, jobname, urlinfo):
     conn = Connection.DirectConnection(args.timeout)
     repository = os.path.split(urlinfo.path)
-    beConfig = mkBackendConfig(config, jobname, repository[0])
+    backend_config = mkBackendConfig(config, jobname, repository[0])
 
-    backend = Backend.Backend(conn.serverMessages, beConfig, logSession=False)
-    backendThread = threading.Thread(target=backend.runBackup, name="Backend")
-    backendThread.start()
-    return conn, backend, backendThread
+    backend = Backend.Backend(conn.serverMessages, backend_config, logSession=False)
+    backend_thread = threading.Thread(target=backend.runBackup, name="Backend")
+    backend_thread.start()
+    return conn, backend, backend_thread
 
 def initialize():
     setProgress("Initializing...")
@@ -2220,7 +2204,7 @@ def initialize():
             password = Util.getPassword(args.password, args.passwordfile, args.passwordprog, prompt=f"Password for {client}: ", confirm=args.create)
         except Exception as e:
             logger.critical("Could not retrieve password.: %s", str(e))
-            exceptionLogger.log(e)
+            exc_logger.log(e)
             sys.exit(1)
 
         # If no compression types are specified, load the list
@@ -2230,7 +2214,7 @@ def initialize():
 
     except Exception as e:
         logger.critical("Unable to initialize: %s", (str(e)))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         sys.exit(1)
 
     return password, directories, rootdir, client, url, urlinfo, excludes
@@ -2257,16 +2241,16 @@ def encryptString(string):
 
 def sendConfigInfo(directories):
     # Generate a string of the command line
-    commandLine = " ".join(sys.argv) + "\n"
+    cmd_line = " ".join(sys.argv) + "\n"
 
     # Send a command line (encrypted), and a hash of it, so it can be saved easily.
-    h, iv, data = encryptString(commandLine)
+    h, iv, data = encryptString(cmd_line)
 
     message = {
         "message": Protocol.Commands.COMMANDLINE,
         "hash": h,
         "line": data,
-        "size": len(commandLine),
+        "size": len(cmd_line),
         "encrypted": bool(iv),
     }
     sendMessage(message)
@@ -2276,6 +2260,7 @@ def sendConfigInfo(directories):
     if args.sendconfig:
         a = vars(args)
         a["directories"] = directories
+        # Remove the password if one is included
         if a["password"]:
             a["password"] = "-- removed --"
         jsonArgs = json.dumps(a, cls=Util.ArgJsonEncoder, sort_keys=True)
@@ -2301,14 +2286,14 @@ def main():
     # Set up logging
     verbosity = args.verbose or 0
     try:
-        setupLogging(args.logfiles, verbosity, args.exceptions)
+        setupLogging(args.logfiles, verbosity, args.exceptions, args.logtime)
         # determine mode:
     except Exception as e:
         logger.critical(e)
         sys.exit(1)
 
     # Open the connection
-    backendThread = None
+    backend_thread = None
 
     # Initialize the progress bar, if requested
     if args.progress:
@@ -2322,7 +2307,7 @@ def main():
         password, directories, rootdir, client, url, urlinfo, excludes = initialize()
 
         if urlinfo.scheme == "file":
-            (conn, _, backendThread) = runBackend(config, jobname, urlinfo)
+            (conn, _, backend_thread) = runBackend(config, jobname, urlinfo)
         else:
             conn = Connection.MsgPackConnection(urlinfo.hostname, urlinfo.port, compress=args.compressmsgs, timeout=args.timeout, validate=args.validatecerts)
 
@@ -2331,7 +2316,7 @@ def main():
         messenger.setProgressBar(statusBar)
     except Exception as e:
         logger.critical("Unable to start session with %s: %s", args.repo, str(e))
-        exceptionLogger.log(e)
+        exc_logger.log(e)
         sys.exit(1)
 
     # Now, do the actual work here.
@@ -2340,8 +2325,8 @@ def main():
         if args.progress:
             statusBar.start()
 
-        hasPassword = args.password or args.passwordfile or args.passwordprog
-        startBackup(client, url, hasPassword)
+        has_passwd = args.password or args.passwordfile or args.passwordprog
+        startBackup(client, url, has_passwd)
 
         # Send information about this backup.
         sendConfigInfo(directories)
@@ -2367,12 +2352,12 @@ def main():
     except Exception as e:
         logger.error("Caught exception: %s, %s", e.__class__.__name__, e)
         exc = str(e)
-        exceptionLogger.log(e)
+        exc_logger.log(e)
     finally:
         conn.close(exc)
         if urlinfo.scheme == "file":
             logger.info("Waiting for server to complete")
-            backendThread.join()        # Should I do communicate?
+            backend_thread.join()        # Should I do communicate?
 
     endtime = datetime.datetime.now(tz=datetime.timezone.utc)
 
