@@ -644,17 +644,21 @@ def deleteBsets(db, cache):
     if not bsets:
         raise ValueError("No backupsets specified")
 
+    filesDeleted = 0
     names = [b["name"] for b in bsets]
+
     print("Sets to be deleted:")
     pprint.pprint(names, compact=True)
     if confirm():
-        filesDeleted = 0
         for bset in bsets:
-            filesDeleted += db.deleteBackupSet(bset["backupset"])
+            # Prompt to confirm delete if the set is locked.
+            if not bset['locked'] or confirm(f"Backupset {bset['name']} is locked.  Delete (y/n)"):
+                filesDeleted += db.deleteBackupSet(bset["backupset"])
 
         print(f"Deleted {filesDeleted} files")
-        if args.purge:
-            removeOrphans(db, cache)
+
+    if args.purge and filesDeleted > 0:
+        removeOrphans(db, cache)
 
     return 0
 
