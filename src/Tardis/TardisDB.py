@@ -1177,7 +1177,7 @@ class TardisDB:
         backupset = self._bset(current)
         self.logger.debug("Purging backupsets below priority %d, before %s, and backupset: %d", priority, timestamp, backupset)
         # First, purge out the backupsets that don't match
-        c = self._execute("DELETE FROM Backups WHERE Priority <= :priority AND EndTime <= :timestamp AND BackupSet < :backupset AND Locked = 0",
+        c = self._execute("DELETE FROM Backups WHERE Priority <= :priority AND COALESCE(EndTime, StartTime) <= :timestamp AND BackupSet < :backupset AND Locked = 0",
                           {"priority": priority, "timestamp": str(timestamp), "backupset": backupset})
         setsDeleted = c.rowcount
         # Then delete the files which are no longer referenced
