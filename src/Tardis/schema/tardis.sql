@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS Backups (
     BackupSet       INTEGER PRIMARY KEY AUTOINCREMENT,
     StartTime       TEXT,
     EndTime         TEXT,
-    PurgeTime       TEXT,
     ClientEndTime   TEXT,
     ClientTime      TEXT,
     Session         TEXT UNIQUE,
