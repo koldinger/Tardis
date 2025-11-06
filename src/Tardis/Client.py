@@ -101,8 +101,6 @@ local_config = Defaults.getDefault("TARDIS_LOCAL_CONFIG")
 if not os.path.exists(local_config):
     local_config = Defaults.getDefault("TARDIS_DAEMON_CONFIG")
 
-msgCompressionChoices = ["none", "zlib", "zlib-stream", "snappy"]
-
 class BasePathChoices(StrEnum):
     NONE = auto()
     COMMON = auto()
@@ -610,7 +608,7 @@ def processSig(inode, sigfile, oldchksum):
                     (sigsize, _, _) = Util.sendData(messenger, newsig, TardisCrypto.NullEncryptor(), chunksize=args.chunksize, compress=False, stats=stats, log=args.logmessages) # Don't bother to encrypt the signature
                     newsig.close()
 
-                if args.report != "none":
+                if args.report != ReportChoices.NONE:
                     x = {
                         "type": "Delta",
                         "size": sent,
@@ -725,7 +723,7 @@ def sendContent(inode, reportType):
                     sig.close()
 
             Util.accumulateStat(stats, "new")
-            if args.report != "none":
+            if args.report != ReportChoices.NONE:
                 repInfo = {
                     "type": reportType,
                     "size": size,
@@ -1743,7 +1741,7 @@ def startBackup(client, url, hasPassword):
     else:
         (f, c) = (None, None)
 
-    if args.stats or args.report != "none":
+    if args.stats or args.report != ReportChoices.NONE:
         logger.log(log.STATS, f"{colored('Name:', 'green')} {backupName} {colored('Repository', 'green')}: {url}")
 
     trackOutstanding = True
@@ -1875,8 +1873,8 @@ def processCommandLine():
                         help="Ignore the global exclude file.  " + _def)
 
     comgrp = parser.add_argument_group("Communications options", "Options for specifying details about the communications protocol.")
-    comgrp.add_argument("--compress-msgs", "-Y",    dest="compressmsgs", nargs="?", const="snappy",
-                        choices=["none", "zlib", "zlib-stream", "snappy"], default=c.get(t, "CompressMsgs"),
+    comgrp.add_argument("--compress-msgs", "-Y",    dest="compressmsgs", nargs="?", const=Messages.MsgCompAlgs.SNAPPY,
+                        choices=Messages.MsgCompAlgs, default=c.get(t, "CompressMsgs"),
                         help="Compress messages.  " + _def)
     comgrp.add_argument("--validate-certs",         dest="validatecerts", action=argparse.BooleanOptionalAction, default=c.getboolean(t, "ValidateCerts"),
                         help="Validate Certificates.   Set to false for self-signed certificates. " + _def)
