@@ -310,7 +310,7 @@ def listBSets(db, crypt, cache):
             sets = sets[:args.first]
 
         for bset in sets:
-            t = Text(time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"]))), "dark_cyan")
+            starttime = Text(time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"]))), "dark_cyan")
             duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"]))))) if bset["endtime"] is not None else ""
 
             completed = Text("Comp", "green") if bset["completed"] else Text("Incomp", "red")
@@ -328,7 +328,7 @@ def listBSets(db, crypt, cache):
             locked = "*" if bset["locked"] else " "
 
             #print(f.format(bset["name"], bset["backupset"], completed, bset["priority"], full, t, duration, bset["filesfull"] or 0, bset["filesdelta"] or 0, size, locked, status))
-            table.add_row(name, str(bset["backupset"]), completed, str(bset["priority"]), full, t, duration, str(bset["filesfull"] or 0), str(bset["filesdelta"] or 0), size, str(locked), status)
+            table.add_row(name, str(bset["backupset"]), completed, str(bset["priority"]), full, starttime, duration, str(bset["filesfull"] or 0), str(bset["filesdelta"] or 0), size, str(locked), status)
 
             if args.longinfo:
                 commandLine = getCommandLine(bset["commandline"], regenerator)
