@@ -665,15 +665,16 @@ def sendContent(inode, reportType):
                 else:
                     data = open(pathname, "rb")
             except OSError as e:
-                if e.errno == errno.ENOENT:
-                    logger.warning("%s disappeared.  Not backed up", pathname)
-                    Util.accumulateStat(stats, "gone")
-                elif e.errno == errno.EACCES:
-                    logger.warning("Permission denied opening: %s.  Not backed up", pathname)
-                    Util.accumulateStat(stats, "denied")
-                else:
-                    logger.warning("Unable to open %s: %s", pathname, e.strerror)
-                    Util.accumulateStat(stats, "denied")
+                match e.errno:
+                    case errno.ENOENT:
+                        logger.warning("%s disappeared.  Not backed up", pathname)
+                        Util.accumulateStat(stats, "gone")
+                    case errno.EACCES:
+                        logger.warning("Permission denied opening: %s.  Not backed up", pathname)
+                        Util.accumulateStat(stats, "denied")
+                    case _:
+                        logger.warning("Unable to open %s: %s", pathname, e.strerror)
+                        Util.accumulateStat(stats, "denied")
                 return
 
             # Attempt to send the data.
