@@ -38,10 +38,10 @@ import snappy
 
 
 class MsgCompAlgs(StrEnum):
-    none = auto()
-    zlib = auto()
-    zlibs = auto()
-    snappy = auto()
+    NONE = auto()
+    ZLIB = auto()
+    ZLIBS = auto()
+    SNAPPY = auto()
 
 class Messages:
     def __init__(self, socket, stats=None):
@@ -87,20 +87,20 @@ class zlibCompressor:
         return message
 
 class BinMessages(Messages):
-    def __init__(self, socket, stats=None, compress=MsgCompAlgs.none):
+    def __init__(self, socket, stats=None, compress=MsgCompAlgs.NONE):
         Messages.__init__(self, socket, stats)
         match compress:
-            case MsgCompAlgs.zlibs:
+            case MsgCompAlgs.ZLIBS:
                 self.compressor = zlibCompressor()
                 self.compress = self.compressor.compress
                 self.decompress = self.compressor.decompress
-            case MsgCompAlgs.zlib:
+            case MsgCompAlgs.ZLIB:
                 self.compress = zlib.compress
                 self.decompress = zlib.decompress
-            case MsgCompAlgs.snappy:
+            case MsgCompAlgs.SNAPPY:
                 self.compress = snappy.compress
                 self.decompress = snappy.decompress
-            case MsgCompAlgs.none | None:
+            case MsgCompAlgs.NONE | None:
                 self.compress = None
                 self.decompress = None
             case _:
