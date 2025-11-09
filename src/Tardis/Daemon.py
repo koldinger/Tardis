@@ -37,6 +37,7 @@ import io
 import json
 import logging
 import logging.config
+import os
 import pstats
 import pwd
 import signal
@@ -48,22 +49,14 @@ import traceback
 import uuid
 from datetime import datetime
 
-from rich.traceback import install
-install(show_locals=True)
-
 import colorlog
 import daemonize
-
-import Tardis
+import rich.traceback
 
 from . import Backend, Connection, ConnIdLogAdapter, Defaults, Messages, Util
 
-DONE    = 0
-CONTENT = 1
-CKSUM   = 2
-DELTA   = 3
-REFRESH = 4                     # Perform a full content update
-LINKED  = 5                     # Check if it's already linked
+# Setup pretty execption logging
+rich.traceback.install(show_locals=True)
 
 config: configparser.ConfigParser
 args: argparse.Namespace
@@ -113,18 +106,21 @@ configDefaults = {
     "CksContent"        : "65536",
     "AutoPurge"         : str(False),
     "SaveConfig"        : str(True),
-    "AllowClientOverrides"  :  str(True),
-    "AllowSchemaUpgrades"   :  str(False),
+    "AllowClientOverrides"  : str(True),
+    "AllowSchemaUpgrades"   : str(False),
 }
 
 server = None
 logger: logging.Logger
 
+
 class InitFailedException(Exception):
     pass
 
+
 class ProtocolError(Exception):
     pass
+
 
 class TardisServerHandler(socketserver.BaseRequestHandler):
     def setup(self):
@@ -146,7 +142,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
             self.address = self.client_address[0]
         else:
             self.address = "localhost"
-        log            = logging.getLogger("Tardis")
+        log = logging.getLogger("Tardis")
         self.sessionid = str(uuid.uuid1())
         self.logger = ConnIdLogAdapter.ConnIdLogAdapter(log, {"connid": self.sessionid[0:13]})
         self.logger.info("Session created from: %s", self.address)
@@ -159,7 +155,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
         started = False
         completed = False
         starttime = datetime.now(tz=None)
-        endtime = starttime         # justoduyt to keep pylint happy
+        endtime = starttime  # just do it to keep pylint happy
 
         if self.server.profiler:
             self.logger.info("Starting Profiler")
@@ -222,6 +218,7 @@ class TardisServerHandler(socketserver.BaseRequestHandler):
 
             self.logger.info("Session from %s {%s} Ending: %s: %s", backend.client, self.sessionid, str(completed), str(datetime.now(tz=None) - starttime))
 
+
 class TardisServer:
     # HACK.  Operate on an object, but not in the class.
     # Want to do this in multiple classes.
@@ -230,7 +227,7 @@ class TardisServer:
 
         self.savefull       = config.getboolean(configSection, "SaveFull")
         self.maxChain       = config.getint(configSection, "MaxDeltaChain")
-        self.deltaPercent   = float(config.getint(configSection, "MaxChangePercent")) / 100.0        # Convert to a ratio
+        self.deltaPercent   = float(config.getint(configSection, "MaxChangePercent")) / 100.0  # Convert to a ratio
         self.cksContent     = config.getint(configSection, "CksContent")
 
         self.allowNew       = args.newhosts
@@ -251,7 +248,7 @@ class TardisServer:
         self.timeout        = args.timeout
 
         numFormats = len(self.formats)
-        if len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats:
+        if (len(self.priorities) != numFormats or len(self.keep) != numFormats or len(self.forceFull) != numFormats):
             logger.warning("Different sizes for the lists of formats: Formats: %d Priorities: %d KeepDays: %d ForceFull: %d",
                            len(self.formats), len(self.priorities), len(self.keep), len(self.forceFull))
 
@@ -301,12 +298,13 @@ class TardisServer:
         else:
             self.profiler = None
 
-class TardisSocketServer(socketserver.ThreadingMixIn, socketserver.TCPServer, TardisServer):
-    def __init__(self):
 
+class TardisSocketServer( socketserver.ThreadingMixIn, socketserver.TCPServer, TardisServer):
+    def __init__(self):
         socketserver.TCPServer.__init__(self, ("", args.port), TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("TCP Server %s Running", Tardis.__versionstring__)
+
 
 class TardisSingleThreadedSocketServer(socketserver.TCPServer, TardisServer):
     def __init__(self):
@@ -314,9 +312,10 @@ class TardisSingleThreadedSocketServer(socketserver.TCPServer, TardisServer):
         TardisServer.__init__(self)
         logger.info("Single Threaded TCP Server %s Running", Tardis.__versionstring__)
 
+
 class TardisDomainSocketServer(socketserver.UnixStreamServer, TardisServer):
     def __init__(self):
-        socketserver.UnixStreamServer.__init__(self,  args.local, TardisServerHandler)
+        socketserver.UnixStreamServer.__init__(self, args.local, TardisServerHandler)
         TardisServer.__init__(self)
         logger.info("Unix Domain Socket %s Server Running", Tardis.__versionstring__)
 
@@ -364,8 +363,35 @@ def setupLogging():
 
     return logger
 
+
+def checkUser():
+    """
+    Check the user info, complain if we're running as root.
+    """
+    try:
+        pw = pwd.getpwuid(os.geteuid())
+    except KeyError:
+        logger.error(f"Could not retrieve user info for UID {os.geteuid()}")
+        raise
+
+    try:
+        gr = grp.getgrgid(os.getegid())
+    except KeyError:
+        logger.error(f"Could not retrieve group info for GID {os.getegid()}")
+        raise
+
+    if pw.pw_uid == 0 or gr.gr_gid == 0:
+        logger.critical(
+            f"Daemon running with root permissions.   Set correct user and group info in config.  User: {pw.pw_name}, {pw.pw_uid}  Group: {gr.gr_name}, {gr.gr_gid}"
+        )
+        return True
+    return False
+
+
 def runServer():
     global server
+
+    checkUser()
 
     try:
         if args.reuseaddr:
@@ -398,9 +424,11 @@ def runServer():
         if args.exceptions:
             logger.exception(e)
 
+
 def stopServer():
     logger.info("Stopping server")
     server.shutdown()
+
 
 def signalTermHandler(_sig, _frame):
     logger.info("Caught term signal.  Stopping")
@@ -408,8 +436,10 @@ def signalTermHandler(_sig, _frame):
     t.start()
     logger.info("Server stopped")
 
+
 def shutdownHandler():
     stopServer()
+
 
 def processArgs():
     parser = argparse.ArgumentParser(description="Tardis Backup Server", formatter_class=Util.HelpFormatter, add_help=False)
@@ -419,10 +449,11 @@ def processArgs():
 
     t = configSection
     config = configparser.ConfigParser(configDefaults, default_section="Tardis", interpolation=configparser.ExtendedInterpolation())
-    config.add_section(t)                   # Make it safe for reading other values from.
+    config.add_section(t)                   # Make it safe for reading other values fro
     if args.config:
         config.read(args.config)
 
+    parser.add_argument("--port",               dest="port",            default=config.getint(t, "Port"), type=int, help="Listen on port (Default: %(default)s)")
     parser.add_argument("--port",               dest="port",            default=config.getint(t, "Port"), type=int, help="Listen on port (Default: %(default)s)")
     parser.add_argument("--basedir",            dest="basedir",         default=config.get(t, "BaseDir"), help="Location where all backup clients are stored (Default: %(default)s)")
     parser.add_argument("--logfile", "-l",      dest="logfile",         default=config.get(t, "LogFile"), help="Log to file (Default: %(default)s)")
@@ -432,13 +463,11 @@ def processArgs():
     parser.add_argument("--allow-new-hosts",    dest="newhosts",        action=argparse.BooleanOptionalAction, default=config.getboolean(t, "AllowNewHosts"),
                         help="Allow new clients to attach and create new backup sets")
     parser.add_argument("--profile",            dest="profile",         default=config.getboolean(t, "Profile"), help="Generate a profile")
-
     parser.add_argument("--single",             dest="single",          action=argparse.BooleanOptionalAction, default=config.getboolean(t, "Single"),
                         help="Run a single transaction and quit")
     parser.add_argument("--local",              dest="local",           default=config.get(t, "Local"),
                         help="Run as a Unix Domain Socket Server on the specified filename")
     parser.add_argument("--threads",            dest="threaded",        action=argparse.BooleanOptionalAction, default=True, help="Run a threaded server.  Default: %(default)s")
-
     parser.add_argument("--timeout",            dest="timeout",         default=config.getint(t, "Timeout"), type=float, help="Timeout, in seconds.  0 for no timeout (Default: %(default)s)")
 
     parser.add_argument("--reuseaddr",          dest="reuseaddr",       action=argparse.BooleanOptionalAction, default=config.getboolean(t, "ReuseAddr"),
@@ -461,6 +490,7 @@ def processArgs():
 
     args = parser.parse_args(remaining)
     return (args, config)
+
 
 def main():
     global logger, args, config
@@ -499,6 +529,7 @@ def main():
             logger.critical(f"Unable to run server: {e}")
             if args.exceptions:
                 logger.exception(e)
+
 
 if __name__ == "__main__":
     try:
