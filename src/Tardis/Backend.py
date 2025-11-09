@@ -668,8 +668,9 @@ class Backend:
                 else:
                     # else, check the old version
                     old = self.db.getFileInfoByInode((inode, dev))
-                    # if it exists, and the chainlength is low, add a chain
-                    if old and (old["chainlength"] < self.maxChain):
+
+                    # if it exists, and has a checksum, the chainlength is low, add a chain
+                    if old and old["checksum"] and (old["chainlength"] < self.maxChain):
                         delta.append((f["inode"], old["checksum"]))
                     else:
                         # else get the whol thing.
