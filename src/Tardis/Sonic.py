@@ -310,7 +310,7 @@ def listBSets(db, crypt, cache):
             sets = sets[:args.first]
 
         for bset in sets:
-            t = time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"])))
+            t = Text(time.strftime("%d %b, %Y %I:%M:%S %p", time.localtime(float(bset["starttime"]))), "dark_cyan")
             duration = str(datetime.timedelta(seconds = (int(float(bset["endtime"]) - float(bset["starttime"]))))) if bset["endtime"] is not None else ""
 
             completed = Text("Comp", "green") if bset["completed"] else Text("Incomp", "red")
