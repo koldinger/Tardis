@@ -34,7 +34,6 @@ import importlib
 import importlib.resources
 import logging
 import os
-import os.path
 import sqlite3
 import sys
 import time
