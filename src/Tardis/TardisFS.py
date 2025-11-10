@@ -48,6 +48,8 @@ from enum import IntEnum, auto
 import rich.traceback
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 
+import Tardis
+
 from . import (Cache, CacheDir, Config, Defaults, Regenerator, RemoteDB,
                TardisDB, Util)
 
