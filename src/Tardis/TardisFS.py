@@ -44,19 +44,19 @@ import tempfile
 import time
 from enum import IntEnum, auto
 
+import rich.traceback
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
+
 import Tardis
 from Tardis.RemoteDB import RemoteDB
 
-import rich.traceback
-
 rich.traceback.install()
 
-from . import Cache, CacheDir, Config, Defaults, RemoteDB, Regenerator, TardisDB, Util
+from . import (Cache, CacheDir, Config, Defaults, Regenerator, RemoteDB,
+               TardisDB, Util)
 
-from icecream import ic
-
-ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 
 class CacheKeys(IntEnum):
