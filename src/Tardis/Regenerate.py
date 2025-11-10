@@ -319,14 +319,14 @@ def recoverObject(regenerator, info, bset, outputdir, path, linkDB, name=None, a
 
     return retCode
 
-def setupPermissionChecks():
-    uid = os.getuid()
-    groups = os.getgroups()
-
-    if uid == 0:
-        return None     # If super-user, return None.  Causes no checking to happen.
-
-    return Util.checkPermission
+# def setupPermissionChecks():
+#     uid = os.getuid()
+#     groups = os.getgroups()
+#
+#     if uid == 0:
+#         return None     # If super-user, return None.  Causes no checking to happen.
+#
+#     return Util.checkPermission
 
 def findLastPath(path, reduce):
     logger.debug("findLastPath: %s", path)
@@ -454,10 +454,10 @@ def processFiles(files: list[Path], r: Regenerator.Regenerator, bset: bool|int, 
 
 def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir: str, outname: Path|None):
     retcode = 0
-    for i in checksums:
+    for i in map(str, checksums):
         try:
             hasher = crypt.getHash()
-            ckname = i
+            ckname = i        # Comes in as a Path object
             if args.recovername:
                 ckname = recoverName(i)
             logger.info("Recovering checksum %s -> %s", i, ckname)
