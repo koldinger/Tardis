@@ -35,6 +35,7 @@ import errno  # for error number codes (ENOENT, etc)
 import functools
 import grp
 import json
+import math
 import os  # for filesystem modes (O_RDONLY, etc)
 import os.path
 import pwd
@@ -44,19 +45,17 @@ import tempfile
 import time
 from enum import IntEnum, auto
 
-from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
-import Tardis
-from Tardis.RemoteDB import RemoteDB
-
 import rich.traceback
+from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
+
+import Tardis
+
+from . import (Cache, CacheDir, Config, Defaults, Regenerator, RemoteDB,
+               TardisDB, Util)
 
 rich.traceback.install()
-
-from . import Cache, CacheDir, Config, Defaults, RemoteDB, Regenerator, TardisDB, Util
-
-from icecream import ic
-
-ic.configureOutput(includeContext=True)
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
 
 
 class CacheKeys(IntEnum):
@@ -115,7 +114,7 @@ class TardisFS(LoggingMixIn, Operations):
         self.files = {}
 
         # Set up some caches.
-        self.cachetime = 60
+        self.cachetime = 1
 
         self.cache = Cache.Cache(0, float(self.cachetime))
         self.fileCache = Cache.Cache(0, float(self.cachetime), "FileCache")
@@ -246,6 +245,8 @@ class TardisFS(LoggingMixIn, Operations):
                 "st_atime": timestamp,
                 "st_mtime": timestamp,
                 "st_ctime": timestamp,
+                "st_blksize": 4096,
+                "st_blocks": 1,
             }
             return st
         if depth == 1:
@@ -265,6 +266,8 @@ class TardisFS(LoggingMixIn, Operations):
                     "st_atime": timestamp,
                     "st_mtime": timestamp,
                     "st_ctime": timestamp,
+                    "st_blksize": 4096,
+                    "st_blocks": 1,
                 }
                 return st
             f = self.getBackupSetInfo(lead[0])
@@ -281,6 +284,8 @@ class TardisFS(LoggingMixIn, Operations):
                     "st_atime": timestamp,
                     "st_mtime": timestamp,
                     "st_ctime": timestamp,
+                    "st_blksize": 4096,
+                    "st_blocks": 1,
                 }
                 return st
         else:
@@ -296,13 +301,17 @@ class TardisFS(LoggingMixIn, Operations):
                     "st_atime": f["mtime"],
                     "st_mtime": f["mtime"],
                     "st_ctime": f["ctime"],
+                    "st_blksize": 4096,
                 }
                 if f["size"] is not None:
                     st["st_size"] = int(f["size"])
+                    st["st_blocks"] = math.ceil(int(f["size"] / 4096))
                 elif f["dir"]:
                     st["st_size"] = 4096  # Arbitrary number
+                    st["st_blocks"] = 1
                 else:
                     st["st_size"] = 0
+                    st["st_blocks"] = 0
                 return st
         logger.debug("File not found: %s", path)
         raise FuseOSError(errno.ENOENT)

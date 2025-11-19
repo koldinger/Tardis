@@ -60,10 +60,11 @@ def parseArgs():
 
     parser.add_argument("--color",                  dest="color",   default=isatty, action=argparse.BooleanOptionalAction,   help="Use colors")
 
-    diffgroup = parser.add_mutually_exclusive_group()
-    diffgroup.add_argument("--unified", "-u",  dest="unified", type=int, default=0, nargs="?", const=3,         help="Generate unified diff")
-    diffgroup.add_argument("--context", "-c",  dest="context", type=int, default=5, nargs="?", const=5,         help="Generate context diff")
-    diffgroup.add_argument("--ndiff", "-n",    dest="ndiff",   default=False, action="store_true",              help="Generate NDiff style diff")
+    diffgroup = parser.add_argument_group("Diff style options")
+    difftype = diffgroup.add_mutually_exclusive_group()
+    difftype.add_argument("--unified", "-u",  dest="unified", type=int, default=0, nargs="?", const=3,         help="Generate unified diff")
+    difftype.add_argument("--context", "-c",  dest="context", type=int, default=5, nargs="?", const=5,         help="Generate context diff")
+    difftype.add_argument("--ndiff", "-n",    dest="ndiff",   default=False, action="store_true",              help="Generate NDiff style diff")
 
     parser.add_argument("--reduce-path",       dest="reduce",  default=0, const=sys.maxsize, type=int, nargs="?",   metavar="N",
                         help='Reduce path by N directories.  No value for "smart" reduction')

@@ -53,6 +53,8 @@ import colorlog
 import daemonize
 import rich.traceback
 
+import Tardis
+
 from . import Backend, Connection, ConnIdLogAdapter, Defaults, Messages, Util
 
 # Setup pretty execption logging
@@ -453,7 +455,6 @@ def processArgs():
     if args.config:
         config.read(args.config)
 
-    parser.add_argument("--port",               dest="port",            default=config.getint(t, "Port"), type=int, help="Listen on port (Default: %(default)s)")
     parser.add_argument("--port",               dest="port",            default=config.getint(t, "Port"), type=int, help="Listen on port (Default: %(default)s)")
     parser.add_argument("--basedir",            dest="basedir",         default=config.get(t, "BaseDir"), help="Location where all backup clients are stored (Default: %(default)s)")
     parser.add_argument("--logfile", "-l",      dest="logfile",         default=config.get(t, "LogFile"), help="Log to file (Default: %(default)s)")

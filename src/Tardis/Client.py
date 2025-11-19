@@ -2065,12 +2065,12 @@ def printReport(repFormat, limitdirs):
         filefmts = ["", "KB", "MB", "GB", "TB", "PB"]
         dirfmts  = ["B", "KB", "MB", "GB", "TB", "PB"]
         fmt  = f"%-{length + 12}s %-6s %-10s %-10s"
-        fmt2 = f"  %-{length+4}s   %-6s %-10s %-10s"
-        fmt3 = f"  %-{length+4}s   %-6s %-10s"
+        fmt2 = f"  %-{length + 8}s   %-6s %-10s %-10s"
+        fmt3 = f"  %-{length + 8}s   %-6s %-10s"
         fmt4 = "  %d files (%d full, %d delta, %s)"
 
         logger.log(log.STATS, grn(fmt % ("FileName", "Type", "Size", "Sig Size")))
-        logger.log(log.STATS, grn(fmt % ("-" * (length + 4), "-" * 6, "-" * 10, "-" * 10)))
+        logger.log(log.STATS, grn(fmt % ("-" * (length + 12), "-" * 6, "-" * 10, "-" * 10)))
 
         # Set limiting true if we're in DIRS mode, or if in all mode, we'll handle it dynamically.
         summary_dir = None
