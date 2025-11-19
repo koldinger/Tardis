@@ -61,7 +61,6 @@ class OwMode(enum.StrEnum):
     OW_PROMPT = "ask"
 
 owMode = OwMode.OW_PROMPT if sys.stdout.isatty() else OwMode.OW_NEVER
-owModeDefault = str(owMode)
 
 errors = 0
 
@@ -87,9 +86,9 @@ def checkOverwrite(name: Path, info):
                 s = os.lstat(name)
                 if s.st_mtime < info["mtime"]:
                     # Current version is older
-                    return owMode == OwMode.OW_NEWER
+                    return args.overwrite == OwMode.OW_NEWER
                 # Current version is newer
-                return owMode == OwMode.OW_OLDER
+                return args.overwrite == OwMode.OW_OLDER
     return True
 
 def doVerifyContents(outname: Path|None, checksum, digest):
@@ -354,8 +353,8 @@ def recoverName(cksum):
     logger.error("No name discovered for checksum %s", cksum)
     return cksum
 
-def mkOutputDir(name):
-    if name.isdir():
+def mkOutputDir(name: Path):
+    if name.is_dir():
         return name
     if name.exists():
         logger.error("%s is not a directory", name)
@@ -370,7 +369,7 @@ def parseArgs():
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
-    parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
+    parser.add_argument("--output", "-o",   dest="output", help="Output file", type=Path, default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest="cksum", action="store_true", default=False)
 
     bsetgroup = parser.add_mutually_exclusive_group()
@@ -471,7 +470,8 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
                     else:
                         outname = Path(ckname)
                         # Note, this should ONLY be true if only one file
-                    if outname.exists() and owMode == OwMode.OW_NEVER:
+                        # TODO: Use checkOverwrite here.
+                    if outname.exists() and args.overwrite == OwMode.OW_NEVER:
                         logger.warning("File %s exists.  Skipping", outname)
                         continue
                     logger.debug("Writing output to %s", outname)
