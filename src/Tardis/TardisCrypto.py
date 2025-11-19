@@ -496,7 +496,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
 
     def encryptPath(self, path):
         rooted = False
-        comps = path.split(os.sep)
+        comps = str(path).split(os.sep)
         if comps[0] == "":
             rooted = True
             comps.pop(0)
