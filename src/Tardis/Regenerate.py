@@ -76,7 +76,7 @@ def yesOrNo(x):
 
 def checkOverwrite(name: Path, info):
     if name.exists:
-        match (owMode):
+        match (args.overwrite):
             case OwMode.OW_NEVER:
                 return False
             case OwMode.OW_ALWAYS:
@@ -390,9 +390,8 @@ def parseArgs():
     parser.add_argument("--set-perms",       dest="setperm", default=True, action=argparse.BooleanOptionalAction,      help="Set file owner and permisions to match original file. Default: %(default)s")
     parser.add_argument("--set-attrs",       dest="setattrs", default=True, action=argparse.BooleanOptionalAction,     help="Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s")
     parser.add_argument("--set-acl",         dest="setacl", default=True, action=argparse.BooleanOptionalAction,       help="Set file access control lists to match the original file. Default: %(default)s")
-    parser.add_argument("--overwrite", "-O", dest="overwrite", default=owModeDefault, const="always", nargs="?",
-                        type=OwMode, choices=[str(x) for x in OwMode],
-                        help="Mode for handling existing files. Default: %(default)s")
+    parser.add_argument("--overwrite", "-O", dest="overwrite", default=owMode, const="always", nargs="?",
+                        type=OwMode, choices=OwMode, help="Mode for handling existing files. Default: %(default)s")
 
     parser.add_argument("--hardlinks",       dest="hardlinks",   default=True,   action=argparse.BooleanOptionalAction,   help="Create hardlinks of multiple copies of same inode created. Default: %(default)s")
 
@@ -532,7 +531,7 @@ def calculateBackupSet():
 
 
 def main():
-    global logger, eLogger, crypt, tardis, args, owMode
+    global logger, eLogger, crypt, tardis, args
     args = parseArgs()
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
