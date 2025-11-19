@@ -74,7 +74,7 @@ def yesOrNo(x):
     return False
 
 def checkOverwrite(name: Path, info):
-    if name.exists:
+    if name.exists():
         match (args.overwrite):
             case OwMode.OW_NEVER:
                 return False
