@@ -869,18 +869,6 @@ class TardisDB:
             return data["chainlength"]
         return -1
 
-        """
-        Could do this, but not all versions of SQLite3 seem to support "WITH RECURSIVE" statements
-        c = self._execute("WITH RECURSIVE x(n) AS (VALUES(:checksum) UNION SELECT Basis FROM Checksums, x WHERE x.n=Checksums.Checksum) "
-                         "SELECT COUNT(*) FROM Checksums WHERE Checksum IN x",
-                         {"checksum": checksum})
-        r = c.fetchone()
-        if r:
-            return int(r[0])
-        else:
-            return -1
-        """
-
     @authenticate
     def readDirectory(self, dirNode, current=False):
         (inode, device) = dirNode
