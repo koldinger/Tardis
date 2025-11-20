@@ -61,7 +61,6 @@ class OwMode(enum.StrEnum):
     OW_PROMPT = "ask"
 
 owMode = OwMode.OW_PROMPT if sys.stdout.isatty() else OwMode.OW_NEVER
-owModeDefault = str(owMode)
 
 errors = 0
 
@@ -75,8 +74,8 @@ def yesOrNo(x):
     return False
 
 def checkOverwrite(name: Path, info):
-    if name.exists:
-        match (owMode):
+    if name.exists():
+        match (args.overwrite):
             case OwMode.OW_NEVER:
                 return False
             case OwMode.OW_ALWAYS:
@@ -87,9 +86,9 @@ def checkOverwrite(name: Path, info):
                 s = os.lstat(name)
                 if s.st_mtime < info["mtime"]:
                     # Current version is older
-                    return owMode == OwMode.OW_NEWER
+                    return args.overwrite == OwMode.OW_NEWER
                 # Current version is newer
-                return owMode == OwMode.OW_OLDER
+                return args.overwrite == OwMode.OW_OLDER
     return True
 
 def doVerifyContents(outname: Path|None, checksum, digest):
@@ -354,8 +353,8 @@ def recoverName(cksum):
     logger.error("No name discovered for checksum %s", cksum)
     return cksum
 
-def mkOutputDir(name):
-    if name.isdir():
+def mkOutputDir(name: Path):
+    if name.is_dir():
         return name
     if name.exists():
         logger.error("%s is not a directory", name)
@@ -370,7 +369,7 @@ def parseArgs():
     Config.addCommonOptions(parser)
     Config.addPasswordOptions(parser)
 
-    parser.add_argument("--output", "-o",   dest="output", help="Output file", default=None)
+    parser.add_argument("--output", "-o",   dest="output", help="Output file", type=Path, default=None)
     parser.add_argument("--checksum", "-c", help="Use checksum instead of filename", dest="cksum", action="store_true", default=False)
 
     bsetgroup = parser.add_mutually_exclusive_group()
@@ -390,9 +389,8 @@ def parseArgs():
     parser.add_argument("--set-perms",       dest="setperm", default=True, action=argparse.BooleanOptionalAction,      help="Set file owner and permisions to match original file. Default: %(default)s")
     parser.add_argument("--set-attrs",       dest="setattrs", default=True, action=argparse.BooleanOptionalAction,     help="Set file extended attributes to match original file.  May only set attributes in user space. Default: %(default)s")
     parser.add_argument("--set-acl",         dest="setacl", default=True, action=argparse.BooleanOptionalAction,       help="Set file access control lists to match the original file. Default: %(default)s")
-    parser.add_argument("--overwrite", "-O", dest="overwrite", default=owModeDefault, const="always", nargs="?",
-                        type=OwMode, choices=[str(x) for x in OwMode],
-                        help="Mode for handling existing files. Default: %(default)s")
+    parser.add_argument("--overwrite", "-O", dest="overwrite", default=owMode, const="always", nargs="?",
+                        type=OwMode, choices=OwMode, help="Mode for handling existing files. Default: %(default)s")
 
     parser.add_argument("--hardlinks",       dest="hardlinks",   default=True,   action=argparse.BooleanOptionalAction,   help="Create hardlinks of multiple copies of same inode created. Default: %(default)s")
 
@@ -472,7 +470,8 @@ def processChecksums(checksums: list[str], r: Regenerator.Regenerator, outputdir
                     else:
                         outname = Path(ckname)
                         # Note, this should ONLY be true if only one file
-                    if outname.exists() and owMode == OwMode.OW_NEVER:
+                        # TODO: Use checkOverwrite here.
+                    if outname.exists() and args.overwrite == OwMode.OW_NEVER:
                         logger.warning("File %s exists.  Skipping", outname)
                         continue
                     logger.debug("Writing output to %s", outname)
@@ -532,7 +531,7 @@ def calculateBackupSet():
 
 
 def main():
-    global logger, eLogger, crypt, tardis, args, owMode
+    global logger, eLogger, crypt, tardis, args
     args = parseArgs()
     logger = Util.setupLogging(args.verbose, stream=sys.stderr)
     eLogger = Util.ExceptionLogger(logger, args.exceptions, True)
