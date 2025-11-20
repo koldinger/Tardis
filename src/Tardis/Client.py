@@ -438,11 +438,14 @@ def processChecksums(inodes):
 def logFileInfo(i, c):
     (x, name) = inodeDB.get(i)
     if name:
-        size = x.get("size", 0)
-        size = Util.fmtSize(size, suffixes=["", "KB", "MB", "GB", "TB", "PB"])
-        logger.log(log.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
-        cname = crypt.encryptPath(name)
-        logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
+        if logger.isEnabledFor(log.FILES):
+            size = x.get("size", 0)
+            size = Util.fmtSize(size, suffixes=["", "KB", "MB", "GB", "TB", "PB"])
+            logger.log(log.FILES, "[%c]: %s (%s)", c, Util.shortPath(name), size)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            cname = crypt.encryptPath(name)
+            logger.debug("Filename: %s => %s", Util.shortPath(name), Util.shortPath(cname))
 
 def handleAckSum(response):
     checkMessage(response, Protocol.Responses.ACKSUM)
@@ -808,11 +811,11 @@ def handleAckDir(message):
         path = crypt.decryptPath(path)
         logger.debug("Processing ACKDIR: Up-to-date: %3d New Content: %3d Delta: %3d ChkSum: %3d -- %s", len(done), len(content), len(delta), len(cksum), Util.shortPath(path, 40))
 
-    allContent += content
-    allDelta   += delta
-    allCkSum   += cksum
-    allRefresh += refresh
-    allDone    += done
+    allContent.extend(content)
+    allDelta.extend(delta)
+    allCkSum.extend(cksum)
+    allRefresh.extend(refresh)
+    allDone.extend(done)
 
 def pushFiles():
     global allContent, allDelta, allCkSum, allRefresh, allDone
@@ -859,10 +862,11 @@ def pushFiles():
         inodeDB.delete(i)
     for i in [tuple(x) for x in allDone]:
         inodeDB.delete(i)
-    allRefresh = []
-    allContent = []
-    allDelta   = []
-    allDone    = []
+
+    allRefresh.clear()
+    allContent.clear()
+    allDelta.clear()
+    allDone.clear()
 
     # If checksum content is specified, concatenate the checksums and content requests, and handle checksums
     # for all of them.
