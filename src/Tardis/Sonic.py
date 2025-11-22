@@ -388,8 +388,8 @@ def humanify(size: int) -> str:
     return str(size)
 
 def makeHeaderLong(db, crypt):
-    userLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getUsers()))
-    groupLen   = max(map(lambda x: len(_decryptName(x["name"], crypt)), db.getGroups()))
+    userLen   = max([len(_decryptName(x["Name"], crypt)) for x in db.getUsers()])
+    groupLen   = max([len(_decryptName(x["Name"], crypt)) for x in db.getGroups()])
     headers = []
     if args.status:
         headers.append(Column("Status", width=8))
