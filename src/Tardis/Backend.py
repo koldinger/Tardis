@@ -893,22 +893,6 @@ class Backend:
         }
         return (response, False)
 
-    def processBatch(self, message):
-        batch = message["batch"]
-        responses = []
-        for mess in batch:
-            (response, _) = self.processMessage(mess, transaction=False)
-            if response:
-                responses.append(response)
-
-        response = {
-            "message": Protocol.Responses.ACKBTCH,
-            "responses": responses,
-        }
-        self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
-        self.db.commit()
-        return (response, True)
-
     def processSetKeys(self, message):
         filenameKey     = message["filenameKey"]
         contentKey      = message["contentKey"]
@@ -992,8 +976,6 @@ class Backend:
                     (response, flush) = self.processChecksum(message)
                 case Protocol.Commands.CLN:
                     (response, flush) = self.processClone(message)
-                case Protocol.Commands.BATCH:
-                    (response, flush) = self.processBatch(message)
                 case Protocol.Commands.PRG:
                     (response, flush) = self.processPurge(message)
                 case Protocol.Commands.CLICONFIG:

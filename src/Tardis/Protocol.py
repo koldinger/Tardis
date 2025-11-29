@@ -44,7 +44,7 @@ class Commands(UppercaseStrEnum):
     CON = auto()
     CKS = auto()
     CLN = auto()
-    BATCH = auto()
+    # BATCH = auto()
     PRG = auto()
     CLICONFIG = auto()
     COMMANDLINE = auto()
@@ -66,7 +66,7 @@ class Responses(UppercaseStrEnum):
     ACKCLICONFIG = auto()
     ACKCMDLN = auto()
     ACKDONE = auto()
-    ACKBTCH = auto()
+    # ACKBTCH = auto()
     ACKBACKUP = "INIT"
     ACKSETKEYS = auto()
     ACKCON = auto()
