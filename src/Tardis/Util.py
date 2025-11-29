@@ -562,9 +562,16 @@ def sendData(sender, data, encrypt, chunksize=(16 * 1024), hasher=None, compress
             log.write(f"Sent {size} bytes\n")
     return size, ck, sig
 
-def receiveData(receiver, output, log=None):
-    """ Receive a block of data from the sender, and store it in the specified file.
-    Collect some info sent, and return it.
+def receiveData(receiver, output, log=None) -> tuple[int, str, int, str, str]:
+    """
+    Receive a block of data from the sender, and store it in the specified file.
+
+    Returns a tuple which contains:
+        - number of bytes recieved
+        - status of the send from the server
+        - size of the data (could be different from amount received due to compression)
+        - checksum this applies to
+        - compression algorithm used on the data, if compressed
     """
     # logger = logging.getLogger('Data')
     if isinstance(receiver, Connection.Connection):
