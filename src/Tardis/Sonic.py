@@ -55,8 +55,9 @@ import Tardis
 from . import (CacheDir, Config, Defaults, Regenerator, RemoteDB, TardisCrypto,
                TardisDB, Util)
 
-##from icecream import ic
-# ic.configureOutput(includeContext=True)
+#from icecream import ic
+#ic.configureOutput(includeContext=True)
+#ic.disable()
 
 class NoSuchBackupError(Exception):
     def __init__(self, message, value):
@@ -387,38 +388,41 @@ def humanify(size: int) -> str:
         size = ""
     return str(size)
 
-def makeHeaderLong(db, crypt):
+def makeFilesTable(db, crypt) -> Table:
     userLen   = max([len(_decryptName(x["Name"], crypt)) for x in db.getUsers()])
     groupLen   = max([len(_decryptName(x["Name"], crypt)) for x in db.getGroups()])
-    headers = []
+
+    table = Table(box=None, show_header=False)
+
     if args.status:
-        headers.append(Column("Status", width=8))
-    headers.extend([
-        "Mode",
-        Column("Owner", width=userLen),
-        Column("Group", width=groupLen),
-        Column("Size", justify="right", min_width=6),
-        Column("Time", min_width=8)
-    ])
+        #headers.append(Column("Status", width=8))
+        table.add_column("Status", width=8)
+    if args.long:
+        table.add_column("Mode")
+        table.add_column("Owner", width=userLen)
+        table.add_column("Group", width=groupLen)
+        table.add_column("Size", justify="right", min_width=6)
+        table.add_column("Time", min_width=8),
 
     if args.cksums:
-        headers.append(Column("Checksum", min_width=16))
+        table.add_column("Checksum", min_width=16)
     if args.chnlen:
-        headers.append(Column("Chain", width=3))
+        table.add_column("Chain", width=3)
     if args.inode:
         #print(f" {inode:16}", end=' ')
-        headers.append(Column("Inode", min_width=5))
+        table.add_column("Inode", min_width=5)
     if args.type:
         #print(f" {'Delta' if fInfo.get('chainlength', 0) else 'Full':5} " , end=' ')
-        headers.append("Type")
+        table.add_column("Type")
     if args.size:
         #size = humanify(fInfo.get('disksize', 0))
         #print(f' {size:9} ', end=' ')
-        headers.append(Column("Size", justify="right", min_width=6))
-    headers.append("Name")
-    return headers
+        table.add_column("Size", justify="right", min_width=6)
+    table.add_column("Name")
+    return table
 
 def makeRowLong(fInfo, name, crypt):
+    printit = False
     row = []
     mode  = stat.filemode(fInfo['mode'])
     group = crypt.decryptName(fInfo['groupname'])
@@ -426,6 +430,7 @@ def makeRowLong(fInfo, name, crypt):
     mtime = Util.formatTime(fInfo['mtime'])
     size = humanify(fInfo['size'])
     inode = fInfo['inode']
+
 
     if args.status:
         status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
@@ -458,7 +463,7 @@ def makeRowDetails(fInfo, name):
 
     row = [status]
     if args.cksums:
-        row.append(fInfo.get('checksum', ''))
+        row.append(Text(fInfo.get('checksum', '')))
     if args.chnlen:
         row.append(str(fInfo.get('chainlength', 0)))
     if args.inode:
@@ -476,8 +481,10 @@ def listFiles(db, crypt):
 
     files = db.getNewFiles(bset, args.previous)
     if not args.dirs:
-        files = filter(lambda x: not bool(x['dir']), files)
+        files = filter(lambda x: not bool(x["dir"]), files)
+    files = list(files)
 
+    # Determine if we need to print full details
     details = args.status or args.cksums or args.chnlen or args.inode or args.type or args.size
 
     # Partiion the files into directories
@@ -485,8 +492,6 @@ def listFiles(db, crypt):
     for f in files:
         dirs[(f["parent"], f["parentdev"])].append(f)
 
-    if args.long or details:
-        headers = makeHeaderLong(db, crypt)
 
     for d in sorted(dirs.keys(), key=lambda x: _path(db, crypt, bset, x)):
         path = _path(db, crypt, bset, d)
@@ -494,7 +499,10 @@ def listFiles(db, crypt):
 
         # Build table
         if args.long or details:
-            tab = Table(*headers, box=None, show_header=False)
+            # UGLY: Bug in Rich.Table?
+            # Note, we have to regenerate the headers for each table, otherwise  each Column object will contain the
+            # of the previous iteration.
+            table = makeFilesTable(db, crypt)
             for fInfo in sorted(files, key=lambda x: _decryptName(x["name"], crypt)):
                 name = _decryptName(fInfo["name"], crypt)
 
@@ -503,20 +511,22 @@ def listFiles(db, crypt):
 
                 if args.long:
                     row = makeRowLong(fInfo, name, crypt)
+                    #print(*row)
                 else:
                     row = makeRowDetails(fInfo, name)
-                tab.add_row(*row)
+                #print("Row-> ", row)
+                table.add_row(*row)
             # Print the table if it's not empty
-            if tab.rows:
-                # Print the direcotry payth
+            if table.rows:
+                # Print the direcotry path
                 print(Text(path, "bright_blue") + ":")
-                print(tab)
+                print(table)
         else:
             names = [_decryptName(i["name"], crypt) for i in files]
             if names:
-                tab = Columns(map(Text, sorted(names)), padding=(0,2), pad_edge=True)
+                columns = Columns(map(Text, sorted(names)), padding=(0,2), pad_edge=True)
                 print(Text(path, "bright_blue") + ":")
-                print(tab)
+                print(columns)
 
 
 def _bsetInfo(db, crypt, info):
