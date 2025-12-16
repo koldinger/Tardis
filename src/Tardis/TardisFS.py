@@ -226,7 +226,6 @@ class TardisFS(LoggingMixIn, Operations):
         - st_ctime (platform dependent; time of most recent metadata change on Unix,
                     or the time of creation on Windows).
         """
-
         path = self.fsEncodeName(path)
 
         depth = getDepth(path)  # depth of path, zero-based from root
@@ -485,7 +484,7 @@ class TardisFS(LoggingMixIn, Operations):
             return {
                 (key, getattr(fs, key)) for key in ("f_bavail", "f_bfree", "f_blocks", "f_bsize", "f_favail", "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax")
             }
-        elif isinstance(self.cacheDir, RemoteDB.RemoteDB):
+        if isinstance(self.cacheDir, RemoteDB.RemoteDB):
             return {
                 (key, 1024) for key in ("f_avail", "f_bfree", "f_blocks", "f_bsize", "f_favail", "f_ffree", "f_files", "f_flag", "f_frsize", "f_namemax")
             }

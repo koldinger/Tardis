@@ -402,7 +402,7 @@ def makeFilesTable(db, crypt) -> Table:
         table.add_column("Owner", width=userLen)
         table.add_column("Group", width=groupLen)
         table.add_column("Size", justify="right", min_width=6)
-        table.add_column("Time", min_width=8),
+        table.add_column("Time", min_width=8)
 
     if args.cksums:
         table.add_column("Checksum", min_width=16)
@@ -424,16 +424,15 @@ def makeFilesTable(db, crypt) -> Table:
 def makeRowLong(fInfo, name, crypt):
     printit = False
     row = []
-    mode  = stat.filemode(fInfo['mode'])
-    group = crypt.decryptName(fInfo['groupname'])
-    owner = crypt.decryptName(fInfo['username'])
-    mtime = Util.formatTime(fInfo['mtime'])
-    size = humanify(fInfo['size'])
-    inode = fInfo['inode']
-
+    mode  = stat.filemode(fInfo["mode"])
+    group = crypt.decryptName(fInfo["groupname"])
+    owner = crypt.decryptName(fInfo["username"])
+    mtime = Util.formatTime(fInfo["mtime"])
+    size = humanify(fInfo["size"])
+    inode = fInfo["inode"]
 
     if args.status:
-        status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
+        status = Text("[New]", "green") if fInfo["chainlength"] == 0 else Text("[Delta] ", "yellow")
         row.append(status)
 
     #print(f' {status} {mode:9} {owner:8} {group:8} {size:9} {mtime:12}', end=' ')
@@ -441,7 +440,7 @@ def makeRowLong(fInfo, name, crypt):
     if args.cksums:
         row.append(fInfo["checksum"] or "")
     if args.chnlen:
-        row.append(str(fInfo['chainlength'] or 0))
+        row.append(str(fInfo["chainlength"] or 0))
     if args.inode:
         #print(f" {inode:16}", end=' ')
         row.append(str(inode))
@@ -451,27 +450,27 @@ def makeRowLong(fInfo, name, crypt):
     if args.size:
         #size = humanify(fInfo.get('disksize', 0))
         #print(f' {size:9} ', end=' ')
-        row.append(humanify(fInfo.get('disksize', 0)))
+        row.append(humanify(fInfo.get("disksize", 0)))
     row.append(Text(name, "green"))
     return row
 
 def makeRowDetails(fInfo, name):
     if args.status:
-        status = Text('[New]', 'green') if fInfo['chainlength'] == 0 else Text('[Delta] ', 'yellow')
+        status = Text("[New]", "green") if fInfo["chainlength"] == 0 else Text("[Delta] ", "yellow")
     else:
-        status = ''
+        status = ""
 
     row = [status]
     if args.cksums:
-        row.append(Text(fInfo.get('checksum', '')))
+        row.append(Text(fInfo.get("checksum", "")))
     if args.chnlen:
-        row.append(str(fInfo.get('chainlength', 0)))
+        row.append(str(fInfo.get("chainlength", 0)))
     if args.inode:
         row.append(f"({fInfo.get('device', '')}, {fInfo.get('inode', '')})")
     if args.type:
-        row.append('Delta' if fInfo['chainlength'] else 'Full')
+        row.append("Delta" if fInfo["chainlength"] else "Full")
     if args.size:
-        row.append(humanify(fInfo['size']))
+        row.append(humanify(fInfo["size"]))
     row.append(name)
     return row
 
@@ -491,7 +490,6 @@ def listFiles(db, crypt):
     dirs = collections.defaultdict(list)
     for f in files:
         dirs[(f["parent"], f["parentdev"])].append(f)
-
 
     for d in sorted(dirs.keys(), key=lambda x: _path(db, crypt, bset, x)):
         path = _path(db, crypt, bset, d)
@@ -662,7 +660,7 @@ def deleteBsets(db, cache):
     if confirm():
         for bset in bsets:
             # Prompt to confirm delete if the set is locked.
-            if not bset['locked'] or confirm(f"Backupset {bset['name']} is locked.  Delete (y/n)"):
+            if not bset["locked"] or confirm(f"Backupset {bset['name']} is locked.  Delete (y/n)"):
                 filesDeleted += db.deleteBackupSet(bset["backupset"])
 
         print(f"Deleted {filesDeleted} files")

@@ -84,6 +84,7 @@ def fs_encode(val):
 
 class RemoteDB:
     """ Proxy class to retrieve objects via HTTP queries """
+
     headers = {}
     prevBackupSet = None
 
@@ -182,8 +183,9 @@ class RemoteDB:
         return self.prevBackupSet
 
     def _bset(self, current):
-        """ Determine the backupset we're being asked about.
-            True == current, false = previous, otherwise a number is returned
+        """
+        Determine the backupset we're being asked about.
+        True == current, false = previous, otherwise a number is returned
         """
         if isinstance(current, bool):
             if current:

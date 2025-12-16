@@ -367,9 +367,7 @@ def setupLogging():
 
 
 def checkUser():
-    """
-    Check the user info, complain if we're running as root.
-    """
+    """ Check the user info, complain if we're running as root. """
     try:
         pw = pwd.getpwuid(os.geteuid())
     except KeyError:
@@ -384,7 +382,7 @@ def checkUser():
 
     if pw.pw_uid == 0 or gr.gr_gid == 0:
         logger.critical(
-            f"Daemon running with root permissions.   Set correct user and group info in config.  User: {pw.pw_name}, {pw.pw_uid}  Group: {gr.gr_name}, {gr.gr_gid}"
+            f"Daemon running with root permissions.   Set correct user and group info in config.  User: {pw.pw_name}, {pw.pw_uid}  Group: {gr.gr_name}, {gr.gr_gid}",
         )
         return True
     return False

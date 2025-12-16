@@ -210,7 +210,7 @@ class StatusBar:
 
         try:
             rprint(output, end=_resetLine, flush=True)
-        except Exception as e:
+        except Exception:
             print(_ansiClearEol + _startOfLine, end="", flush=True)
 
         self.event = self.scheduler.enter(self.delay, self.priority, self.printStatus)
@@ -219,7 +219,7 @@ class StatusBar:
         """
         Clear the status bar area.   Should only be used after a stop
         """
-        print("", end=_showCursor + _startOfLine + _ansiClearEol)
+        print(end=_showCursor + _startOfLine + _ansiClearEol)
 
 
 if __name__ == "__main__":

@@ -350,6 +350,7 @@ class Crypto_Null(CryptoScheme):
     An encryption scheme which does nothing, always returns the given text when asked to encrypt or decrypt
     Works as the basis for other encryption schemes.
     """
+
     _cryptoScheme = "0"
     _cryptoName   = "None"
     _contentKey  = None
@@ -425,6 +426,7 @@ class Crypto_AES_CBC_HMAC__AES_ECB(CryptoScheme):
     No authentication of key values.
     For backwards compatibility only.
     """
+
     _cryptoScheme = "1"
     _cryptoName   = "AES-CBC-HMAC/AES-ECB/PBKDF2"
     _contentKey  = None
@@ -553,6 +555,7 @@ class Crypto_AES_CBC_HMAC__AES_SIV(Crypto_AES_CBC_HMAC__AES_ECB):
     those formerly using Crypto_AES_CBC_HMAC__AES_ECB), AES-128 SIV encryption and authentication is used.
     Uses AES-128 SIV encryption and validation on the keys.
     """
+
     _cryptoScheme = "2"
     _cryptoName   = "AES-CBC-HMAC/AES-SIV/scrypt"
 
@@ -614,6 +617,7 @@ class Crypto_AES_GCM__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Still uses AES-256 GCM for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
+
     _cryptoScheme = "3"
     _cryptoName   = "AES-GCM/AES-SIV/scrypt"
 
@@ -635,6 +639,7 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
     Uses ChaCha20/Poly1305  for encryption and authentication
     Uses ASE-256 SIV encryption and authentaction for files
     """
+
     _cryptoScheme = "4"
     _cryptoName   = "ChaCha20-Poly1305/AES-SIV/scrypt"
 
@@ -650,8 +655,8 @@ class Crypto_ChaCha20_Poly1305__AES_SIV(Crypto_AES_CBC_HMAC__AES_SIV):
         return StreamEncryptor(self.getContentCipher(iv))
 
 def test():
-    string = b"abcdefghijknlmnopqrstuvwxyz" + \
-             b"ABCDEFGHIJKNLMNOPQRSTUVWXYZ" + \
+    string = b"abcdefghijknlmnopqrstuvwxyz" \
+             b"ABCDEFGHIJKNLMNOPQRSTUVWXYZ" \
              b"1234567890!@#$%&*()[]{}-_,.<>"
 
     path = "/srv/home/kolding/this is a/test.onlyATest/X"

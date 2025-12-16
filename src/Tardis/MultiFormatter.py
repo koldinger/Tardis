@@ -35,6 +35,7 @@ class MultiFormatter(logging.Formatter):
     """
     A class to allow different logging levels to have different logging formats
     """
+
     def __init__(self, default_fmt = "%(levelname)s: %(message)s", formats=None, baseclass=logging.Formatter, **kwargs):
         """
         default_fmt:    A string containing the default format to use

@@ -160,6 +160,7 @@ conversionModules = {}
 
 class TardisDB:
     """ Main source for all interaction with the Tardis DB """
+
     db              = None
     currBackupSet   = None
     prevBackupSet   = None
@@ -300,8 +301,9 @@ class TardisDB:
             os.chown(self.dbfile, self.user, self.group)
 
     def _bset(self, current):
-        """ Determine the backupset we're being asked about.
-            True == current, False = previous, otherwise a number is returned
+        """
+        Determine the backupset we're being asked about.
+        True == current, False = previous, otherwise a number is returned
         """
         if isinstance(current, bool):
             return self.currBackupSet if current else self.prevBackupSet
@@ -754,7 +756,7 @@ class TardisDB:
 
     @authenticate
     def extendFileRowIDs(self, rowids, current=True):
-        """ extend a set of files based on a list of rowid's """
+        """ Extend a set of files based on a list of rowid's """
         current = self._bset(current)
         self.conn.executemany("UPDATE Files SET LASTSET = :lastset WHERE RowID = :rowid", [{"lastset": current, "rowid": x} for x in rowids])
 

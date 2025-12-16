@@ -194,10 +194,11 @@ clone_contents      = {}
 # A cache of metadata.  Since many files can have the same metadata, we check that
 # that we haven't sent it yet.
 meta_cache          = {}
+
 # When we encounter new metadata, keep it here until we flush it to the server.
 newmeta             = []
 
-nocompress_types         = []
+nocompress_types    = []
 
 crypt: TardisCrypto.CryptoScheme
 logger: logging.Logger
@@ -226,7 +227,7 @@ class InodeEntry:
 
     paths: list[str] = field(default_factory=list)
     numEntries: int = 0
-    finfo: dict = None
+    finfo: dict = field(default_factory=dict)
 
 class InodeDB:
     """ Database of inodes that we currently care about. """
@@ -297,6 +298,9 @@ class AuthenticationFailed(Exception):
 class InitFailedException(Exception):
     """ Initialization error. """
 
+class BackupFailedException(Exception):
+    """ Backup run failed. """
+
 class ExitRecursionException(Exception):
     def __init__(self, rootException):
         self.rootException = rootException
@@ -348,7 +352,7 @@ def virtualDev(device, path):
         return digest
 
 def fs_encode(val) -> bytes:
-    """ Turn filenames into str's (ie, series of bytes) rather than Unicode things """
+    """ Turn filenames into str's (ie, series of bytes) rather than Unicode things. """
     if not isinstance(val, bytes):
         return val.encode(systemencoding)
     return val
@@ -495,7 +499,7 @@ def processDelta(inode, cksum):
         path = crypt.encryptPath(pathname)
         message = {
             "message" : "SGR",
-            "inode" : (inode, cksum),        # FIXME: TODO: Break out checksum into it's own field.
+            "inode" : (inode, cksum),        #  TODO: Break out checksum into it's own field.
             "path"  : path,
         }
         sendMessage(message)
@@ -519,7 +523,7 @@ def handleSig(response):
         sendContent(inode, "Full")
 
 def processSig(inode, sigfile, oldchksum):
-    def fakeseek(x, y=0):
+    def fakeseek(_x, _y=0):
         return 0
 
     """ Generate a delta and send it """
@@ -541,8 +545,8 @@ def processSig(inode, sigfile, oldchksum):
 
                 # Create a buffered reader object, which can generate the checksum and an actual filesize while
                 # reading the file.  And, if we need it, the signature
-                with open(pathname, "rb") as input:
-                    reader = CompressedBuffer.BufferedReader(input, hasher=crypt.getHash(), signature=makeSig)
+                with open(pathname, "rb") as inp:
+                    reader = CompressedBuffer.BufferedReader(inp, hasher=crypt.getHash(), signature=makeSig)
                     # HACK: Monkeypatch the reader object to have a seek function to keep librsync happy.  Never gets called
                     reader.seek = fakeseek
 
@@ -767,14 +771,12 @@ def handleAckMeta(response):
 
     sendMessage(message)
 
-_defaultHash = None
 def sendDirHash(inode):
-    global _defaultHash
-    if _defaultHash is None:
-        _defaultHash = crypt.getHash().hexdigest()
+    if not hasattr(sendDirHash, "defaultHash"):
+        sendDirHash.defaultHash = crypt.getHash().hexdigest()
 
     i = tuple(inode)
-    (h, s) = dirHashes.setdefault(i, (_defaultHash, 0))
+    (h, s) = dirHashes.setdefault(i, (sendDirHash.defaultHash, 0))
 
     message = {
         "message": Protocol.Commands.DHSH,
@@ -796,8 +798,6 @@ allRefresh = []
 allDone    = []
 
 def handleAckDir(message):
-    global allContent, allDelta, allCkSum, allRefresh, allDone
-
     checkMessage(message, Protocol.Responses.ACKDIR)
 
     content = message.get("content", {})
@@ -818,7 +818,6 @@ def handleAckDir(message):
     allDone.extend(done)
 
 def pushFiles():
-    global allContent, allDelta, allCkSum, allRefresh, allDone
     logger.debug("Pushing files")
 
     processed = []
@@ -977,10 +976,22 @@ def getGroupName(gid):
         name = str(gid)
     return crypt.encryptName(name)
 
-def getDirContents(dirname, dirstat, excludes=None):
+def getDirContents(dirname: str, dirstat, excludes: list[str]) -> tuple[list[dict], list[str], list[str]]:
     """
+    Get the contents of a directory that need to be backup up.
+
     Read a directory, load any new exclusions, delete the excluded files, and return a list
-    of the files, a list of sub directories, and the new list of excluded patterns
+    of the files, a list of sub directories, and the new list of excluded patterns.
+
+    Parameters:
+        dirname: Name of the directory
+        dirstat: Stat object of the directory
+        excludes: List of patterns to exclude, not including the contents of any exclude files in this directory.
+
+    Returns a tuple:
+        List of the FileInfo dictionaries
+        List of the subdirectories
+        List of exclude patterns to be passed to lower level directories
     """
     excludes = excludes or set()
     Util.accumulateStat(stats, "dirs")
@@ -1097,7 +1108,7 @@ def sendPurge():
     checkMessage(response, Protocol.Responses.ACKPRG)
 
 def sendDirChunks(path, fullpath, inode, files):
-    """ Chunk the directory into dirslice sized chunks, and send each sequentially """
+    """ Chunk the directory into dirslice sized chunks, and send each sequentially. """
     (inum, dev) = inode
     vdev = virtualDev(dev, fullpath)
 
@@ -1125,12 +1136,11 @@ def sendDirChunks(path, fullpath, inode, files):
     sendDirHash((inum, vdev))
 
 def makeMetaMessage():
-    global newmeta
     message = {
         "message": Protocol.Commands.META,
         "metadata": newmeta,
     }
-    newmeta = []
+    newmeta.clear()
     return message
 
 statusBar: StatusBar.StatusBar | None = None
@@ -1255,7 +1265,6 @@ def processDirectory(path, top, depth=0, excludes=None):
         exc_logger.log(e)
         raise ExitRecursionException(e) from e
     except Exception as e:
-        # TODO: Clean this up
         logger.error("Error handling directory: %s: %s", path, str(e))
         exc_logger.log(e)
         raise ExitRecursionException(e) from e
@@ -1304,7 +1313,7 @@ def runBackup():
         exc_logger.log(e)
 
 def cloneDir(inode, device, files, path, info=None):
-    """ Send a clone message, containing the hash of the filenames, and the number of files """
+    """ Send a clone message, containing the hash of the filenames, and the number of files. """
     if info:
         (h, s) = info
     else:
@@ -1339,7 +1348,8 @@ def setPurgeValues():
             if success:
                 purge_time = time.mktime(then)
             else:
-                raise Exception(f"Could not parse --keep-time argument: {args.purgetime}")
+                raise ValueError(f"Could not parse --keep-time argument: {args.purgetime}")
+    return purge_time, purge_priority
 
 
 def mkExcludePattern(pattern):
@@ -1360,7 +1370,7 @@ def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
     try:
         with open(name) as f:
-            excludes = (mkExcludePattern(x.rstrip("\n")) for x in f.readlines())
+            excludes = (mkExcludePattern(x.rstrip("\n")) for x in f)
         return set(excludes)
     except (OSError, FileNotFoundError):
         return set()
@@ -1582,7 +1592,7 @@ def setCrypto(client, password, version):
     logger.debug("Using %s Crypto scheme", crypt.getCryptoScheme())
 
 def doSendKeys(client, password):
-    """ Set up cryptography system, and send the generated keys """
+    """ Set up cryptography system, and send the generated keys. """
     logger.debug("Sending keys")
     crypt.genKeys()
     (f, c) = crypt.getKeys()
@@ -1636,7 +1646,7 @@ def doSrpAuthentication(client, password, response):
         if resp["status"] == "AUTHFAIL":
             raise AuthenticationFailed("Authentication Failed")
         if resp["status"] != "OK":
-            raise Exception(resp["error"])
+            raise BackupFailedException(resp["error"])
         srpHamk = base64.b64decode(resp["srpValueHAMK"])
         srp_user.verify_session(srpHamk)
         return resp
@@ -1689,13 +1699,12 @@ def startBackup(client, url, has_passwd):
         errmesg = "BACKUP request failed"
         if "error" in resp:
             errmesg = errmesg + ": " + resp["error"]
-        raise Exception(errmesg)
+        raise BackupFailedException(errmesg)
 
     if triedAuthentication and not (args.password or args.passwordfile or args.passwordprog):
         # Password specified, but not needed
         raise AuthenticationFailed("Authentication Failed")
 
-    sessionid      = uuid.UUID(resp["sessionid"])
     clientId       = uuid.UUID(resp["clientid"])
     lastTimestamp  = float(resp["prevDate"])
     backupName     = resp["name"]
@@ -2131,9 +2140,7 @@ def lockRun(location: str):
     try:
         pidfile.create()
     except pid.PidFileError as e:
-        exc_logger.log(e)
-        raise Exception("Tardis already running") from e
-    except Exception as e:
+        logger.critical("Tardis already running")
         exc_logger.log(e)
         raise
     return pidfile

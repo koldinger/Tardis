@@ -251,7 +251,7 @@ def fullPath(name):
     return os.path.expanduser(os.path.expandvars(name))
 
 def hashPath(path):
-    return hashlib.md5(bytes(str(path), 'utf8')).hexdigest()
+    return hashlib.md5(bytes(str(path), "utf8")).hexdigest()
 
 """
 Retrieve a password.
@@ -715,6 +715,7 @@ class GenShellCompletions(argparse.Action):
     """
     Class to generate arguments and exit
     """
+
     def __call__(self, parser, namespace, values, option_string=None):
         path = os.path.split(sys.argv[0])[1]
         c = genzshcomp.CompletionGenerator(path, parser, parser_type="argparse", output_format=values)

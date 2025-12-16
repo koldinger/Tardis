@@ -12,7 +12,7 @@
 #     * Redistributions in binary form must reproduce the above copyright
 #       notice, this list of conditions and the following disclaimer in the
 #       documentation and/or other materials provided with the distribution.
-#     * Neither the name of the copyright holder nor the
+
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
 #
@@ -29,10 +29,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import base64
+import contextlib
+import dataclasses
 import io
 import json
 import logging
-import logging.config
 import os
 import pprint
 import shutil
@@ -69,10 +70,8 @@ def addSession(sessionId, client):
     _sessions[sessionId] = client
 
 def rmSession(sessionId):
-    try:
+    with contextlib.suppress(KeyError):
         del _sessions[sessionId]
-    except KeyError:
-        pass
 
 def checkSession(sessionId):
     return sessionId in _sessions
@@ -86,77 +85,85 @@ class ProtocolError(Exception):
 class ProcessingError(Exception):
     pass
 
+@dataclasses.dataclass
 class BackendConfig:
     """
-    Configuration class.   Used by the Client class when an integrated backend is used (ie, local mode)
+    Configuration class.
+
+    Used by the Client class when an integrated backend is used (ie, local mode).
     """
-    umask           = 0
-    cksContent      = 0
-    serverSessionID = None
-    formats         = []
-    priorities      = []
-    keep            = []
-    forceFull       = False
 
-    savefull        = False
-    maxChain        = 0
-    deltaPercent    = 0
-    autoPurge       = False
-    saveConfig      = False
-    dbbackups       = 0
+    umask: int              = 0
+    cksContent: int         = 0
+    serverSessionID:str     = ""
+    formats: list[str]      = dataclasses.field(default_factory=list)
+    priorities: list[int]   = dataclasses.field(default_factory=list)
+    keep: list[int]         = dataclasses.field(default_factory=list)
+    forceFull: bool         = False
 
-    user            = None
-    group           = None
+    savefull: bool          = False
+    maxChain: int           = 0
+    deltaPercent: int       = 0
+    autoPurge: bool         = False
+    saveConfig: bool        = False
+    dbbackups: int          = 0
 
-    basedir         = ""
-    allowNew        = True
-    allowUpgrades   = True
+    user: str               = ""
+    group: str              = ""
 
-    allowOverrides  = True
+    basedir: str            = ""        # TODO: Change to path
+    allowNew: bool          = True
+    allowUpgrades: bool     = True
 
-    requirePW       = False
+    allowOverrides: bool    = True
 
-    exceptions      = False
+    requirePW: bool         = False
 
-    linkBasis       = False
+    exceptions: bool        = False
 
-    skip            = Defaults.getDefault("TARDIS_SKIP")
+    linkBasis: bool         = False
+
+    skip: str               = Defaults.getDefault("TARDIS_SKIP") or ""
 
 
 class Backend:
     def __init__(self, messenger: Messages.Messages, conf, logSession=True, sessionid=None, prettyExceptions=True):
-        self.sessionid      = None
-        self.tempdir        = None
-        self.purged         = False
-        self.full           = False
-        self.done           = False
-        self.statNewFiles   = 0
-        self.statUpdFiles   = 0
+        self.sessionid          = None
+        self.tempdir            = None
+        self.purged             = False
+        self.full               = False
+        self.done               = False
+        self.statNewFiles       = 0
+        self.statUpdFiles       = 0
         self.statBytesReceived  = 0
         self.statPurgedFiles    = 0
-        self.statPurgedSets = 0
-        self.statCommands   = {}
-        self.address        = ""
-        self.regenerator    = None
-        self.basedir        = None
-        self.autoPurge      = False
-        self.saveConfig     = False
-        self.deltaPercent   = 80
-        self.forceFull      = False
-        self.lastCompleted  = None
-        self.maxChain       = 0
+        self.statPurgedSets     = 0
+        self.statCommands       = {}
+        self.address            = ""
+        self.basedir            = None
+        self.autoPurge          = False
+        self.saveConfig         = False
+        self.deltaPercent       = 80
+        self.forceFull          = False
+        self.lastCompleted      = None
+        self.maxChain           = 0
 
-        self.lastDirNode = None
-        self.lastDirContents = {}
+        self.lastDirNode        = None
+        self.lastDirContents    = {}
 
-        self.configKeepTime = None
-        self.configPriority = 0
+        self.configKeepTime     = None
+        self.configPriority     = 0
 
-        self.name           = None
-        self.tags           = None
-        self.movetag        = False
+        self.name               = None
+        self.tags               = None
+        self.movetag            = False
+        self.sizes              = set()
+        self.sizesLoaded        = False
 
-        self.db: TardisDB.TardisDB = None
+        self.db: TardisDB.TardisDB
+        self.regenerator: Regenerator.Regenerator
+
+        self.sequenceNumber = 0
 
         self.sessionid = sessionid if sessionid else str(uuid.uuid1())
         self.idstr = self.sessionid[0:13]   # Leading portion (ie, timestamp) of the UUID.  Sufficient for logging.
@@ -176,10 +183,11 @@ class Backend:
         self.exceptionLogger = Util.ExceptionLogger(self.logger, self.config.exceptions, prettyExceptions)
 
     def checkMessage(self, message, expected):
-        """ Check that a message is of the expected type.  Throw an exception if not """
-        if not message["message"] == expected:
-            self.logger.critical(f"Expected {expected} message, received {message['message']}")
-            raise ProtocolError(f"Expected {expected} message, received {message['message']}")
+        """ Check that a message is of the expected type.  Throw an exception if not. """
+        if message["message"] != expected:
+            excmsg = (f"Expected {expected} message, received {message['message']}")
+            self.logger.critical(excmsg)
+            raise ProtocolError(excmsg)
 
     def setXattrAcl(self, inode, device, xattr, acl):
         self.logger.debug("Setting Xattr and ACL info: %d %s %s", inode, xattr, acl)
@@ -190,17 +198,16 @@ class Backend:
 
     def sendMessage(self, message):
         if self.printMessages:
-            self.logger.log(log.MSGS, "Sending:\n" + pp.pformat(message))
+            self.logger.log(log.MSGS, "Sending:\n%s",pp.pformat(message))
         self.messenger.sendMessage(message)
 
     def recvMessage(self) -> dict[str, str]|bytearray:
         message = self.messenger.recvMessage()
         if self.printMessages:
-            self.logger.log(log.MSGS, "Received:\n" + pp.pformat(message))
+            self.logger.log(log.MSGS, "Received:\n%s", pp.pformat(message))
         return message
 
-    sizes = set()
-    sizesLoaded = False
+
 
     def checkForSize(self, size):
         if not self.sizesLoaded:
@@ -215,9 +222,7 @@ class Backend:
         return FileResponse.CONTENT
 
     def checkFile(self, parent, f, dirContents, extends):
-        """
-        Process an individual file.  Check to see if it's different from what's there already
-        """
+        """ Process an individual file.  Check to see if it's different from what's there already. """
         basis = None
         self.logger.debug("Processing file: %s %s", str(f), str(parent))
         name = f["name"]
@@ -332,14 +337,13 @@ class Backend:
                             # otherwise
                             retVal = FileResponse.CKSUM
                     else:
-                        # TODO: Lookup based on inode.
+                        # Check to see if there's a same sized file.   If so, they may match
                         retVal = self.checkForSize(f["size"])
 
         return retVal, basis
 
     def processDir(self, data):
         """ Process a directory message.  Lookup each file in the previous backup set, and determine if it's changed. """
-
         # Create some sets that we'll collect the inodes into
         # Use sets to remove duplicates due to hard links in a directory
         done = set()
@@ -371,7 +375,6 @@ class Backend:
 
             # If found, read that' guys directory
             if oldDir and oldDir["dir"] == 1:
-                # TODO: FIXME: Get actual Device
                 dirInode = (oldDir["inode"], oldDir["device"])
             else:
                 # Otherwise
@@ -391,7 +394,7 @@ class Backend:
             # Shortcut for this:
             if res == FileResponse.LINKED:
                 # Determine if this fileid is already in one of the queues
-                if not any(map(lambda x: fileId in x, queues)):
+                if not any(fileId in x for x in queues):
                     queues[FileResponse.DONE].add(fileId)
             elif res == FileResponse.DELTA:
                 queues[FileResponse.DELTA].add((fileId, basis))
@@ -456,7 +459,7 @@ class Backend:
         return response, True
 
     def processSigRequest(self, message):
-        """ Generate and send a signature for a file """
+        """ Generate and send a signature for a file. """
         self.logger.debug("Processing signature request message: %s", str(message))
         ((inode, dev), checksum) = message["inode"]
         return self.sendSignature(inode, dev, checksum, message.get("msgid", 0))
@@ -482,7 +485,7 @@ class Backend:
                 sigfile = chksum + ".sig"
                 if self.cache.exists(sigfile):
                     sigfile = self.cache.open(sigfile, "rb")
-                    sig = sigfile.read()       # TODO: Does this always read the entire file?
+                    sig = sigfile.read()
                     sigfile.close()
                 else:
                     # TODO: Remove this?   Only valid for unencrypted backups.
@@ -498,25 +501,27 @@ class Backend:
 
                     except (librsync.LibrsyncError, Regenerator.RegenerateException) as e:
                         self.logger.error(f"Unable to generate signature for inode: {inode}, checksum: {chksum}: {e}")
-                # TODO: Break the signature out of here.
+
+                # send a response, then the actual signature
                 response = {
                     "message": Protocol.Commands.SIG,
                     "respid" : msgid,
                     "inode": (inode, dev),
                     "status": "OK",
-                    "encoding": self.messenger.getEncoding(),
                     "checksum": chksum,
                     "size": len(sig),
                 }
                 self.sendMessage(response)
                 sigio = io.BytesIO(sig)
                 Util.sendDataPlain(self.messenger, sigio, compress=None)
-                return (None, False)
             except Exception as e:
                 self.logger.error("Could not recover data for checksum: %s: %s", chksum, str(e))
                 self.exceptionLogger.log(e)
                 errmsg = str(e)
+            else:
+                return (None, False)
 
+        # if not chksum
         if response is None:
             response = {
                 "message": Protocol.Commands.SIG,
@@ -532,13 +537,12 @@ class Backend:
         """ Receive a delta message. """
         self.logger.debug("Processing delta message: %s", message)
         output   = None
-        temp     = None
         checksum = message["checksum"]
         basis    = message["basis"]
         size     = message["size"]          # size of the original file, not the content
         (inode, dev)    = message["inode"]
 
-        deltasize = message["deltasize"] if "deltasize" in message else None
+        deltasize = message.get("deltasize", None)
         encrypted = message.get("encrypted", False)
 
         savefull = self.config.savefull and not encrypted
@@ -575,18 +579,14 @@ class Backend:
                     if compressed:
                         delta = CompressedBuffer.UncompressedBufferedReader(output)
                         # HACK: Monkeypatch the buffer reader object to have a seek function to keep librsync happy.  Never gets called
-                        delta.seek = lambda x, y: 0
+                        delta.seek = lambda _x, _y: 0
                     else:
                         delta = output
 
                     # Process the delta file into the new file.
                     basisFile = self.regenerator.recoverChecksum(basis)
+
                     # Can't use isinstance
-                    if not basisFile.seekable():
-                        # TODO: Is it possible to get here?  Is this just dead code?
-                        temp = basisFile
-                        basisFile = tempfile.TemporaryFile(dir=self.tempdir, prefix=self.tempPrefix)
-                        shutil.copyfileobj(temp, basisFile)
                     patched = librsync.patch(basisFile, delta)
                     shutil.copyfileobj(patched, self.cache.open(checksum, "wb"))
                     self.db.insertChecksum(checksum, encrypted, size=size, disksize=bytesReceived)
@@ -610,7 +610,6 @@ class Backend:
             except Exception as e:
                 self.logger.error("Could not insert checksum %s: %s", checksum, str(e))
             output.close()
-            # TODO: This has gotta be wrong.
         else:
             self.db.setChecksum(inode, dev, checksum)
 
@@ -635,7 +634,6 @@ class Backend:
         else:
             output = self.cache.open(sigfile, "wb")
 
-        # TODO: Record these in stats
         (_, _, _, checksum, _) = Util.receiveData(self.messenger, output)
 
         if output is not None:
@@ -648,7 +646,7 @@ class Backend:
         return (response, False)
 
     def processChecksum(self, message):
-        """ Process a list of checksums """
+        """ Process a list of checksums. """
         self.logger.debug("Processing checksum message: %s", message)
         done = []
         delta = []
@@ -689,7 +687,7 @@ class Backend:
         return (message, False)
 
     def processMeta(self, message):
-        """ Check metadata messages """
+        """ Check metadata messages. """
         metadata = message["metadata"]
         encrypted = message.get("encrypted", False)
         done = []
@@ -717,7 +715,7 @@ class Backend:
         return (message, False)
 
     def processMetaData(self, message):
-        """ Process a metadata content message, including all the data content chunks """
+        """ Process a metadata content message, including all the data content chunks. """
         self.logger.debug("Processing metadata message: %s", message)
 
         data = message["data"]
@@ -753,10 +751,8 @@ class Backend:
         elif self.configKeepTime:
             prevTime = float(self.db.prevBackupDate) - float(self.configKeepTime)
 
-        if "priority" in message:
-            priority = message["priority"]
-        else:
-            priority = self.configPriority
+        # Get the priority, if it's definied in the message, else use the default
+        priority = message.get("priority", self.configPriority)
 
         # Purge the files
         if prevTime:
@@ -770,7 +766,7 @@ class Backend:
         return ({"message": Protocol.Responses.ACKPRG, "status": "FAIL"}, True)
 
     def processClone(self, message):
-        """ Clone an entire directory """
+        """ Clone an entire directory. """
         done = []
         content = []
         for d in message["clones"]:
@@ -814,10 +810,9 @@ class Backend:
         }
         return response, True
 
-    _sequenceNumber = 0
 
     def processContent(self, message):
-        """ Process a content message, including all the data content chunks """
+        """ Process a content message, including all the data content chunks. """
         self.logger.debug("Processing content message: %s", message)
         tempName = None
         checksum = None
@@ -827,8 +822,8 @@ class Backend:
                 self.logger.debug("Checksum file %s already exists", checksum)
             output = self.cache.open(checksum, "w")
         else:
-            tempName = os.path.join(self.tempdir, self.tempPrefix + str(self._sequenceNumber))
-            self._sequenceNumber += 1
+            tempName = os.path.join(self.tempdir, self.tempPrefix + str(self.sequenceNumber))
+            self.sequenceNumber += 1
             self.logger.debug("Sending output to temporary file %s", tempName)
             output = open(tempName, "wb")
 
@@ -951,7 +946,7 @@ class Backend:
         return (response, False)
 
     def processMessage(self, message, transaction=True):
-        """ Dispatch a message to the correct handlers """
+        """ Dispatch a message to the correct handlers. """
         try:
             messageType = message["message"]
             # Stats
@@ -998,14 +993,14 @@ class Backend:
             if transaction:
                 self.db.setStats(self.statNewFiles, self.statUpdFiles, self.statBytesReceived)
                 self.db.commit()
-
-            return (response, flush)
         except ProtocolError as e:
             raise ProtocolError(str(e)) from e
         except Exception as e:
             self.logger.error("Caught exception processing message: %d %s -- %s", message.get("msgid", -1), message.get("message", ""), textwrap.shorten(json.dumps(message), 256, placeholder="..."))
             self.exceptionLogger.log(e)
             raise ProcessingError(str(e)) from e
+        else:
+            return (response, flush)
 
     def genPaths(self):
         self.logger.debug("Generating paths: %s", self.config.basedir)
@@ -1142,12 +1137,10 @@ class Backend:
             self.logger.warning("Unable to delete temporary directory: %s: %s", self.tempdir, error.strerror)
 
     def calcAutoInfo(self, clienttime):
-        """
-        Calculate a name if autoname is passed in.
-        """
+        """ Calculate a name if autoname is passed in. """
         starttime = datetime.fromtimestamp(clienttime)
         # Walk the automatic naming formats until we find one that's free
-        for (fmt, prio, keep, full) in zip(self.formats, self.priorities, self.keep, self.forceFull):
+        for (fmt, prio, keep, full) in zip(self.formats, self.priorities, self.keep, self.forceFull, strict=True):
             name = starttime.strftime(fmt)
             if self.db.checkBackupSetName(name):
                 return (name, prio, keep, full)
@@ -1166,21 +1159,12 @@ class Backend:
             resp = self.recvMessage()
             self.checkMessage(resp, "SETKEYS")
 
-            filenameKey  = resp["filenameKey"]
-            contentKey   = resp["contentKey"]
-            srpSalt      = resp["srpSalt"]
-            srpVkey      = resp["srpVkey"]
-            cryptoScheme = resp["cryptoScheme"]
-            # ret = self.db.setKeys(srpSalt, srpVkey, filenameKey, contentKey)
-            return srpSalt, srpVkey, filenameKey, contentKey, cryptoScheme
+            return resp["srpSalt"], resp["srpVkey"], resp["filenameKey"], resp["contentKey"], resp["cryptoScheme"]
         except KeyError as e:
             raise InitFailedException(str(e)) from e
 
     def doSrpAuthentication(self):
-        """
-        Perform the SPR authentication steps  Start with the name and value A passed in from the
-        connection call.
-        """
+        """ Perform the SPR authentication steps  Start with the name and value A passed in from the connection call. """
         self.logger.debug("Beginning Authentication")
         try:
             cryptoScheme = self.db._getConfigValue("CryptoScheme", "1")
@@ -1196,6 +1180,7 @@ class Backend:
 
             srpValueS, srpValueB = self.db.authenticate1(name, srpValueA)
             if srpValueS is None or srpValueB is None:
+                # TODO: clean this logic up, along with the handler below
                 raise TardisDB.AuthenticationFailed("SRP Authentication failed")
 
             self.logger.debug("Sending Challenge values")
@@ -1221,6 +1206,7 @@ class Backend:
             }
             self.logger.debug("Authenticated")
         except TardisDB.AuthenticationFailed as e:
+            # TODO: Clean this up with the above
             message = {
                 "status"    : "AUTHFAIL",
                 "error"     : str(e),
@@ -1238,7 +1224,7 @@ class Backend:
             if messType != Protocol.Commands.BACKUP:
                 raise InitFailedException(f"Unknown message type: {messType}")
 
-            client      = message["host"]            # TODO: Change at client as well.
+            client      = message["host"]
             clienttime  = message["time"]
             version     = message["version"]
 
@@ -1363,11 +1349,11 @@ class Backend:
             flush = False
             message = self.recvMessage()
             if message is None:
-                raise Exception("No message received")
+                raise ProtocolError("No message received")
 
             if message["message"] == "BYE":
                 if "error" in message:
-                    raise Exception("Client Error: " + message["error"])
+                    raise ProcessingError(f"Client Error: {message["error"]}")
                 break
 
             (response, flush) = self.processMessage(message)
@@ -1405,9 +1391,8 @@ class Backend:
                 if self.tags:
                     for tag in self.tags:
                         self.logger.debug("Setting tag : %s %s", tag, self.movetag)
-                        if self.movetag:
-                            if self.db.removeTag(tag):
-                                self.logger.debug("Removed old version of %s", tag)
+                        if self.movetag and self.db.removeTag(tag):
+                            self.logger.debug("Removed old version of %s", tag)
                         if not self.db.setTag(tag, True):
                             self.logger.warning("Could not set tag: %s.   Already exists", tag)
                             # TODO: Inform the client it happened

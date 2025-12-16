@@ -206,7 +206,6 @@ def collectDirContents(tardis, dirList, crypt):
     query any directory entries that exist in here, and span each one over the approriate portions of the
     range.  Repeat for each range.
     """
-
     contents = {}
     for (x, _) in dirList:
         contents[x["backupset"]] = {}
@@ -429,7 +428,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
 
     # Print the header
     if args.headers or (numFound == 0) or not first:
-        color = colors['header'] if first else colors['name']
+        color = colors["header"] if first else colors["name"]
         doprint(fmt % filename, color)
         if numFound == 0:
             doprint(" Not found", colors["error"])
@@ -461,7 +460,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
     if recurse:
         # This is inefficient.  We're recalculating info we grabbed above.  But recursion should be minimal
         dirs = [(x, fInfos[x["backupset"]]) for x in backupSets if fInfos[x["backupset"]] and fInfos[x["backupset"]]["dir"] == 1]
-        if len(dirs):
+        if dirs:
             (contents, names) = collectDirContents(tardis, dirs, crypt)
             if not args.hidden:
                 names = [n for n in names if not n.startswith(".")]
@@ -471,7 +470,7 @@ def processFile(filename, fInfos, tardis, crypt, printContents=True, recurse=0, 
             for name in sorted(names, key=lambda x: x.lower().lstrip("."), reverse=args.reverse):
                 fInfos = getInfoByName(contents, name)
                 dirs = [(x, fInfos[x["backupset"]]) for x in backupSets if fInfos[x["backupset"]] and fInfos[x["backupset"]]["dir"] == 1]
-                if len(dirs):
+                if dirs:
                     print()
                     processFile(os.path.join(filename, name), fInfos, tardis, crypt, printContents=printContents, recurse=recurse-1, first=True, eol=True)
                 flushLine()
