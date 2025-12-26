@@ -170,8 +170,6 @@ config_defaults = {
 
 exclude_dirs         = []
 
-encoding            = None
-
 systemencoding      = sys.getfilesystemencoding()
 
 
@@ -357,9 +355,13 @@ def fs_encode(val) -> bytes:
 
 def checkMessage(message, expected):
     """ Check that a message is of the expected type.  Throw an exception if not """
-    if message["message"] != expected:
-        logger.critical(f"Expected {expected} message, received {message['message']}")
-        raise ProtocolError(f"Expected {expected} message, received {message['message']}")
+    if isinstance(message, dict):
+        if message["message"] != expected:
+            logger.critical(f"Expected {expected} message, received {message['message']}")
+            raise ProtocolError(f"Expected {expected} message, received {message['message']}")
+    else:
+        raise ProtocolError(f"Expected a dictionary message, received {type(message)}")
+
 
 def filelist(dirname, excludes, skipfile):
     """ List the files in a directory, except those that match something in a set of patterns. """
@@ -580,7 +582,6 @@ def processSig(inode, sigfile, oldchksum):
                     "size": filesize,
                     "checksum": checksum,
                     "basis": oldchksum,
-                    "encoding": encoding,
                     "encrypted": bool(iv),
                 }
                 sendMessage(message)
@@ -643,7 +644,6 @@ def sendContent(inode, reportType):
             message = {
                 "message":      Protocol.Commands.CON,
                 "inode":        inode,
-                "encoding":     encoding,
                 "encrypted":    bool(iv),
             }
 
@@ -1449,6 +1449,7 @@ def setMessageID(message):
 def sendMessage(message):
     setMessageID(message)
     logger.debug("Send: %s", message)
+    logger.info(f"<-- {message['msgid']}")
     if args.logmessages:
         args.logmessages.write(f"\nSending message {message.get('msgid', 'Unknown')} {'-' * 40}\n")
         args.logmessages.write(pprint.pformat(message, width=250, compact=True) + "\n")
@@ -1498,6 +1499,8 @@ currentResponse = None
 def handleResponse(response, doPush=True):
     global currentResponse, outstandingMessages
     try:
+        if isinstance(response, dict):
+            logger.info(f"--> {response.get('respid', -1)}")
         currentResponse = response
         msgtype = response["message"]
         match msgtype:
@@ -1654,7 +1657,6 @@ def startBackup(client, url, has_passwd):
     message = {
             "message"   : Protocol.Commands.BACKUP,
             "host"      : client,
-            "encoding"  : encoding,
             "priority"  : args.priority,
             "autoname"  : args.name is None,
             "force"     : args.force,
