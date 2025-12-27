@@ -872,19 +872,16 @@ def pushFiles():
     # for all of them.
     if len(allCkSum) > 0:
         cksums = [tuple(x) for x in allCkSum]
-        allCkSum   = []             # Clear it out to avoid processing loop
+        allCkSum.clear()
         while cksums:
             processChecksums(cksums[0:args.cksumbatch])
             cksums = cksums[args.cksumbatch:]
 
     logger.debug("Done pushing")
 
-
 @functools.cache
 def addMeta(meta):
-    """
-    Add data to the metadata cache
-    """
+    """ Add data to the metadata cache. """
     m = crypt.getHash()
     m.update(bytes(meta, "utf8"))
     digest = m.hexdigest()
