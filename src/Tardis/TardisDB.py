@@ -176,6 +176,7 @@ class TardisDB:
         self.authenticated = False
 
         self.srpSrv = None
+        self.conn = None            # To avoid a problem with some deletes
 
         self.rootVId = Util.hashPath("/")
 
