@@ -44,7 +44,7 @@ class Rotator:
     def backup(self, name: Path):
         if name.exists():
             with name.open("rb") as infile:
-                newname = Path(f"{name.name}.{time.strftime('%Y%m%d-%H%M%S')}")
+                newname = name.parent / Path(f"{name.name}.{time.strftime('%Y%m%d-%H%M%S')}")
                 stat = name.stat()
                 if self.compress and stat.st_size >= self.compress:
                     newname = Path(f"{newname}.gz")
