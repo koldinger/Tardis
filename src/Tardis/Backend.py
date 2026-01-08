@@ -160,7 +160,7 @@ class Backend:
         self.sizes              = set()
         self.sizesLoaded        = False
 
-        self.db: TardisDB.TardisDB
+        self.db: TardisDB.TardisDB = None
         self.regenerator: Regenerator.Regenerator
 
         self.sequenceNumber = 0
