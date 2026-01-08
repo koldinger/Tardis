@@ -1370,7 +1370,7 @@ def loadExcludeFile(name):
     """ Load a list of patterns to exclude from a file. """
     try:
         with open(name) as f:
-            excludes = (mkExcludePattern(x.rstrip("\n")) for x in f)
+            excludes = [mkExcludePattern(x.rstrip("\n")) for x in f]
         return set(excludes)
     except (OSError, FileNotFoundError):
         return set()
