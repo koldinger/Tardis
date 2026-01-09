@@ -35,6 +35,6 @@ termcolor==3.1.0
 tornado==6.5.2
 typing_extensions==4.14.0
 url-normalize==2.2.1
-Werkzeug==3.1.4
+Werkzeug==3.1.5
 xattr==1.2.0
 zstandard==0.24.0
