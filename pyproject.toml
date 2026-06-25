@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 80.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["dependencies", "version"]
+name = "tardis"
+description = "Tardis Backup System"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.14"
+authors = [
+  { name ="Eric Koldinger", email="kolding@washington.edu" }
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Topic :: System :: Archiving :: Backup",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Operating System :: MacOS :: MacOS X", "Operating System :: POSIX",
+  "Operating System :: POSIX :: Linux",
+  "System::Archiving::Backup"
+]
+
+[project.scripts]
+tardis = "Tardis.Client:main"
+tardisd = "Tardis.Daemon:main"
+regenerate = "Tardis.Regenerate:main"
+lstardis = "Tardis.List:main"
+sonic = "Tardis.Sonic:main"
+tardiff = "Tardis.Diff:main"
+tardisremote = "Tardis.HttpInterface:tornado"
+
+[tool.uv.sources]
+#rich = { git = "https://github.com/koldinger/rich" }
+#python-librsync = { git = "https://github.com/koldinger/python-librsync.git" }
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools_scm]
+version_file = "src/Tardis/_version.py"

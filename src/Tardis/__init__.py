@@ -32,25 +32,31 @@ import os
 import subprocess
 import sys
 
-__version__ = "1.9.5"
-v = sys.version_info
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0"
 
+#__version__ = "1.9.5"
+v = sys.version_info
+#
 __buildversion__ = ""
 __pythonversion__ = f" Python {v.major}.{v.minor}.{v.micro}"
 __versionstring__ = f"{__version__} ({__pythonversion__})"
-
-try:
-    parentDir     = os.path.dirname(os.path.realpath(__file__))
-    versionFile   = os.path.join(parentDir, "tardisversion")
-    __buildversion__ = str(open(versionFile).readline()).strip()
-except Exception:
-    try:
-        __buildversion__ = str(subprocess.check_output(["git", "describe", "--dirty", "--tags", "--always"], stderr=subprocess.STDOUT).strip(), "utf-8")
-    except subprocess.CalledProcessError:
-        pass
-
-if __buildversion__:
-    __versionstring__ = __version__ + " (" + str(__buildversion__) + __pythonversion__ + ")"
+#
+#
+#try:
+#    parentDir     = os.path.dirname(os.path.realpath(__file__))
+#    versionFile   = os.path.join(parentDir, "tardisversion")
+#    __buildversion__ = str(open(versionFile).readline()).strip()
+#except Exception:
+#    try:
+#        __buildversion__ = str(subprocess.check_output(["git", "describe", "--dirty", "--tags", "--always"], stderr=subprocess.STDOUT).strip(), "utf-8")
+#    except subprocess.CalledProcessError:
+#        pass
+#
+#if __buildversion__:
+#    __versionstring__ = __version__ + " (" + str(__buildversion__) + __pythonversion__ + ")"
 
 def check_features():
     xattr_pkg = "xattr"
