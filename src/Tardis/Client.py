@@ -976,7 +976,7 @@ def getGroupName(gid):
         name = str(gid)
     return crypt.encryptName(name)
 
-def getDirContents(dirname: str, dirstat, excludes: list[str]) -> tuple[list[dict], list[str], list[str]]:
+def getDirContents(dirname: str, dirstat: os.stat_result, excludes: set[str]) -> tuple[list[dict], list[str], list[str]]:
     """
     Get the contents of a directory that need to be backup up.
 
@@ -1169,7 +1169,7 @@ processedDirs = set()
 
 def processDirectory(path, top, depth=0, excludes=None):
     """ Process a directory, send any contents along, and then dive down into subdirectories and repeat. """
-    excludes = excludes or []
+    excludes = excludes or set()
 
     newdepth = max(depth - 1, 0)
 
