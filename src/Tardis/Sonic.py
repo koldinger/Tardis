@@ -874,8 +874,8 @@ def parseArgs() -> argparse.Namespace:
     listParser.add_argument("--minpriority",    dest="minpriority", default=0, type=int,            help="Minimum priority to list")
 
     limitParser = listParser.add_mutually_exclusive_group()
-    limitParser.add_argument("--first",         dest="first", default=None, type=int,       help="Show only the first N backupsets")
-    limitParser.add_argument("--last",          dest="last", default=None, type=int,        help="Show only the last N backupsets")
+    limitParser.add_argument("--first",         dest="first", default=None, type=int, const=10, nargs="?", metavar="N", help="Show only the first N backupsets")
+    limitParser.add_argument("--last",          dest="last", default=None, type=int, const=10, nargs="?",  metavar="N", help="Show only the last N backupsets")
 
     listParser.add_argument("--before",         dest="before", type=parseDateTime, default=None )
     listParser.add_argument("--after",          dest="after",  type=parseDateTime, default=None )
