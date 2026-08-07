@@ -41,7 +41,7 @@ except ImportError:
 v = sys.version_info
 #
 __buildversion__ = ""
-__pythonversion__ = f" Python {v.major}.{v.minor}.{v.micro}"
+__pythonversion__ = f"Python {v.major}.{v.minor}.{v.micro}"
 __versionstring__ = f"{__version__} ({__pythonversion__})"
 #
 #
